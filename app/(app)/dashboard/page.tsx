@@ -31,7 +31,8 @@ export default function DashboardPage() {
     Chart.defaults.font.family = 'system-ui, sans-serif'
 
     // Destroy existing charts
-    ['statusChart','regionChart','typeChart'].forEach(id => {
+    const chartIds = ['statusChart','regionChart','typeChart']
+    chartIds.forEach((id: string) => {
       const existing = Chart.getChart(id)
       if (existing) existing.destroy()
     })
