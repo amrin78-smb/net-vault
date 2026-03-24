@@ -193,7 +193,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                             <td><span className="badge" style={{ background: '#ede9fe', color: '#5b21b6' }}>{c.technology || '—'}</span></td>
                             <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.max_speed || '—'}</td>
                             <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.public_subnet && c.public_subnet !== '-' ? c.public_subnet : '—'}</td>
-                            <td style={{ fontSize: '12px' }}>{c.cost_month ? `$${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
+                            <td style={{ fontSize: '12px' }}>{c.cost_month ? `THB ${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
                             <td><span className="badge" style={{ background: c.pingable === 'Yes' ? '#dcfce7' : '#f3f4f6', color: c.pingable === 'Yes' ? '#166534' : '#6b7280' }}>{c.pingable || '—'}</span></td>
                             <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }}>View</button></Link></td>
                           </tr>
@@ -217,7 +217,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                             <td><span className="badge" style={{ background: '#ede9fe', color: '#5b21b6' }}>{c.technology || '—'}</span></td>
                             <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.max_speed || '—'}</td>
                             <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.public_subnet && c.public_subnet !== '-' ? c.public_subnet : '—'}</td>
-                            <td style={{ fontSize: '12px' }}>{c.cost_month ? `$${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
+                            <td style={{ fontSize: '12px' }}>{c.cost_month ? `THB ${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
                             <td><span className="badge" style={{ background: c.pingable === 'Yes' ? '#dcfce7' : '#f3f4f6', color: c.pingable === 'Yes' ? '#166634' : '#6b7280' }}>{c.pingable || '—'}</span></td>
                             <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }}>View</button></Link></td>
                           </tr>

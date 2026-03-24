@@ -166,7 +166,7 @@ export default function CircuitsPage() {
                     <td><TechBadge tech={c.technology} /></td>
                     <td style={{ fontSize: '12px', fontFamily: 'monospace' }}>{c.max_speed || '—'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.public_subnet && c.public_subnet !== '-' ? c.public_subnet : '—'}</td>
-                    <td style={{ fontSize: '12px' }}>{c.cost_month ? `$${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
+                    <td style={{ fontSize: '12px' }}>{c.cost_month ? `THB ${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
                     <td><PingBadge pingable={c.pingable} /></td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>

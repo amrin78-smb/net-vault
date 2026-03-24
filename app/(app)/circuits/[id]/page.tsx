@@ -154,7 +154,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
           <div>
             <Section title="Commercial">
               <Field label="Public subnet" value={circuit.public_subnet} />
-              <Field label="Cost / month" value={circuit.cost_month ? `$${parseFloat(circuit.cost_month).toLocaleString()}` : null} />
+              <Field label="Cost / month" value={circuit.cost_month ? `THB ${parseFloat(circuit.cost_month).toLocaleString()}` : null} />
               <Field label="Contract term" value={circuit.contract_term} />
               <Field label="Pingable from IDC" value={circuit.pingable} />
               <div style={{ gridColumn: '1 / -1' }}><Field label="Comment" value={circuit.comment} /></div>
