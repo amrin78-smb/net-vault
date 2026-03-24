@@ -50,3 +50,7 @@ select.input {
   appearance: none;
   -webkit-appearance: none;
 }
+
+.card {
+  padding: 24px 28px !important;
+}
