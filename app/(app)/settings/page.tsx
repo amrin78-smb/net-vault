@@ -35,7 +35,7 @@ export default function SettingsPage() {
   const [sites, setSites] = useState<Site[]>([])
   const [countries, setCountries] = useState<Country[]>([])
   const [showSiteForm, setShowSiteForm] = useState(false)
-  const [siteForm, setSiteForm] = useState({ name: '', code: '', country_id: '' })
+  const [siteForm, setSiteForm] = useState({ name: '', code: '', country_id: '', address: '', city: '', postal_code: '', coordinates: '', site_type: '', phone: '', contact_name: '', contact_email: '' })
   const [savingSite, setSavingSite] = useState(false)
   const [siteError, setSiteError] = useState('')
   const [siteSearch, setSiteSearch] = useState('')
@@ -312,6 +312,50 @@ export default function SettingsPage() {
                     <option value="">Select country</option>
                     {countries.map(c => <option key={c.id} value={c.id}>{c.name} — {c.region}</option>)}
                   </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site type</label>
+                  <select className="input select" value={siteForm.site_type} onChange={e => setSiteForm(f => ({ ...f, site_type: e.target.value }))}>
+                    <option value="">Select type</option>
+                    <option>Head Office</option>
+                    <option>Factory</option>
+                    <option>Warehouse</option>
+                    <option>Branch Office</option>
+                    <option>Data Center</option>
+                    <option>Cloud</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>City</label>
+                  <input className="input" placeholder="e.g. Bangkok" value={siteForm.city} onChange={e => setSiteForm(f => ({ ...f, city: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Postal code</label>
+                  <input className="input" placeholder="e.g. 10110" value={siteForm.postal_code} onChange={e => setSiteForm(f => ({ ...f, postal_code: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>GPS coordinates</label>
+                  <input className="input" placeholder="e.g. 13.7563, 100.5018" value={siteForm.coordinates} onChange={e => setSiteForm(f => ({ ...f, coordinates: e.target.value }))} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Address</label>
+                  <textarea className="input" rows={2} placeholder="Full street address" value={siteForm.address} onChange={e => setSiteForm(f => ({ ...f, address: e.target.value }))} style={{ resize: 'vertical' }} />
+                </div>
+                <div style={{ borderTop: '1px solid #f3f4f6', gridColumn: '1 / -1', paddingTop: '12px', marginTop: '4px' }}>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px' }}>Site contact</div>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Contact name</label>
+                  <input className="input" placeholder="e.g. John Smith" value={siteForm.contact_name} onChange={e => setSiteForm(f => ({ ...f, contact_name: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Contact email</label>
+                  <input className="input" type="email" placeholder="e.g. john@company.com" value={siteForm.contact_email} onChange={e => setSiteForm(f => ({ ...f, contact_email: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Phone</label>
+                  <input className="input" placeholder="e.g. +66 2 123 4567" value={siteForm.phone} onChange={e => setSiteForm(f => ({ ...f, phone: e.target.value }))} />
                 </div>
               </div>
               {siteError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{siteError}</div>}
