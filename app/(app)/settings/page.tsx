@@ -12,6 +12,8 @@ type Settings = {
 }
 
 type User = { id: number; name: string; email: string; role: string; created_at: string }
+type Site = { id: number; name: string; code: string; country: string; country_id: number; region: string; total: string }
+type Country = { id: number; name: string; region: string }
 
 export default function SettingsPage() {
   const { data: session } = useSession()
@@ -32,11 +34,33 @@ export default function SettingsPage() {
   const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'viewer' })
   const [savingUser, setSavingUser] = useState(false)
   const [userError, setUserError] = useState('')
-  const [activeTab, setActiveTab] = useState<'branding'|'users'>('branding')
+  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'>('branding')
+  const [sites, setSites] = useState<Site[]>([])
+  const [countries, setCountries] = useState<Country[]>([])
+  const [showSiteForm, setShowSiteForm] = useState(false)
+  const [siteForm, setSiteForm] = useState({ name: '', code: '', country_id: '' })
+  const [savingSite, setSavingSite] = useState(false)
+  const [siteError, setSiteError] = useState('')
+  const [siteSearch, setSiteSearch] = useState('')
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(d => { setSettings(d); setLoadingSettings(false) })
     fetch('/api/users').then(r => r.json()).then(setUsers)
+    fetch('/api/sites').then(r => r.json()).then(setSites)
+    fetch('/api/lookup').then(r => r.json()).then(d => {
+      if (d.sites) {
+        const seen = new Set()
+        const uniqueCountries: Country[] = []
+        d.sites.forEach((s: any) => {
+          if (!seen.has(s.country)) {
+            seen.add(s.country)
+            uniqueCountries.push({ id: 0, name: s.country, region: s.region })
+          }
+        })
+        setCountries(uniqueCountries)
+      }
+    })
+    fetch('/api/countries').then(r => r.json()).then(d => { if (Array.isArray(d)) setCountries(d) }).catch(() => {})
   }, [])
 
   async function saveSettings() {
@@ -49,6 +73,34 @@ export default function SettingsPage() {
     setSavingSettings(false)
     setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 3000)
+  }
+
+  function fetchSites() {
+    fetch('/api/sites').then(r => r.json()).then(setSites)
+  }
+
+  async function addSite() {
+    if (!siteForm.name || !siteForm.country_id) { setSiteError('Site name and country are required'); return }
+    setSavingSite(true); setSiteError('')
+    const res = await fetch('/api/sites/manage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(siteForm)
+    })
+    if (res.ok) { setShowSiteForm(false); setSiteForm({ name: '', code: '', country_id: '' }); fetchSites() }
+    else { const d = await res.json(); setSiteError(d.error || 'Failed to add site') }
+    setSavingSite(false)
+  }
+
+  async function deleteSite(id: number, name: string) {
+    if (!confirm(`Delete site "${name}"?`)) return
+    const res = await fetch('/api/sites/manage', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    })
+    if (res.ok) { fetchSites() }
+    else { const d = await res.json(); alert(d.error || 'Failed to delete') }
   }
 
   function fetchUsers() {
@@ -96,9 +148,9 @@ export default function SettingsPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: '24px' }}>
-        {(['branding', 'users'] as const).map(tab => (
+        {(['branding', 'users', 'sites'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? '#C8102E' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #C8102E' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
-            {tab === 'branding' ? 'Branding' : `Users (${users.length})`}
+            {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : `Sites (${sites.length})`}
           </button>
         ))}
       </div>
@@ -260,6 +312,78 @@ export default function SettingsPage() {
                         <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }} onClick={() => openEdit(u)}>Edit</button>
                         <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteUser(u.id, u.name)}>Delete</button>
                       </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+
+      {activeTab === 'sites' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <input className="input" style={{ width: '240px' }} placeholder="Search sites..." value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
+            </div>
+            <button className="btn-primary" onClick={() => { setShowSiteForm(true); setSiteError('') }}>+ Add site</button>
+          </div>
+
+          {showSiteForm && (
+            <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Add new site</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site name <span style={{ color: '#C8102E' }}>*</span></label>
+                  <input className="input" placeholder="e.g. Bangkok Office" value={siteForm.name} onChange={e => setSiteForm(f => ({ ...f, name: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site code</label>
+                  <input className="input" placeholder="e.g. BKK-01" value={siteForm.code} onChange={e => setSiteForm(f => ({ ...f, code: e.target.value }))} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Country <span style={{ color: '#C8102E' }}>*</span></label>
+                  <select className="input select" value={siteForm.country_id} onChange={e => setSiteForm(f => ({ ...f, country_id: e.target.value }))}>
+                    <option value="">Select country</option>
+                    {countries.map((c, i) => <option key={i} value={c.id || c.name}>{c.name} — {c.region}</option>)}
+                  </select>
+                </div>
+              </div>
+              {siteError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{siteError}</div>}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn-primary" onClick={addSite} disabled={savingSite}>{savingSite ? 'Saving...' : 'Add site'}</button>
+                <button className="btn-secondary" onClick={() => setShowSiteForm(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            <table>
+              <thead><tr><th>Site name</th><th>Code</th><th>Country</th><th>Region</th><th>Devices</th><th>Actions</th></tr></thead>
+              <tbody>
+                {sites
+                  .filter(s => !siteSearch || s.name?.toLowerCase().includes(siteSearch.toLowerCase()) || s.country?.toLowerCase().includes(siteSearch.toLowerCase()))
+                  .map(s => (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: '500', color: '#111827' }}>{s.name}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#6b7280' }}>{s.code || '—'}</td>
+                    <td>{s.country}</td>
+                    <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{s.region}</span></td>
+                    <td>
+                      <span style={{ fontSize: '12px', fontWeight: '500', color: parseInt(s.total) > 0 ? '#111827' : '#9ca3af' }}>
+                        {s.total} device{parseInt(s.total) !== 1 ? 's' : ''}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        className="btn-danger"
+                        style={{ padding: '4px 10px', fontSize: '12px' }}
+                        onClick={() => deleteSite(s.id, s.name)}
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
