@@ -95,7 +95,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
               </div>
               <button className="btn-primary" disabled={savingSite} onClick={async () => {
                 setSavingSite(true)
-                await fetch(`/api/sites/${siteId}`, {
+                await fetch(`/api/sites/${site.id}`, {
                   method: 'PUT',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify(siteForm)
