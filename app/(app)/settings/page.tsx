@@ -8,7 +8,7 @@ type Settings = {
   app_primary_color: string; app_navy_color: string
 }
 type User = { id: number; name: string; email: string; role: string; created_at: string }
-type Site = { id: number; name: string; code: string; country: string; country_id: number; region: string; total: string }
+type Site = { id: number; site: string; name: string; code: string; country: string; country_id: number; region: string; total: string }
 type Country = { id: number; name: string; iso_code: string; region: string }
 
 const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS']
