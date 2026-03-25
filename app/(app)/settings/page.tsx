@@ -88,7 +88,7 @@ export default function SettingsPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(siteForm)
     })
-    if (res.ok) { setShowSiteForm(false); setSiteForm({ name: '', code: '', country_id: '' }); fetchSites() }
+    if (res.ok) { setShowSiteForm(false); setSiteForm({ name: '', code: '', country_id: '', address: '', city: '', postal_code: '', coordinates: '', site_type: '', phone: '', contact_name: '', contact_email: '' }); fetchSites() }
     else { const d = await res.json(); setSiteError(d.error || 'Failed to add site') }
     setSavingSite(false)
   }
