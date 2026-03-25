@@ -4,16 +4,14 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 
 type Settings = {
-  app_name: string
-  app_subtitle: string
-  app_logo_url: string
-  app_primary_color: string
-  app_navy_color: string
+  app_name: string; app_subtitle: string; app_logo_url: string
+  app_primary_color: string; app_navy_color: string
 }
-
 type User = { id: number; name: string; email: string; role: string; created_at: string }
 type Site = { id: number; name: string; code: string; country: string; country_id: number; region: string; total: string }
-type Country = { id: number; name: string; region: string }
+type Country = { id: number; name: string; iso_code: string; region: string }
+
+const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS']
 
 export default function SettingsPage() {
   const { data: session } = useSession()
@@ -21,20 +19,19 @@ export default function SettingsPage() {
   const user = session?.user as { role?: string } | undefined
   useEffect(() => { if (user && user.role !== 'admin') router.push('/dashboard') }, [user, router])
 
-  const [settings, setSettings] = useState<Settings>({
-    app_name: '', app_subtitle: '', app_logo_url: '',
-    app_primary_color: '#C8102E', app_navy_color: '#1a2744'
-  })
-  const [users, setUsers] = useState<User[]>([])
+  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'>('branding')
+  const [settings, setSettings] = useState<Settings>({ app_name: '', app_subtitle: '', app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744' })
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsSaved, setSettingsSaved] = useState(false)
+
+  const [users, setUsers] = useState<User[]>([])
   const [showUserForm, setShowUserForm] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
   const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'viewer' })
   const [savingUser, setSavingUser] = useState(false)
   const [userError, setUserError] = useState('')
-  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'>('branding')
+
   const [sites, setSites] = useState<Site[]>([])
   const [countries, setCountries] = useState<Country[]>([])
   const [showSiteForm, setShowSiteForm] = useState(false)
@@ -47,36 +44,40 @@ export default function SettingsPage() {
     fetch('/api/settings').then(r => r.json()).then(d => { setSettings(d); setLoadingSettings(false) })
     fetch('/api/users').then(r => r.json()).then(setUsers)
     fetch('/api/sites').then(r => r.json()).then(setSites)
-    fetch('/api/lookup').then(r => r.json()).then(d => {
-      if (d.sites) {
-        const seen = new Set()
-        const uniqueCountries: Country[] = []
-        d.sites.forEach((s: any) => {
-          if (!seen.has(s.country)) {
-            seen.add(s.country)
-            uniqueCountries.push({ id: 0, name: s.country, region: s.region })
-          }
-        })
-        setCountries(uniqueCountries)
-      }
-    })
-    fetch('/api/countries').then(r => r.json()).then(d => { if (Array.isArray(d)) setCountries(d) }).catch(() => {})
+    fetch('/api/countries').then(r => r.json()).then(d => { if (Array.isArray(d)) setCountries(d) })
   }, [])
 
   async function saveSettings() {
     setSavingSettings(true)
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(settings)
-    })
-    setSavingSettings(false)
-    setSettingsSaved(true)
+    await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) })
+    setSavingSettings(false); setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 3000)
   }
 
-  function fetchSites() {
-    fetch('/api/sites').then(r => r.json()).then(setSites)
+  function fetchUsers() { fetch('/api/users').then(r => r.json()).then(setUsers) }
+  function fetchSites() { fetch('/api/sites').then(r => r.json()).then(setSites) }
+
+  function openAddUser() { setUserForm({ name: '', email: '', password: '', role: 'viewer' }); setEditUser(null); setShowUserForm(true); setUserError('') }
+  function openEditUser(u: User) { setUserForm({ name: u.name, email: u.email, password: '', role: u.role }); setEditUser(u); setShowUserForm(true); setUserError('') }
+
+  async function saveUser() {
+    if (!userForm.name || !userForm.email) { setUserError('Name and email required'); return }
+    if (!editUser && !userForm.password) { setUserError('Password required for new users'); return }
+    setSavingUser(true); setUserError('')
+    const res = await fetch(editUser ? `/api/users/${editUser.id}` : '/api/users', {
+      method: editUser ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userForm)
+    })
+    if (res.ok) { setShowUserForm(false); fetchUsers() }
+    else { const d = await res.json(); setUserError(d.error || 'Failed to save') }
+    setSavingUser(false)
+  }
+
+  async function deleteUser(id: number, name: string) {
+    if (!confirm(`Delete user "${name}"?`)) return
+    await fetch(`/api/users/${id}`, { method: 'DELETE' })
+    fetchUsers()
   }
 
   async function addSite() {
@@ -103,50 +104,19 @@ export default function SettingsPage() {
     else { const d = await res.json(); alert(d.error || 'Failed to delete') }
   }
 
-  function fetchUsers() {
-    fetch('/api/users').then(r => r.json()).then(setUsers)
-  }
-
-  function openAdd() {
-    setUserForm({ name: '', email: '', password: '', role: 'viewer' })
-    setEditUser(null); setShowUserForm(true); setUserError('')
-  }
-
-  function openEdit(u: User) {
-    setUserForm({ name: u.name, email: u.email, password: '', role: u.role })
-    setEditUser(u); setShowUserForm(true); setUserError('')
-  }
-
-  async function saveUser() {
-    if (!userForm.name || !userForm.email) { setUserError('Name and email required'); return }
-    if (!editUser && !userForm.password) { setUserError('Password required for new users'); return }
-    setSavingUser(true); setUserError('')
-    const res = await fetch(editUser ? `/api/users/${editUser.id}` : '/api/users', {
-      method: editUser ? 'PUT' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userForm)
-    })
-    if (res.ok) { setShowUserForm(false); fetchUsers() }
-    else { const d = await res.json(); setUserError(d.error || 'Failed to save') }
-    setSavingUser(false)
-  }
-
-  async function deleteUser(id: number, name: string) {
-    if (!confirm(`Delete user "${name}"?`)) return
-    await fetch(`/api/users/${id}`, { method: 'DELETE' })
-    fetchUsers()
-  }
-
   if (loadingSettings) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
 
+  const filteredSites = sites.filter(s =>
+    !siteSearch || s.name?.toLowerCase().includes(siteSearch.toLowerCase()) || s.country?.toLowerCase().includes(siteSearch.toLowerCase())
+  )
+
   return (
-    <div style={{ padding: '24px 28px', maxWidth: '860px' }}>
+    <div style={{ padding: '24px 28px', maxWidth: '900px' }}>
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Settings</h1>
-        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage app branding and user access</p>
+        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage app branding, users and sites</p>
       </div>
 
-      {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: '24px' }}>
         {(['branding', 'users', 'sites'] as const).map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? '#C8102E' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #C8102E' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
@@ -155,9 +125,9 @@ export default function SettingsPage() {
         ))}
       </div>
 
+      {/* BRANDING TAB */}
       {activeTab === 'branding' && (
         <div>
-          {/* Preview */}
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Preview</div>
             <div style={{ background: settings.app_navy_color || '#1a2744', borderRadius: '8px', padding: '14px 16px', width: '220px' }}>
@@ -175,22 +145,21 @@ export default function SettingsPage() {
                   <div style={{ color: 'white', fontSize: '13px', fontWeight: '700' }}>{settings.app_name || 'App name'}</div>
                 </div>
               )}
-              <div style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>{settings.app_logo_url ? settings.app_name : ''}</div>
+              {settings.app_logo_url && <div style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>{settings.app_name}</div>}
               <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>{settings.app_subtitle || 'Subtitle'}</div>
             </div>
           </div>
 
-          {/* Branding fields */}
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>App identity</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>App name</label>
-                <input className="input" value={settings.app_name} onChange={e => setSettings(s => ({ ...s, app_name: e.target.value }))} placeholder="e.g. TU CMDB" />
+                <input className="input" value={settings.app_name} onChange={e => setSettings(s => ({ ...s, app_name: e.target.value }))} placeholder="e.g. NetVault" />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Subtitle</label>
-                <input className="input" value={settings.app_subtitle} onChange={e => setSettings(s => ({ ...s, app_subtitle: e.target.value }))} placeholder="e.g. Thai Union Group" />
+                <input className="input" value={settings.app_subtitle} onChange={e => setSettings(s => ({ ...s, app_subtitle: e.target.value }))} placeholder="e.g. Network Intelligence Platform" />
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Logo</label>
@@ -199,7 +168,7 @@ export default function SettingsPage() {
                     {settings.app_logo_url ? (
                       <div style={{ position: 'relative', display: 'inline-block' }}>
                         <img src={settings.app_logo_url} alt="logo" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #e5e7eb' }} />
-                        <button onClick={() => setSettings(s => ({ ...s, app_logo_url: '' }))} style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>×</button>
+                        <button onClick={() => setSettings(s => ({ ...s, app_logo_url: '' }))} style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                       </div>
                     ) : (
                       <div style={{ width: '56px', height: '56px', borderRadius: '8px', border: '2px dashed #d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '11px' }}>No logo</div>
@@ -228,7 +197,6 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Colors */}
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colors</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -258,13 +226,13 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* USERS TAB */}
       {activeTab === 'users' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Manage who can access this system</p>
-            <button className="btn-primary" onClick={openAdd}>+ Add user</button>
+            <button className="btn-primary" onClick={openAddUser}>+ Add user</button>
           </div>
-
           {showUserForm && (
             <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>{editUser ? 'Edit user' : 'Add new user'}</h3>
@@ -276,9 +244,7 @@ export default function SettingsPage() {
                 ].map(f => (
                   <div key={f.field}>
                     <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
-                    <input className="input" type={f.type} placeholder={f.placeholder}
-                      value={userForm[f.field as keyof typeof userForm]}
-                      onChange={e => setUserForm(p => ({ ...p, [f.field]: e.target.value }))} />
+                    <input className="input" type={f.type} placeholder={f.placeholder} value={userForm[f.field as keyof typeof userForm]} onChange={e => setUserForm(p => ({ ...p, [f.field]: e.target.value }))} />
                   </div>
                 ))}
                 <div>
@@ -296,7 +262,6 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
             <table>
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
@@ -309,7 +274,7 @@ export default function SettingsPage() {
                     <td style={{ color: '#9ca3af', fontSize: '12px' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }} onClick={() => openEdit(u)}>Edit</button>
+                        <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }} onClick={() => openEditUser(u)}>Edit</button>
                         <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteUser(u.id, u.name)}>Delete</button>
                       </div>
                     </td>
@@ -320,14 +285,12 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
-    </div>
 
+      {/* SITES TAB */}
       {activeTab === 'sites' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input className="input" style={{ width: '240px' }} placeholder="Search sites..." value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
-            </div>
+            <input className="input" style={{ width: '240px' }} placeholder="Search sites or countries..." value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
             <button className="btn-primary" onClick={() => { setShowSiteForm(true); setSiteError('') }}>+ Add site</button>
           </div>
 
@@ -347,7 +310,7 @@ export default function SettingsPage() {
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Country <span style={{ color: '#C8102E' }}>*</span></label>
                   <select className="input select" value={siteForm.country_id} onChange={e => setSiteForm(f => ({ ...f, country_id: e.target.value }))}>
                     <option value="">Select country</option>
-                    {countries.map((c, i) => <option key={i} value={c.id || c.name}>{c.name} — {c.region}</option>)}
+                    {countries.map(c => <option key={c.id} value={c.id}>{c.name} — {c.region}</option>)}
                   </select>
                 </div>
               </div>
@@ -363,27 +326,15 @@ export default function SettingsPage() {
             <table>
               <thead><tr><th>Site name</th><th>Code</th><th>Country</th><th>Region</th><th>Devices</th><th>Actions</th></tr></thead>
               <tbody>
-                {sites
-                  .filter(s => !siteSearch || s.name?.toLowerCase().includes(siteSearch.toLowerCase()) || s.country?.toLowerCase().includes(siteSearch.toLowerCase()))
-                  .map(s => (
+                {filteredSites.map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: '500', color: '#111827' }}>{s.name}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#6b7280' }}>{s.code || '—'}</td>
                     <td>{s.country}</td>
                     <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{s.region}</span></td>
+                    <td><span style={{ fontSize: '12px', fontWeight: '500', color: parseInt(s.total) > 0 ? '#111827' : '#9ca3af' }}>{s.total}</span></td>
                     <td>
-                      <span style={{ fontSize: '12px', fontWeight: '500', color: parseInt(s.total) > 0 ? '#111827' : '#9ca3af' }}>
-                        {s.total} device{parseInt(s.total) !== 1 ? 's' : ''}
-                      </span>
-                    </td>
-                    <td>
-                      <button
-                        className="btn-danger"
-                        style={{ padding: '4px 10px', fontSize: '12px' }}
-                        onClick={() => deleteSite(s.id, s.name)}
-                      >
-                        Delete
-                      </button>
+                      <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteSite(s.id, s.name)}>Delete</button>
                     </td>
                   </tr>
                 ))}
