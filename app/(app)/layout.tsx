@@ -59,20 +59,28 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div style={{ display: 'flex', minHeight: '100vh', background: '#f8f8f8' }}>
       <div style={{ width: '220px', background: navy, display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
         <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+          <div style={{ marginBottom: '14px' }}>
             {settings.app_logo_url ? (
-              <img src={settings.app_logo_url} alt="logo" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover', flexShrink: 0 }} />
+              <img src={settings.app_logo_url} alt="logo" style={{ width: '100%', maxHeight: '48px', objectFit: 'contain', objectPosition: 'left', marginBottom: '8px' }} />
             ) : (
-              <div style={{ width: '32px', height: '32px', background: primary, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-                </svg>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                <div style={{ width: '32px', height: '32px', background: primary, borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ color: 'white', fontSize: '15px', fontWeight: '700' }}>{settings.app_name || 'NetVault'}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>{settings.app_subtitle || 'Network Intelligence Platform'}</div>
+                </div>
               </div>
             )}
-            <div>
-              <div style={{ color: 'white', fontSize: '15px', fontWeight: '700' }}>{settings.app_name || 'TU CMDB'}</div>
-              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>{settings.app_subtitle || 'Thai Union Group'}</div>
-            </div>
+            {settings.app_logo_url && (
+              <div>
+                <div style={{ color: 'white', fontSize: '13px', fontWeight: '600' }}>{settings.app_name || 'NetVault'}</div>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>{settings.app_subtitle || 'Network Intelligence Platform'}</div>
+              </div>
+            )}
           </div>
           <GlobalSearch />
         </div>

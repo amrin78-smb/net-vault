@@ -50,18 +50,23 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
             {settings.app_logo_url ? (
-              <img src={settings.app_logo_url} alt="logo" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }} />
-            ) : (
-              <div style={{ width: '40px', height: '40px', background: primary, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-                </svg>
+              <div style={{ textAlign: 'center' }}>
+                <img src={settings.app_logo_url} alt="logo" style={{ maxWidth: '200px', maxHeight: '64px', objectFit: 'contain', marginBottom: '8px' }} />
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{settings.app_subtitle}</div>
               </div>
+            ) : (
+              <>
+                <div style={{ width: '48px', height: '48px', background: primary, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ color: 'white', fontSize: '22px', fontWeight: '700' }}>{settings.app_name}</div>
+                  <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{settings.app_subtitle}</div>
+                </div>
+              </>
             )}
-            <div>
-              <div style={{ color: 'white', fontSize: '22px', fontWeight: '700' }}>{settings.app_name}</div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{settings.app_subtitle}</div>
-            </div>
           </div>
         </div>
         <div style={{ background: 'white', borderRadius: '12px', padding: '36px 40px' }}>

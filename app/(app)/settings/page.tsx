@@ -108,20 +108,23 @@ export default function SettingsPage() {
           {/* Preview */}
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Preview</div>
-            <div style={{ background: settings.app_navy_color || '#1a2744', borderRadius: '8px', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: '10px', width: '220px' }}>
+            <div style={{ background: settings.app_navy_color || '#1a2744', borderRadius: '8px', padding: '14px 16px', width: '220px' }}>
               {settings.app_logo_url ? (
-                <img src={settings.app_logo_url} alt="logo" style={{ width: '32px', height: '32px', borderRadius: '6px', objectFit: 'cover' }} />
+                <div style={{ marginBottom: '6px' }}>
+                  <img src={settings.app_logo_url} alt="logo" style={{ maxWidth: '160px', maxHeight: '40px', objectFit: 'contain', objectPosition: 'left' }} />
+                </div>
               ) : (
-                <div style={{ width: '32px', height: '32px', background: settings.app_primary_color || '#C8102E', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-                  </svg>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <div style={{ width: '28px', height: '28px', background: settings.app_primary_color || '#C8102E', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                    </svg>
+                  </div>
+                  <div style={{ color: 'white', fontSize: '13px', fontWeight: '700' }}>{settings.app_name || 'App name'}</div>
                 </div>
               )}
-              <div>
-                <div style={{ color: 'white', fontSize: '14px', fontWeight: '700' }}>{settings.app_name || 'App name'}</div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>{settings.app_subtitle || 'Subtitle'}</div>
-              </div>
+              <div style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>{settings.app_logo_url ? settings.app_name : ''}</div>
+              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>{settings.app_subtitle || 'Subtitle'}</div>
             </div>
           </div>
 
