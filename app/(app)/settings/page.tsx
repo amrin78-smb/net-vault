@@ -35,6 +35,10 @@ export default function SettingsPage() {
   const [sites, setSites] = useState<Site[]>([])
   const [countries, setCountries] = useState<Country[]>([])
   const [showSiteForm, setShowSiteForm] = useState(false)
+  const [editSite, setEditSite] = useState<Site | null>(null)
+  const [editSiteForm, setEditSiteForm] = useState({ name: '', code: '', city: '', address: '', postal_code: '', coordinates: '', site_type: '', phone: '', contact_name: '', contact_email: '' })
+  const [savingEditSite, setSavingEditSite] = useState(false)
+  const [editSiteError, setEditSiteError] = useState('')
   const [siteForm, setSiteForm] = useState({ name: '', code: '', country_id: '', address: '', city: '', postal_code: '', coordinates: '', site_type: '', phone: '', contact_name: '', contact_email: '' })
   const [savingSite, setSavingSite] = useState(false)
   const [siteError, setSiteError] = useState('')
@@ -91,6 +95,36 @@ export default function SettingsPage() {
     if (res.ok) { setShowSiteForm(false); setSiteForm({ name: '', code: '', country_id: '', address: '', city: '', postal_code: '', coordinates: '', site_type: '', phone: '', contact_name: '', contact_email: '' }); fetchSites() }
     else { const d = await res.json(); setSiteError(d.error || 'Failed to add site') }
     setSavingSite(false)
+  }
+
+  function openEditSite(s: Site) {
+    setEditSite(s)
+    setEditSiteForm({
+      name: s.name || s.site || '',
+      code: s.code || '',
+      city: (s as any).city || '',
+      address: (s as any).address || '',
+      postal_code: (s as any).postal_code || '',
+      coordinates: (s as any).coordinates || '',
+      site_type: (s as any).site_type || '',
+      phone: (s as any).phone || '',
+      contact_name: (s as any).contact_name || '',
+      contact_email: (s as any).contact_email || '',
+    })
+    setEditSiteError('')
+  }
+
+  async function saveEditSite() {
+    if (!editSite || !editSiteForm.name) { setEditSiteError('Site name is required'); return }
+    setSavingEditSite(true); setEditSiteError('')
+    const res = await fetch(`/api/sites/${editSite.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(editSiteForm)
+    })
+    if (res.ok) { setEditSite(null); fetchSites() }
+    else { const d = await res.json(); setEditSiteError(d.error || 'Failed to save') }
+    setSavingEditSite(false)
   }
 
   async function deleteSite(id: number, name: string) {
@@ -366,6 +400,50 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {editSite && (
+            <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
+              <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Edit site — {editSite.name || (editSite as any).site}</h3>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                {[
+                  { label: 'Site name *', field: 'name', placeholder: 'e.g. Bangkok Office' },
+                  { label: 'Site code', field: 'code', placeholder: 'e.g. BKK-01' },
+                  { label: 'City', field: 'city', placeholder: 'e.g. Bangkok' },
+                  { label: 'Postal code', field: 'postal_code', placeholder: 'e.g. 10110' },
+                  { label: 'GPS coordinates', field: 'coordinates', placeholder: 'e.g. 13.7563, 100.5018' },
+                  { label: 'Phone', field: 'phone', placeholder: 'e.g. +66 2 123 4567' },
+                  { label: 'Contact name', field: 'contact_name', placeholder: 'e.g. John Smith' },
+                  { label: 'Contact email', field: 'contact_email', placeholder: 'e.g. john@company.com' },
+                ].map(f => (
+                  <div key={f.field}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
+                    <input className="input" placeholder={f.placeholder}
+                      value={editSiteForm[f.field as keyof typeof editSiteForm]}
+                      onChange={e => setEditSiteForm(p => ({ ...p, [f.field]: e.target.value }))} />
+                  </div>
+                ))}
+                <div>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site type</label>
+                  <select className="input select" value={editSiteForm.site_type} onChange={e => setEditSiteForm(p => ({ ...p, site_type: e.target.value }))}>
+                    <option value="">Select type</option>
+                    {['Head Office','Factory','Warehouse','Branch Office','Data Center','Cloud','Other'].map(t => <option key={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Address</label>
+                  <textarea className="input" rows={2} placeholder="Full street address"
+                    value={editSiteForm.address}
+                    onChange={e => setEditSiteForm(p => ({ ...p, address: e.target.value }))}
+                    style={{ resize: 'vertical' }} />
+                </div>
+              </div>
+              {editSiteError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{editSiteError}</div>}
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button className="btn-primary" onClick={saveEditSite} disabled={savingEditSite}>{savingEditSite ? 'Saving...' : 'Save changes'}</button>
+                <button className="btn-secondary" onClick={() => setEditSite(null)}>Cancel</button>
+              </div>
+            </div>
+          )}
+
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
             <table>
               <thead><tr><th>Site name</th><th>Code</th><th>Country</th><th>Region</th><th>Devices</th><th>Actions</th></tr></thead>
@@ -378,7 +456,10 @@ export default function SettingsPage() {
                     <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{s.region}</span></td>
                     <td><span style={{ fontSize: '12px', fontWeight: '500', color: parseInt(s.total) > 0 ? '#111827' : '#9ca3af' }}>{s.total}</span></td>
                     <td>
-                      <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteSite(s.id, s.name)}>Delete</button>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }} onClick={() => openEditSite(s)}>Edit</button>
+                        <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteSite(s.id, s.name || (s as any).site)}>Delete</button>
+                      </div>
                     </td>
                   </tr>
                 ))}
