@@ -29,6 +29,9 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [typeFilter, setTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [activeTab, setActiveTab] = useState<'devices'|'circuits'>('devices')
+  const [editingSite, setEditingSite] = useState(false)
+  const [siteForm, setSiteForm] = useState({ name: '', code: '' })
+  const [savingSite, setSavingSite] = useState(false)
 
   useEffect(() => {
     params.then(async p => {
@@ -37,6 +40,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
         fetch(`/api/circuits`).then(r => r.json()),
       ])
       setData(siteData)
+      setSiteForm({ name: siteData.site?.site || '', code: siteData.site?.code || '' })
       const siteCircuits = Array.isArray(allCircuits)
         ? allCircuits.filter((c: Circuit) => String(c.site_id) === String(p.id))
         : []
@@ -78,19 +82,53 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: '0 0 4px' }}>{site.site}</h1>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: '#6b7280' }}>{site.country}</span>
-            <span style={{ color: '#d1d5db' }}>·</span>
-            <span style={{ fontSize: '13px', color: '#6b7280' }}>{site.region}</span>
-            {site.code && <span style={{ fontSize: '11px', background: '#f3f4f6', color: '#6b7280', padding: '2px 8px', borderRadius: '20px' }}>{site.code}</span>}
+        <div style={{ flex: 1, marginRight: '16px' }}>
+          {editingSite ? (
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Site name</label>
+                <input className="input" style={{ width: '220px' }} value={siteForm.name} onChange={e => setSiteForm(f => ({ ...f, name: e.target.value }))} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Site code</label>
+                <input className="input" style={{ width: '120px' }} value={siteForm.code} onChange={e => setSiteForm(f => ({ ...f, code: e.target.value }))} placeholder="e.g. CEVA" />
+              </div>
+              <button className="btn-primary" disabled={savingSite} onClick={async () => {
+                setSavingSite(true)
+                await fetch(`/api/sites/${siteId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(siteForm)
+                })
+                setData(d => d ? { ...d, site: { ...d.site, site: siteForm.name, code: siteForm.code } } : d)
+                setEditingSite(false)
+                setSavingSite(false)
+              }}>{savingSite ? 'Saving...' : 'Save'}</button>
+              <button className="btn-secondary" onClick={() => { setEditingSite(false); setSiteForm({ name: site.site, code: site.code }) }}>Cancel</button>
+            </div>
+          ) : (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+                <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{site.site}</h1>
+                {isAdmin && (
+                  <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer', color: '#6b7280' }}>Edit</button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '13px', color: '#6b7280' }}>{site.country}</span>
+                <span style={{ color: '#d1d5db' }}>·</span>
+                <span style={{ fontSize: '13px', color: '#6b7280' }}>{site.region}</span>
+                {site.code && <span style={{ fontSize: '11px', background: '#f3f4f6', color: '#6b7280', padding: '2px 8px', borderRadius: '20px' }}>{site.code}</span>}
+              </div>
+            </div>
+          )}
+        </div>
+        {!editingSite && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {isAdmin && <Link href="/devices/new"><button className="btn-primary">+ Add device</button></Link>}
+            {isAdmin && <Link href={`/circuits/new?site_id=${site.id}&site=${encodeURIComponent(site.site)}`}><button className="btn-secondary">+ Add circuit</button></Link>}
           </div>
-        </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {isAdmin && <Link href="/devices/new"><button className="btn-primary">+ Add device</button></Link>}
-          {isAdmin && <Link href={`/circuits/new?site_id=${site.id}&site=${encodeURIComponent(site.site)}`}><button className="btn-secondary">+ Add circuit</button></Link>}
-        </div>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '12px', marginBottom: '20px' }}>

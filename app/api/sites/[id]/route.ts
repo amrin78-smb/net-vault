@@ -38,3 +38,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!siteRes.rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json({ site: siteRes.rows[0], devices: devicesRes.rows })
 }
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = session.user as { role: string }
+  if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { id } = await params
+  const body = await req.json()
+  await query(
+    `UPDATE sites SET name = $1, code = $2 WHERE id = $3`,
+    [body.name, body.code || null, id]
+  )
+  return NextResponse.json({ success: true })
+}
