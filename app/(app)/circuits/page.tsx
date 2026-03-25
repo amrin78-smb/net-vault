@@ -8,8 +8,8 @@ type Circuit = {
   country: string; region: string; isp: string; usage: string
   circuit_id: string; product: string; technology: string; circuit_type: string
   interface: string; max_speed: string; guaranteed_speed: string
-  public_subnet: string; cost_month: string; pingable: string; comment: string
-  it_owner: string; city: string
+  public_subnet: string; cost_month: string; currency: string
+  pingable: string; comment: string; it_owner: string; city: string
 }
 
 function UsageBadge({ usage }: { usage: string }) {
@@ -18,13 +18,14 @@ function UsageBadge({ usage }: { usage: string }) {
 }
 
 function TechBadge({ tech }: { tech: string }) {
+  if (!tech || tech === 'nan') return <span style={{ color: '#d1d5db', fontSize: '12px' }}>—</span>
   const colors: Record<string, { bg: string; color: string }> = {
     'DIA': { bg: '#dcfce7', color: '#166534' },
     'MPLS': { bg: '#ede9fe', color: '#5b21b6' },
     'SD-WAN': { bg: '#fef3c7', color: '#92400e' },
   }
   const c = colors[tech] || { bg: '#f3f4f6', color: '#6b7280' }
-  return <span className="badge" style={{ background: c.bg, color: c.color }}>{tech || '—'}</span>
+  return <span className="badge" style={{ background: c.bg, color: c.color }}>{tech}</span>
 }
 
 function PingBadge({ pingable }: { pingable: string }) {
@@ -58,7 +59,7 @@ export default function CircuitsPage() {
     })
     const res = await fetch(`/api/circuits?${params}`)
     const data = await res.json()
-    setCircuits(data)
+    setCircuits(Array.isArray(data) ? data : [])
     setLoading(false)
   }
 
@@ -69,11 +70,16 @@ export default function CircuitsPage() {
   }
 
   const isps = [...new Set(circuits.map(c => c.isp).filter(Boolean))].sort()
-  const technologies = [...new Set(circuits.map(c => c.technology).filter(Boolean))].sort()
+  const technologies = [...new Set(circuits.map(c => c.technology).filter(t => t && t !== 'nan'))].sort()
   const countries = [...new Set(circuits.map(c => c.country).filter(Boolean))].sort()
   const totalCost = circuits.reduce((s, c) => s + (parseFloat(c.cost_month) || 0), 0)
   const mainCount = circuits.filter(c => c.usage?.toLowerCase() === 'main').length
   const backupCount = circuits.filter(c => c.usage?.toLowerCase() === 'backup').length
+
+  function formatCost(cost: string, currency: string) {
+    if (!cost) return '—'
+    return `${currency || 'THB'} ${parseFloat(cost).toLocaleString()}`
+  }
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -82,16 +88,14 @@ export default function CircuitsPage() {
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>WAN Circuits</h1>
           <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>ISP circuit inventory across all sites</p>
         </div>
-        <button className="btn-secondary" onClick={() => window.location.href='/api/circuits/export'} style={{ fontSize: '13px' }}>Export CSV</button>
       </div>
 
-      {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
           { label: 'Total circuits', value: circuits.length, color: '#1a2744' },
           { label: 'Main links', value: mainCount, color: '#166534' },
           { label: 'Backup links', value: backupCount, color: '#075985' },
-          { label: 'Monthly cost', value: totalCost > 0 ? `$${totalCost.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—', color: '#92400e' },
+          { label: 'Monthly cost (THB)', value: totalCost > 0 ? totalCost.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—', color: '#92400e' },
         ].map(s => (
           <div key={s.label} style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
             <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
@@ -100,7 +104,6 @@ export default function CircuitsPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
         <input className="input" style={{ flex: 1, minWidth: '200px', maxWidth: '280px' }}
           placeholder="Search circuit ID, ISP, subnet..."
@@ -127,7 +130,6 @@ export default function CircuitsPage() {
         )}
       </div>
 
-      {/* Table */}
       <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading circuits...</div>
@@ -138,17 +140,9 @@ export default function CircuitsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Site</th>
-                  <th>Country</th>
-                  <th>ISP</th>
-                  <th>Circuit ID</th>
-                  <th>Usage</th>
-                  <th>Technology</th>
-                  <th>Max speed</th>
-                  <th>Public subnet</th>
-                  <th>Cost/month</th>
-                  <th>Pingable</th>
-                  <th>Actions</th>
+                  <th>Site</th><th>Country</th><th>ISP</th><th>Circuit ID</th>
+                  <th>Usage</th><th>Technology</th><th>Max speed</th>
+                  <th>Public subnet</th><th>Cost/month</th><th>Pingable</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -161,12 +155,12 @@ export default function CircuitsPage() {
                     </td>
                     <td style={{ fontSize: '12px', color: '#6b7280' }}>{c.country}</td>
                     <td style={{ fontWeight: '500' }}>{c.isp}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#374151' }}>{c.circuit_id || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.circuit_id || '—'}</td>
                     <td><UsageBadge usage={c.usage} /></td>
                     <td><TechBadge tech={c.technology} /></td>
-                    <td style={{ fontSize: '12px', fontFamily: 'monospace' }}>{c.max_speed || '—'}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.public_subnet && c.public_subnet !== '-' ? c.public_subnet : '—'}</td>
-                    <td style={{ fontSize: '12px' }}>{c.cost_month ? `THB ${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.max_speed || '—'}</td>
+                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.public_subnet && c.public_subnet !== '-' && c.public_subnet !== 'nan' ? c.public_subnet : '—'}</td>
+                    <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{formatCost(c.cost_month, c.currency)}</td>
                     <td><PingBadge pingable={c.pingable} /></td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>

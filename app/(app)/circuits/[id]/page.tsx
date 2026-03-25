@@ -5,6 +5,8 @@ import Link from 'next/link'
 
 type Circuit = Record<string, any>
 
+const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS']
+
 export default function CircuitDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { data: session } = useSession()
   const user = session?.user as { role?: string } | undefined
@@ -40,10 +42,15 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
   if (!circuit) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Circuit not found</div>
 
+  const formatCost = (cost: any, currency: string) => {
+    if (!cost) return '—'
+    return `${currency || 'THB'} ${parseFloat(cost).toLocaleString()}`
+  }
+
   const Field = ({ label, value }: { label: string; value: any }) => (
     <div style={{ marginBottom: '14px' }}>
       <div style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
-      <div style={{ fontSize: '14px', color: value && value !== 'nan' ? '#111827' : '#d1d5db', fontFamily: ['Circuit ID','Public subnet','Max speed','Guaranteed speed'].includes(label) ? 'monospace' : undefined }}>
+      <div style={{ fontSize: '14px', color: value && value !== 'nan' && value !== '-' ? '#111827' : '#d1d5db', fontFamily: ['Circuit ID','Public subnet','Max speed','Guaranteed speed'].includes(label) ? 'monospace' : undefined }}>
         {value && value !== 'nan' && value !== '-' ? value : '—'}
       </div>
     </div>
@@ -83,7 +90,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
             {circuit.usage && (
               <span className="badge" style={{ background: circuit.usage?.toLowerCase() === 'main' ? '#e0f2fe' : '#f3f4f6', color: circuit.usage?.toLowerCase() === 'main' ? '#075985' : '#6b7280' }}>{circuit.usage}</span>
             )}
-            {circuit.technology && (
+            {circuit.technology && circuit.technology !== 'nan' && (
               <span className="badge" style={{ background: '#ede9fe', color: '#5b21b6' }}>{circuit.technology}</span>
             )}
           </div>
@@ -119,7 +126,13 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
           <div>
             <Section title="Commercial">
               <EditField label="Public subnet" field="public_subnet" />
-              <EditField label="Cost/month ($)" field="cost_month" type="number" />
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Currency</label>
+                <select className="input select" value={form.currency || 'THB'} onChange={e => setForm((f: Circuit) => ({ ...f, currency: e.target.value }))}>
+                  {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                </select>
+              </div>
+              <EditField label="Cost/month" field="cost_month" type="number" />
               <EditField label="Contract term" field="contract_term" />
               <EditField label="Pingable" field="pingable" />
               <div style={{ gridColumn: '1 / -1' }}>
@@ -154,7 +167,8 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
           <div>
             <Section title="Commercial">
               <Field label="Public subnet" value={circuit.public_subnet} />
-              <Field label="Cost / month" value={circuit.cost_month ? `THB ${parseFloat(circuit.cost_month).toLocaleString()}` : null} />
+              <Field label="Currency" value={circuit.currency || 'THB'} />
+              <Field label="Cost / month" value={formatCost(circuit.cost_month, circuit.currency)} />
               <Field label="Contract term" value={circuit.contract_term} />
               <Field label="Pingable from IDC" value={circuit.pingable} />
               <div style={{ gridColumn: '1 / -1' }}><Field label="Comment" value={circuit.comment} /></div>
