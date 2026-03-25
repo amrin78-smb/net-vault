@@ -1,7 +1,12 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+
+type Settings = {
+  app_name: string; app_subtitle: string; app_logo_url: string
+  app_primary_color: string; app_navy_color: string
+}
 
 export default function LoginPage() {
   const router = useRouter()
@@ -9,6 +14,19 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [settings, setSettings] = useState<Settings>({
+    app_name: 'NetVault',
+    app_subtitle: 'Network Intelligence Platform',
+    app_logo_url: '',
+    app_primary_color: '#C8102E',
+    app_navy_color: '#1a2744',
+  })
+
+  useEffect(() => {
+    fetch('/api/settings').then(r => r.json()).then(d => {
+      if (d && !d.error) setSettings(d)
+    }).catch(() => {})
+  }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -23,19 +41,26 @@ export default function LoginPage() {
     }
   }
 
+  const navy = settings.app_navy_color || '#1a2744'
+  const primary = settings.app_primary_color || '#C8102E'
+
   return (
-    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #1a2744 0%, #2d3f6b 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+    <div style={{ minHeight: '100vh', background: `linear-gradient(135deg, ${navy} 0%, ${navy}dd 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
       <div style={{ width: '100%', maxWidth: '420px' }}>
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ width: '40px', height: '40px', background: '#C8102E', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-              </svg>
-            </div>
+            {settings.app_logo_url ? (
+              <img src={settings.app_logo_url} alt="logo" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }} />
+            ) : (
+              <div style={{ width: '40px', height: '40px', background: primary, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                </svg>
+              </div>
+            )}
             <div>
-              <div style={{ color: 'white', fontSize: '20px', fontWeight: '700' }}>TU CMDB</div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>Thai Union Group</div>
+              <div style={{ color: 'white', fontSize: '22px', fontWeight: '700' }}>{settings.app_name}</div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{settings.app_subtitle}</div>
             </div>
           </div>
         </div>
@@ -75,7 +100,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              style={{ width: '100%', padding: '11px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '7px', fontSize: '15px', fontWeight: '500', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
+              style={{ width: '100%', padding: '11px', background: primary, color: 'white', border: 'none', borderRadius: '7px', fontSize: '15px', fontWeight: '500', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
