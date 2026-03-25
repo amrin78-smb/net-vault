@@ -156,7 +156,7 @@ export default function DashboardPage() {
         {[
           { label: 'WAN circuits', value: parseInt(circuitStats.total_circuits).toLocaleString(), sub: `${circuitStats.sites_with_circuits} sites covered`, color: '#075985' },
           { label: 'Main links', value: parseInt(circuitStats.main_circuits).toLocaleString(), sub: `${parseInt(circuitStats.backup_circuits)} backup links`, color: '#166534' },
-          { label: 'Monthly cost (THB)', value: parseFloat(circuitStats.total_cost_thb) > 0 ? `฿${parseFloat(circuitStats.total_cost_thb).toLocaleString(undefined,{maximumFractionDigits:0})}` : '—', sub: parseFloat(circuitStats.total_cost_usd) > 0 ? `+ $${parseFloat(circuitStats.total_cost_usd).toLocaleString(undefined,{maximumFractionDigits:0})} USD` : 'THB circuits only', color: '#92400e' },
+          { label: 'Sites with WAN', value: parseInt(circuitStats.sites_with_circuits).toLocaleString(), sub: `out of 51 total sites`, color: '#92400e' },
           { label: 'ISP providers', value: parseInt(circuitStats.total_isps).toLocaleString(), sub: `${circuitStats.pingable_count} circuits pingable`, color: '#5b21b6' },
         ].map(s => (
           <div key={s.label} style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
