@@ -97,21 +97,25 @@ export default function SettingsPage() {
     setSavingSite(false)
   }
 
-  function openEditSite(s: Site) {
+  async function openEditSite(s: Site) {
     setEditSite(s)
-    setEditSiteForm({
-      name: s.name || s.site || '',
-      code: s.code || '',
-      city: (s as any).city || '',
-      address: (s as any).address || '',
-      postal_code: (s as any).postal_code || '',
-      coordinates: (s as any).coordinates || '',
-      site_type: (s as any).site_type || '',
-      phone: (s as any).phone || '',
-      contact_name: (s as any).contact_name || '',
-      contact_email: (s as any).contact_email || '',
-    })
     setEditSiteError('')
+    // Fetch full site details
+    const res = await fetch(`/api/sites/${s.id}`)
+    const data = await res.json()
+    const full = data.site || {}
+    setEditSiteForm({
+      name: full.site || s.name || '',
+      code: full.code || s.code || '',
+      city: full.city || '',
+      address: full.address || '',
+      postal_code: full.postal_code || '',
+      coordinates: full.coordinates || '',
+      site_type: full.site_type || '',
+      phone: full.phone || '',
+      contact_name: full.contact_name || '',
+      contact_email: full.contact_email || '',
+    })
   }
 
   async function saveEditSite() {
