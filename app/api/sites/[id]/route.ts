@@ -18,8 +18,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       WHERE s.id = $1
     `, [id]),
     query(`
-      SELECT * FROM v_devices_flat WHERE site_id = $1
-      ORDER BY device_type, name
+      SELECT
+        d.id, d.name, d.model, d.serial_number,
+        d.ip_address, d.device_status, d.lifecycle_status,
+        d.location_detail, d.risk_score,
+        dt.name as device_type,
+        b.name as brand,
+        s.name as site,
+        s.id as site_id
+      FROM devices d
+      LEFT JOIN device_types dt ON dt.id = d.device_type_id
+      LEFT JOIN brands b ON b.id = d.brand_id
+      LEFT JOIN sites s ON s.id = d.site_id
+      WHERE d.site_id = $1
+      ORDER BY dt.name, d.name
     `, [id]),
   ])
 
