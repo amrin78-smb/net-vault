@@ -87,7 +87,10 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             {site.code && <span style={{ fontSize: '11px', background: '#f3f4f6', color: '#6b7280', padding: '2px 8px', borderRadius: '20px' }}>{site.code}</span>}
           </div>
         </div>
-        {isAdmin && <Link href="/devices/new"><button className="btn-primary">+ Add device</button></Link>}
+        <div style={{ display: 'flex', gap: '8px' }}>
+          {isAdmin && <Link href="/devices/new"><button className="btn-primary">+ Add device</button></Link>}
+          {isAdmin && <Link href={`/circuits/new?site_id=${siteId}&site=${encodeURIComponent(site.site)}`}><button className="btn-secondary">+ Add circuit</button></Link>}
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '12px', marginBottom: '20px' }}>

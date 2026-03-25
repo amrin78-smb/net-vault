@@ -7,9 +7,10 @@ type RegionRow = { region: string; total: string; eol_count: string }
 type TypeRow = { device_type: string; total: string }
 type EolRow = { site: string; country: string; region: string; eol_count: string }
 type ActivityRow = { field_name: string; changed_at: string; changed_by_name: string; device_name: string }
+type CircuitStats = { total_circuits: string; main_circuits: string; backup_circuits: string; sites_with_circuits: string; total_cost_thb: string; total_cost_usd: string; total_cost_eur: string; total_isps: string; pingable_count: string }
 
 export default function DashboardPage() {
-  const [data, setData] = useState<{ summary: Summary; byRegion: RegionRow[]; byType: TypeRow[]; topEol: EolRow[]; recentActivity: ActivityRow[] } | null>(null)
+  const [data, setData] = useState<{ summary: Summary; byRegion: RegionRow[]; byType: TypeRow[]; topEol: EolRow[]; recentActivity: ActivityRow[]; circuitStats: CircuitStats } | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartsReady, setChartsReady] = useState(false)
 
@@ -102,7 +103,7 @@ export default function DashboardPage() {
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading dashboard...</div>
   if (!data) return null
 
-  const { summary, byRegion, topEol, recentActivity } = data
+  const { summary, byRegion, topEol, recentActivity, circuitStats } = data
   const total = parseInt(summary.total)
   const eol = parseInt(summary.eol)
   const eolPct = total > 0 ? Math.round((eol / total) * 100) : 0
@@ -146,6 +147,22 @@ export default function DashboardPage() {
             <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
             <div style={{ fontSize: '26px', fontWeight: '700', color: s.color }}>{s.value}</div>
             <div style={{ fontSize: '11px', color: s.label === 'EOL / EOS' && eolPct >= 25 ? '#991b1b' : '#9ca3af', marginTop: '2px' }}>{s.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Circuit stats row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>
+        {[
+          { label: 'WAN circuits', value: parseInt(circuitStats.total_circuits).toLocaleString(), sub: `${circuitStats.sites_with_circuits} sites covered`, color: '#075985' },
+          { label: 'Main links', value: parseInt(circuitStats.main_circuits).toLocaleString(), sub: `${parseInt(circuitStats.backup_circuits)} backup links`, color: '#166534' },
+          { label: 'Monthly cost (THB)', value: parseFloat(circuitStats.total_cost_thb) > 0 ? `฿${parseFloat(circuitStats.total_cost_thb).toLocaleString(undefined,{maximumFractionDigits:0})}` : '—', sub: parseFloat(circuitStats.total_cost_usd) > 0 ? `+ $${parseFloat(circuitStats.total_cost_usd).toLocaleString(undefined,{maximumFractionDigits:0})} USD` : 'THB circuits only', color: '#92400e' },
+          { label: 'ISP providers', value: parseInt(circuitStats.total_isps).toLocaleString(), sub: `${circuitStats.pingable_count} circuits pingable`, color: '#5b21b6' },
+        ].map(s => (
+          <div key={s.label} style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
+            <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+            <div style={{ fontSize: '22px', fontWeight: '700', color: s.color }}>{s.value}</div>
+            <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '2px' }}>{s.sub}</div>
           </div>
         ))}
       </div>
