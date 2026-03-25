@@ -48,7 +48,7 @@ export default function UsersPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Users</h1>
-          <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage who can access TU CMDB</p>
+          <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage who can access this system</p>
         </div>
         <button className="btn-primary" onClick={openAdd}>+ Add user</button>
       </div>
