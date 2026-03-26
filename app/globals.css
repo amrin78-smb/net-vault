@@ -93,3 +93,8 @@ th { background: #f9fafb; padding: 10px 14px; text-align: left; font-size: 11px;
 td { padding: 11px 14px; font-size: 13px; color: #374151; border-bottom: 1px solid #f3f4f6; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: #fafafa; }
+
+/* Filter row selects should not be full width */
+.filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+.filter-row .select { width: auto; min-width: 130px; }
+.filter-row .input { width: auto; }

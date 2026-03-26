@@ -104,24 +104,24 @@ export default function CircuitsPage() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap', alignItems: 'center' }}>
         <input className="input" style={{ flex: 1, minWidth: '200px', maxWidth: '280px' }}
           placeholder="Search circuit ID, ISP, subnet..."
           value={search} onChange={e => setSearch(e.target.value)} />
-        <select className="select" value={country} onChange={e => setCountry(e.target.value)}>
+        <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={country} onChange={e => setCountry(e.target.value)}>
           <option value="">All countries</option>
           {countries.map(c => <option key={c}>{c}</option>)}
         </select>
-        <select className="select" value={isp} onChange={e => setIsp(e.target.value)}>
+        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={isp} onChange={e => setIsp(e.target.value)}>
           <option value="">All ISPs</option>
           {isps.map(i => <option key={i}>{i}</option>)}
         </select>
-        <select className="select" value={usage} onChange={e => setUsage(e.target.value)}>
+        <select className="select" style={{ width: 'auto', minWidth: '120px' }} value={usage} onChange={e => setUsage(e.target.value)}>
           <option value="">All usage</option>
           <option value="Main">Main</option>
           <option value="Backup">Backup</option>
         </select>
-        <select className="select" value={technology} onChange={e => setTechnology(e.target.value)}>
+        <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={technology} onChange={e => setTechnology(e.target.value)}>
           <option value="">All technology</option>
           {technologies.map(t => <option key={t}>{t}</option>)}
         </select>

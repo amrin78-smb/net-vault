@@ -77,9 +77,9 @@ export default function SitesPage() {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-        <input className="input" style={{ flex: 1, maxWidth: '280px' }} placeholder="Search site or country..."
+        <input className="input" style={{ flex: 1, maxWidth: '280px', width: '280px' }} placeholder="Search site or country..."
           value={search} onChange={e => setSearch(e.target.value)} />
-        <select className="select" value={region} onChange={e => setRegion(e.target.value)}>
+        <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={region} onChange={e => setRegion(e.target.value)}>
           <option value="">All regions</option>
           {regions.map(r => <option key={r}>{r}</option>)}
         </select>
