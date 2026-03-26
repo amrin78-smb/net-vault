@@ -144,7 +144,6 @@ export default function CircuitsPage() {
                   <th>Country</th>
                   <th>ISP</th>
                   <th>Usage</th>
-                  <th>Technology</th>
                   <th>Max speed</th>
                   <th>Public subnet</th>
                   <th>Cost/month</th>
@@ -163,7 +162,6 @@ export default function CircuitsPage() {
                     <td style={{ fontWeight: '500' }}>{c.isp}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.circuit_id || '—'}</td>
                     <td><UsageBadge usage={c.usage} /></td>
-                    <td><TechBadge tech={c.technology} /></td>
                     <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.max_speed || '—'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.public_subnet && c.public_subnet !== '-' && c.public_subnet !== 'nan' ? c.public_subnet : '—'}</td>
                     <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{formatCost(c.cost_month, c.currency)}</td>
