@@ -115,11 +115,18 @@ export default function NewCircuitPage() {
           </Field>
           <Field label="Usage">
             <select className="input select" value={form.usage} onChange={e => set('usage', e.target.value)}>
-              <option>Main</option>
-              <option>Backup</option>
-              <option>VIP</option>
-              <option>IT internet/youtube</option>
-            </select>
+                <option value="">Select usage</option>
+                <option key='Primary Internet'>Primary Internet</option>
+                <option key='Backup Internet'>Backup Internet</option>
+                <option key='MPLS Primary'>MPLS Primary</option>
+                <option key='MPLS Backup'>MPLS Backup</option>
+                <option key='Guest Internet'>Guest Internet</option>
+                <option key='Out-of-Band / Management'>Out-of-Band / Management</option>
+                <option key='CCTV / Camera'>CCTV / Camera</option>
+                <option key='IoT / OT'>IoT / OT</option>
+                <option key='Compliance / Government'>Compliance / Government</option>
+                <option key='Others'>Others</option>
+                </select>
           </Field>
           <Field label="Circuit ID">
             <input className="input" value={form.circuit_id} onChange={e => set('circuit_id', e.target.value)} placeholder="e.g. DI40443" />
