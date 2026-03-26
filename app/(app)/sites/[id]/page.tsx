@@ -216,11 +216,11 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           </div>
           <div>
             <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
-              <select className="select" value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+              <select className="select" style={{ width: "auto", minWidth: "130px" }} value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
                 <option value="">All types</option>
                 {types.map(t => <option key={t}>{t}</option>)}
               </select>
-              <select className="select" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <select className="select" style={{ width: "auto", minWidth: "130px" }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
                 <option value="">All statuses</option>
                 {['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
               </select>

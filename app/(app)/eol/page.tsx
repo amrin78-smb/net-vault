@@ -46,7 +46,7 @@ export default function EolPage() {
         </div>
       </div>
       <div style={{ marginBottom: '16px' }}>
-        <select className="select" value={region} onChange={e => setRegion(e.target.value)}>
+        <select className="select" style={{ width: "auto", minWidth: "130px" }} value={region} onChange={e => setRegion(e.target.value)}>
           <option value="">All regions</option>
           {regions.map(r => <option key={r}>{r}</option>)}
         </select>
