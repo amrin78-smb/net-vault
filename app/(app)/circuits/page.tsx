@@ -160,7 +160,6 @@ export default function CircuitsPage() {
                     </td>
                     <td style={{ fontSize: '12px', color: '#6b7280' }}>{c.country}</td>
                     <td style={{ fontWeight: '500' }}>{c.isp}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.circuit_id || '—'}</td>
                     <td><UsageBadge usage={c.usage} /></td>
                     <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.max_speed || '—'}</td>
                     <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.public_subnet && c.public_subnet !== '-' && c.public_subnet !== 'nan' ? c.public_subnet : '—'}</td>
