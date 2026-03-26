@@ -7,7 +7,7 @@ type Settings = {
   app_name: string; app_subtitle: string; app_logo_url: string
   app_primary_color: string; app_navy_color: string
 }
-type User = { id: number; name: string; email: string; role: string; created_at: string }
+type User = { id: number; name: string; email: string; role: string; created_at: string; sites?: { id: number; name: string; code: string }[] }
 type Site = { id: number; site: string; name: string; code: string; country: string; country_id: number; region: string; total: string }
 type Country = { id: number; name: string; iso_code: string; region: string }
 
@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [showUserForm, setShowUserForm] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
-  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'viewer' })
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'viewer', site_ids: [] as number[] })
   const [savingUser, setSavingUser] = useState(false)
   const [userError, setUserError] = useState('')
 
@@ -61,8 +61,8 @@ export default function SettingsPage() {
   function fetchUsers() { fetch('/api/users').then(r => r.json()).then(setUsers) }
   function fetchSites() { fetch('/api/sites').then(r => r.json()).then(setSites) }
 
-  function openAddUser() { setUserForm({ name: '', email: '', password: '', role: 'viewer' }); setEditUser(null); setShowUserForm(true); setUserError('') }
-  function openEditUser(u: User) { setUserForm({ name: u.name, email: u.email, password: '', role: u.role }); setEditUser(u); setShowUserForm(true); setUserError('') }
+  function openAddUser() { setUserForm({ name: '', email: '', password: '', role: 'viewer', site_ids: [] }); setEditUser(null); setShowUserForm(true); setUserError('') }
+  function openEditUser(u: User) { setUserForm({ name: u.name, email: u.email, password: '', role: u.role, site_ids: (u as any).sites?.map((s: any) => s.id) || [] }); setEditUser(u); setShowUserForm(true); setUserError('') }
 
   async function saveUser() {
     if (!userForm.name || !userForm.email) { setUserError('Name and email required'); return }
@@ -287,11 +287,67 @@ export default function SettingsPage() {
                 ))}
                 <div>
                   <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Role</label>
-                  <select className="input select" value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value }))}>
-                    <option value="viewer">Viewer — read only</option>
-                    <option value="admin">Admin — full access</option>
+                  <select className="input select" value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value, site_ids: [] }))}>
+                    <option value="viewer">Viewer — read only, all sites</option>
+                    <option value="site_admin">Site Admin — full edit, assigned sites only</option>
+                    <option value="admin">Admin — full access, all sites</option>
                   </select>
                 </div>
+                {userForm.role === 'site_admin' && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                      Assigned sites <span style={{ color: '#C8102E' }}>*</span>
+                      <span style={{ fontWeight: '400', color: '#9ca3af', marginLeft: '6px' }}>({userForm.site_ids.length} selected)</span>
+                    </label>
+                    <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', maxHeight: '200px', overflowY: 'auto', padding: '8px' }}>
+                      {sites.length === 0 ? (
+                        <div style={{ color: '#9ca3af', fontSize: '13px', padding: '8px' }}>Loading sites...</div>
+                      ) : (
+                        Object.entries(
+                          sites.reduce((acc: any, s: any) => {
+                            const key = s.country || 'Other'
+                            if (!acc[key]) acc[key] = []
+                            acc[key].push(s)
+                            return acc
+                          }, {})
+                        ).map(([country, countrySites]: [string, any]) => (
+                          <div key={country} style={{ marginBottom: '8px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '4px 6px' }}>{country}</div>
+                            {countrySites.map((s: any) => (
+                              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px', borderRadius: '5px', cursor: 'pointer', background: userForm.site_ids.includes(s.id) ? '#fef2f2' : 'transparent' }}>
+                                <input type="checkbox"
+                                  checked={userForm.site_ids.includes(s.id)}
+                                  onChange={e => {
+                                    const id = s.id
+                                    setUserForm(p => ({
+                                      ...p,
+                                      site_ids: e.target.checked
+                                        ? [...p.site_ids, id]
+                                        : p.site_ids.filter((x: number) => x !== id)
+                                    }))
+                                  }}
+                                />
+                                <span style={{ fontSize: '13px', color: '#374151' }}>{s.site || s.name}</span>
+                                {s.code && <span style={{ fontSize: '11px', color: '#9ca3af' }}>{s.code}</span>}
+                              </label>
+                            ))}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                      <button type="button" style={{ fontSize: '12px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        onClick={() => setUserForm(p => ({ ...p, site_ids: sites.map((s: any) => s.id) }))}>
+                        Select all
+                      </button>
+                      <span style={{ color: '#d1d5db' }}>·</span>
+                      <button type="button" style={{ fontSize: '12px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                        onClick={() => setUserForm(p => ({ ...p, site_ids: [] }))}>
+                        Clear all
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               {userError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{userError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -302,13 +358,21 @@ export default function SettingsPage() {
           )}
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
             <table>
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Site access</th><th>Created</th><th>Actions</th></tr></thead>
               <tbody>
                 {users.map(u => (
                   <tr key={u.id}>
                     <td style={{ fontWeight: '500', color: '#111827' }}>{u.name}</td>
                     <td style={{ color: '#6b7280' }}>{u.email}</td>
-                    <td><span className={`badge ${u.role === 'admin' ? 'badge-admin' : 'badge-viewer'}`}>{u.role}</span></td>
+                    <td>
+                      <span className={`badge ${u.role === 'admin' ? 'badge-admin' : u.role === 'site_admin' ? 'badge-active' : 'badge-viewer'}`}>{u.role}</span>
+                    </td>
+                    <td style={{ fontSize: '12px', color: '#6b7280', maxWidth: '200px' }}>
+                      {u.role === 'site_admin' && u.sites && u.sites.length > 0
+                        ? u.sites.map((s: any) => s.name || s.code).join(', ')
+                        : u.role === 'site_admin' ? <span style={{ color: '#f59e0b' }}>No sites assigned</span>
+                        : <span style={{ color: '#9ca3af' }}>All sites</span>}
+                    </td>
                     <td style={{ color: '#9ca3af', fontSize: '12px' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>

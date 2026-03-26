@@ -6,6 +6,12 @@ import { query } from '@/lib/db'
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const sessionUser = session.user as { role: string; siteIds?: number[] }
+
+  const isSiteAdmin = sessionUser.role === 'site_admin'
+  const siteIds = sessionUser.siteIds || []
+  const siteFilter = isSiteAdmin && siteIds.length ? `AND site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''
+  const vFilter = isSiteAdmin && siteIds.length ? `WHERE site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''
 
   const [summary, byRegion, byType, topEol, recentActivity, circuitStats] = await Promise.all([
     query(`
@@ -17,20 +23,20 @@ export async function GET() {
         COUNT(*) FILTER (WHERE lifecycle_status = 'EOL / EOS') as eol,
         COUNT(*) FILTER (WHERE lifecycle_status = 'Active, Supported') as supported,
         COUNT(*) FILTER (WHERE lifecycle_status = 'Unknown') as unknown_lifecycle
-      FROM v_devices_flat
+      FROM v_devices_flat ${vFilter}
     `),
     query(`
       SELECT region,
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE lifecycle_status = 'EOL / EOS') as eol_count
-      FROM v_devices_flat
-      WHERE region IS NOT NULL
+      FROM v_devices_flat ${vFilter}
+      WHERE region IS NOT NULL ${siteFilter ? 'AND site_id = ANY(ARRAY[' + siteIds.join(',') + '])' : ''}
       GROUP BY region ORDER BY total DESC
     `),
     query(`
       SELECT device_type, COUNT(*) as total
-      FROM v_devices_flat
-      WHERE device_type IS NOT NULL
+      FROM v_devices_flat ${vFilter}
+      WHERE device_type IS NOT NULL ${siteFilter ? 'AND site_id = ANY(ARRAY[' + siteIds.join(',') + '])' : ''}
       GROUP BY device_type ORDER BY total DESC LIMIT 8
     `),
     query(`
@@ -38,7 +44,7 @@ export async function GET() {
         COUNT(*) FILTER (WHERE lifecycle_status = 'EOL / EOS') as eol_count,
         COUNT(*) as total_count
       FROM v_devices_flat
-      WHERE lifecycle_status = 'EOL / EOS'
+      WHERE lifecycle_status = 'EOL / EOS' ${siteFilter}
       GROUP BY site, country, region
       ORDER BY eol_count DESC LIMIT 8
     `),
@@ -49,6 +55,7 @@ export async function GET() {
       FROM audit_log a
       LEFT JOIN users u ON u.id = a.changed_by
       LEFT JOIN devices d ON d.id = a.device_id
+      ${isSiteAdmin && siteIds.length ? `WHERE d.site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''}
       ORDER BY a.changed_at DESC LIMIT 6
     `),
     query(`
@@ -63,6 +70,7 @@ export async function GET() {
         COUNT(DISTINCT isp) as total_isps,
         COUNT(*) FILTER (WHERE pingable = 'Yes') as pingable_count
       FROM circuits
+      ${isSiteAdmin && siteIds.length ? `WHERE site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''}
     `),
   ])
 
