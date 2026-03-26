@@ -225,23 +225,23 @@ export default function DevicesPage() {
       {/* Filters */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
         <input className="input" style={{ flex: '1', minWidth: '200px', maxWidth: '320px' }} placeholder="Search name, IP, model, serial..." value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
-        <select className="select" value={region} onChange={e => { setRegion(e.target.value); setSite(''); setPage(1) }}>
+        <select className="select" style={{ width: "auto", minWidth: "130px" }} value={region} onChange={e => { setRegion(e.target.value); setSite(''); setPage(1) }}>
           <option value="">All regions</option>
           {lookups.regions.map(r => <option key={r}>{r}</option>)}
         </select>
-        <select className="select" value={site} onChange={e => { setSite(e.target.value); setPage(1) }}>
+        <select className="select" style={{ width: "auto", minWidth: "150px" }} value={site} onChange={e => { setSite(e.target.value); setPage(1) }}>
           <option value="">All sites</option>
           {filteredSites.map((s: any) => <option key={s.site}>{s.site}</option>)}
         </select>
-        <select className="select" value={type} onChange={e => { setType(e.target.value); setPage(1) }}>
+        <select className="select" style={{ width: "auto", minWidth: "130px" }} value={type} onChange={e => { setType(e.target.value); setPage(1) }}>
           <option value="">All types</option>
           {lookups.deviceTypes.map(t => <option key={t}>{t}</option>)}
         </select>
-        <select className="select" value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}>
+        <select className="select" style={{ width: "auto", minWidth: "130px" }} value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}>
           <option value="">All statuses</option>
           {['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
         </select>
-        <select className="select" value={lifecycle} onChange={e => { setLifecycle(e.target.value); setPage(1) }}>
+        <select className="select" style={{ width: "auto", minWidth: "140px" }} value={lifecycle} onChange={e => { setLifecycle(e.target.value); setPage(1) }}>
           <option value="">All lifecycle</option>
           <option value="EOL / EOS">EOL / EOS</option>
           <option value="Active, Supported">Active, Supported</option>
