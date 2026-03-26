@@ -137,7 +137,7 @@ export default function CircuitsPage() {
           <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>No circuits found</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ fontSize: '13px', minWidth: '750px' }}>
+            <table style={{ fontSize: '13px' }}>
               <thead>
                 <tr>
                   <th>Site</th>
