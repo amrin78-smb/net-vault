@@ -11,11 +11,11 @@ type Settings = {
 }
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: '▤' },
-  { href: '/devices', label: 'All devices', icon: '☰' },
+  { href: '/dashboard', label: 'Dashboard', icon: '▤', hideForSiteAdmin: true },
+  { href: '/devices', label: 'All devices', icon: '☰', hideForSiteAdmin: true },
   { href: '/sites', label: 'Sites', icon: '◈' },
   { href: '/circuits', label: 'WAN circuits', icon: '⇌' },
-  { href: '/eol', label: 'EOL / Risk', icon: '⚠' },
+  { href: '/eol', label: 'EOL / Risk', icon: '⚠', hideForSiteAdmin: true },
   { href: '/audit', label: 'Audit log', icon: '≡', adminOnly: true },
   { href: '/settings', label: 'Settings', icon: '⚙', adminOnly: true },
 ]
@@ -35,7 +35,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
-  }, [status, router])
+    if (status === 'authenticated' && user?.role === 'site_admin') {
+      const restricted = ['/dashboard', '/devices', '/eol']
+      if (restricted.some(p => pathname.startsWith(p))) router.push('/sites')
+    }
+  }, [status, router, user, pathname])
 
   useEffect(() => {
     if (status === 'authenticated') {
@@ -87,6 +91,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <nav style={{ flex: 1, padding: '12px 8px' }}>
           {navItems.map(item => {
             if (item.adminOnly && user?.role !== 'admin') return null
+            if ((item as any).hideForSiteAdmin && user?.role === 'site_admin') return null
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
             return (
               <Link key={item.href} href={item.href} style={{ textDecoration: 'none' }}>
