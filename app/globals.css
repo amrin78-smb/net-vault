@@ -38,8 +38,8 @@ body { background: #f8f8f8; color: #1a1a1a; font-family: system-ui, -apple-syste
 .input::placeholder { color: #9ca3af; }
 
 /* ── Selects — same height as inputs ── */
+/* Filter dropdowns - auto width */
 .select {
-  width: 100%;
   padding: 9px 32px 9px 12px;
   border: 1px solid #d1d5db;
   border-radius: 7px;
@@ -54,6 +54,8 @@ body { background: #f8f8f8; color: #1a1a1a; font-family: system-ui, -apple-syste
   transition: border-color 0.15s;
 }
 .select:focus { border-color: var(--tu-red); box-shadow: 0 0 0 3px rgba(200,16,46,0.08); }
+
+/* Form selects inside .input class - full width */
 select.input {
   width: 100%;
   padding: 9px 32px 9px 12px;
