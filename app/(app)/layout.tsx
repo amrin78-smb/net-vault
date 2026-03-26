@@ -3,7 +3,6 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import GlobalSearch from '@/components/GlobalSearch'
 
 type Settings = {
   app_name: string; app_subtitle: string; app_logo_url: string
@@ -83,7 +82,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )}
 
           </div>
-          <GlobalSearch />
         </div>
         <nav style={{ flex: 1, padding: '12px 8px' }}>
           {navItems.map(item => {
