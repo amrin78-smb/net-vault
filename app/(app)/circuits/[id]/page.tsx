@@ -10,7 +10,7 @@ const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS
 export default function CircuitDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { data: session } = useSession()
   const user = session?.user as { role?: string } | undefined
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'site_admin'
   const [circuit, setCircuit] = useState<Circuit | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState(false)

@@ -23,7 +23,7 @@ function LifecycleBadge({ status }: { status: string }) {
 export default function DevicesPage() {
   const { data: session } = useSession()
   const user = session?.user as { role?: string } | undefined
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'site_admin'
   const [devices, setDevices] = useState<Device[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)

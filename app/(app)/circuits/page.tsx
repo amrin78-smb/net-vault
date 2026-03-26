@@ -37,7 +37,7 @@ function PingBadge({ pingable }: { pingable: string }) {
 export default function CircuitsPage() {
   const { data: session } = useSession()
   const user = session?.user as { role?: string } | undefined
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'site_admin'
   const [circuits, setCircuits] = useState<Circuit[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')

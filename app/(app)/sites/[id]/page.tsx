@@ -22,7 +22,7 @@ function LifecycleBadge({ status }: { status: string }) {
 export default function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { data: session } = useSession()
   const user = session?.user as { role?: string } | undefined
-  const isAdmin = user?.role === 'admin'
+  const isAdmin = user?.role === 'admin' || user?.role === 'site_admin'
   const [data, setData] = useState<SiteData | null>(null)
   const [circuits, setCircuits] = useState<Circuit[]>([])
   const [loading, setLoading] = useState(true)
