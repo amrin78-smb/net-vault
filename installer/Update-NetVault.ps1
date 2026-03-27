@@ -3,11 +3,8 @@
 .SYNOPSIS
     NetVault - Code Update Script
 .DESCRIPTION
-    Run this whenever you pull a new build.
-    Stops the service, rebuilds, copies static files, and restarts.
-
-    Usage:
-        .\Update-NetVault.ps1
+    Stops the service, pulls latest code from GitHub, rebuilds,
+    copies static files, and restarts. Preserves .env file.
 #>
 
 $AppDir     = "C:\NetVault\app"
@@ -22,7 +19,6 @@ Write-Host ""
 Write-Host "  NetVault - Update" -ForegroundColor White
 Write-Host ""
 
-# Stop service
 Write-Step "Stopping NetVault service"
 $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq 'Running') {
@@ -33,7 +29,6 @@ if ($svc -and $svc.Status -eq 'Running') {
     Write-Warn "NetVault service was not running"
 }
 
-# Kill any leftover node processes
 $node = Get-Process -Name node -ErrorAction SilentlyContinue
 if ($node) {
     Stop-Process -Name node -Force
@@ -41,33 +36,45 @@ if ($node) {
     Write-OK "Killed leftover node process"
 }
 
-# Pull latest code from GitHub
+# Backup .env before git pull
+Write-Step "Backing up .env"
+$envBackup = Get-Content "$AppDir\.env" -Raw -ErrorAction SilentlyContinue
+if ($envBackup) {
+    Write-OK ".env backed up"
+} else {
+    Write-Warn ".env not found - will need to recreate after pull"
+}
+
 Write-Step "Pulling latest code from GitHub"
 Set-Location $AppDir
 $gitResult = & git pull origin main 2>&1
 Write-Host "    $gitResult" -ForegroundColor Gray
 Write-OK "Git pull done"
 
-# Rebuild
+# Restore .env after git pull
+Write-Step "Restoring .env"
+if ($envBackup) {
+    $envBackup | Out-File -FilePath "$AppDir\.env" -Encoding UTF8 -NoNewline
+    Write-OK ".env restored"
+} else {
+    Write-Warn ".env was not backed up - check credentials before starting service"
+}
+
 Write-Step "Rebuilding NetVault"
 & npm install --production=false 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
 & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
 Write-OK "Build complete"
 
-# Copy static files into standalone output
 Write-Step "Copying static files into standalone output"
 $standaloneDir = "$AppDir\.next\standalone"
-
 if (Test-Path $standaloneDir) {
-    # Copy public/
     $publicDest = "$standaloneDir\public"
     if (Test-Path $publicDest) { Remove-Item $publicDest -Recurse -Force }
     Copy-Item -Path "$AppDir\public" -Destination $publicDest -Recurse -Force
     Write-OK "Copied public/"
 
-    # Copy .next/static/
-    $staticDest = "$standaloneDir\.next\static"
     New-Item -ItemType Directory -Force -Path "$standaloneDir\.next" | Out-Null
+    $staticDest = "$standaloneDir\.next\static"
     if (Test-Path $staticDest) { Remove-Item $staticDest -Recurse -Force }
     Copy-Item -Path "$AppDir\.next\static" -Destination $staticDest -Recurse -Force
     Write-OK "Copied .next/static/"
@@ -75,14 +82,12 @@ if (Test-Path $standaloneDir) {
     Write-Warn "Standalone directory not found - check build output"
 }
 
-# Verify server.js
 if (Test-Path "$standaloneDir\server.js") {
     Write-OK "server.js present"
 } else {
     Write-Warn "server.js missing - service may not start correctly"
 }
 
-# Start service
 Write-Step "Starting NetVault service"
 Start-Service -Name NetVault
 Start-Sleep -Seconds 5
