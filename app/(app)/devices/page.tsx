@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 type Device = {
@@ -9,9 +10,7 @@ type Device = {
   lifecycle_status: string; device_status: string; serial_number: string
 }
 
-type Duplicate = {
-  field: string; value: string; count: number; device_ids: string[]
-}
+type Duplicate = { field: string; value: string; count: number; device_ids: string[] }
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = { 'Active': 'badge-active', 'Decommed': 'badge-decommed', 'Faulty, Replaced': 'badge-faulty', 'Spare': 'badge-spare' }
@@ -26,19 +25,20 @@ function LifecycleBadge({ status }: { status: string }) {
 
 export default function DevicesPage() {
   const { data: session } = useSession()
+  const searchParams = useSearchParams()
   const user = session?.user as { role?: string } | undefined
   const isAdmin = user?.role === 'admin' || user?.role === 'site_admin'
+
   const [devices, setDevices] = useState<Device[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : new URLSearchParams()
-  const [search, setSearch] = useState(searchParams.get('search') || '')
-  const [region, setRegion] = useState(searchParams.get('region') || '')
-  const [site, setSite] = useState(searchParams.get('site') || '')
-  const [type, setType] = useState(searchParams.get('type') || '')
-  const [status, setStatus] = useState(searchParams.get('status') || '')
-  const [lifecycle, setLifecycle] = useState(searchParams.get('lifecycle') || '')
+  const [search, setSearch] = useState('')
+  const [region, setRegion] = useState('')
+  const [site, setSite] = useState('')
+  const [type, setType] = useState('')
+  const [status, setStatus] = useState('')
+  const [lifecycle, setLifecycle] = useState('')
   const [lookups, setLookups] = useState<{ regions: string[]; sites: {site:string;id:number;region:string}[]; deviceTypes: string[] }>({ regions: [], sites: [], deviceTypes: [] })
   const [stats, setStats] = useState({ total: 0, active: 0, eol: 0, decommed: 0 })
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -53,6 +53,17 @@ export default function DevicesPage() {
   const [duplicates, setDuplicates] = useState<Duplicate[]>([])
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [dupLoading, setDupLoading] = useState(false)
+
+  // Read URL params on mount and when they change
+  useEffect(() => {
+    setSearch(searchParams.get('search') || '')
+    setRegion(searchParams.get('region') || '')
+    setSite(searchParams.get('site') || '')
+    setType(searchParams.get('type') || '')
+    setStatus(searchParams.get('status') || '')
+    setLifecycle(searchParams.get('lifecycle') || '')
+    setPage(1)
+  }, [searchParams])
 
   useEffect(() => {
     fetch('/api/lookup').then(r => r.json()).then(setLookups)
@@ -69,7 +80,15 @@ export default function DevicesPage() {
   const fetchDevices = useCallback(async () => {
     setLoading(true)
     setSelected(new Set())
-    const params = new URLSearchParams({ page: String(page), limit: '50', ...(search && { search }), ...(region && { region }), ...(site && { site }), ...(type && { type }), ...(status && { status }), ...(lifecycle && { lifecycle }) })
+    const params = new URLSearchParams({
+      page: String(page), limit: '50',
+      ...(search && { search }),
+      ...(region && { region }),
+      ...(site && { site }),
+      ...(type && { type }),
+      ...(status && { status }),
+      ...(lifecycle && { lifecycle }),
+    })
     const res = await fetch(`/api/devices?${params}`)
     const data = await res.json()
     setDevices(data.devices || [])
@@ -267,7 +286,7 @@ export default function DevicesPage() {
           { label: 'Total devices', value: stats.total.toLocaleString(), color: '#1a2744' },
           { label: 'Active', value: stats.active.toLocaleString(), color: '#166534' },
           { label: 'EOL / EOS', value: stats.eol.toLocaleString(), color: '#991b1b' },
-          { label: 'Decommed', value: stats.decommed.toLocaleString(), color: '#92400e' }
+          { label: 'Decommed', value: stats.decommed.toLocaleString(), color: '#92400e' },
         ].map(s => (
           <div key={s.label} style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>{s.label}</div>
@@ -275,6 +294,24 @@ export default function DevicesPage() {
           </div>
         ))}
       </div>
+
+      {/* Active filters banner */}
+      {hasFilters && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: '13px', color: '#1d4ed8' }}>
+            Showing filtered results:
+            {status && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Status: {status}</span>}
+            {lifecycle && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Lifecycle: {lifecycle}</span>}
+            {region && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Region: {region}</span>}
+            {site && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Site: {site}</span>}
+            {type && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Type: {type}</span>}
+            {search && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Search: {search}</span>}
+          </div>
+          <button onClick={() => { setSearch(''); setRegion(''); setSite(''); setType(''); setStatus(''); setLifecycle(''); setPage(1) }} style={{ fontSize: '12px', color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
