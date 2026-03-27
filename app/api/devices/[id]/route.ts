@@ -30,8 +30,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       location_detail=$10,lifecycle_status=$11,device_status=$12,
       risk_score=$13,technical_debt=$14,remark=$15,cost=$16,
       purchase_date=$17,
-      purchase_vendor_id=(SELECT id FROM vendors WHERE name=$18),
-      ma_vendor_id=(SELECT id FROM vendors WHERE name=$19),
       updated_by=$20
     WHERE id=$21`,
     [body.name,body.brand,body.model,body.serial_number,body.device_type,
