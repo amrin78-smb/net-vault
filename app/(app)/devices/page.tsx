@@ -50,6 +50,8 @@ export default function DevicesPage() {
   const [importPreview, setImportPreview] = useState<any[]>([])
   const [importLoading, setImportLoading] = useState(false)
   const [importResult, setImportResult] = useState('')
+  const [importSkipped, setImportSkipped] = useState<{row:number;name:string;reason:string}[]>([])
+  const [showSkipped, setShowSkipped] = useState(false)
   const [duplicates, setDuplicates] = useState<Duplicate[]>([])
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [dupLoading, setDupLoading] = useState(false)
@@ -166,6 +168,8 @@ export default function DevicesPage() {
     const res = await fetch('/api/import', { method: 'POST', body: formData })
     const data = await res.json()
     setImportResult(`Done! Imported: ${data.inserted}, Skipped: ${data.skipped}`)
+    setImportSkipped(data.skippedRows || [])
+    setShowSkipped(data.skipped > 0)
     setImportLoading(false); setImportFile(null); setImportPreview([])
     fetchDevices()
   }
@@ -252,7 +256,41 @@ export default function DevicesPage() {
               </button>
             </div>
           )}
-          {importResult && <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 14px', borderRadius: '6px', fontSize: '13px' }}>{importResult}</div>}
+          {importResult && (
+            <div style={{ marginTop: '10px' }}>
+              <div style={{ background: '#dcfce7', color: '#166534', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '8px' }}>
+                {importResult}
+              </div>
+              {showSkipped && importSkipped.length > 0 && (
+                <div style={{ background: 'white', border: '1px solid #fbbf24', borderRadius: '8px', overflow: 'hidden' }}>
+                  <div style={{ background: '#fef3c7', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '13px', fontWeight: '600', color: '#92400e' }}>{importSkipped.length} rows skipped — see reasons below</span>
+                    <button onClick={() => setShowSkipped(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: '16px' }}>×</button>
+                  </div>
+                  <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                    <table style={{ fontSize: '12px', width: '100%' }}>
+                      <thead>
+                        <tr style={{ background: '#f9fafb' }}>
+                          <th style={{ padding: '8px 12px', textAlign: 'left', color: '#6b7280', fontWeight: '600', width: '60px' }}>Row</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'left', color: '#6b7280', fontWeight: '600', width: '180px' }}>Device name</th>
+                          <th style={{ padding: '8px 12px', textAlign: 'left', color: '#6b7280', fontWeight: '600' }}>Reason skipped</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importSkipped.map((s, i) => (
+                          <tr key={i} style={{ borderTop: '1px solid #f3f4f6' }}>
+                            <td style={{ padding: '7px 12px', color: '#9ca3af', fontFamily: 'monospace' }}>{s.row}</td>
+                            <td style={{ padding: '7px 12px', color: '#111827', fontWeight: '500' }}>{s.name}</td>
+                            <td style={{ padding: '7px 12px', color: '#991b1b' }}>{s.reason}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

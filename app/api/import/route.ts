@@ -43,20 +43,34 @@ export async function POST(req: NextRequest) {
     return i >= 0 ? row[i]?.trim().replace(/^"|"$/g, '') || '' : ''
   }
 
-  let inserted = 0, skipped = 0
+  let inserted = 0
+  const skippedRows: { row: number; name: string; reason: string }[] = []
 
-  for (const line of lines.slice(1)) {
+  for (const [idx, line] of lines.slice(1).entries()) {
+    const rowNum = idx + 2 // 1-indexed, +1 for header
     try {
       const vals = line.split(',')
       const country = normaliseCountry(getVal(vals, 'country'))
       const siteName = getVal(vals, 'site')
-      if (!siteName || !country) { skipped++; continue }
+      const deviceName = getVal(vals, 'name') || `Row ${rowNum}`
+
+      if (!siteName) {
+        skippedRows.push({ row: rowNum, name: deviceName, reason: 'Site name is empty' })
+        continue
+      }
+      if (!country) {
+        skippedRows.push({ row: rowNum, name: deviceName, reason: 'Country is empty' })
+        continue
+      }
 
       const siteRes = await query(
         `SELECT s.id FROM sites s JOIN countries c ON c.id = s.country_id WHERE s.name = $1 AND c.name = $2`,
         [siteName, country]
       )
-      if (!siteRes.rows[0]) { skipped++; continue }
+      if (!siteRes.rows[0]) {
+        skippedRows.push({ row: rowNum, name: deviceName, reason: `Site "${siteName}" not found in country "${country}"` })
+        continue
+      }
       const siteId = siteRes.rows[0].id
 
       const deviceType = normaliseType(getVal(vals, 'type'))
@@ -66,6 +80,19 @@ export async function POST(req: NextRequest) {
 
       const ip = getVal(vals, 'ip')
       const validIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) ? ip : null
+      if (ip && !validIp) {
+        skippedRows.push({ row: rowNum, name: deviceName, reason: `Invalid IP address "${ip}"` })
+        continue
+      }
+
+      // Check duplicate IP
+      if (validIp) {
+        const dupIp = await query(`SELECT id FROM devices WHERE ip_address = $1`, [validIp])
+        if (dupIp.rows[0]) {
+          skippedRows.push({ row: rowNum, name: deviceName, reason: `IP address "${validIp}" already exists in the database` })
+          continue
+        }
+      }
 
       const lifecycleMap: Record<string,string> = { 'Active, Supported':'Active, Supported','EOL / EOS':'EOL / EOS' }
       const lifecycle = lifecycleMap[getVal(vals, 'lifecycle')] || 'Unknown'
@@ -91,10 +118,11 @@ export async function POST(req: NextRequest) {
         ]
       )
       inserted++
-    } catch {
-      skipped++
+    } catch (e: any) {
+      const deviceName = `Row ${rowNum}`
+      skippedRows.push({ row: rowNum, name: deviceName, reason: e?.message?.includes('duplicate') ? 'Duplicate entry' : `Database error: ${e?.message || 'unknown'}` })
     }
   }
 
-  return NextResponse.json({ inserted, skipped })
+  return NextResponse.json({ inserted, skipped: skippedRows.length, skippedRows })
 }
