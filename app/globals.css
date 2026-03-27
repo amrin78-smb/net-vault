@@ -127,3 +127,11 @@ table thead tr th {
   background: #f9fafb;
   box-shadow: 0 1px 0 #e5e7eb;
 }
+
+/* Row hover highlight */
+tbody tr {
+  transition: background 0.1s;
+}
+tbody tr:hover {
+  background: #f8faff !important;
+}
