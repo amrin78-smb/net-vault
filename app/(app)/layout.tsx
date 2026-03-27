@@ -32,6 +32,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     app_navy_color: '#1a2744',
   })
 
+  const [showPwModal, setShowPwModal] = useState(false)
+  const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
+  const [pwError, setPwError] = useState('')
+  const [pwSuccess, setPwSuccess] = useState(false)
+  const [pwSaving, setPwSaving] = useState(false)
+
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
     if (status === 'authenticated' && user?.role === 'site_admin') {
@@ -49,6 +55,39 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }).catch(() => {})
     }
   }, [status])
+
+  function openPwModal() {
+    setPwForm({ current_password: '', new_password: '', confirm_password: '' })
+    setPwError('')
+    setPwSuccess(false)
+    setShowPwModal(true)
+  }
+
+  async function changePassword() {
+    if (!pwForm.current_password || !pwForm.new_password || !pwForm.confirm_password) {
+      setPwError('All fields are required'); return
+    }
+    if (pwForm.new_password !== pwForm.confirm_password) {
+      setPwError('New passwords do not match'); return
+    }
+    if (pwForm.new_password.length < 8) {
+      setPwError('New password must be at least 8 characters'); return
+    }
+    setPwSaving(true); setPwError('')
+    const res = await fetch('/api/users/me', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ current_password: pwForm.current_password, new_password: pwForm.new_password })
+    })
+    const data = await res.json()
+    setPwSaving(false)
+    if (res.ok) {
+      setPwSuccess(true)
+      setTimeout(() => setShowPwModal(false), 1500)
+    } else {
+      setPwError(data.error || 'Failed to change password')
+    }
+  }
 
   if (status === 'loading') return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -80,9 +119,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             )}
-
           </div>
         </div>
+
         <nav style={{ flex: 1, padding: '12px 8px' }}>
           {navItems.map(item => {
             if (item.adminOnly && user?.role !== 'admin') return null
@@ -103,6 +142,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             )
           })}
         </nav>
+
         <div style={{ padding: '12px 8px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
           <div style={{ padding: '10px 12px', borderRadius: '7px', background: 'rgba(255,255,255,0.05)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
@@ -114,13 +154,66 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{user?.role}</div>
               </div>
             </div>
-            <button onClick={() => signOut({ callbackUrl: '/login' })} style={{ width: '100%', padding: '5px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '5px', color: 'rgba(255,255,255,0.5)', fontSize: '12px', cursor: 'pointer' }}>
-              Sign out
-            </button>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button onClick={openPwModal} style={{ flex: 1, padding: '5px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '5px', color: 'rgba(255,255,255,0.5)', fontSize: '11px', cursor: 'pointer' }}>
+                Change password
+              </button>
+              <button onClick={() => signOut({ callbackUrl: '/login' })} style={{ flex: 1, padding: '5px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '5px', color: 'rgba(255,255,255,0.5)', fontSize: '11px', cursor: 'pointer' }}>
+                Sign out
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
       <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
+
+      {showPwModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'white', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: '0 0 4px' }}>Change password</h2>
+            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0 0 20px' }}>Enter your current password and choose a new one.</p>
+            {pwSuccess ? (
+              <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', textAlign: 'center' }}>
+                Password changed successfully!
+              </div>
+            ) : (
+              <>
+                {[
+                  { label: 'Current password', field: 'current_password' },
+                  { label: 'New password', field: 'new_password' },
+                  { label: 'Confirm new password', field: 'confirm_password' },
+                ].map(f => (
+                  <div key={f.field} style={{ marginBottom: '14px' }}>
+                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
+                    <input
+                      type="password"
+                      className="input"
+                      value={pwForm[f.field as keyof typeof pwForm]}
+                      onChange={e => setPwForm(p => ({ ...p, [f.field]: e.target.value }))}
+                      onKeyDown={e => e.key === 'Enter' && changePassword()}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                ))}
+                {pwError && (
+                  <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '14px' }}>
+                    {pwError}
+                  </div>
+                )}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button className="btn-primary" onClick={changePassword} disabled={pwSaving} style={{ flex: 1 }}>
+                    {pwSaving ? 'Saving...' : 'Change password'}
+                  </button>
+                  <button className="btn-secondary" onClick={() => setShowPwModal(false)} style={{ flex: 1 }}>
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
