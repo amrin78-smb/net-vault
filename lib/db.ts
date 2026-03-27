@@ -1,9 +1,11 @@
 import { Pool } from 'pg'
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.SSL_DISABLED === 'true' ? false : { rejectUnauthorized: false },
   max: 10,
 })
+
 export async function query(text: string, params?: unknown[]) {
   const client = await pool.connect()
   try {
@@ -13,4 +15,5 @@ export async function query(text: string, params?: unknown[]) {
     client.release()
   }
 }
+
 export default pool
