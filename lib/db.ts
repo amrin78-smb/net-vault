@@ -1,22 +1,16 @@
 import { Pool } from 'pg'
-
-const connectionString = process.env.DATABASE_URL
-
 const pool = new Pool({
-  connectionString,
-  ssl: connectionString?.includes('localhost') || connectionString?.includes('127.0.0.1')
-    ? false
-    : { rejectUnauthorized: false }
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false },
+  max: 10,
 })
-
-export async function query(text: string, params?: any[]) {
+export async function query(text: string, params?: unknown[]) {
   const client = await pool.connect()
   try {
-    const result = await client.query(text, params)
-    return result
+    const res = await client.query(text, params)
+    return res
   } finally {
     client.release()
   }
 }
-
 export default pool
