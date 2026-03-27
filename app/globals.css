@@ -104,3 +104,11 @@ tr:hover td { background: #fafafa; }
 .filter-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
 .filter-row .select { width: auto; min-width: 130px; }
 .filter-row .input { width: auto; }
+
+/* Sticky table headers */
+table thead tr th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: #f9fafb;
+}
