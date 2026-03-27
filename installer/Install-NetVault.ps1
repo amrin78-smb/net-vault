@@ -128,6 +128,7 @@ Write-Step "Importing NetVault data"
 $sqlFile = "$PSScriptRoot\netvault_export.sql"
 if (Test-Path $sqlFile) {
     $env:PGPASSWORD = $PgPasswordPlain
+    $env:PGCLIENTENCODING = "UTF8"
     & "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U $DbUser -h localhost -p $PgPort -d $DbName -f $sqlFile
     Write-OK "Data imported successfully"
 } else {
@@ -137,13 +138,14 @@ if (Test-Path $sqlFile) {
 
 # ── Copy app files ─────────────────────────────────────────────
 Write-Step "Copying application files"
-$sourceDir = Split-Path $PSScriptRoot -Parent
+$sourceDir = "$PSScriptRoot\app"
 if (Test-Path "$sourceDir\package.json") {
-    Copy-Item -Path $sourceDir -Destination $AppDir -Recurse -Force -Exclude @('.git','node_modules','.next','installer')
+    Write-Host "    Copying app files..." -ForegroundColor Gray
+    New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
+    Copy-Item -Path "$sourceDir\*" -Destination $AppDir -Recurse -Force
     Write-OK "App files copied to $AppDir"
 } else {
-    Write-Warn "App source not found at $sourceDir"
-    Write-Warn "Please copy the NetVault app files to $AppDir manually"
+    throw "App source not found at $sourceDir. Make sure the app folder is inside the installer folder."
 }
 
 # ── Create .env file ───────────────────────────────────────────
