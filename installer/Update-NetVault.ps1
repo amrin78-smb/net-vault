@@ -48,6 +48,9 @@ Write-Host "    $gitResult" -ForegroundColor Gray
 # But preserve .env and .env.local
 & git clean -fd --exclude=".env" --exclude=".env.local" --exclude="node_modules" 2>&1 | Out-Null
 Write-OK "Git reset and clean done"
+# Explicitly restore known-problematic files to prevent BOM/CRLF issues
+& git checkout origin/main -- app/api/settings/route.ts 2>&1 | Out-Null
+& git checkout origin/main -- app/api/settings/logo/route.ts 2>&1 | Out-Null
 # Restore .env after git reset
 Write-Step "Restoring .env"
 if ($envBackup) {
