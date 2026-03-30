@@ -3,20 +3,10 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Breadcrumb from '@/components/Breadcrumb'
+import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 
 type Device = Record<string, any>
 type Log = { field_name: string; changed_at: string; changed_by_name: string; old_value: string; new_value: string }
-
-function Badge({ status }: { status: string }) {
-  const map: Record<string, string> = { 'Active': 'badge-active', 'Decommed': 'badge-decommed', 'Faulty, Replaced': 'badge-faulty', 'Spare': 'badge-spare' }
-  return <span className={`badge ${map[status] || 'badge-unknown'}`}>{status}</span>
-}
-
-function LifecycleBadge({ status }: { status: string }) {
-  if (status === 'EOL / EOS') return <span className="badge badge-eol">EOL / EOS</span>
-  if (status === 'Active, Supported') return <span className="badge badge-active">Active, Supported</span>
-  return <span className="badge badge-unknown">Unknown</span>
-}
 
 function timeAgo(d: string) {
   const diff = Date.now() - new Date(d).getTime()
@@ -151,7 +141,7 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: '0 0 6px' }}>{device.name}</h1>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <Badge status={device.device_status} />
+            <StatusBadge status={device.device_status} />
             <LifecycleBadge status={device.lifecycle_status} />
             <span style={{ fontSize: '13px', color: '#9ca3af' }}>{device.device_type} · {device.brand} {device.model}</span>
           </div>

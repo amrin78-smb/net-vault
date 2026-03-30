@@ -1,5 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
+import { RoleBadge } from '@/components/Badges'
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
@@ -90,7 +91,7 @@ export default function UsersPage() {
                 <tr key={u.id}>
                   <td style={{ fontWeight: '500', color: '#111827' }}>{u.name}</td>
                   <td style={{ color: '#6b7280' }}>{u.email}</td>
-                  <td><span className={`badge ${u.role === 'admin' ? 'badge-admin' : 'badge-viewer'}`}>{u.role}</span></td>
+                  <td><RoleBadge role={u.role} /></td>
                   <td style={{ color: '#9ca3af', fontSize: '12px' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '6px' }}>

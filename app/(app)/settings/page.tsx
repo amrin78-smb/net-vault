@@ -1,5 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
+import { RoleBadge } from '@/components/Badges'
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
@@ -372,7 +373,7 @@ export default function SettingsPage() {
                     <td style={{ fontWeight: '500', color: '#111827' }}>{u.name}</td>
                     <td style={{ color: '#6b7280' }}>{u.email}</td>
                     <td>
-                      <span className={`badge ${u.role === 'admin' ? 'badge-admin' : u.role === 'site_admin' ? 'badge-active' : 'badge-viewer'}`}>{u.role}</span>
+                      <RoleBadge role={u.role} />
                     </td>
                     <td style={{ fontSize: '12px', color: '#6b7280', maxWidth: '200px' }}>
                       {u.role === 'site_admin' && u.sites && u.sites.length > 0

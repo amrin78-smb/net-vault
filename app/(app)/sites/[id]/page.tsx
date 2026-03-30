@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Breadcrumb from '@/components/Breadcrumb'
+import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
 
 type SiteData = {
@@ -10,16 +11,6 @@ type SiteData = {
   devices: any[]
 }
 type Circuit = Record<string, any>
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = { 'Active': 'badge-active', 'Decommed': 'badge-decommed', 'Faulty, Replaced': 'badge-faulty', 'Spare': 'badge-spare' }
-  return <span className={`badge ${map[status] || 'badge-unknown'}`}>{status}</span>
-}
-function LifecycleBadge({ status }: { status: string }) {
-  if (status === 'EOL / EOS') return <span className="badge badge-eol">EOL</span>
-  if (status === 'Active, Supported') return <span className="badge badge-active">Supported</span>
-  return <span className="badge badge-unknown">Unknown</span>
-}
 
 export default function SiteDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { data: session } = useSession()

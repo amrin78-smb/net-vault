@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
 
 type Device = {
@@ -12,17 +13,6 @@ type Device = {
 }
 
 type Duplicate = { field: string; value: string; count: number; device_ids: string[] }
-
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = { 'Active': 'badge-active', 'Decommed': 'badge-decommed', 'Faulty, Replaced': 'badge-faulty', 'Spare': 'badge-spare' }
-  return <span className={`badge ${map[status] || 'badge-unknown'}`}>{status}</span>
-}
-
-function LifecycleBadge({ status }: { status: string }) {
-  if (status === 'EOL / EOS') return <span className="badge badge-eol">EOL</span>
-  if (status === 'Active, Supported') return <span className="badge badge-active">Supported</span>
-  return <span className="badge badge-unknown">Unknown</span>
-}
 
 export default function DevicesPage() {
   const { data: session } = useSession()
