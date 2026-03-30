@@ -58,8 +58,11 @@ export default function CircuitsPage() {
   }
 
   async function deleteCircuit(id: string, circuitId: string) {
-    if (!confirm(`Delete circuit "${circuitId}"?`)) return
-    await fetch(`/api/circuits/${id}`, { method: 'DELETE' })
+    const ok = await confirm({ title: 'Delete circuit', message: `Are you sure you want to delete circuit "${circuitId}"?`, confirmLabel: 'Delete', danger: true })
+    if (!ok) return
+    const res = await fetch(`/api/circuits/${id}`, { method: 'DELETE' })
+    if (res.ok) showToast(`Circuit "${circuitId}" deleted`)
+    else showToast('Failed to delete circuit', 'error')
     fetchCircuits()
   }
 
