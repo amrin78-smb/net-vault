@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
+import Breadcrumb from '@/components/Breadcrumb'
 
 type SiteData = {
   site: { id: string; site: string; code: string; country: string; region: string }
@@ -92,7 +93,10 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '20px' }}>
-        <Link href="/sites" style={{ fontSize: '13px', color: '#6b7280', textDecoration: 'none' }}>← Back to sites</Link>
+        <Breadcrumb crumbs={[
+          { label: 'Sites', href: '/sites' },
+          { label: data.site.site || 'Site detail' },
+        ]} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>

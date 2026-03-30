@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
+import Breadcrumb from '@/components/Breadcrumb'
 
 type Circuit = Record<string, any>
 
@@ -86,7 +87,10 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
   return (
     <div style={{ padding: '24px 28px', maxWidth: '900px' }}>
       <div style={{ marginBottom: '16px' }}>
-        <Link href="/circuits" style={{ fontSize: '13px', color: '#6b7280', textDecoration: 'none' }}>← Back to circuits</Link>
+        <Breadcrumb crumbs={[
+          { label: 'Circuits', href: '/circuits' },
+          { label: circuit.circuit_id && circuit.circuit_id !== 'nan' ? circuit.circuit_id : circuit.isp || 'Circuit detail' },
+        ]} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
