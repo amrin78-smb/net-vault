@@ -21,6 +21,8 @@ export default function DevicesPage() {
   const { confirm } = useConfirm()
   const user = session?.user as { role?: string } | undefined
   const isAdmin = user?.role === 'admin' || user?.role === 'site_admin'
+  const isSiteAdmin = user?.role === 'site_admin'
+  const sessionUser = session?.user as { role?: string; siteIds?: number[] } | undefined
 
   const [devices, setDevices] = useState<Device[]>([])
   const [total, setTotal] = useState(0)
@@ -341,6 +343,13 @@ export default function DevicesPage() {
           </div>
         ))}
       </div>
+
+      {/* Site admin scope banner */}
+      {isSiteAdmin && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: '13px', color: '#1d4ed8' }}>
+          Showing devices for your assigned sites only.
+        </div>
+      )}
 
       {/* Active filters banner */}
       {hasFilters && (

@@ -12,7 +12,7 @@ type Settings = {
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: '▤', hideForSiteAdmin: true },
-  { href: '/devices', label: 'All devices', icon: '☰', hideForSiteAdmin: true },
+  { href: '/devices', label: 'My devices', icon: '☰' },
   { href: '/sites', label: 'Sites', icon: '◈' },
   { href: '/circuits', label: 'Circuits', icon: '⇌' },
   { href: '/eol', label: 'EOL / Risk', icon: '⚠', hideForSiteAdmin: true },
@@ -39,9 +39,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (status === 'unauthenticated') router.push('/login')
     if (status === 'authenticated' && user?.role === 'site_admin') {
       const restricted = ['/dashboard', '/eol']
-      const exactRestricted = ['/devices']
       if (restricted.some(p => pathname.startsWith(p))) router.push('/sites')
-      if (exactRestricted.some(p => pathname === p)) router.push('/sites')
     }
   }, [status, router, user, pathname])
 
@@ -114,7 +112,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Global search */}
-        <div style={{ padding: '10px 10px 4px', flexShrink: 0 }}>
+        <div style={{ padding: '8px 8px 4px', flexShrink: 0 }}>
           <GlobalSearch />
         </div>
 

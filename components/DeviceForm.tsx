@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 
 type Lookups = {
   regions: string[]; sites: { site: string; country: string; region: string }[]
@@ -12,6 +13,9 @@ type DeviceFormProps = { initialData?: Record<string, any>; deviceId?: string }
 
 export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
   const router = useRouter()
+  const { data: session } = useSession()
+  const sessionUser = session?.user as { role?: string; siteIds?: number[] } | undefined
+  const isSiteAdmin = sessionUser?.role === 'site_admin'
   const [lookups, setLookups] = useState<Lookups | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -113,7 +117,9 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
           <Field label="Site" required>
             <select {...inp} value={form.site} onChange={e => set('site', e.target.value)}>
               <option value="">Select site</option>
-              {lookups.sites.map(s => <option key={s.site} value={s.site}>{s.site} — {s.country}</option>)}
+              {lookups.sites
+                .filter((s: any) => !isSiteAdmin || !sessionUser?.siteIds?.length || sessionUser.siteIds.includes(s.id))
+                .map((s: any) => <option key={s.site} value={s.site}>{s.site} — {s.country}</option>)}
             </select>
           </Field>
           <Field label="Location detail">
@@ -132,21 +138,27 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
               {lookups.deviceStatuses.map(s => <option key={s}>{s}</option>)}
             </select>
           </Field>
-          <Field label="Risk score">
-            <input {...inp} type="number" value={form.risk_score} onChange={e => set('risk_score', e.target.value)} placeholder="0–100" min="0" max="100" />
-          </Field>
-          <Field label="Technical debt">
-            <input {...inp} value={form.technical_debt} onChange={e => set('technical_debt', e.target.value)} />
-          </Field>
+          {!isSiteAdmin && (
+            <Field label="Risk score">
+              <input {...inp} type="number" value={form.risk_score} onChange={e => set('risk_score', e.target.value)} placeholder="0–100" min="0" max="100" />
+            </Field>
+          )}
+          {!isSiteAdmin && (
+            <Field label="Technical debt">
+              <input {...inp} value={form.technical_debt} onChange={e => set('technical_debt', e.target.value)} />
+            </Field>
+          )}
           <Field label="Remark" span>
             <textarea {...inp} value={form.remark} onChange={e => set('remark', e.target.value)} rows={3} style={{ resize: 'vertical' }} />
           </Field>
         </Section>
 
         <Section title="Procurement">
-          <Field label="Cost (USD)">
-            <input {...inp} type="number" value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="0.00" />
-          </Field>
+          {!isSiteAdmin && (
+            <Field label="Cost (USD)">
+              <input {...inp} type="number" value={form.cost} onChange={e => set('cost', e.target.value)} placeholder="0.00" />
+            </Field>
+          )}
           <Field label="Purchase date">
             <input {...inp} type="date" value={form.purchase_date} onChange={e => set('purchase_date', e.target.value)} />
           </Field>

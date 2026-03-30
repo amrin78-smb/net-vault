@@ -27,8 +27,8 @@ async function getOrCreate(table: string, col: string, value: string) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const user = session.user as { role: string; id: string }
-  if (user.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const user = session.user as { role: string; id: string; siteIds?: number[] }
+  if (user.role !== 'admin' && user.role !== 'site_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const formData = await req.formData()
   const file = formData.get('file') as File
@@ -72,6 +72,12 @@ export async function POST(req: NextRequest) {
         continue
       }
       const siteId = siteRes.rows[0].id
+
+      // Site admins can only import to their assigned sites
+      if (user.role === 'site_admin' && user.siteIds?.length && !user.siteIds.includes(siteId)) {
+        skippedRows.push({ row: rowNum, name: deviceName, reason: `You are not assigned to site "${siteName}"` })
+        continue
+      }
 
       const deviceType = normaliseType(getVal(vals, 'type'))
       const brand = normaliseBrand(getVal(vals, 'brand'))
