@@ -47,7 +47,8 @@ if ($envBackup) {
 
 Write-Step "Pulling latest code from GitHub"
 Set-Location $AppDir
-$gitResult = & git pull origin main 2>&1
+& git fetch origin 2>&1 | Out-Null
+$gitResult = & git reset --hard origin/main 2>&1
 Write-Host "    $gitResult" -ForegroundColor Gray
 Write-OK "Git pull done"
 
