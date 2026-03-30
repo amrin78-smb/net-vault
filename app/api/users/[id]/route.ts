@@ -11,6 +11,14 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (sessionUser.role !== 'admin' && sessionUser.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const body = await req.json()
+
+  // Regular admins cannot edit super_admin accounts or assign super_admin role
+  const targetUser = await query('SELECT role FROM users WHERE id=$1', [id])
+  if (targetUser.rows[0]?.role === 'super_admin' && sessionUser.role !== 'super_admin')
+    return NextResponse.json({ error: 'Only super admins can edit super admin accounts' }, { status: 403 })
+  if (body.role === 'super_admin' && sessionUser.role !== 'super_admin')
+    return NextResponse.json({ error: 'Only super admins can assign the super admin role' }, { status: 403 })
+
   if (body.password) {
     const hash = await bcrypt.hash(body.password, 10)
     await query('UPDATE users SET name=$1, email=$2, role=$3, password_hash=$4 WHERE id=$5',
