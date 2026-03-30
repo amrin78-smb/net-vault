@@ -21,7 +21,15 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
   const [error, setError] = useState('')
   const [form, setForm] = useState({ name: '', brand: '', model: '', serial_number: '', device_type: '', device_type_other: '', ip_address: '', mgmt_protocol: '', mgmt_url: '', site: '', location_detail: '', lifecycle_status: 'Unknown', device_status: 'Active', risk_score: '', technical_debt: '', remark: '', cost: '', purchase_date: '', purchase_vendor: '', ma_vendor: '', ...initialData })
 
-  useEffect(() => { fetch('/api/lookup').then(r => r.json()).then(setLookups) }, [])
+  useEffect(() => {
+    fetch('/api/lookup').then(r => r.json()).then(data => {
+      setLookups(data)
+      // Auto-select site if site admin has only one assigned site and no site is set
+      if (isSiteAdmin && data.sites?.length === 1 && !initialData?.site) {
+        setForm(f => ({ ...f, site: data.sites[0].site }))
+      }
+    })
+  }, [isSiteAdmin])
   function set(field: string, value: string) { setForm(f => ({ ...f, [field]: value })) }
 
   async function handleSubmit(e: React.FormEvent) {
