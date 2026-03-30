@@ -3,6 +3,25 @@
 .SYNOPSIS
     NetVault - IT Asset Management Platform
     On-Premises Installer for Windows Server
+.DESCRIPTION
+    Full installer incorporating all fixes and features:
+    - Clones app directly from GitHub (always latest code)
+    - Correct NSSM service config using standalone server.js
+    - Static files copied into standalone output after build
+    - Vendors table and all device columns created before data import
+    - UTF-8 encoding forced for psql restore
+    - NEXTAUTH_URL auto-detected from server IP for correct logout redirect
+    - SSL_DISABLED=true for on-prem PostgreSQL
+    - Firewall rule for port 3000
+    - git fetch + reset --hard for reliable updates
+
+    Prerequisites:
+    - netvault_export.sql  (exported from Neon via Colab - optional)
+
+    Usage:
+        .\Install-NetVault.ps1
+        .\Install-NetVault.ps1 -AppPort 8080
+        .\Install-NetVault.ps1 -InstallDir "D:\NetVault"
 #>
 
 param(
@@ -19,11 +38,13 @@ $PgBin     = "C:\Program Files\PostgreSQL\16\bin"
 $NssmUrl   = "https://nssm.cc/release/nssm-2.24.zip"
 $NodeUrl   = "https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi"
 $PgUrl     = "https://get.enterprisedb.com/postgresql/postgresql-16.2-1-windows-x64.exe"
+$GitHubUrl = "https://github.com/amrin78-smb/net-vault.git"
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
 
+# ── Banner ─────────────────────────────────────────────────────
 Clear-Host
 Write-Host @"
 
@@ -42,6 +63,7 @@ Write-Host "  App port          : $AppPort" -ForegroundColor Gray
 Write-Host "  PostgreSQL port   : $PgPort" -ForegroundColor Gray
 Write-Host ""
 
+# ── Collect passwords ──────────────────────────────────────────
 $PgPassword = Read-Host "Enter PostgreSQL password for 'netvault' user" -AsSecureString
 $PgPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($PgPassword))
@@ -52,6 +74,7 @@ $PgAdminPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
 
 $NextAuthSecret = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 48 | % {[char]$_})
 
+# Detect server IP
 $ServerIP = (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.IPAddress -ne '127.0.0.1' -and $_.PrefixOrigin -ne 'WellKnown' } |
     Select-Object -First 1).IPAddress
@@ -59,11 +82,24 @@ if (-not $ServerIP) { $ServerIP = "localhost" }
 Write-Host "  Detected server IP : $ServerIP" -ForegroundColor Gray
 Write-Host ""
 
+# ── Create directories ─────────────────────────────────────────
 Write-Step "Creating install directories"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 New-Item -ItemType Directory -Force -Path "$InstallDir\logs" | Out-Null
 Write-OK "Created $InstallDir"
 
+# ── Check / Install Git ────────────────────────────────────────
+Write-Step "Checking Git"
+$gitVer = $null
+try { $gitVer = & git --version 2>$null } catch {}
+if ($gitVer) {
+    Write-OK "Git already installed: $gitVer"
+} else {
+    Write-Warn "Git not found. Please install Git from https://git-scm.com and re-run this installer."
+    exit 1
+}
+
+# ── Check / Install Node.js ────────────────────────────────────
 Write-Step "Checking Node.js"
 $nodeVer = $null
 try { $nodeVer = & node --version 2>$null } catch {}
@@ -79,6 +115,7 @@ if ($nodeVer) {
     Write-OK "Node.js installed"
 }
 
+# ── Check / Install PostgreSQL ─────────────────────────────────
 Write-Step "Checking PostgreSQL"
 $pgVer = $null
 try { $pgVer = & "$PgBin\psql.exe" --version 2>$null } catch {}
@@ -94,6 +131,7 @@ if ($pgVer) {
     Write-OK "PostgreSQL installed"
 }
 
+# ── Create database and user ───────────────────────────────────
 Write-Step "Setting up NetVault database"
 $env:PGPASSWORD = $PgAdminPasswordPlain
 $createDbSql = @"
@@ -111,6 +149,7 @@ GRANT ALL PRIVILEGES ON DATABASE $DbName TO $DbUser;
 $createDbSql | & "$PgBin\psql.exe" -U postgres -h localhost -p $PgPort
 Write-OK "Database and user ready"
 
+# ── Schema migration ───────────────────────────────────────────
 Write-Step "Running schema migration"
 $env:PGPASSWORD = $PgAdminPasswordPlain
 $schemaSql = @"
@@ -135,24 +174,30 @@ GRANT USAGE, SELECT ON SEQUENCE vendors_id_seq TO $DbUser;
 $schemaSql | & "$PgBin\psql.exe" -U postgres -h localhost -p $PgPort -d $DbName
 Write-OK "Schema migration complete"
 
+# ── Import data ────────────────────────────────────────────────
 Write-Step "Importing data"
 $sqlFile = "$PSScriptRoot\netvault_export.sql"
 if (Test-Path $sqlFile) {
-    $env:PGPASSWORD        = $PgPasswordPlain
-    $env:PGCLIENTENCODING  = "UTF8"
+    $env:PGPASSWORD       = $PgPasswordPlain
+    $env:PGCLIENTENCODING = "UTF8"
     & "$PgBin\psql.exe" -U $DbUser -h localhost -p $PgPort -d $DbName -f $sqlFile
     Write-OK "Data imported"
 } else {
     Write-Warn "netvault_export.sql not found - database will be empty"
+    Write-Warn "Export from Neon via Colab and restore manually later"
 }
 
+# ── Clone app from GitHub ──────────────────────────────────────
 Write-Step "Cloning app from GitHub"
-$gitUrl = "https://github.com/amrin78-smb/net-vault.git"
-if (Test-Path $AppDir) { Remove-Item $AppDir -Recurse -Force }
-& git clone $gitUrl $AppDir
+if (Test-Path $AppDir) {
+    Write-Warn "App directory already exists - removing for clean install"
+    Remove-Item $AppDir -Recurse -Force
+}
+& git clone $GitHubUrl $AppDir
 if ($LASTEXITCODE -ne 0) { throw "Git clone failed" }
 Write-OK "App cloned to $AppDir"
 
+# ── Create .env file ───────────────────────────────────────────
 Write-Step "Creating environment configuration"
 $envContent = @"
 DATABASE_URL=postgresql://${DbUser}:${PgPasswordPlain}@localhost:${PgPort}/${DbName}
@@ -164,6 +209,7 @@ SSL_DISABLED=true
 $envContent | Out-File -FilePath "$AppDir\.env" -Encoding UTF8
 Write-OK ".env created (NEXTAUTH_URL=http://${ServerIP}:${AppPort})"
 
+# ── Install dependencies and build ────────────────────────────
 Write-Step "Installing dependencies"
 Set-Location $AppDir
 & npm install --production=false 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
@@ -174,21 +220,26 @@ Write-Step "Building NetVault"
 if ($LASTEXITCODE -ne 0) { throw "Build failed. Check $InstallDir\logs\npm-build.log" }
 Write-OK "Build complete"
 
+# ── Copy static files into standalone output ──────────────────
 Write-Step "Copying static files into standalone output"
 $standaloneDir = "$AppDir\.next\standalone"
 if (-not (Test-Path $standaloneDir)) { throw "Standalone output not found" }
+
 $publicDest = "$standaloneDir\public"
 if (Test-Path $publicDest) { Remove-Item $publicDest -Recurse -Force }
 Copy-Item -Path "$AppDir\public" -Destination $publicDest -Recurse -Force
 Write-OK "Copied public/"
+
 New-Item -ItemType Directory -Force -Path "$standaloneDir\.next" | Out-Null
 $staticDest = "$standaloneDir\.next\static"
 if (Test-Path $staticDest) { Remove-Item $staticDest -Recurse -Force }
 Copy-Item -Path "$AppDir\.next\static" -Destination $staticDest -Recurse -Force
 Write-OK "Copied .next/static/"
+
 if (-not (Test-Path "$standaloneDir\server.js")) { throw "server.js not found" }
 Write-OK "server.js confirmed"
 
+# ── Install NSSM ───────────────────────────────────────────────
 Write-Step "Installing NSSM"
 $nssmZip = "$env:TEMP\nssm.zip"
 $nssmDir = "$InstallDir\nssm"
@@ -197,6 +248,7 @@ Expand-Archive -Path $nssmZip -DestinationPath $nssmDir -Force
 $nssmExe = "$nssmDir\nssm-2.24\win64\nssm.exe"
 Write-OK "NSSM ready"
 
+# ── Register Windows Service ───────────────────────────────────
 Write-Step "Registering Windows Service"
 $existingSvc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
 if ($existingSvc) {
@@ -206,6 +258,7 @@ if ($existingSvc) {
 }
 $nodePath = (Get-Command node -ErrorAction SilentlyContinue).Source
 if (-not $nodePath) { $nodePath = "C:\Program Files\nodejs\node.exe" }
+
 & $nssmExe install NetVault $nodePath "$standaloneDir\server.js"
 & $nssmExe set NetVault AppDirectory         $standaloneDir
 & $nssmExe set NetVault AppEnvironmentExtra  `
@@ -226,6 +279,7 @@ if (-not $nodePath) { $nodePath = "C:\Program Files\nodejs\node.exe" }
 & $nssmExe set NetVault AppRestartDelay 3000
 Write-OK "Windows Service registered"
 
+# ── Firewall rule ──────────────────────────────────────────────
 Write-Step "Configuring firewall"
 $ruleName = "NetVault Port $AppPort"
 if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue)) {
@@ -234,6 +288,7 @@ if (-not (Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContin
 }
 Write-OK "Firewall rule added for port $AppPort"
 
+# ── Start service ──────────────────────────────────────────────
 Write-Step "Starting NetVault service"
 & $nssmExe start NetVault
 Start-Sleep -Seconds 6
@@ -244,6 +299,7 @@ if ($svc -and $svc.Status -eq 'Running') {
     Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
 }
 
+# ── Desktop shortcut ───────────────────────────────────────────
 Write-Step "Creating desktop shortcut"
 $WshShell = New-Object -ComObject WScript.Shell
 $shortcut = $WshShell.CreateShortcut("$env:PUBLIC\Desktop\NetVault.lnk")
@@ -251,6 +307,7 @@ $shortcut.TargetPath = "http://${ServerIP}:${AppPort}"
 $shortcut.Save()
 Write-OK "Desktop shortcut created"
 
+# ── Done ───────────────────────────────────────────────────────
 Write-Host ""
 Write-Host ("=" * 60) -ForegroundColor Green
 Write-Host "  NetVault installation complete!" -ForegroundColor Green
@@ -258,6 +315,10 @@ Write-Host ("=" * 60) -ForegroundColor Green
 Write-Host ""
 Write-Host "  Access NetVault at : http://${ServerIP}:${AppPort}" -ForegroundColor White
 Write-Host "  Local access       : http://localhost:${AppPort}" -ForegroundColor White
+Write-Host ""
+Write-Host "  Default login      : admin@yourcompany.com" -ForegroundColor Gray
+Write-Host "  Default password   : Admin1234!" -ForegroundColor Gray
+Write-Host "  Change immediately after first login via Settings." -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Logs               : $InstallDir\logs\" -ForegroundColor Gray
 Write-Host "  Service commands:" -ForegroundColor Gray
