@@ -15,7 +15,6 @@ export async function POST(req: NextRequest) {
 
   const buffer = await file.arrayBuffer()
   const fileName = file.name.toLowerCase()
-
   let rows: Record<string, string>[] = []
 
   if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
