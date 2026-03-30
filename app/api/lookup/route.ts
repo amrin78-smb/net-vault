@@ -35,7 +35,9 @@ export async function GET() {
            JOIN regions r ON r.id = c.region_id
            WHERE s.name IS NOT NULL ${siteFilter}
            ORDER BY s.name`),
-    query('SELECT name FROM device_types ORDER BY name'),
+    isSiteAdmin && siteIds.length
+      ? query(`SELECT DISTINCT dt.name FROM device_types dt JOIN devices d ON d.device_type_id = dt.id WHERE d.site_id = ANY($1) ORDER BY dt.name`, [siteIds])
+      : query('SELECT name FROM device_types ORDER BY name'),
     query('SELECT name FROM brands ORDER BY name'),
     vendorsExist
       ? query('SELECT name FROM vendors ORDER BY name')
