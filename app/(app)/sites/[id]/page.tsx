@@ -4,7 +4,6 @@ import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Breadcrumb from '@/components/Breadcrumb'
 import { useToast, useConfirm } from '@/app/providers'
-import { useToast, useConfirm } from '@/app/providers'
 
 type SiteData = {
   site: { id: string; site: string; code: string; country: string; region: string }
