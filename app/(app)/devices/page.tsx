@@ -186,8 +186,18 @@ export default function DevicesPage() {
   }
 
   const totalPages = Math.ceil(total / 50)
-  const filteredSites = region ? lookups.sites.filter((s: any) => s.region === region) : lookups.sites
   const hasFilters = !!(search || region || site || type || status || lifecycle)
+
+  // For site admins, filter lookups to only show their assigned sites
+  const availableSites = isSiteAdmin && sessionUser?.siteIds?.length
+    ? lookups.sites.filter((s: any) => sessionUser.siteIds!.includes(s.id))
+    : lookups.sites
+  const filteredSites = region
+    ? availableSites.filter((s: any) => s.region === region)
+    : availableSites
+  const availableRegions = isSiteAdmin && sessionUser?.siteIds?.length
+    ? [...new Set(availableSites.map((s: any) => s.region).filter(Boolean))]
+    : lookups.regions
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -374,7 +384,7 @@ export default function DevicesPage() {
         <input className="input" style={{ flex: '1', minWidth: '200px', maxWidth: '320px' }} placeholder="Search name, IP, model, serial..." value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
         <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={region} onChange={e => { setRegion(e.target.value); setSite(''); setPage(1) }}>
           <option value="">All regions</option>
-          {lookups.regions.map(r => <option key={r}>{r}</option>)}
+          {(isSiteAdmin ? availableRegions : lookups.regions).map((r: string) => <option key={r}>{r}</option>)}
         </select>
         <select className="select" style={{ width: 'auto', minWidth: '150px' }} value={site} onChange={e => { setSite(e.target.value); setPage(1) }}>
           <option value="">All sites</option>
