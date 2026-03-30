@@ -153,6 +153,10 @@ Write-OK "Database and user ready"
 Write-Step "Running schema migration"
 $env:PGPASSWORD = $PgAdminPasswordPlain
 $schemaSql = @"
+-- Update role constraint to include super_admin
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'super_admin', 'site_admin', 'viewer'));
+
 CREATE TABLE IF NOT EXISTS vendors (
     id   SERIAL PRIMARY KEY,
     name TEXT NOT NULL UNIQUE,
@@ -196,6 +200,17 @@ if (Test-Path $AppDir) {
 & git clone $GitHubUrl $AppDir
 if ($LASTEXITCODE -ne 0) { throw "Git clone failed" }
 Write-OK "App cloned to $AppDir"
+
+# ── Run setup.sql to create default admin user ────────────────
+Write-Step "Creating default admin user"
+$env:PGPASSWORD = $PgAdminPasswordPlain
+$setupSql = "$AppDir\setup.sql"
+if (Test-Path $setupSql) {
+    & "$PgBin\psql.exe" -U postgres -h localhost -p $PgPort -d $DbName -f $setupSql
+    Write-OK "Default admin user created (admin@yourcompany.com / Admin1234!)"
+} else {
+    Write-Warn "setup.sql not found - no default user created"
+}
 
 # ── Create .env file ───────────────────────────────────────────
 Write-Step "Creating environment configuration"
