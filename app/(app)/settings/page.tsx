@@ -51,7 +51,11 @@ export default function SettingsPage() {
   const [siteSearch, setSiteSearch] = useState('')
 
   useEffect(() => {
-    fetch('/api/settings').then(r => r.json()).then(d => { setSettings(d); setLoadingSettings(false) })
+    if (user?.role === 'super_admin') {
+      fetch('/api/settings').then(r => r.json()).then(d => { setSettings(d); setLoadingSettings(false) })
+    } else {
+      setLoadingSettings(false)
+    }
     fetch('/api/users').then(r => r.json()).then(setUsers)
     fetch('/api/sites').then(r => r.json()).then(setSites)
     fetch('/api/countries').then(r => r.json()).then(d => { if (Array.isArray(d)) setCountries(d) })
