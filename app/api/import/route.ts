@@ -101,8 +101,9 @@ export async function POST(req: NextRequest) {
       const deviceTypeId = await getOrCreate('device_types', 'name', deviceType)
       const brandId = brand ? await getOrCreate('brands', 'name', brand) : null
 
-      const ip = getVal(rowData, 'ip').split('/')[0].trim() || null
-      const validIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(ip) ? ip : null
+      const ipRaw = getVal(rowData, 'ip').split('/')[0].trim()
+      const validIp = ipRaw ? (/^\d{1,3}(\.\d{1,3}){3}$/.test(ipRaw) ? ipRaw : null) : null
+      const ip = ipRaw || null
       if (ip && !validIp) {
         skippedRows.push({ row: rowNum, name: deviceName, reason: `Invalid IP address "${ip}"` })
         continue
