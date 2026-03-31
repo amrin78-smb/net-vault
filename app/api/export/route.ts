@@ -33,21 +33,41 @@ export async function GET(req: NextRequest) {
 
   const res = await query(
     `SELECT name, brand, model, serial_number, device_type, ip_address,
-            mgmt_protocol, site, location_detail, country, region,
-            lifecycle_status, device_status, risk_score, technical_debt,
+            site, location_detail, country, lifecycle_status, region,
+            device_status, technical_debt, risk_score, mgmt_protocol,
             remark, cost, purchase_date, purchase_vendor, ma_vendor
      FROM v_devices_flat ${where} ORDER BY region, country, site, name`, params)
 
-  const headers = Object.keys(res.rows[0] || {
-    name:'', brand:'', model:'', serial_number:'', device_type:'', ip_address:'',
-    mgmt_protocol:'', site:'', location_detail:'', country:'', region:'',
-    lifecycle_status:'', device_status:'', risk_score:'', technical_debt:'',
-    remark:'', cost:'', purchase_date:'', purchase_vendor:'', ma_vendor:''
-  })
+  // PowerBI-friendly column names matching expected format
+  const colMap: Record<string, string> = {
+    name: 'Name',
+    brand: 'Brand',
+    model: 'Model',
+    serial_number: 'S/N',
+    device_type: 'Type',
+    ip_address: 'IP Address',
+    site: 'Site',
+    location_detail: 'Location',
+    country: 'Country',
+    lifecycle_status: 'Lifecycle Status',
+    region: 'Region',
+    device_status: 'Device Status',
+    technical_debt: 'Technical Debt',
+    risk_score: 'Risk Score',
+    mgmt_protocol: 'Mgmt Protocol',
+    remark: 'Remark',
+    cost: 'Cost',
+    purchase_date: 'Purchase Date',
+    purchase_vendor: 'Purchase Vendor',
+    ma_vendor: 'MA Vendor',
+  }
+
+  const dbCols = Object.keys(colMap)
+  const headers = dbCols.map(c => colMap[c])
 
   const csv = [
     headers.join(','),
-    ...res.rows.map(row => headers.map(h => {
+    ...res.rows.map(row => dbCols.map(h => {
       const val = row[h] ?? ''
       const str = String(val)
       return str.includes(',') || str.includes('"') || str.includes('\n')
