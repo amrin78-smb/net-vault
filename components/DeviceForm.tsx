@@ -48,7 +48,7 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
     if (res.ok) {
       const data = await res.json()
       if (!deviceId) {
-        showToast(`Device "${data.name || body.name}" added successfully to ${data.site || body.site}`)
+        showToast(`Device "${data.name || form.name}" added successfully to ${data.site || form.site}`)
       } else {
         showToast('Device updated successfully')
       }
