@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import * as XLSX from 'xlsx'
+import { calcTechnicalDebt } from '@/lib/techDebt'
 
 function normaliseType(t: string) {
   const map: Record<string,string> = { 'SWITCH':'Switch','switch':'Switch','Wireless controller':'Wireless Controller','ArubaMM-VA':'Aruba MM-VA','ArubaCPPM':'Aruba CPPM' }
@@ -90,7 +91,6 @@ export async function POST(req: NextRequest) {
       }
       const siteId = siteRes.rows[0].id
 
-      // Site admins can only import to their assigned sites
       if (user.role === 'site_admin' && user.siteIds?.length && !user.siteIds.includes(siteId)) {
         skippedRows.push({ row: rowNum, name: deviceName, reason: `You are not assigned to site "${siteName}"` })
         continue
@@ -109,7 +109,6 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // Check duplicate IP
       if (validIp) {
         const dupIp = await query(`SELECT id FROM devices WHERE ip_address = $1`, [validIp])
         if (dupIp.rows[0]) {
@@ -126,8 +125,8 @@ export async function POST(req: NextRequest) {
       await query(`
         INSERT INTO devices (
           name, brand_id, model, serial_number, device_type_id,
-          ip_address, site_id, lifecycle_status, device_status, created_by, updated_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$10)`,
+          ip_address, site_id, lifecycle_status, device_status, technical_debt, created_by, updated_by
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`,
         [
           getVal(rowData, 'name') || null,
           brandId,
@@ -138,6 +137,7 @@ export async function POST(req: NextRequest) {
           siteId,
           lifecycle,
           devStatus,
+          calcTechnicalDebt(lifecycle, devStatus, deviceType),
           parseInt(user.id)
         ]
       )

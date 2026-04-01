@@ -10,6 +10,8 @@ export async function GET() {
 
   const isSiteAdmin = sessionUser.role === 'site_admin'
   const siteIds = sessionUser.siteIds || []
+  // vFilter: standalone WHERE clause for queries with no other conditions
+  // siteFilter: AND clause for queries that already have a WHERE
   const siteFilter = isSiteAdmin && siteIds.length ? `AND site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''
   const vFilter = isSiteAdmin && siteIds.length ? `WHERE site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''
 
@@ -29,14 +31,14 @@ export async function GET() {
       SELECT region,
         COUNT(*) as total,
         COUNT(*) FILTER (WHERE lifecycle_status = 'EOL / EOS') as eol_count
-      FROM v_devices_flat ${vFilter}
-      WHERE region IS NOT NULL ${siteFilter ? 'AND site_id = ANY(ARRAY[' + siteIds.join(',') + '])' : ''}
+      FROM v_devices_flat
+      WHERE region IS NOT NULL ${siteFilter}
       GROUP BY region ORDER BY total DESC
     `),
     query(`
       SELECT device_type, COUNT(*) as total
-      FROM v_devices_flat ${vFilter}
-      WHERE device_type IS NOT NULL ${siteFilter ? 'AND site_id = ANY(ARRAY[' + siteIds.join(',') + '])' : ''}
+      FROM v_devices_flat
+      WHERE device_type IS NOT NULL ${siteFilter}
       GROUP BY device_type ORDER BY total DESC LIMIT 8
     `),
     query(`

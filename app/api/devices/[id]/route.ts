@@ -16,11 +16,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const user = session.user as { role: string; id: string }
-  if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const user = session.user as { role: string; id: string; siteIds?: number[] }
+  if (user.role === 'viewer') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
   const body = await req.json()
   const old = await query('SELECT * FROM v_devices_flat WHERE id = $1', [id])
+  if (user.role === 'site_admin') {
+    if (!user.siteIds?.includes(old.rows[0]?.site_id)) {
+      return NextResponse.json({ error: 'You can only edit devices at your assigned sites' }, { status: 403 })
+    }
+  }
   await query(`
     UPDATE devices SET
       name=$1,brand_id=(SELECT id FROM brands WHERE name=$2),

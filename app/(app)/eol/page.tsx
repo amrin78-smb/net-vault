@@ -1,6 +1,5 @@
 'use client'
 import { useState, useEffect } from 'react'
-type Device = { region: string; country: string; site: string; lifecycle_status: string }
 type SiteRow = { region: string; country: string; site: string; eol_count: number; total_count: number }
 
 export default function EolPage() {
@@ -9,14 +8,22 @@ export default function EolPage() {
   const [region, setRegion] = useState('')
 
   useEffect(() => {
-    fetch('/api/devices?lifecycle=EOL+%2F+EOS&limit=3000').then(r => r.json()).then(d => {
+    Promise.all([
+      fetch('/api/devices?lifecycle=EOL+%2F+EOS&limit=3000').then(r => r.json()),
+      fetch('/api/devices?limit=3000').then(r => r.json()),
+    ]).then(([eolData, allData]) => {
       const sites: Record<string, SiteRow> = {}
-      for (const dev of d.devices || []) {
+      for (const dev of allData.devices || []) {
+        const key = `${dev.region}|${dev.country}|${dev.site}`
+        if (!sites[key]) sites[key] = { region: dev.region, country: dev.country, site: dev.site, eol_count: 0, total_count: 0 }
+        sites[key].total_count++
+      }
+      for (const dev of eolData.devices || []) {
         const key = `${dev.region}|${dev.country}|${dev.site}`
         if (!sites[key]) sites[key] = { region: dev.region, country: dev.country, site: dev.site, eol_count: 0, total_count: 0 }
         sites[key].eol_count++
       }
-      setRows(Object.values(sites).sort((a, b) => b.eol_count - a.eol_count))
+      setRows(Object.values(sites).filter(s => s.eol_count > 0).sort((a, b) => b.eol_count - a.eol_count))
       setLoading(false)
     })
   }, [])
@@ -54,17 +61,18 @@ export default function EolPage() {
       <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
         {loading ? <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div> : (
           <table>
-            <thead><tr><th>Site</th><th>Country</th><th>Region</th><th>EOL devices</th><th>Risk level</th></tr></thead>
+            <thead><tr><th>Site</th><th>Country</th><th>Region</th><th>EOL devices</th><th>% of site</th><th>Risk level</th></tr></thead>
             <tbody>
               {filtered.map(row => {
-                const pct = row.eol_count > 0 ? row.eol_count : 0
-                const risk = pct >= 20 ? { label: 'High', bg: '#fee2e2', color: '#991b1b' } : pct >= 10 ? { label: 'Medium', bg: '#fef3c7', color: '#92400e' } : { label: 'Low', bg: '#dcfce7', color: '#166534' }
+                const pct = row.total_count > 0 ? Math.round((row.eol_count / row.total_count) * 100) : 0
+                const risk = pct >= 50 ? { label: 'High', bg: '#fee2e2', color: '#991b1b' } : pct >= 25 ? { label: 'Medium', bg: '#fef3c7', color: '#92400e' } : { label: 'Low', bg: '#dcfce7', color: '#166534' }
                 return (
                   <tr key={`${row.site}-${row.region}`}>
                     <td style={{ fontWeight: '500', color: '#111827' }}>{row.site}</td>
                     <td>{row.country}</td>
                     <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{row.region}</span></td>
                     <td style={{ fontWeight: '600', color: '#991b1b' }}>{row.eol_count}</td>
+                    <td style={{ color: '#6b7280' }}>{pct}%</td>
                     <td><span className="badge" style={{ background: risk.bg, color: risk.color }}>{risk.label}</span></td>
                   </tr>
                 )
