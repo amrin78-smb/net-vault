@@ -62,6 +62,7 @@ export async function POST(req: NextRequest) {
     return k ? (row[k] || '').trim() : ''
   }
 
+  const dryRun = formData.get('dryRun') === 'true'
   let inserted = 0
   const skippedRows: { row: number; name: string; reason: string }[] = []
 
@@ -122,25 +123,27 @@ export async function POST(req: NextRequest) {
       const statusMap: Record<string,string> = { 'Active':'Active','Decommed':'Decommed','Faulty, Replaced':'Faulty, Replaced','Spare':'Spare' }
       const devStatus = statusMap[getVal(rowData, 'status')] || 'Active'
 
-      await query(`
-        INSERT INTO devices (
-          name, brand_id, model, serial_number, device_type_id,
-          ip_address, site_id, lifecycle_status, device_status, technical_debt, created_by, updated_by
-        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`,
-        [
-          getVal(rowData, 'name') || null,
-          brandId,
-          getVal(rowData, 'model') || null,
-          getVal(rowData, 's/n') || getVal(rowData, 'serial') || null,
-          deviceTypeId,
-          validIp,
-          siteId,
-          lifecycle,
-          devStatus,
-          calcTechnicalDebt(lifecycle, devStatus, deviceType),
-          parseInt(user.id)
-        ]
-      )
+      if (!dryRun) {
+        await query(`
+          INSERT INTO devices (
+            name, brand_id, model, serial_number, device_type_id,
+            ip_address, site_id, lifecycle_status, device_status, technical_debt, created_by, updated_by
+          ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11)`,
+          [
+            getVal(rowData, 'name') || null,
+            brandId,
+            getVal(rowData, 'model') || null,
+            getVal(rowData, 's/n') || getVal(rowData, 'serial') || null,
+            deviceTypeId,
+            validIp,
+            siteId,
+            lifecycle,
+            devStatus,
+            calcTechnicalDebt(lifecycle, devStatus, deviceType),
+            parseInt(user.id)
+          ]
+        )
+      }
       inserted++
     } catch (e: any) {
       const deviceName = `Row ${rowNum}`

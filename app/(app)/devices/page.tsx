@@ -47,6 +47,8 @@ export default function DevicesPage() {
   const [importResult, setImportResult] = useState('')
   const [importSkipped, setImportSkipped] = useState<{row:number;name:string;reason:string}[]>([])
   const [showSkipped, setShowSkipped] = useState(false)
+  const [dryRun, setDryRun] = useState(true)
+  const [dryRunResult, setDryRunResult] = useState<{inserted: number; skipped: number; skippedRows: any[]} | null>(null)
   const [duplicates, setDuplicates] = useState<Duplicate[]>([])
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [dupLoading, setDupLoading] = useState(false)
@@ -171,19 +173,31 @@ export default function DevicesPage() {
     setImportLoading(false)
   }
 
-  async function confirmImport() {
+  async function runImport(dry: boolean) {
     if (!importFile) return
     setImportLoading(true)
-    const formData = new FormData(); formData.append('file', importFile)
+    const formData = new FormData()
+    formData.append('file', importFile)
+    formData.append('dryRun', String(dry))
     const res = await fetch('/api/import', { method: 'POST', body: formData })
     const data = await res.json()
-    setImportResult(`Imported: ${data.inserted}, Skipped: ${data.skipped}`)
-    setImportSkipped(data.skippedRows || [])
-    setShowSkipped(data.skipped > 0)
-    setImportLoading(false); setImportFile(null); setImportPreview([])
-    showToast(`Import complete: ${data.inserted} imported, ${data.skipped} skipped`, data.skipped > 0 ? 'info' : 'success')
-    fetchDevices()
+    if (dry) {
+      setDryRunResult(data)
+      setImportSkipped(data.skippedRows || [])
+      setShowSkipped(data.skipped > 0)
+    } else {
+      setImportResult(`Imported: ${data.inserted}, Skipped: ${data.skipped}`)
+      setImportSkipped(data.skippedRows || [])
+      setShowSkipped(data.skipped > 0)
+      setDryRunResult(null)
+      setImportLoading(false); setImportFile(null); setImportPreview([])
+      showToast(`Import complete: ${data.inserted} imported, ${data.skipped} skipped`, data.skipped > 0 ? 'info' : 'success')
+      fetchDevices()
+      return
+    }
+    setImportLoading(false)
   }
+  async function confirmImport() { await runImport(false) }
 
   const totalPages = Math.ceil(total / 50)
   const hasFilters = !!(search || region || site || type || status || lifecycle)
@@ -307,9 +321,19 @@ export default function DevicesPage() {
                   </tbody>
                 </table>
               </div>
-              <button className="btn-primary" onClick={confirmImport} disabled={importLoading} style={{ marginTop: '10px' }}>
-                {importLoading ? 'Importing...' : 'Confirm import'}
-              </button>
+              <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' as const }}>
+                <button className="btn-secondary" onClick={() => runImport(true)} disabled={importLoading}>
+                  {importLoading && dryRunResult === null ? 'Validating...' : '🔍 Validate (dry run)'}
+                </button>
+                {dryRunResult && (
+                  <span style={{ fontSize: '13px', color: dryRunResult.skipped > 0 ? '#92400e' : '#166534', fontWeight: '500' }}>
+                    ✓ {dryRunResult.inserted} will be imported, {dryRunResult.skipped} will be skipped
+                  </span>
+                )}
+                <button className="btn-primary" onClick={confirmImport} disabled={importLoading}>
+                  {importLoading && dryRunResult !== null ? 'Importing...' : 'Confirm import'}
+                </button>
+              </div>
             </div>
           )}
           {importResult && (
