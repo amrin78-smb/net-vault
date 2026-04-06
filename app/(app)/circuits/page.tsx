@@ -39,8 +39,9 @@ export default function CircuitsPage() {
   const [usage, setUsage] = useState('')
   const [technology, setTechnology] = useState('')
   const [country, setCountry] = useState('')
+  const [site, setSite] = useState('')
 
-  useEffect(() => { fetchCircuits() }, [search, isp, usage, technology, country])
+  useEffect(() => { fetchCircuits() }, [search, isp, usage, technology, country, site])
 
   async function fetchCircuits() {
     setLoading(true)
@@ -50,6 +51,7 @@ export default function CircuitsPage() {
       ...(usage && { usage }),
       ...(technology && { technology }),
       ...(country && { country }),
+      ...(site && { site }),
     })
     const res = await fetch(`/api/circuits?${params}`)
     const data = await res.json()
@@ -69,6 +71,7 @@ export default function CircuitsPage() {
   const isps = [...new Set(circuits.map(c => c.isp).filter(Boolean))].sort()
   const technologies = [...new Set(circuits.map(c => c.technology).filter(t => t && t !== 'nan'))].sort()
   const countries = [...new Set(circuits.map(c => c.country).filter(Boolean))].sort()
+  const sites = [...new Set(circuits.map(c => c.site).filter(Boolean))].sort()
   const mainCount = circuits.filter(c => ['main','primary internet','mpls primary'].includes(c.usage?.toLowerCase())).length
   const backupCount = circuits.filter(c => ['backup','backup internet','mpls backup'].includes(c.usage?.toLowerCase())).length
 
@@ -119,9 +122,13 @@ export default function CircuitsPage() {
         <input style={{ padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '7px', fontSize: '14px', background: 'white', outline: 'none', minWidth: '200px', flex: 1, maxWidth: '280px' }}
           placeholder="Search circuit ID, ISP, subnet..."
           value={search} onChange={e => setSearch(e.target.value)} />
-        <select style={selectStyle} value={country} onChange={e => setCountry(e.target.value)}>
+        <select style={selectStyle} value={country} onChange={e => { setCountry(e.target.value); setSite('') }}>
           <option value="">All countries</option>
           {countries.map(c => <option key={c}>{c}</option>)}
+        </select>
+        <select style={selectStyle} value={site} onChange={e => setSite(e.target.value)}>
+          <option value="">All sites</option>
+          {sites.filter(s => !country || circuits.find(c => c.site === s)?.country === country).map(s => <option key={s}>{s}</option>)}
         </select>
         <select style={selectStyle} value={isp} onChange={e => setIsp(e.target.value)}>
           <option value="">All ISPs</option>
@@ -140,9 +147,9 @@ export default function CircuitsPage() {
           <option value="">All technology</option>
           {technologies.map(t => <option key={t}>{t}</option>)}
         </select>
-        {(search || isp || usage || technology || country) && (
+        {(search || isp || usage || technology || country || site) && (
           <button style={{ padding: '8px 14px', background: 'white', border: '1px solid #d1d5db', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}
-            onClick={() => { setSearch(''); setIsp(''); setUsage(''); setTechnology(''); setCountry('') }}>Clear</button>
+            onClick={() => { setSearch(''); setIsp(''); setUsage(''); setTechnology(''); setCountry(''); setSite('') }}>Clear</button>
         )}
       </div>
 
