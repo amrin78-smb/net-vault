@@ -4,10 +4,10 @@ import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Breadcrumb from '@/components/Breadcrumb'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
-import { useToast } from '@/app/providers'
+import { useToast, useConfirm } from '@/app/providers'
 
 type SiteData = {
-  site: { id: string; site: string; code: string; country: string; region: string }
+  site: { id: string; site: string; code: string; country: string; region: string; site_status?: string }
   devices: any[]
 }
 type Circuit = Record<string, any>
@@ -25,11 +25,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
   const [editingSite, setEditingSite] = useState(false)
   const [siteForm, setSiteForm] = useState({ name: '', code: '' })
   const [savingSite, setSavingSite] = useState(false)
+  const [togglingDecomm, setTogglingDecomm] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkField, setBulkField] = useState('device_status')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
   const { showToast } = useToast()
+  const { confirm } = useConfirm()
 
 
   const [siteId, setSiteId] = useState('')
@@ -50,6 +52,35 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       setLoading(false)
     })
   }, [params])
+
+  async function toggleDecomm() {
+    const isDecommed = site?.site_status === 'Decommed'
+    const newStatus = isDecommed ? 'Active' : 'Decommed'
+    const ok = await confirm({
+      title: isDecommed ? 'Reactivate site' : 'Decommission site',
+      message: isDecommed
+        ? `Are you sure you want to reactivate "${site?.site}"?`
+        : `Are you sure you want to decommission "${site?.site}"? This will be blocked if any devices are still active.`,
+      confirmLabel: isDecommed ? 'Reactivate' : 'Decommission',
+      danger: !isDecommed
+    })
+    if (!ok) return
+    setTogglingDecomm(true)
+    const res = await fetch('/api/sites/manage', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: site?.id, site_status: newStatus })
+    })
+    const d = await res.json()
+    if (res.ok) {
+      showToast(isDecommed ? 'Site reactivated' : 'Site decommissioned')
+      const siteData = await fetch(`/api/sites/${site?.id}`).then(r => r.json())
+      setData(siteData)
+    } else {
+      showToast(d.error || 'Failed to update site status', 'error')
+    }
+    setTogglingDecomm(false)
+  }
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
   if (!data) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Site not found</div>
@@ -178,8 +209,18 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
         </div>
         {!editingSite && (
           <div style={{ display: 'flex', gap: '8px' }}>
-            {isAdmin && <Link href="/devices/new"><button className="btn-primary">+ Add device</button></Link>}
-            {isAdmin && <Link href={`/circuits/new?site_id=${site.id}&site=${encodeURIComponent(site.site)}`}><button className="btn-secondary">+ Add circuit</button></Link>}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              {site?.site_status === 'Decommed' && (
+                <span style={{ background: '#f3f4f6', color: '#6b7280', fontSize: '12px', fontWeight: '600', padding: '4px 12px', borderRadius: '20px', border: '1px solid #d1d5db' }}>⚠ Decommed site</span>
+              )}
+              {isAdmin && (
+                <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '7px', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? '#166534' : '#991b1b', borderColor: site?.site_status === 'Decommed' ? '#bbf7d0' : '#fca5a5', background: site?.site_status === 'Decommed' ? '#dcfce7' : '#fee2e2' }}>
+                  {togglingDecomm ? 'Updating...' : site?.site_status === 'Decommed' ? 'Reactivate site' : 'Decommission site'}
+                </button>
+              )}
+              {isAdmin && <Link href="/devices/new"><button className="btn-primary">+ Add device</button></Link>}
+              {isAdmin && <Link href={`/circuits/new?site_id=${site.id}&site=${encodeURIComponent(site.site)}`}><button className="btn-secondary">+ Add circuit</button></Link>}
+            </div>
           </div>
         )}
       </div>

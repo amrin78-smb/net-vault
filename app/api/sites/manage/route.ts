@@ -28,6 +28,31 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ id: res.rows[0].id }, { status: 201 })
 }
 
+export async function PATCH(req: NextRequest) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = session.user as { role: string }
+  if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const body = await req.json()
+  if (!body.id || !body.site_status) return NextResponse.json({ error: 'Site ID and status required' }, { status: 400 })
+
+  if (body.site_status === 'Decommed') {
+    const activeCheck = await query(
+      `SELECT COUNT(*) FROM devices WHERE site_id = $1 AND device_status = 'Active'`,
+      [body.id]
+    )
+    if (parseInt(activeCheck.rows[0].count) > 0) {
+      return NextResponse.json({
+        error: `Cannot decommission — this site has ${activeCheck.rows[0].count} active devices. Set them to Decommed first.`
+      }, { status: 409 })
+    }
+  }
+
+  await query('UPDATE sites SET site_status = $1 WHERE id = $2', [body.site_status, body.id])
+  return NextResponse.json({ success: true })
+}
+
 export async function DELETE(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

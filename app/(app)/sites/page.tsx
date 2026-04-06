@@ -5,7 +5,7 @@ import Link from 'next/link'
 type Site = {
   id: string; site: string; code: string; country: string
   iso_code: string; region: string; total: string; active: string
-  decommed: string; eol: string; spare: string; last_updated: string
+  decommed: string; eol: string; spare: string; last_updated: string; site_status: string
 }
 
 export default function SitesPage() {
@@ -35,7 +35,8 @@ export default function SitesPage() {
   const totalDevices = filtered.reduce((s, r) => s + parseInt(r.total), 0)
   const totalEol = filtered.reduce((s, r) => s + parseInt(r.eol), 0)
 
-  function riskColor(eol: number, total: number) {
+  function riskColor(eol: number, total: number, siteStatus?: string) {
+    if (siteStatus === 'Decommed') return { bg: '#f3f4f6', color: '#6b7280', label: 'Decommed' }
     if (total === 0) return { bg: '#f3f4f6', color: '#6b7280', label: 'Empty' }
     const pct = eol / total
     if (pct >= 0.4) return { bg: '#fee2e2', color: '#991b1b', label: 'High' }
@@ -103,13 +104,14 @@ export default function SitesPage() {
             {/* Site cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
               {group.sites.map(site => {
-                const risk = riskColor(parseInt(site.eol), parseInt(site.total))
+                const risk = riskColor(parseInt(site.eol), parseInt(site.total), site.site_status)
+                const isDecommed = site.site_status === 'Decommed'
                 const eolPct = parseInt(site.total) > 0 ? Math.round(parseInt(site.eol) / parseInt(site.total) * 100) : 0
                 return (
                   <Link key={site.id} href={`/sites/${site.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s' }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = '#C8102E')}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = '#e5e7eb')}>
+                    <div style={{ background: isDecommed ? '#f9fafb' : 'white', borderRadius: '10px', border: isDecommed ? '1px solid #d1d5db' : '1px solid #e5e7eb', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s', opacity: isDecommed ? 0.7 : 1 }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = isDecommed ? '#d1d5db' : '#C8102E')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = isDecommed ? '#d1d5db' : '#e5e7eb')}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
                           <div style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>{site.site}</div>
