@@ -36,7 +36,7 @@ export default function SitesPage() {
   const totalEol = filtered.reduce((s, r) => s + parseInt(r.eol), 0)
 
   function riskColor(eol: number, total: number, siteStatus?: string) {
-    if (siteStatus === 'Decommed') return { bg: '#f3f4f6', color: '#6b7280', label: 'Decommed' }
+    if (siteStatus === 'Decommed') return { bg: '#e5e7eb', color: '#4b5563', label: 'Site decommed' }
     if (total === 0) return { bg: '#f3f4f6', color: '#6b7280', label: 'Empty' }
     const pct = eol / total
     if (pct >= 0.4) return { bg: '#fee2e2', color: '#991b1b', label: 'High' }
