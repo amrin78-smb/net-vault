@@ -23,7 +23,7 @@ function CircuitEditField({ label, field, form, setForm, type = 'text' }: { labe
   return (
     <div style={{ marginBottom: '14px' }}>
       <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>{label}</label>
-      <input className="input" type={type} value={form[field] || ''} onChange={e => setForm((f: any) => ({ ...f, [field]: e.target.value }))} />
+      <input className="input" type={type} value={form[field] && form[field] !== 'nan' ? form[field] : ''} onChange={e => setForm((f: any) => ({ ...f, [field]: e.target.value }))} />
     </div>
   )
 }
@@ -228,7 +228,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
               <CircuitEditField form={form} setForm={setForm} label="Contract term" field="contract_term" />
               <div style={{ gridColumn: '1 / -1' }}>
                 <label style={{ display: 'block', fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Comment</label>
-                <textarea className="input" rows={3} value={form.comment || ''} onChange={e => setForm((f: Circuit) => ({ ...f, comment: e.target.value }))} style={{ resize: 'vertical' }} />
+                <textarea className="input" rows={3} value={form.comment && form.comment !== 'nan' ? form.comment : ''} onChange={e => setForm((f: Circuit) => ({ ...f, comment: e.target.value }))} style={{ resize: 'vertical' }} />
               </div>
             </CircuitSection>
           </div>

@@ -87,9 +87,11 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     return speed
   }
 
-  const mainCircuits = circuits.filter(c => c.usage?.toLowerCase() === 'main')
-  const backupCircuits = circuits.filter(c => c.usage?.toLowerCase() === 'backup')
-  const otherCircuits = circuits.filter(c => !['main','backup'].includes(c.usage?.toLowerCase()))
+  const mainUsages = ['main', 'primary internet', 'mpls primary']
+  const backupUsages = ['backup', 'backup internet', 'mpls backup']
+  const mainCircuits = circuits.filter(c => mainUsages.includes(c.usage?.toLowerCase()))
+  const backupCircuits = circuits.filter(c => backupUsages.includes(c.usage?.toLowerCase()))
+  const otherCircuits = circuits.filter(c => !mainUsages.includes(c.usage?.toLowerCase()) && !backupUsages.includes(c.usage?.toLowerCase()))
 
   function toggleSelect(id: string) {
     setSelected(prev => { const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next })
