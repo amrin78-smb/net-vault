@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
 
   const dryRun = formData.get('dryRun') === 'true'
   let inserted = 0
+  let updated = 0
   const skippedRows: { row: number; name: string; reason: string }[] = []
 
   for (const [idx, rowData] of allRows.entries()) {
@@ -110,6 +111,46 @@ export async function POST(req: NextRequest) {
         continue
       }
 
+      const serialRaw = getVal(rowData, 's/n') || getVal(rowData, 'serial') || null
+      const lifecycleMap: Record<string,string> = { 'Active, Supported':'Active, Supported','EOL / EOS':'EOL / EOS' }
+      const lifecycle = lifecycleMap[getVal(rowData, 'lifecycle')] || 'Unknown'
+      const statusMap: Record<string,string> = { 'Active':'Active','Decommed':'Decommed','Faulty, Replaced':'Faulty, Replaced','Spare':'Spare' }
+      const devStatus = statusMap[getVal(rowData, 'status')] || 'Active'
+
+      // Check if device with same serial already exists — upsert if so
+      const existingBySerial = serialRaw
+        ? await query(`SELECT id FROM devices WHERE serial_number = $1`, [serialRaw])
+        : { rows: [] }
+
+      if (existingBySerial.rows[0]) {
+        // Update everything except site_id
+        if (!dryRun) {
+          await query(`
+            UPDATE devices SET
+              name=$1, brand_id=$2, model=$3,
+              device_type_id=$4, ip_address=$5,
+              lifecycle_status=$6, device_status=$7,
+              technical_debt=$8, updated_by=$9
+            WHERE serial_number=$10`,
+            [
+              getVal(rowData, 'name') || null,
+              brandId,
+              getVal(rowData, 'model') || null,
+              deviceTypeId,
+              validIp,
+              lifecycle,
+              devStatus,
+              calcTechnicalDebt(lifecycle, devStatus, deviceType),
+              parseInt(user.id),
+              serialRaw
+            ]
+          )
+        }
+        updated++
+        continue
+      }
+
+      // New device — check for duplicate IP before inserting
       if (validIp) {
         const dupIp = await query(`SELECT id FROM devices WHERE ip_address = $1`, [validIp])
         if (dupIp.rows[0]) {
@@ -117,11 +158,6 @@ export async function POST(req: NextRequest) {
           continue
         }
       }
-
-      const lifecycleMap: Record<string,string> = { 'Active, Supported':'Active, Supported','EOL / EOS':'EOL / EOS' }
-      const lifecycle = lifecycleMap[getVal(rowData, 'lifecycle')] || 'Unknown'
-      const statusMap: Record<string,string> = { 'Active':'Active','Decommed':'Decommed','Faulty, Replaced':'Faulty, Replaced','Spare':'Spare' }
-      const devStatus = statusMap[getVal(rowData, 'status')] || 'Active'
 
       if (!dryRun) {
         await query(`
@@ -133,7 +169,7 @@ export async function POST(req: NextRequest) {
             getVal(rowData, 'name') || null,
             brandId,
             getVal(rowData, 'model') || null,
-            getVal(rowData, 's/n') || getVal(rowData, 'serial') || null,
+            serialRaw,
             deviceTypeId,
             validIp,
             siteId,
@@ -151,5 +187,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ inserted, skipped: skippedRows.length, skippedRows })
+  return NextResponse.json({ inserted, updated, skipped: skippedRows.length, skippedRows })
 }

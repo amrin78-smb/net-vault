@@ -186,12 +186,12 @@ export default function DevicesPage() {
       setImportSkipped(data.skippedRows || [])
       setShowSkipped(data.skipped > 0)
     } else {
-      setImportResult(`Imported: ${data.inserted}, Skipped: ${data.skipped}`)
+      setImportResult(`Inserted: ${data.inserted}, Updated: ${data.updated || 0}, Skipped: ${data.skipped}`)
       setImportSkipped(data.skippedRows || [])
       setShowSkipped(data.skipped > 0)
       setDryRunResult(null)
       setImportLoading(false); setImportFile(null); setImportPreview([])
-      showToast(`Import complete: ${data.inserted} imported, ${data.skipped} skipped`, data.skipped > 0 ? 'info' : 'success')
+      showToast(`Import complete: ${data.inserted} inserted, ${data.updated || 0} updated, ${data.skipped} skipped`, data.skipped > 0 ? 'info' : 'success')
       fetchDevices()
       return
     }
@@ -327,7 +327,7 @@ export default function DevicesPage() {
                 </button>
                 {dryRunResult && (
                   <span style={{ fontSize: '13px', color: dryRunResult.skipped > 0 ? '#92400e' : '#166534', fontWeight: '500' }}>
-                    ✓ {dryRunResult.inserted} will be imported, {dryRunResult.skipped} will be skipped
+                    ✓ {dryRunResult.inserted} will be inserted, {dryRunResult.updated || 0} will be updated, {dryRunResult.skipped} will be skipped
                   </span>
                 )}
                 <button className="btn-primary" onClick={confirmImport} disabled={importLoading}>
