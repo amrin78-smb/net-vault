@@ -48,7 +48,7 @@ export default function DevicesPage() {
   const [importSkipped, setImportSkipped] = useState<{row:number;name:string;reason:string}[]>([])
   const [showSkipped, setShowSkipped] = useState(false)
   const [dryRun, setDryRun] = useState(true)
-  const [dryRunResult, setDryRunResult] = useState<{inserted: number; skipped: number; skippedRows: any[]} | null>(null)
+  const [dryRunResult, setDryRunResult] = useState<{inserted: number; updated: number; skipped: number; skippedRows: any[]} | null>(null)
   const [duplicates, setDuplicates] = useState<Duplicate[]>([])
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [dupLoading, setDupLoading] = useState(false)
