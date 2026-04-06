@@ -58,19 +58,19 @@ export default function LoginPage() {
               <img
                 src={settings.app_logo_url}
                 alt={settings.app_name}
-                style={{ maxWidth: '200px', maxHeight: '72px', objectFit: 'contain', marginBottom: '10px' }}
+                style={{ maxWidth: '280px', maxHeight: '120px', objectFit: 'contain', marginBottom: '10px' }}
               />
               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px' }}>{settings.app_subtitle}</div>
             </div>
           ) : (
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '44px', height: '44px', background: primary, borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <div style={{ width: '64px', height: '64px', background: primary, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
                 </svg>
               </div>
               <div style={{ textAlign: 'left' }}>
-                <div style={{ color: 'white', fontSize: '22px', fontWeight: '700', lineHeight: 1.1 }}>{settings.app_name}</div>
+                <div style={{ color: 'white', fontSize: '28px', fontWeight: '700', lineHeight: 1.1 }}>{settings.app_name}</div>
                 <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', marginTop: '2px' }}>{settings.app_subtitle}</div>
               </div>
             </div>
