@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const [siteRes, devicesRes] = await Promise.all([
     query(`
-      SELECT s.id, s.name as site, s.code,
+      SELECT s.id, s.name as site, s.code, s.site_status,
              s.city, s.address, s.coordinates, s.postal_code,
              s.site_type, s.phone, s.contact_name, s.contact_email,
              c.name as country, c.iso_code, r.name as region
