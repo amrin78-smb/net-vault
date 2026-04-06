@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
@@ -16,6 +16,7 @@ type Duplicate = { field: string; value: string; count: number; classification: 
 
 export default function DevicesPage() {
   const { data: session } = useSession()
+  const router = useRouter()
   const searchParams = useSearchParams()
   const { showToast } = useToast()
   const { confirm } = useConfirm()
@@ -95,6 +96,18 @@ export default function DevicesPage() {
   }, [page, search, region, site, type, status, lifecycle])
 
   useEffect(() => { fetchDevices() }, [fetchDevices])
+
+  function pushFilters(overrides: Record<string, string> = {}) {
+    const params = new URLSearchParams()
+    const current = { search, region, site, type, status, lifecycle, ...overrides }
+    if (current.search)    params.set('search', current.search)
+    if (current.region)    params.set('region', current.region)
+    if (current.site)      params.set('site', current.site)
+    if (current.type)      params.set('type', current.type)
+    if (current.status)    params.set('status', current.status)
+    if (current.lifecycle) params.set('lifecycle', current.lifecycle)
+    router.push(`/devices${params.toString() ? '?' + params.toString() : ''}`)
+  }
 
   async function checkDuplicates() {
     setDupLoading(true)
@@ -432,7 +445,7 @@ export default function DevicesPage() {
             {type && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Type: {type}</span>}
             {search && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Search: {search}</span>}
           </div>
-          <button onClick={() => { setSearch(''); setRegion(''); setSite(''); setType(''); setStatus(''); setLifecycle(''); setPage(1) }} style={{ fontSize: '12px', color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+          <button onClick={() => router.push('/devices')} style={{ fontSize: '12px', color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
             Clear all
           </button>
         </div>
@@ -440,31 +453,31 @@ export default function DevicesPage() {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-        <input className="input" style={{ flex: '1', minWidth: '200px', maxWidth: '320px' }} placeholder="Search name, IP, model, serial..." value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} />
-        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={region} onChange={e => { setRegion(e.target.value); setSite(''); setPage(1) }}>
+        <input className="input" style={{ flex: '1', minWidth: '200px', maxWidth: '320px' }} placeholder="Search name, IP, model, serial..." value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} onBlur={e => pushFilters({ search: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') pushFilters({ search: (e.target as HTMLInputElement).value }) }} />
+        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={region} onChange={e => { setSite(''); pushFilters({ region: e.target.value, site: '' }) }}>
           <option value="">All regions</option>
           {(isSiteAdmin ? availableRegions : lookups.regions).map((r: string) => <option key={r}>{r}</option>)}
         </select>
-        <select className="select" style={{ width: 'auto', minWidth: '150px' }} value={site} onChange={e => { setSite(e.target.value); setPage(1) }}>
+        <select className="select" style={{ width: 'auto', minWidth: '150px' }} value={site} onChange={e => pushFilters({ site: e.target.value })}>
           <option value="">All sites</option>
           {filteredSites.map((s: any) => <option key={s.site} value={s.site}>{s.site}</option>)}
         </select>
-        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={type} onChange={e => { setType(e.target.value); setPage(1) }}>
+        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={type} onChange={e => pushFilters({ type: e.target.value })}>
           <option value="">All types</option>
           {lookups.deviceTypes.map(t => <option key={t}>{t}</option>)}
         </select>
-        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={status} onChange={e => { setStatus(e.target.value); setPage(1) }}>
+        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={status} onChange={e => pushFilters({ status: e.target.value })}>
           <option value="">All statuses</option>
           {['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
         </select>
-        <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={lifecycle} onChange={e => { setLifecycle(e.target.value); setPage(1) }}>
+        <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={lifecycle} onChange={e => pushFilters({ lifecycle: e.target.value })}>
           <option value="">All lifecycle</option>
           <option value="EOL / EOS">EOL / EOS</option>
           <option value="Active, Supported">Active, Supported</option>
           <option value="Unknown">Unknown</option>
         </select>
         {hasFilters && (
-          <button className="btn-secondary" style={{ fontSize: '13px' }} onClick={() => { setSearch(''); setRegion(''); setSite(''); setType(''); setStatus(''); setLifecycle(''); setPage(1) }}>Clear</button>
+          <button className="btn-secondary" style={{ fontSize: '13px' }} onClick={() => router.push('/devices')}>Clear</button>
         )}
       </div>
 
