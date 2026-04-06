@@ -79,21 +79,26 @@ export default function DevicesPage() {
   const fetchDevices = useCallback(async () => {
     setLoading(true)
     setSelected(new Set())
-    const params = new URLSearchParams({
-      page: String(page), limit: '50',
-      ...(search && { search }),
-      ...(region && { region }),
-      ...(site && { site }),
-      ...(type && { type }),
-      ...(status && { status }),
-      ...(lifecycle && { lifecycle }),
-    })
+    // Read directly from URL to avoid state sync timing issues
+    const s = searchParams.get('search') || ''
+    const r = searchParams.get('region') || ''
+    const si = searchParams.get('site') || ''
+    const t = searchParams.get('type') || ''
+    const st = searchParams.get('status') || ''
+    const lc = searchParams.get('lifecycle') || ''
+    const params = new URLSearchParams({ page: String(page), limit: '50' })
+    if (s)  params.set('search', s)
+    if (r)  params.set('region', r)
+    if (si) params.set('site', si)
+    if (t)  params.set('type', t)
+    if (st) params.set('status', st)
+    if (lc) params.set('lifecycle', lc)
     const res = await fetch(`/api/devices?${params}`)
     const data = await res.json()
     setDevices(data.devices || [])
     setTotal(data.total || 0)
     setLoading(false)
-  }, [page, search, region, site, type, status, lifecycle])
+  }, [page, searchParams])
 
   useEffect(() => { fetchDevices() }, [fetchDevices])
 
