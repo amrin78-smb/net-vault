@@ -60,7 +60,7 @@ if ($envBackup) {
     Write-Warn ".env was not backed up - check credentials before starting service"
 }
 Write-Step "Rebuilding NetVault"
-& npm install --production=false 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
+& npm install --omit=dev=false 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
 & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
 if ($LASTEXITCODE -ne 0) {
     Write-Warn "Build failed - check $InstallDir\logs\npm-build.log"
