@@ -115,7 +115,7 @@ export default function SitesPage() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
                           <div style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>{site.site}</div>
-                          {site.code && <div style={{ fontSize: '11px', color: '#9ca3af', marginTop: '1px' }}>{site.code}</div>}
+
                         </div>
                         <span style={{ fontSize: '10px', fontWeight: '500', padding: '3px 8px', borderRadius: '20px', background: risk.bg, color: risk.color }}>{isDecommed ? risk.label : `${risk.label} risk`}</span>
                       </div>
