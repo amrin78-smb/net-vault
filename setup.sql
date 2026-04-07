@@ -1,5 +1,20 @@
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
 
+-- Site decommission status
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS site_status TEXT NOT NULL DEFAULT 'Active';
+
+-- Unique index on serial number
+CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_serial_unique
+  ON devices (serial_number)
+  WHERE serial_number IS NOT NULL AND serial_number != '';
+
+-- User site assignments
+CREATE TABLE IF NOT EXISTS user_sites (
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    site_id INTEGER REFERENCES sites(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, site_id)
+);
+
 INSERT INTO users (name, email, password_hash, role)
 VALUES (
   'IT Admin',

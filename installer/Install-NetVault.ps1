@@ -36,7 +36,7 @@ $DbUser    = "netvault"
 $PgPort    = 5432
 $PgBin     = "C:\Program Files\PostgreSQL\16\bin"
 $NssmUrl   = "https://nssm.cc/release/nssm-2.24.zip"
-$NodeUrl   = "https://nodejs.org/dist/v20.11.0/node-v20.11.0-x64.msi"
+$NodeUrl   = "https://nodejs.org/dist/v20.19.0/node-v20.19.0-x64.msi"
 $PgUrl     = "https://get.enterprisedb.com/postgresql/postgresql-16.2-1-windows-x64.exe"
 $GitHubUrl = "https://github.com/amrin78-smb/net-vault.git"
 
@@ -174,6 +174,29 @@ ALTER TABLE devices ADD COLUMN IF NOT EXISTS technical_debt     NUMERIC(12,2);
 ALTER TABLE devices ADD COLUMN IF NOT EXISTS remark             TEXT;
 GRANT ALL PRIVILEGES ON TABLE vendors TO $DbUser;
 GRANT USAGE, SELECT ON SEQUENCE vendors_id_seq TO $DbUser;
+
+-- Site decommission status
+ALTER TABLE sites ADD COLUMN IF NOT EXISTS site_status TEXT NOT NULL DEFAULT 'Active';
+
+-- Unique index on serial number (partial - allows NULLs)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_devices_serial_unique
+  ON devices (serial_number)
+  WHERE serial_number IS NOT NULL AND serial_number != '';
+
+-- User site assignments
+CREATE TABLE IF NOT EXISTS user_sites (
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    site_id INTEGER REFERENCES sites(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, site_id)
+);
+GRANT ALL PRIVILEGES ON TABLE user_sites TO $DbUser;
+
+-- Default app settings
+INSERT INTO app_settings (key, value) VALUES ('app_name', 'NetVault') ON CONFLICT (key) DO NOTHING;
+INSERT INTO app_settings (key, value) VALUES ('app_subtitle', 'Network Intelligence Platform') ON CONFLICT (key) DO NOTHING;
+INSERT INTO app_settings (key, value) VALUES ('app_logo_url', '') ON CONFLICT (key) DO NOTHING;
+INSERT INTO app_settings (key, value) VALUES ('app_primary_color', '#C8102E') ON CONFLICT (key) DO NOTHING;
+INSERT INTO app_settings (key, value) VALUES ('app_navy_color', '#1a2744') ON CONFLICT (key) DO NOTHING;
 "@
 $schemaSql | & "$PgBin\psql.exe" -U postgres -h localhost -p $PgPort -d $DbName
 Write-OK "Schema migration complete"
@@ -227,7 +250,7 @@ Write-OK ".env created (NEXTAUTH_URL=http://${ServerIP}:${AppPort})"
 # ── Install dependencies and build ────────────────────────────
 Write-Step "Installing dependencies"
 Set-Location $AppDir
-& npm install --production=false 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
+& npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
 Write-OK "Dependencies installed"
 
 Write-Step "Building NetVault"
