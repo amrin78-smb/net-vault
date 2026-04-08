@@ -18,7 +18,7 @@ Write-Host ""
 Write-Step "Stopping NetVault service"
 $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq 'Running') {
-    Stop-Service -Name NetVault -Force
+    & sc.exe stop NetVault | Out-Null
     Start-Sleep -Seconds 3
     Write-OK "Service stopped"
 } else {
@@ -100,7 +100,7 @@ if ($portProc) {
         Write-OK "Cleared port 3000"
     }
 }
-Start-Service -Name NetVault
+& sc.exe start NetVault | Out-Null
 Start-Sleep -Seconds 5
 $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq 'Running') {
