@@ -80,7 +80,7 @@ export default function GlobalSearch() {
   return (
     <div style={{ position: 'relative', width: '100%' }}>
       <div style={{ position: 'relative' }}>
-        <svg style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <svg style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         <input
           ref={inputRef}
           value={q}
@@ -88,10 +88,10 @@ export default function GlobalSearch() {
           onKeyDown={onKeyDown}
           onFocus={() => q.length >= 2 && setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
-          placeholder="Search… (/)"
-          style={{ width: '100%', padding: '7px 32px 7px 32px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: '7px', color: 'white', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
+          placeholder="Search devices, sites, circuits… (/)"
+          style={{ width: '100%', padding: '7px 32px 7px 32px', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '7px', color: '#111827', fontSize: '13px', outline: 'none', boxSizing: 'border-box' }}
         />
-        {loading && <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>...</div>}
+        {loading && <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: '11px' }}>...</div>}
       </div>
 
       {open && hasResults && (

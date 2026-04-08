@@ -1,7 +1,7 @@
 'use client'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import GlobalSearch from '@/components/GlobalSearch'
 
@@ -42,11 +42,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744',
   })
   const [showPwModal, setShowPwModal] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
   const [pwError, setPwError] = useState('')
   const [pwSuccess, setPwSuccess] = useState(false)
   const [pwSaving, setPwSaving] = useState(false)
   const settingsFetched = useRef(false)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -128,11 +130,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )}
         </div>
 
-        {/* Global search */}
-        <div style={{ padding: '8px 8px 4px', flexShrink: 0 }}>
-          <GlobalSearch />
-        </div>
-
         {/* Nav */}
         <nav style={{ flex: 1, padding: '8px 8px', overflowY: 'auto' }}>
           {navItems.map(item => {
@@ -155,32 +152,61 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        {/* User card - pinned to bottom */}
-        <div style={{ padding: '12px 8px', borderTop: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
-          <div style={{ padding: '10px 12px', borderRadius: '7px', background: 'rgba(255,255,255,0.05)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '600', color: 'white', flexShrink: 0 }}>
-                {userName?.charAt(0)?.toUpperCase() || 'U'}
-              </div>
-              <div style={{ overflow: 'hidden' }}>
-                <div style={{ fontSize: '12px', fontWeight: '500', color: 'white', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{userName}</div>
-                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.4)' }}>{userRole}</div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button onClick={openPwModal} style={{ flex: 1, padding: '5px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '5px', color: 'rgba(255,255,255,0.5)', fontSize: '11px', cursor: 'pointer' }}>
-                Change password
-              </button>
-              <button onClick={() => signOut({ callbackUrl: '/login' })} style={{ flex: 1, padding: '5px', background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '5px', color: 'rgba(255,255,255,0.5)', fontSize: '11px', cursor: 'pointer' }}>
-                Sign out
-              </button>
-            </div>
-          </div>
-        </div>
+
       </div>
 
       {/* Main content offset by sidebar */}
-      <div style={{ marginLeft: '220px', flex: 1, overflow: 'auto' }}>{children}</div>
+      <div style={{ marginLeft: '220px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+        {/* Top bar */}
+        <div style={{ height: '56px', background: 'white', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
+          {/* Global search */}
+          <div style={{ flex: 1, maxWidth: '480px' }}>
+            <GlobalSearch />
+          </div>
+          {/* User area */}
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowUserMenu(m => !m)}
+              style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: '8px', transition: 'background 0.15s' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+            >
+              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '600', color: 'white', flexShrink: 0 }}>
+                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              </div>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: '13px', fontWeight: '500', color: '#111827', whiteSpace: 'nowrap' }}>{user?.name}</div>
+                <div style={{ fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{user?.role?.replace('_', ' ')}</div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            {showUserMenu && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '200px', zIndex: 999, overflow: 'hidden' }}>
+                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827' }}>{user?.name}</div>
+                  <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{user?.role?.replace('_', ' ')}</div>
+                </div>
+                <button onClick={() => { setShowUserMenu(false); openPwModal() }}
+                  style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#374151', display: 'flex', alignItems: 'center', gap: '10px' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+                  Change password
+                </button>
+                <button onClick={() => { setShowUserMenu(false); signOut({ callbackUrl: '/login' }) }}
+                  style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '10px', borderTop: '1px solid #f3f4f6' }}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        {/* Page content */}
+        <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
+      </div>
 
       {/* Change Password Modal */}
       {showPwModal && (
