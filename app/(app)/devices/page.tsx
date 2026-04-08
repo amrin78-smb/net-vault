@@ -54,6 +54,7 @@ export default function DevicesPage() {
   const [duplicates, setDuplicates] = useState<Duplicate[]>([])
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [dupLoading, setDupLoading] = useState(false)
+  const [showFilterPanel, setShowFilterPanel] = useState(false)
 
   useEffect(() => {
     setSearch(searchParams.get('search') || '')
@@ -462,53 +463,79 @@ export default function DevicesPage() {
         </div>
       )}
 
-      {/* Active filters banner */}
-      {hasFilters && (
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontSize: '13px', color: '#1d4ed8' }}>
-            Showing filtered results:
-            {status && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Status: {status}</span>}
-            {lifecycle && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Lifecycle: {lifecycle}</span>}
-            {region && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Region: {region}</span>}
-            {site && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Site: {site}</span>}
-            {type && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Type: {type}</span>}
-            {search && <span style={{ marginLeft: '8px', background: '#dbeafe', padding: '1px 8px', borderRadius: '10px' }}>Search: {search}</span>}
-          </div>
-          <button onClick={() => router.push('/devices')} style={{ fontSize: '12px', color: '#1d4ed8', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+      {/* Search + Filter bar */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
+        <input className="input" style={{ flex: '1', maxWidth: '400px' }} placeholder="Search name, IP, model, serial..." value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1) }}
+          onBlur={e => pushFilters({ search: e.target.value })}
+          onKeyDown={e => { if (e.key === 'Enter') pushFilters({ search: (e.target as HTMLInputElement).value }) }} />
+        <button
+          onClick={() => setShowFilterPanel(f => !f)}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || hasFilters ? '#1a2744' : 'white', color: showFilterPanel || hasFilters ? 'white' : '#374151', border: '1px solid ' + (showFilterPanel || hasFilters ? '#1a2744' : '#e5e7eb'), borderRadius: '7px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+          Filters {hasFilters && `(${[region,site,type,status,lifecycle].filter(Boolean).length})`}
+        </button>
+        {hasFilters && (
+          <button onClick={() => router.push('/devices')} style={{ fontSize: '12px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap' as const }}>
             Clear all
           </button>
+        )}
+      </div>
+
+      {/* Filter panel */}
+      {showFilterPanel && (
+        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Region</div>
+            <select className="select" style={{ width: '100%' }} value={region} onChange={e => { setSite(''); pushFilters({ region: e.target.value, site: '' }) }}>
+              <option value="">All regions</option>
+              {(isSiteAdmin ? availableRegions : lookups.regions).map((r: string) => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Site</div>
+            <select className="select" style={{ width: '100%' }} value={site} onChange={e => pushFilters({ site: e.target.value })}>
+              <option value="">All sites</option>
+              {filteredSites.map((s: any) => <option key={s.site} value={s.site}>{s.site}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Type</div>
+            <select className="select" style={{ width: '100%' }} value={type} onChange={e => pushFilters({ type: e.target.value })}>
+              <option value="">All types</option>
+              {lookups.deviceTypes.map(t => <option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Status</div>
+            <select className="select" style={{ width: '100%' }} value={status} onChange={e => pushFilters({ status: e.target.value })}>
+              <option value="">All statuses</option>
+              {['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Lifecycle</div>
+            <select className="select" style={{ width: '100%' }} value={lifecycle} onChange={e => pushFilters({ lifecycle: e.target.value })}>
+              <option value="">All lifecycle</option>
+              <option value="EOL / EOS">EOL / EOS</option>
+              <option value="Active, Supported">Active, Supported</option>
+              <option value="Unknown">Unknown</option>
+            </select>
+          </div>
         </div>
       )}
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', flexWrap: 'wrap' as const, alignItems: 'center' }}>
-        <input className="input" style={{ flex: '1', minWidth: '200px', maxWidth: '320px' }} placeholder="Search name, IP, model, serial..." value={search} onChange={e => { setSearch(e.target.value); setPage(1) }} onBlur={e => pushFilters({ search: e.target.value })} onKeyDown={e => { if (e.key === 'Enter') pushFilters({ search: (e.target as HTMLInputElement).value }) }} />
-        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={region} onChange={e => { setSite(''); pushFilters({ region: e.target.value, site: '' }) }}>
-          <option value="">All regions</option>
-          {(isSiteAdmin ? availableRegions : lookups.regions).map((r: string) => <option key={r}>{r}</option>)}
-        </select>
-        <select className="select" style={{ width: 'auto', minWidth: '150px' }} value={site} onChange={e => pushFilters({ site: e.target.value })}>
-          <option value="">All sites</option>
-          {filteredSites.map((s: any) => <option key={s.site} value={s.site}>{s.site}</option>)}
-        </select>
-        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={type} onChange={e => pushFilters({ type: e.target.value })}>
-          <option value="">All types</option>
-          {lookups.deviceTypes.map(t => <option key={t}>{t}</option>)}
-        </select>
-        <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={status} onChange={e => pushFilters({ status: e.target.value })}>
-          <option value="">All statuses</option>
-          {['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={lifecycle} onChange={e => pushFilters({ lifecycle: e.target.value })}>
-          <option value="">All lifecycle</option>
-          <option value="EOL / EOS">EOL / EOS</option>
-          <option value="Active, Supported">Active, Supported</option>
-          <option value="Unknown">Unknown</option>
-        </select>
-        {hasFilters && (
-          <button className="btn-secondary" style={{ fontSize: '13px' }} onClick={() => router.push('/devices')}>Clear</button>
-        )}
-      </div>
+      {/* Active filter pills */}
+      {hasFilters && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const, marginBottom: '12px' }}>
+          {region && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Region: {region}<button onClick={() => pushFilters({ region: '', site: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {site && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Site: {site}<button onClick={() => pushFilters({ site: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {type && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Type: {type}<button onClick={() => pushFilters({ type: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {status && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Status: {status}<button onClick={() => pushFilters({ status: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {lifecycle && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Lifecycle: {lifecycle}<button onClick={() => pushFilters({ lifecycle: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {search && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Search: {search}<button onClick={() => pushFilters({ search: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+        </div>
+      )}
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
