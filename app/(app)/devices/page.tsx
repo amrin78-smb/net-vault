@@ -28,6 +28,7 @@ export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(50)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [region, setRegion] = useState('')
@@ -86,7 +87,7 @@ export default function DevicesPage() {
     const t = searchParams.get('type') || ''
     const st = searchParams.get('status') || ''
     const lc = searchParams.get('lifecycle') || ''
-    const params = new URLSearchParams({ page: String(page), limit: '50' })
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) })
     if (s)  params.set('search', s)
     if (r)  params.set('region', r)
     if (si) params.set('site', si)
@@ -98,7 +99,7 @@ export default function DevicesPage() {
     setDevices(data.devices || [])
     setTotal(data.total || 0)
     setLoading(false)
-  }, [page, searchParams])
+  }, [page, limit, searchParams])
 
   useEffect(() => { fetchDevices() }, [fetchDevices])
 
@@ -217,7 +218,7 @@ export default function DevicesPage() {
   }
   async function confirmImport() { await runImport(false) }
 
-  const totalPages = Math.ceil(total / 50)
+  const totalPages = Math.ceil(total / limit)
   const hasFilters = !!(search || region || site || type || status || lifecycle)
 
   // For site admins, filter lookups to only show their assigned sites
@@ -238,16 +239,39 @@ export default function DevicesPage() {
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Devices</h1>
           <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>IT asset inventory</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn-secondary" onClick={exportCSV} style={{ fontSize: '13px' }}>
-            {hasFilters ? 'Export filtered CSV' : 'Export CSV'}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {/* Export */}
+          <button onClick={exportCSV} title={hasFilters ? 'Export filtered CSV' : 'Export CSV'}
+            style={{ padding: '7px 10px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#374151' }}
+            onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Export
           </button>
           {isAdmin && <>
-            <button className="btn-secondary" onClick={checkDuplicates} disabled={dupLoading} style={{ fontSize: '13px' }}>
-              {dupLoading ? 'Checking...' : 'Check duplicates'}
+            {/* Import */}
+            <button onClick={() => { setShowImport(!showImport); setImportResult('') }} title="Import devices"
+              style={{ padding: '7px 10px', background: showImport ? '#eff6ff' : 'white', border: showImport ? '1px solid #bfdbfe' : '1px solid #e5e7eb', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: showImport ? '#1d4ed8' : '#374151' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+              onMouseLeave={e => (e.currentTarget.style.background = showImport ? '#eff6ff' : 'white')}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+              Import
             </button>
-            <button className="btn-secondary" onClick={() => { setShowImport(!showImport); setImportResult('') }} style={{ fontSize: '13px' }}>Import</button>
-            <Link href="/devices/new"><button className="btn-primary">+ Add device</button></Link>
+            {/* Check duplicates */}
+            <button onClick={checkDuplicates} disabled={dupLoading} title="Check for duplicate devices"
+              style={{ padding: '7px 10px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#374151' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
+              {dupLoading ? 'Checking...' : 'Duplicates'}
+            </button>
+            {/* Add device */}
+            <Link href="/devices/new">
+              <button style={{ padding: '7px 14px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '500' }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                Add device
+              </button>
+            </Link>
           </>}
         </div>
       </div>
@@ -483,6 +507,40 @@ export default function DevicesPage() {
         </select>
         {hasFilters && (
           <button className="btn-secondary" style={{ fontSize: '13px' }} onClick={() => router.push('/devices')}>Clear</button>
+        )}
+      </div>
+
+      {/* Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <span style={{ fontSize: '13px', color: '#6b7280' }}>
+            {loading ? 'Loading...' : `Showing ${total === 0 ? 0 : ((page-1)*limit)+1}–${Math.min(page*limit, total)} of ${total.toLocaleString()} devices`}
+          </span>
+          <select value={limit} onChange={e => { setLimit(parseInt(e.target.value)); setPage(1) }}
+            style={{ padding: '4px 8px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '12px', color: '#374151', background: 'white', cursor: 'pointer' }}>
+            <option value={25}>25 / page</option>
+            <option value={50}>50 / page</option>
+            <option value={100}>100 / page</option>
+            <option value={200}>200 / page</option>
+          </select>
+        </div>
+        {!loading && totalPages > 1 && (
+          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+            <button style={{ padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', background: 'white', fontSize: '12px', cursor: page === 1 ? 'default' : 'pointer', color: page === 1 ? '#d1d5db' : '#374151' }} onClick={() => setPage(1)} disabled={page === 1}>First</button>
+            <button style={{ padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', background: 'white', fontSize: '12px', cursor: page === 1 ? 'default' : 'pointer', color: page === 1 ? '#d1d5db' : '#374151' }} onClick={() => setPage(p => Math.max(1,p-1))} disabled={page === 1}>← Prev</button>
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              const start = Math.max(1, Math.min(page - 2, totalPages - 4))
+              const p = start + i
+              return p <= totalPages ? (
+                <button key={p} onClick={() => setPage(p)}
+                  style={{ padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', background: p === page ? '#C8102E' : 'white', color: p === page ? 'white' : '#374151', fontWeight: p === page ? '600' : '400' }}>
+                  {p}
+                </button>
+              ) : null
+            })}
+            <button style={{ padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', background: 'white', fontSize: '12px', cursor: page === totalPages ? 'default' : 'pointer', color: page === totalPages ? '#d1d5db' : '#374151' }} onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page === totalPages}>Next →</button>
+            <button style={{ padding: '4px 10px', border: '1px solid #e5e7eb', borderRadius: '6px', background: 'white', fontSize: '12px', cursor: page === totalPages ? 'default' : 'pointer', color: page === totalPages ? '#d1d5db' : '#374151' }} onClick={() => setPage(totalPages)} disabled={page === totalPages}>Last</button>
+          </div>
         )}
       </div>
 
