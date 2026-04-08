@@ -39,16 +39,16 @@ export default function EolPage() {
         <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Devices at end-of-life by site</p>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
-        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
-          <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>EOL devices</div>
+        <div style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #fca5a5', padding: '14px 16px' }}>
+          <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '4px', fontWeight: '500', opacity: 0.8 }}>EOL devices</div>
           <div style={{ fontSize: '28px', fontWeight: '700', color: '#991b1b' }}>{totalEol.toLocaleString()}</div>
         </div>
-        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
-          <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>Sites affected</div>
+        <div style={{ background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d', padding: '14px 16px' }}>
+          <div style={{ fontSize: '12px', color: '#92400e', marginBottom: '4px', fontWeight: '500', opacity: 0.8 }}>Sites affected</div>
           <div style={{ fontSize: '28px', fontWeight: '700', color: '#92400e' }}>{filtered.length}</div>
         </div>
-        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
-          <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>Regions</div>
+        <div style={{ background: '#f0f4f8', borderRadius: '8px', border: '1px solid #c7d8e8', padding: '14px 16px' }}>
+          <div style={{ fontSize: '12px', color: '#1a2744', marginBottom: '4px', fontWeight: '500', opacity: 0.8 }}>Regions</div>
           <div style={{ fontSize: '28px', fontWeight: '700', color: '#1a2744' }}>{regions.length}</div>
         </div>
       </div>

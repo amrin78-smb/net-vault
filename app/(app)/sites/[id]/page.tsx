@@ -227,14 +227,14 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'Total devices', value: total, color: '#1a2744' },
-          { label: 'Active', value: active, color: '#166534' },
-          { label: 'EOL / EOS', value: eol, color: '#991b1b' },
-          { label: 'Decommed', value: decommed, color: '#92400e' },
-          { label: 'Circuits', value: circuits.length, color: '#075985' },
+          { label: 'Total devices', value: total, color: '#1a2744', bg: '#f0f4f8', border: '#c7d8e8' },
+          { label: 'Active', value: active, color: '#166534', bg: '#dcfce7', border: '#86efac' },
+          { label: 'EOL / EOS', value: eol, color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+          { label: 'Decommed', value: decommed, color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
+          { label: 'Circuits', value: circuits.length, color: '#075985', bg: '#e0f2fe', border: '#7dd3fc' },
         ].map(s => (
-          <div key={s.label} style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+          <div key={s.label} style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '14px 16px' }}>
+            <div style={{ fontSize: '11px', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
             <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>{s.value}</div>
           </div>
         ))}

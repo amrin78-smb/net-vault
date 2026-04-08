@@ -65,12 +65,12 @@ export default function SitesPage() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'Total sites', value: filtered.length, color: '#1a2744' },
-          { label: 'Total devices', value: totalDevices.toLocaleString(), color: '#166534' },
-          { label: 'EOL devices', value: totalEol.toLocaleString(), color: '#991b1b' },
+          { label: 'Total sites', value: filtered.length, color: '#1a2744', bg: '#f0f4f8', border: '#c7d8e8' },
+          { label: 'Total devices', value: totalDevices.toLocaleString(), color: '#166534', bg: '#dcfce7', border: '#86efac' },
+          { label: 'EOL devices', value: totalEol.toLocaleString(), color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
         ].map(s => (
-          <div key={s.label} style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+          <div key={s.label} style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '14px 16px' }}>
+            <div style={{ fontSize: '11px', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
             <div style={{ fontSize: '26px', fontWeight: '700', color: s.color }}>{s.value}</div>
           </div>
         ))}
