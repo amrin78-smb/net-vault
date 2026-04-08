@@ -201,19 +201,6 @@ INSERT INTO app_settings (key, value) VALUES ('app_navy_color', '#1a2744') ON CO
 $schemaSql | & "$PgBin\psql.exe" -U postgres -h localhost -p $PgPort -d $DbName
 Write-OK "Schema migration complete"
 
-# ── Import data ────────────────────────────────────────────────
-Write-Step "Importing data"
-$sqlFile = "$PSScriptRoot\netvault_export.sql"
-if (Test-Path $sqlFile) {
-    $env:PGPASSWORD       = $PgPasswordPlain
-    $env:PGCLIENTENCODING = "UTF8"
-    & "$PgBin\psql.exe" -U $DbUser -h localhost -p $PgPort -d $DbName -f $sqlFile
-    Write-OK "Data imported"
-} else {
-    Write-Warn "netvault_export.sql not found - database will be empty"
-    Write-Warn "Export from Neon via Colab and restore manually later"
-}
-
 # ── Clone app from GitHub ──────────────────────────────────────
 Write-Step "Cloning app from GitHub"
 if (Test-Path $AppDir) {
@@ -223,6 +210,19 @@ if (Test-Path $AppDir) {
 & git clone $GitHubUrl $AppDir
 if ($LASTEXITCODE -ne 0) { throw "Git clone failed" }
 Write-OK "App cloned to $AppDir"
+
+# ── Import data (AFTER schema so all columns exist) ───────────
+Write-Step "Importing data"
+$sqlFile = "$PSScriptRoot\netvault_export.sql"
+if (Test-Path $sqlFile) {
+    $env:PGPASSWORD       = $PgPasswordPlain
+    $env:PGCLIENTENCODING = "UTF8"
+    & "$PgBin\psql.exe" -U $DbUser -h localhost -p $PgPort -d $DbName -f $sqlFile
+    Write-OK "Data imported from netvault_export.sql"
+} else {
+    Write-Warn "netvault_export.sql not found - database will be empty"
+    Write-Warn "Export from Neon via Colab and place in installer folder, then re-run"
+}
 
 # ── Run setup.sql to create default admin user ────────────────
 Write-Step "Creating default admin user"
