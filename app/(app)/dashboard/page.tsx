@@ -149,11 +149,11 @@ export default function DashboardPage() {
 
   // Clickable stat cards config
   const statCards = [
-    { label: 'Total devices', value: parseInt(summary.total).toLocaleString(), sub: `${byRegion.length} regions`, color: '#1a2744', href: '/devices' },
-    { label: 'Active', value: parseInt(summary.active).toLocaleString(), sub: `${Math.round(parseInt(summary.active)/total*100)}% of fleet`, color: '#166534', href: '/devices?status=Active' },
-    { label: 'EOL / EOS', value: eol.toLocaleString(), sub: `${eolPct}%${eolPct >= 25 ? ' — action needed' : ''}`, color: '#991b1b', href: '/devices?lifecycle=EOL+%2F+EOS' },
-    { label: 'Decommed', value: parseInt(summary.decommed).toLocaleString(), sub: 'pending removal', color: '#92400e', href: '/devices?status=Decommed' },
-    { label: 'Spare', value: parseInt(summary.spare).toLocaleString(), sub: 'in storage', color: '#075985', href: '/devices?status=Spare' },
+    { label: 'Total devices', value: parseInt(summary.total).toLocaleString(), sub: `${byRegion.length} regions`, color: '#1a2744', bg: '#f0f4f8', border: '#c7d8e8', href: '/devices', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
+    { label: 'Active', value: parseInt(summary.active).toLocaleString(), sub: `${Math.round(parseInt(summary.active)/total*100)}% of fleet`, color: '#166534', bg: '#dcfce7', border: '#86efac', href: '/devices?status=Active', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
+    { label: 'EOL / EOS', value: eol.toLocaleString(), sub: `${eolPct}%${eolPct >= 25 ? ' — action needed' : ''}`, color: '#991b1b', bg: '#fee2e2', border: '#fca5a5', href: '/devices?lifecycle=EOL+%2F+EOS', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+    { label: 'Decommed', value: parseInt(summary.decommed).toLocaleString(), sub: 'pending removal', color: '#92400e', bg: '#fef3c7', border: '#fcd34d', href: '/devices?status=Decommed', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> },
+    { label: 'Spare', value: parseInt(summary.spare).toLocaleString(), sub: 'in storage', color: '#075985', bg: '#e0f2fe', border: '#7dd3fc', href: '/devices?status=Spare', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg> },
   ]
 
   return (
@@ -172,12 +172,13 @@ export default function DashboardPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px', marginBottom: '20px' }}>
         {statCards.map(s => (
           <Link key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px', cursor: 'pointer', transition: 'box-shadow 0.15s', boxShadow: '0 0 0 0 transparent' }}
-              onMouseEnter={e => (e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.08)')}
-              onMouseLeave={e => (e.currentTarget.style.boxShadow = 'none')}>
-              <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{s.label}</div>
+            <div style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
+              <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
+              <div style={{ fontSize: '11px', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
               <div style={{ fontSize: '26px', fontWeight: '700', color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: '11px', color: s.label === 'EOL / EOS' && eolPct >= 25 ? '#991b1b' : '#9ca3af', marginTop: '2px' }}>{s.sub}</div>
+              <div style={{ fontSize: '11px', color: s.color, opacity: 0.6, marginTop: '2px' }}>{s.sub}</div>
             </div>
           </Link>
         ))}

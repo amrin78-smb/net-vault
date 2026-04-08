@@ -227,13 +227,14 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'Total devices', value: total, color: '#1a2744', bg: '#f0f4f8', border: '#c7d8e8' },
-          { label: 'Active', value: active, color: '#166534', bg: '#dcfce7', border: '#86efac' },
-          { label: 'EOL / EOS', value: eol, color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
-          { label: 'Decommed', value: decommed, color: '#92400e', bg: '#fef3c7', border: '#fcd34d' },
-          { label: 'Circuits', value: circuits.length, color: '#075985', bg: '#e0f2fe', border: '#7dd3fc' },
+          { label: 'Total devices', value: total, color: '#1a2744', bg: '#f0f4f8', border: '#c7d8e8', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
+          { label: 'Active', value: active, color: '#166534', bg: '#dcfce7', border: '#86efac', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
+          { label: 'EOL / EOS', value: eol, color: '#991b1b', bg: '#fee2e2', border: '#fca5a5', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+          { label: 'Decommed', value: decommed, color: '#92400e', bg: '#fef3c7', border: '#fcd34d', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> },
+          { label: 'Circuits', value: circuits.length, color: '#075985', bg: '#e0f2fe', border: '#7dd3fc', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg> },
         ].map(s => (
-          <div key={s.label} style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '14px 16px' }}>
+          <div key={s.label} style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
             <div style={{ fontSize: '11px', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
             <div style={{ fontSize: '24px', fontWeight: '700', color: s.color }}>{s.value}</div>
           </div>

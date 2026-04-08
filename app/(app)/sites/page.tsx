@@ -65,14 +65,20 @@ export default function SitesPage() {
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'Total sites', value: filtered.length, color: '#1a2744', bg: '#f0f4f8', border: '#c7d8e8' },
-          { label: 'Total devices', value: totalDevices.toLocaleString(), color: '#166534', bg: '#dcfce7', border: '#86efac' },
-          { label: 'EOL devices', value: totalEol.toLocaleString(), color: '#991b1b', bg: '#fee2e2', border: '#fca5a5' },
+          { label: 'Total sites', value: filtered.length, color: '#1a2744', bg: '#f0f4f8', border: '#c7d8e8', href: '/sites', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg> },
+          { label: 'Total devices', value: totalDevices.toLocaleString(), color: '#166534', bg: '#dcfce7', border: '#86efac', href: '/devices', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
+          { label: 'EOL devices', value: totalEol.toLocaleString(), color: '#991b1b', bg: '#fee2e2', border: '#fca5a5', href: '/devices?lifecycle=EOL+%2F+EOS', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
         ].map(s => (
-          <div key={s.label} style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '14px 16px' }}>
-            <div style={{ fontSize: '11px', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
-            <div style={{ fontSize: '26px', fontWeight: '700', color: s.color }}>{s.value}</div>
-          </div>
+          <a key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
+            <div style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
+              <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
+              <div style={{ fontSize: '11px', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
+              <div style={{ fontSize: '26px', fontWeight: '700', color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: '11px', color: s.color, opacity: 0.6, marginTop: '4px' }}>View all →</div>
+            </div>
+          </a>
         ))}
       </div>
 
