@@ -49,12 +49,38 @@ export async function POST(req: NextRequest) {
     )
   } else {
     const text = new TextDecoder('utf-8').decode(buffer)
-    const lines = text.split('\n').filter(l => l.trim())
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''))
-    allRows = lines.slice(1).map(line => {
-      const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''))
-      return Object.fromEntries(headers.map((h, i) => [h, vals[i] || '']))
-    })
+    // Proper CSV parsing that handles quoted fields with commas
+    function parseCSV(csv: string): Record<string, string>[] {
+      const lines: string[] = []
+      let current = ''
+      let inQuotes = false
+      for (let i = 0; i < csv.length; i++) {
+        const ch = csv[i]
+        if (ch === '"') { inQuotes = !inQuotes }
+        else if (ch === '\n' && !inQuotes) { lines.push(current); current = ''; continue }
+        else if (ch === '\r') { continue }
+        current += ch
+      }
+      if (current.trim()) lines.push(current)
+      const parseRow = (line: string): string[] => {
+        const fields: string[] = []
+        let field = ''; let inQ = false
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i]
+          if (ch === '"') { inQ = !inQ }
+          else if (ch === ',' && !inQ) { fields.push(field.trim()); field = ''; continue }
+          else { field += ch }
+        }
+        fields.push(field.trim())
+        return fields
+      }
+      const headers = parseRow(lines[0])
+      return lines.slice(1).filter(l => l.trim()).map(line => {
+        const vals = parseRow(line)
+        return Object.fromEntries(headers.map((h, i) => [h, vals[i] || '']))
+      })
+    }
+    allRows = parseCSV(text)
   }
 
   function getVal(row: Record<string, string>, key: string) {
