@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
       const lifecycleMap: Record<string,string> = { 'Active, Supported':'Active, Supported','EOL / EOS':'EOL / EOS' }
       const lifecycle = lifecycleMap[getVal(rowData, 'lifecycle status')] || lifecycleMap[getVal(rowData, 'lifecycle')] || 'Unknown'
       const statusMap: Record<string,string> = { 'Active':'Active','Decommed':'Decommed','Faulty, Replaced':'Faulty, Replaced','Spare':'Spare' }
-      const devStatus = statusMap[getVal(rowData, 'status')] || 'Active'
+      const devStatus = statusMap[getVal(rowData, 'device status')] || statusMap[getVal(rowData, 'status')] || 'Active'
 
       // Check if device with same serial already exists — upsert if so
       const existingBySerial = serialRaw
