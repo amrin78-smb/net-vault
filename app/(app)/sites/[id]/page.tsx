@@ -60,7 +60,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       title: isDecommed ? 'Reactivate site' : 'Decommission site',
       message: isDecommed
         ? `Are you sure you want to reactivate "${site?.site}"?`
-        : `Are you sure you want to decommission "${site?.site}"? This will be blocked if any devices are still active.`,
+        : `Are you sure you want to decommission "${site?.site}"?`,
       confirmLabel: isDecommed ? 'Reactivate' : 'Decommission',
       danger: !isDecommed
     })
@@ -74,6 +74,26 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     const d = await res.json()
     if (res.ok) {
       showToast(isDecommed ? 'Site reactivated' : 'Site decommissioned')
+      // If decommissioning, ask if devices should also be set to Decommed
+      if (!isDecommed) {
+        const activeCount = parseInt(data?.summary?.active || '0')
+        if (activeCount > 0) {
+          const decommDevices = await confirm({
+            title: 'Update devices?',
+            message: `${activeCount} active device${activeCount > 1 ? 's' : ''} at "${site?.site}" — set them all to Decommed too?`,
+            confirmLabel: 'Yes, decomm all devices',
+            danger: false
+          })
+          if (decommDevices) {
+            await fetch('/api/devices/bulk', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ site_id: site?.id, field: 'device_status', value: 'Decommed', all: true })
+            })
+            showToast(`All devices at "${site?.site}" set to Decommed`)
+          }
+        }
+      }
       const siteData = await fetch(`/api/sites/${site?.id}`).then(r => r.json())
       setData(siteData)
     } else {
