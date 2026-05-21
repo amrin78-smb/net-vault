@@ -74,9 +74,14 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     const d = await res.json()
     if (res.ok) {
       showToast(isDecommed ? 'Site reactivated' : 'Site decommissioned')
-      // Remind user to manually bulk decomm devices if needed
       if (!isDecommed) {
-        showToast('Site decommissioned. Remember to bulk update the devices at this site if needed.', 'info')
+        // Show prominent reminder about devices
+        await confirm({
+          title: '⚠ Action required — Devices',
+          message: `"${site?.site}" has been decommissioned. Please go to the Devices tab and bulk update any active devices at this site to Decommed status. Devices will NOT be automatically updated.`,
+          confirmLabel: 'Got it',
+          danger: false
+        })
       }
       const siteData = await fetch(`/api/sites/${site?.id}`).then(r => r.json())
       setData(siteData)
