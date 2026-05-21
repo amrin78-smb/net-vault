@@ -36,7 +36,7 @@ export default function LoginPage() {
     setError('')
     const res = await signIn('credentials', { email, password, redirect: false })
     if (res?.ok) {
-      router.push('/dashboard')
+      router.push('/launcher')
     } else {
       setError('Invalid email or password')
       setLoading(false)
@@ -66,12 +66,13 @@ export default function LoginPage() {
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '64px', height: '64px', background: primary, borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                  <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"/>
+                  <polyline points="9 12 11 14 15 10"/>
                 </svg>
               </div>
               <div style={{ textAlign: 'left' }}>
-                <div style={{ color: 'white', fontSize: '28px', fontWeight: '700', lineHeight: 1.1 }}>{settings.app_name}</div>
-                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', marginTop: '2px' }}>{settings.app_subtitle}</div>
+                <div style={{ color: 'white', fontSize: '28px', fontWeight: '700', lineHeight: 1.1 }}>NexVault</div>
+                <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '12px', marginTop: '2px' }}>Network Intelligence Suite</div>
               </div>
             </div>
           )}
@@ -80,7 +81,7 @@ export default function LoginPage() {
         {/* Login card */}
         <div style={{ background: 'white', borderRadius: '12px', padding: '36px 40px' }}>
           <h1 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', marginBottom: '6px', textAlign: 'center' }}>Sign in</h1>
-          <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '28px', textAlign: 'center' }}>IT Asset Management</p>
+          <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '28px', textAlign: 'center' }}>Sign in to NexVault</p>
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '18px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Email address</label>
