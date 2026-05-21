@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   const type = searchParams.get('type') || ''
   const status = searchParams.get('status') || ''
   const lifecycle = searchParams.get('lifecycle') || ''
+  const model = searchParams.get('model') || ''
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '50')
   const offset = (page - 1) * limit
@@ -32,6 +33,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (search) { conditions.push(`(name ILIKE $${p} OR ip_address::text ILIKE $${p} OR model ILIKE $${p} OR serial_number ILIKE $${p})`); params.push(`%${search}%`); p++ }
+  if (model) { conditions.push(`REGEXP_REPLACE(LOWER(model), '[^a-z0-9]', '', 'g') LIKE $${p}`); params.push(`%${model.toLowerCase().replace(/[^a-z0-9]/gi, '')}%`); p++ }
   if (region) { conditions.push(`region = $${p}`); params.push(region); p++ }
   if (site) { conditions.push(`site = $${p}`); params.push(site); p++ }
   if (type) { conditions.push(`device_type = $${p}`); params.push(type); p++ }

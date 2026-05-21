@@ -55,6 +55,7 @@ export default function DevicesPage() {
   const [showDuplicates, setShowDuplicates] = useState(false)
   const [dupLoading, setDupLoading] = useState(false)
   const [showFilterPanel, setShowFilterPanel] = useState(false)
+  const [model, setModel] = useState('')
 
   useEffect(() => {
     setSearch(searchParams.get('search') || '')
@@ -88,6 +89,7 @@ export default function DevicesPage() {
     const t = searchParams.get('type') || ''
     const st = searchParams.get('status') || ''
     const lc = searchParams.get('lifecycle') || ''
+    const md = searchParams.get('model') || ''
     const params = new URLSearchParams({ page: String(page), limit: String(limit) })
     if (s)  params.set('search', s)
     if (r)  params.set('region', r)
@@ -95,6 +97,7 @@ export default function DevicesPage() {
     if (t)  params.set('type', t)
     if (st) params.set('status', st)
     if (lc) params.set('lifecycle', lc)
+    if (md) params.set('model', md)
     const res = await fetch(`/api/devices?${params}`)
     const data = await res.json()
     setDevices(data.devices || [])
@@ -106,13 +109,14 @@ export default function DevicesPage() {
 
   function pushFilters(overrides: Record<string, string> = {}) {
     const params = new URLSearchParams()
-    const current = { search, region, site, type, status, lifecycle, ...overrides }
+    const current = { search, region, site, type, status, lifecycle, model, ...overrides }
     if (current.search)    params.set('search', current.search)
     if (current.region)    params.set('region', current.region)
     if (current.site)      params.set('site', current.site)
     if (current.type)      params.set('type', current.type)
     if (current.status)    params.set('status', current.status)
     if (current.lifecycle) params.set('lifecycle', current.lifecycle)
+    if (current.model)     params.set('model', current.model)
     router.push(`/devices${params.toString() ? '?' + params.toString() : ''}`)
   }
 
@@ -220,7 +224,7 @@ export default function DevicesPage() {
   async function confirmImport() { await runImport(false) }
 
   const totalPages = Math.ceil(total / limit)
-  const hasFilters = !!(search || region || site || type || status || lifecycle)
+  const hasFilters = !!(search || region || site || type || status || lifecycle || model)
 
   // For site admins, filter lookups to only show their assigned sites
   const availableSites = isSiteAdmin && sessionUser?.siteIds?.length
@@ -479,7 +483,7 @@ export default function DevicesPage() {
           onClick={() => setShowFilterPanel(f => !f)}
           style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || hasFilters ? '#1a2744' : 'white', color: showFilterPanel || hasFilters ? 'white' : '#374151', border: '1px solid ' + (showFilterPanel || hasFilters ? '#1a2744' : '#e5e7eb'), borderRadius: '7px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-          Filters {hasFilters && `(${[region,site,type,status,lifecycle].filter(Boolean).length})`}
+          Filters {hasFilters && `(${[region,site,type,status,lifecycle,model].filter(Boolean).length})`}
         </button>
         {hasFilters && (
           <button onClick={() => router.push('/devices')} style={{ fontSize: '12px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap' as const }}>
@@ -528,6 +532,13 @@ export default function DevicesPage() {
               <option value="Unknown">Unknown</option>
             </select>
           </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Model</div>
+            <input className="input" style={{ width: '100%' }} placeholder="e.g. PA-460 or PA460" value={model}
+              onChange={e => setModel(e.target.value)}
+              onBlur={e => pushFilters({ model: e.target.value })}
+              onKeyDown={e => { if (e.key === 'Enter') pushFilters({ model: (e.target as HTMLInputElement).value }) }} />
+          </div>
         </div>
       )}
 
@@ -539,6 +550,7 @@ export default function DevicesPage() {
           {type && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Type: {type}<button onClick={() => pushFilters({ type: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {status && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Status: {status}<button onClick={() => pushFilters({ status: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {lifecycle && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Lifecycle: {lifecycle}<button onClick={() => pushFilters({ lifecycle: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {model && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Model: {model}<button onClick={() => pushFilters({ model: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {search && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Search: {search}<button onClick={() => pushFilters({ search: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
         </div>
       )}
