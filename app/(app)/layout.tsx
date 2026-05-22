@@ -159,19 +159,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <div style={{ marginLeft: '220px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         {/* Top bar */}
         <div style={{ height: '56px', background: 'white', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1, maxWidth: '520px' }}>
-            {/* Back to launcher */}
-            <a href="/launcher" title="Back to NexVault hub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '8px', background: '#f3f4f6', flexShrink: 0, textDecoration: 'none', color: '#6b7280', transition: 'background 0.15s' }}
+          {/* Global search */}
+          <div style={{ flex: 1, maxWidth: '480px' }}>
+            <GlobalSearch />
+          </div>
+          {/* User area */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <a href="/launcher" title="Back to NexVault hub" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '8px', background: '#f3f4f6', flexShrink: 0, textDecoration: 'none', color: '#6b7280' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#e5e7eb')}
               onMouseLeave={e => (e.currentTarget.style.background = '#f3f4f6')}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
             </a>
-            {/* Global search */}
-            <div style={{ flex: 1 }}>
-              <GlobalSearch />
-            </div>
-          </div>
-          {/* User area */}
           <div style={{ position: 'relative' }}>
             <button
               onClick={() => setShowUserMenu(m => !m)}
@@ -210,6 +208,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
             )}
+          </div>
           </div>
         </div>
         {/* Page content */}
