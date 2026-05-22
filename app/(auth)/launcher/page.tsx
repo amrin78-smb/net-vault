@@ -46,18 +46,7 @@ export default function LauncherPage() {
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
       <div style={{ background: navy, padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '36px', height: '36px', background: primary, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
-              <path d="M12 2L3 7v5c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V7L12 2z"/>
-              <polyline points="9 12 11 14 15 10"/>
-            </svg>
-          </div>
-          <div>
-            <div style={{ color: 'white', fontSize: '16px', fontWeight: '700' }}>NexVault</div>
-            <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>Network Intelligence Suite</div>
-          </div>
-        </div>
+        <img src="/nexvault-logo-white.png" alt="NexVault" style={{ maxHeight: '48px', objectFit: 'contain' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500' }}>{user?.name}</div>
