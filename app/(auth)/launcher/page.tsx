@@ -65,11 +65,11 @@ export default function LauncherPage() {
           <p style={{ fontSize: '16px', color: '#6b7280', margin: 0 }}>Select an application to get started</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 340px)', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 340px)', gap: '24px', alignItems: 'stretch' }}>
           {apps.map(app => (
-            <a key={app.name} href={app.href} target={app.external ? '_blank' : '_self'} rel={app.external ? 'noopener noreferrer' : undefined} style={{ textDecoration: 'none' }}>
+            <a key={app.name} href={app.href} target={app.external ? '_blank' : '_self'} rel={app.external ? 'noopener noreferrer' : undefined} style={{ textDecoration: 'none', display: 'flex' }}>
               <div
-                style={{ background: 'white', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '32px', cursor: 'pointer', transition: 'all 0.15s', boxSizing: 'border-box' as const }}
+                style={{ background: 'white', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '32px', cursor: 'pointer', transition: 'all 0.15s', boxSizing: 'border-box' as const, height: '100%', display: 'flex', flexDirection: 'column' as const }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 32px rgba(0,0,0,0.12)'; (e.currentTarget as HTMLDivElement).style.borderColor = app.color }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; (e.currentTarget as HTMLDivElement).style.borderColor = '#e5e7eb' }}
               >
