@@ -26,7 +26,7 @@ export default function LauncherPage() {
       description: 'Manage network devices, sites, circuits and track EOL/EOS across your global infrastructure.',
       href: '/dashboard',
       external: false,
-      icon: <img src="/netvault-logo-white.png" alt="NetVault" style={{ width: '120px', objectFit: 'contain' }} />,
+      icon: <img src="/netvault-logo-white.png" alt="NetVault" style={{ width: '240px', objectFit: 'contain' }} />,
       color: primary,
       bg: '#1a2744',
     },
@@ -36,7 +36,7 @@ export default function LauncherPage() {
       description: 'Real-time syslog collection, analysis and alerting for your network infrastructure.',
       href: '/api/sso/logvault',
       external: false,
-      icon: <img src="/logvault-logo-white.png" alt="LogVault" style={{ width: '120px', objectFit: 'contain' }} />,
+      icon: <img src="/logvault-logo-white.png" alt="LogVault" style={{ width: '240px', objectFit: 'contain' }} />,
       color: '#0369a1',
       bg: '#1a2744',
     },
@@ -73,7 +73,7 @@ export default function LauncherPage() {
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 32px rgba(0,0,0,0.12)'; (e.currentTarget as HTMLDivElement).style.borderColor = app.color }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; (e.currentTarget as HTMLDivElement).style.borderColor = '#e5e7eb' }}
               >
-                <div style={{ width: '100%', height: '80px', borderRadius: '10px', background: app.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', padding: '12px' }}>
+                <div style={{ width: '100%', height: '120px', borderRadius: '10px', background: app.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', padding: '16px' }}>
                   {app.icon}
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>{app.name}</div>
