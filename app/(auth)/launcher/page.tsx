@@ -26,9 +26,9 @@ export default function LauncherPage() {
       description: 'Manage network devices, sites, circuits and track EOL/EOS across your global infrastructure.',
       href: '/dashboard',
       external: false,
-      icon: <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>,
+      icon: <img src="/netvault-logo-white.png" alt="NetVault" style={{ width: '120px', objectFit: 'contain' }} />,
       color: primary,
-      bg: '#fee2e2',
+      bg: '#1a2744',
     },
     {
       name: 'LogVault',
@@ -36,9 +36,9 @@ export default function LauncherPage() {
       description: 'Real-time syslog collection, analysis and alerting for your network infrastructure.',
       href: '/api/sso/logvault',
       external: false,
-      icon: <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>,
+      icon: <img src="/logvault-logo-white.png" alt="LogVault" style={{ width: '120px', objectFit: 'contain' }} />,
       color: '#0369a1',
-      bg: '#e0f2fe',
+      bg: '#1a2744',
     },
   ]
 
@@ -46,7 +46,7 @@ export default function LauncherPage() {
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
       <div style={{ background: navy, padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <img src="/nexvault-logo-white.png" alt="NexVault" style={{ maxHeight: '48px', objectFit: 'contain' }} />
+        <img src="/nexvault-logo-white.png" alt="NexVault" style={{ maxHeight: '52px', maxWidth: '220px', objectFit: 'contain' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500' }}>{user?.name}</div>
@@ -73,7 +73,7 @@ export default function LauncherPage() {
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 32px rgba(0,0,0,0.12)'; (e.currentTarget as HTMLDivElement).style.borderColor = app.color }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; (e.currentTarget as HTMLDivElement).style.borderColor = '#e5e7eb' }}
               >
-                <div style={{ width: '64px', height: '64px', borderRadius: '14px', background: app.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: app.color, marginBottom: '20px' }}>
+                <div style={{ width: '100%', height: '80px', borderRadius: '10px', background: app.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', padding: '12px' }}>
                   {app.icon}
                 </div>
                 <div style={{ fontSize: '20px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>{app.name}</div>
