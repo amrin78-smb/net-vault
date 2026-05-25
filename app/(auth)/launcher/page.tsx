@@ -40,6 +40,16 @@ export default function LauncherPage() {
       color: '#0369a1',
       bg: '#1a2744',
     },
+    {
+      name: 'DDIVault',
+      subtitle: 'DNS, DHCP & IPAM Solution',
+      description: 'Centralised DNS, DHCP and IP address management for your network infrastructure.',
+      href: '/api/sso/ddivault',
+      external: false,
+      icon: <img src="/ddivault-logo-white.png" alt="DDIVault" style={{ width: '240px', objectFit: 'contain' }} />,
+      color: '#7c3aed',
+      bg: '#1a2744',
+    },
   ]
 
   return (
@@ -65,7 +75,7 @@ export default function LauncherPage() {
           <p style={{ fontSize: '16px', color: '#6b7280', margin: 0 }}>Select an application to get started</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 340px)', gap: '24px', alignItems: 'stretch' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 320px)', gap: '24px', alignItems: 'stretch' }}>
           {apps.map(app => (
             <a key={app.name} href={app.href} target={app.external ? '_blank' : '_self'} rel={app.external ? 'noopener noreferrer' : undefined} style={{ textDecoration: 'none', display: 'flex' }}>
               <div
