@@ -1,15 +1,17 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { signIn } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 type Settings = {
   app_name: string; app_subtitle: string; app_logo_url: string
   app_primary_color: string; app_navy_color: string
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/launcher'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -36,7 +38,7 @@ export default function LoginPage() {
     setError('')
     const res = await signIn('credentials', { email, password, redirect: false })
     if (res?.ok) {
-      router.push('/launcher')
+      router.push(callbackUrl)
     } else {
       setError('Invalid email or password')
       setLoading(false)
@@ -103,5 +105,13 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   )
 }
