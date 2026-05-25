@@ -1,27 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { getToken } from 'next-auth/jwt'
 import jwt from 'jsonwebtoken'
 
 export async function GET(req: NextRequest) {
-  const session = await getServerSession(authOptions)
-  if (!session) {
-    return NextResponse.redirect(new URL('/login?callbackUrl=%2Fapi%2Fsso%2Fddivault', 'http://192.168.6.111:3000'))
+  console.log('[SSO DDIVault] Request received')
+  console.log('[SSO DDIVault] Cookie header:', req.headers.get('cookie')?.substring(0, 100))
+  
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
+  console.log('[SSO DDIVault] Token found:', !!token, token?.email)
+  
+  if (!token) {
+    console.log('[SSO DDIVault] No token - redirecting to login')
+    return NextResponse.redirect('http://192.168.6.111:3000/login?callbackUrl=%2Fapi%2Fsso%2Fddivault')
   }
 
-  const user = session.user as { id: string; email: string; role: string; name: string }
-
-  const token = jwt.sign(
+  const ssoToken = jwt.sign(
     {
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-      name: user.name,
+      userId: token.id,
+      email: token.email,
+      role: token.role,
+      name: token.name,
       app: 'ddivault',
     },
     process.env.NEXTAUTH_SECRET!,
     { expiresIn: '2m' }
   )
 
-  return NextResponse.redirect(`http://192.168.6.111:3006/sso?token=${token}`)
+  console.log('[SSO DDIVault] Generated token for:', token.email, '- redirecting to DDIVault')
+  return NextResponse.redirect(`http://192.168.6.111:3006/sso?token=${ssoToken}`)
 }
