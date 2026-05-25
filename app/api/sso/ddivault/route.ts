@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken'
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(new URL('/login?callbackUrl=%2Fapi%2Fsso%2Fddivault', 'http://192.168.6.111:3000'))
   }
 
   const user = session.user as { id: string; email: string; role: string; name: string }
