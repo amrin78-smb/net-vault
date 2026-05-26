@@ -55,13 +55,13 @@ function LoginForm() {
 
         {/* Logo / branding */}
         <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <img src="/nexvault-logo-white.png" alt="NexVault" style={{ maxWidth: '280px', maxHeight: '100px', objectFit: 'contain' }} />
+          <img src="/nocvault-logo-white.png" alt="NocVault" style={{ maxWidth: '280px', maxHeight: '100px', objectFit: 'contain' }} />
         </div>
 
         {/* Login card */}
         <div style={{ background: 'white', borderRadius: '12px', padding: '36px 40px' }}>
           <h1 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', marginBottom: '6px', textAlign: 'center' }}>Sign in</h1>
-          <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '28px', textAlign: 'center' }}>Sign in to NexVault</p>
+          <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '28px', textAlign: 'center' }}>Sign in to NocVault</p>
           <form onSubmit={handleSubmit}>
             <div style={{ marginBottom: '18px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Email address</label>

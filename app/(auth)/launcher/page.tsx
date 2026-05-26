@@ -56,7 +56,7 @@ export default function LauncherPage() {
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
       <div style={{ background: navy, padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <img src="/nexvault-logo-white.png" alt="NexVault" style={{ maxHeight: '52px', maxWidth: '220px', objectFit: 'contain' }} />
+        <img src="/nocvault-logo-white.png" alt="NocVault" style={{ maxHeight: '52px', maxWidth: '220px', objectFit: 'contain' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500' }}>{user?.name}</div>
@@ -98,7 +98,7 @@ export default function LauncherPage() {
           ))}
         </div>
 
-        <p style={{ marginTop: '40px', fontSize: '12px', color: '#9ca3af' }}>NexVault · Network Intelligence Suite</p>
+        <p style={{ marginTop: '40px', fontSize: '12px', color: '#9ca3af' }}>NocVault · Network Intelligence Suite</p>
       </div>
     </div>
   )
