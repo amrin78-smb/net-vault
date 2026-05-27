@@ -5,16 +5,25 @@
 .DESCRIPTION
     Stops the service, pulls latest code from GitHub, rebuilds,
     copies static files, and restarts. Preserves .env file.
+.PARAMETER InstallDir
+    Root installation directory (default: C:\Apps\NetVault)
 #>
-$AppDir     = "C:\NetVault\app"
-$InstallDir = "C:\NetVault"
-$NssmExe    = "$InstallDir\nssm\nssm-2.24\win64\nssm.exe"
+param(
+    [string]$InstallDir = "C:\Apps\NetVault"
+)
+
+$AppDir  = "$InstallDir\app"
+$NssmExe = "$InstallDir\nssm\nssm-2.24\win64\nssm.exe"
+
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
+
 Write-Host ""
 Write-Host "  NetVault - Update" -ForegroundColor White
+Write-Host "  Install directory : $InstallDir" -ForegroundColor Gray
 Write-Host ""
+
 Write-Step "Stopping NetVault service"
 $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq 'Running') {
@@ -30,6 +39,7 @@ if ($node) {
     Start-Sleep -Seconds 2
     Write-OK "Killed leftover node process"
 }
+
 # Backup .env before git reset
 Write-Step "Backing up .env"
 $envBackup = Get-Content "$AppDir\.env" -Raw -ErrorAction SilentlyContinue
@@ -38,19 +48,19 @@ if ($envBackup) {
 } else {
     Write-Warn ".env not found - will need to recreate after pull"
 }
+
 Write-Step "Pulling latest code from GitHub"
 Set-Location $AppDir
 & git fetch origin 2>&1 | Out-Null
-# Reset hard to match GitHub exactly
 $gitResult = & git reset --hard origin/main 2>&1
 Write-Host "    $gitResult" -ForegroundColor Gray
-# Clean any untracked or modified files that survived the reset
-# But preserve .env and .env.local
 & git clean -fd --exclude=".env" --exclude=".env.local" --exclude="node_modules" 2>&1 | Out-Null
 Write-OK "Git reset and clean done"
-# Explicitly restore known-problematic files to prevent BOM/CRLF issues
+
+# Restore known-problematic files
 & git checkout origin/main -- app/api/settings/route.ts 2>&1 | Out-Null
 & git checkout origin/main -- app/api/settings/logo/route.ts 2>&1 | Out-Null
+
 # Restore .env after git reset
 Write-Step "Restoring .env"
 if ($envBackup) {
@@ -59,6 +69,7 @@ if ($envBackup) {
 } else {
     Write-Warn ".env was not backed up - check credentials before starting service"
 }
+
 Write-Step "Rebuilding NetVault"
 & npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
 & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
@@ -67,6 +78,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Write-OK "Build complete"
+
 Write-Step "Copying static files into standalone output"
 $standaloneDir = "$AppDir\.next\standalone"
 if (Test-Path $standaloneDir) {
@@ -83,14 +95,15 @@ if (Test-Path $standaloneDir) {
     Write-Warn "Standalone directory not found - check build output"
     exit 1
 }
+
 if (Test-Path "$standaloneDir\server.js") {
     Write-OK "server.js present"
 } else {
     Write-Warn "server.js missing - service may not start correctly"
     exit 1
 }
+
 Write-Step "Starting NetVault service"
-# Kill any process still holding port 3000
 $portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
 if ($portProc) {
     $pid = $portProc.OwningProcess
@@ -108,6 +121,7 @@ if ($svc -and $svc.Status -eq 'Running') {
 } else {
     Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
 }
+
 Write-Host ""
 Write-Host "  Update complete. Access NetVault at: http://localhost:3000" -ForegroundColor Green
 Write-Host ""

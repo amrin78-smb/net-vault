@@ -25,7 +25,7 @@
 #>
 
 param(
-    [string]$InstallDir = "C:\NetVault",
+    [string]$InstallDir = "C:\Apps\NetVault",
     [int]$AppPort       = 3000
 )
 
