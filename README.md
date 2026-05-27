@@ -1,36 +1,111 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# NetVault — Network Asset Management Platform
 
-## Getting Started
+NetVault is an IT Asset Management (CMDB) platform built to manage network devices, sites, and circuits across global locations. Part of the **NocVault Network Intelligence Suite**.
 
-First, run the development server:
+## Stack
 
+- **Frontend/Backend:** Next.js 16 (App Router, standalone build)
+- **Database:** PostgreSQL (Neon cloud + on-premises Windows Server)
+- **Auth:** NextAuth.js (JWT, credentials)
+- **Service:** NSSM Windows Service
+
+## Roles
+
+| Role | Permissions |
+|---|---|
+| `super_admin` | Full access including branding, delete users/sites |
+| `admin` | Full CRUD, cannot delete users/sites or change branding |
+| `site_admin` | Assigned sites only — view, add, edit devices |
+| `viewer` | Read only |
+
+## Development Setup
+
+### Prerequisites
+- Node.js v20.19.0+
+- PostgreSQL (Neon cloud or local)
+
+### Environment variables
+Copy `.env.example` to `.env` and fill in:
+DATABASE_URL=postgresql://user:password@host/dbname
+NEXTAUTH_SECRET=your-secret-here
+NEXTAUTH_URL=http://localhost:3000
+SSL_DISABLED=false
+
+### Run locally
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Deploy to on-premises server
+```bash
+git push
+```
+Then on the server:
+```powershell
+& "C:\Apps\NetVault\app\installer\Update-NetVault.ps1"
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## On-Premises Installation
 
-## Learn More
+See `installer/README.txt` for full installation instructions.
 
-To learn more about Next.js, take a look at the following resources:
+**Quick start:**
+1. Copy the `installer/` folder to the Windows Server
+2. Optionally add `netvault_export.sql` to the installer folder
+3. Open PowerShell as Administrator and run:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\Install-NetVault.ps1
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Default install path: `C:\Apps\NetVault`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+To install to a custom path:
+```powershell
+.\Install-NetVault.ps1 -InstallDir "D:\Apps\NetVault"
+```
 
-## Deploy on Vercel
+## Database
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Main table: `devices` (references `sites`, `brands`, `device_types`, `vendors`)
+- View: `v_devices_flat` — joins all lookup tables, strips `/32` from IP
+- Technical debt auto-calculated for EOL/EOS + Active devices
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Device Type | Technical Debt (THB) |
+|---|---|
+| Access Point | 35,000 |
+| Core Switch | 1,000,000 |
+| Firewall | 300,000 |
+| Router | 25,000 |
+| Switch | 120,000 |
+| Wireless Controller | 300,000 |
+
+## Key Features
+
+- Device CMDB with lifecycle tracking (Active Supported / EOL / EOS / Unknown)
+- Site management with decommission support
+- Circuit management (ISP, usage, cost, technology)
+- EOL / Risk report with % exposure per site
+- Bulk device edit (status, lifecycle, site)
+- Import from Excel/CSV with dry run validation and upsert by serial
+- Export to PowerBI-friendly CSV
+- Duplicate device detection (IP + serial)
+- Global search across devices, sites, circuits
+- Audit log with filters (action, user, date range)
+- Role-based access control with site scoping
+- NocVault SSO — single login for NetVault, LogVault, DDIVault
+
+## NocVault Suite
+
+NetVault is part of the NocVault Network Intelligence Suite:
+
+| App | Description | Port |
+|---|---|---|
+| NetVault | Network Asset Management (this app) | 3000 |
+| LogVault | Syslog & Log Analysis | 3004 |
+| DDIVault | DNS, DHCP & IPAM | 3006 |
+
+All apps share the same login via the NocVault hub at port 3000.
