@@ -6,7 +6,7 @@ import jwt from 'jsonwebtoken'
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) {
-    return NextResponse.redirect(new URL('/login?callbackUrl=%2Fapi%2Fsso%2Flogvault', 'http://192.168.6.111:3000'))
+    return NextResponse.redirect(new URL('/login?callbackUrl=%2Fapi%2Fsso%2Flogvault', process.env.NEXTAUTH_URL || 'http://localhost:3000'))
   }
 
   const user = session.user as { id: string; email: string; role: string; name: string }
@@ -23,5 +23,6 @@ export async function GET(req: NextRequest) {
     { expiresIn: '2m' }
   )
 
-  return NextResponse.redirect(`http://192.168.6.111:3004/sso?token=${token}`)
+  const lvUrl = (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(':3000', ':3004')
+  return NextResponse.redirect(`${lvUrl}/sso?token=${token}`)
 }

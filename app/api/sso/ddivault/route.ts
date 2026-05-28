@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   
   if (!token) {
     console.log('[SSO DDIVault] No token - redirecting to login')
-    return NextResponse.redirect('http://192.168.6.111:3000/login?callbackUrl=%2Fapi%2Fsso%2Fddivault')
+    return NextResponse.redirect(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login?callbackUrl=%2Fapi%2Fsso%2Fddivault`)
   }
 
   const ssoToken = jwt.sign(
@@ -27,5 +27,6 @@ export async function GET(req: NextRequest) {
   )
 
   console.log('[SSO DDIVault] Generated token for:', token.email, '- redirecting to DDIVault')
-  return NextResponse.redirect(`http://192.168.6.111:3006/sso?token=${ssoToken}`)
+  const ddiUrl = (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(':3000', ':3006')
+  return NextResponse.redirect(`${ddiUrl}/sso?token=${ssoToken}`)
 }
