@@ -182,7 +182,7 @@ if (Test-Path $NVAppDir) { Remove-Item $NVAppDir -Recurse -Force }
 & git clone "https://github.com/amrin78-smb/net-vault" $NVAppDir
 Set-Location $NVAppDir
 
-# Run schema
+    # Run schema -- use postgres superuser for extension creation
 $env:PGPASSWORD = $PgAdminPassword
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -f "$NVAppDir\schema.sql"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -f "$NVAppDir\setup.sql"
@@ -234,9 +234,11 @@ if ($InstallLogVault) {
     & git clone "https://github.com/amrin78-smb/logvault" $LVAppDir
     Set-Location $LVAppDir
 
-    # Run schema
-    $env:PGPASSWORD = $LVDbPass
-    & "$PgBin\psql.exe" -U logvault_user -h localhost -p 5432 -d logvault -f "$LVAppDir\scripts\schema.sql"
+    # Run schema -- use postgres superuser for extension creation
+    $env:PGPASSWORD = $PgAdminPassword
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -f "$LVAppDir\scripts\schema.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO logvault_user;"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO logvault_user;"
     Write-OK "LogVault schema applied"
 
     # Create .env
@@ -324,11 +326,13 @@ if ($InstallDDIVault) {
     Set-Location $DDIAppDir
 
     # Run schemas in order
-    $env:PGPASSWORD = $DDIDbPass
-    & "$PgBin\psql.exe" -U ddivault_user -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema.sql"
-    & "$PgBin\psql.exe" -U ddivault_user -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-ipam.sql"
-    & "$PgBin\psql.exe" -U ddivault_user -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-server-auth.sql"
-    & "$PgBin\psql.exe" -U ddivault_user -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-sites.sql"
+    $env:PGPASSWORD = $PgAdminPassword
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-ipam.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-server-auth.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-sites.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ddivault_user;"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ddivault_user;"
     Write-OK "DDIVault schemas applied"
 
     # Create .env
