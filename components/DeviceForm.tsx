@@ -205,7 +205,6 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
             </select>
           </Field>
         </Section>
-        </Section>
         <Section title="Support Contract">
           <Field label="Contract number">
             <input {...inp} type="text" value={form.support_contract_number} onChange={e => set('support_contract_number', e.target.value)} placeholder="e.g. SUP-12345" />
