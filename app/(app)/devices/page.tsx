@@ -534,7 +534,7 @@ export default function DevicesPage() {
           </div>
           <div>
             <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Model</div>
-            <input className="input" style={{ width: '100%' }} placeholder="e.g. PA-460 or PA460" value={model}
+            <input className="input" style={{ width: '100%' }} placeholder="e.g. PA-460, Cisco, Palo Alto" value={model}
               onChange={e => setModel(e.target.value)}
               onBlur={e => pushFilters({ model: e.target.value })}
               onKeyDown={e => { if (e.key === 'Enter') pushFilters({ model: (e.target as HTMLInputElement).value }) }} />
@@ -550,7 +550,7 @@ export default function DevicesPage() {
           {type && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Type: {type}<button onClick={() => pushFilters({ type: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {status && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Status: {status}<button onClick={() => pushFilters({ status: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {lifecycle && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Lifecycle: {lifecycle}<button onClick={() => pushFilters({ lifecycle: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {model && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Model: {model}<button onClick={() => pushFilters({ model: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {model && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Model: {model}<button onClick={() => { setModel(''); pushFilters({ model: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {search && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Search: {search}<button onClick={() => pushFilters({ search: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
         </div>
       )}
