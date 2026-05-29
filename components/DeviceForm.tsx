@@ -193,16 +193,10 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
             <input {...inp} type="date" value={form.purchase_date} onChange={e => set('purchase_date', e.target.value)} />
           </Field>
           <Field label="Purchase vendor">
-            <select {...inp} value={form.purchase_vendor} onChange={e => set('purchase_vendor', e.target.value)}>
-              <option value="">Select vendor</option>
-              {lookups.vendors.map(v => <option key={v}>{v}</option>)}
-            </select>
+            <input {...inp} list="vendors-list" value={form.purchase_vendor} onChange={e => set('purchase_vendor', e.target.value)} placeholder="Select or type vendor" />
           </Field>
           <Field label="MA vendor">
-            <select {...inp} value={form.ma_vendor} onChange={e => set('ma_vendor', e.target.value)}>
-              <option value="">Select vendor</option>
-              {lookups.vendors.map(v => <option key={v}>{v}</option>)}
-            </select>
+            <input {...inp} list="vendors-list" value={form.ma_vendor} onChange={e => set('ma_vendor', e.target.value)} placeholder="Select or type vendor" />
           </Field>
         </Section>
         <Section title="Support Contract">
@@ -210,10 +204,7 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
             <input {...inp} type="text" value={form.support_contract_number} onChange={e => set('support_contract_number', e.target.value)} placeholder="e.g. SUP-12345" />
           </Field>
           <Field label="Support vendor">
-            <select {...inp} value={form.support_vendor} onChange={e => set('support_vendor', e.target.value)}>
-              <option value="">Select vendor</option>
-              {lookups.vendors.map(v => <option key={v}>{v}</option>)}
-            </select>
+            <input {...inp} list="vendors-list" value={form.support_vendor} onChange={e => set('support_vendor', e.target.value)} placeholder="Select or type vendor" />
           </Field>
           <Field label="Support start date">
             <input {...inp} type="date" value={form.support_start_date} onChange={e => set('support_start_date', e.target.value)} />
@@ -240,6 +231,9 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
           <button className="btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : deviceId ? 'Save changes' : 'Add device'}</button>
           <button className="btn-secondary" type="button" onClick={() => router.back()}>Cancel</button>
         </div>
+      <datalist id="vendors-list">
+        {lookups.vendors.map(v => <option key={v} value={v} />)}
+      </datalist>
       </form>
     </div>
   )
