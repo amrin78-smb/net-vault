@@ -41,7 +41,7 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
   const [lookups, setLookups] = useState<Lookups | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [form, setForm] = useState({ name: '', brand: '', model: '', serial_number: '', device_type: '', device_type_other: '', ip_address: '', mgmt_protocol: '', mgmt_url: '', site: '', location_detail: '', lifecycle_status: 'Unknown', device_status: 'Active', risk_score: '', technical_debt: '', remark: '', cost: '', purchase_date: '', purchase_vendor: '', ma_vendor: '', ...initialData })
+  const [form, setForm] = useState({ name: '', brand: '', model: '', serial_number: '', device_type: '', device_type_other: '', ip_address: '', mgmt_protocol: '', mgmt_url: '', site: '', location_detail: '', lifecycle_status: 'Unknown', device_status: 'Active', risk_score: '', technical_debt: '', remark: '', cost: '', purchase_date: '', purchase_vendor: '', ma_vendor: '', support_contract_number: '', support_vendor: '', support_start_date: '', support_end_date: '', support_cost: '', support_currency: 'THB', ...initialData })
 
   useEffect(() => {
     fetch('/api/lookup').then(r => r.json()).then(data => {
@@ -205,6 +205,35 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
             </select>
           </Field>
         </Section>
+        </Section>
+        <Section title="Support Contract">
+          <Field label="Contract number">
+            <input {...inp} type="text" value={form.support_contract_number} onChange={e => set('support_contract_number', e.target.value)} placeholder="e.g. SUP-12345" />
+          </Field>
+          <Field label="Support vendor">
+            <select {...inp} value={form.support_vendor} onChange={e => set('support_vendor', e.target.value)}>
+              <option value="">Select vendor</option>
+              {lookups.vendors.map(v => <option key={v}>{v}</option>)}
+            </select>
+          </Field>
+          <Field label="Support start date">
+            <input {...inp} type="date" value={form.support_start_date} onChange={e => set('support_start_date', e.target.value)} />
+          </Field>
+          <Field label="Support end date">
+            <input {...inp} type="date" value={form.support_end_date} onChange={e => set('support_end_date', e.target.value)} />
+          </Field>
+          <Field label="Support cost">
+            <input {...inp} type="number" value={form.support_cost} onChange={e => set('support_cost', e.target.value)} placeholder="0.00" />
+          </Field>
+          <Field label="Currency">
+            <select {...inp} value={form.support_currency} onChange={e => set('support_currency', e.target.value)}>
+              <option value="THB">THB</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+              <option value="SGD">SGD</option>
+              <option value="GBP">GBP</option>
+            </select>
+          </Field>
 
         {error && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', marginBottom: '16px' }}>{error}</div>}
         <div style={{ display: 'flex', gap: '10px' }}>

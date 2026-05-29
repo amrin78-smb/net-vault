@@ -42,14 +42,23 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       purchase_date=$17,
       purchase_vendor_id=(SELECT id FROM vendors WHERE name=$18),
       ma_vendor_id=(SELECT id FROM vendors WHERE name=$19),
-      updated_by=$20
-    WHERE id=$21`,
+      support_contract_number=$20,
+      support_vendor_id=(SELECT id FROM vendors WHERE name=$21),
+      support_start_date=$22,
+      support_end_date=$23,
+      support_cost=$24,
+      support_currency=$25,
+      updated_by=$26
+    WHERE id=$27`,
     [body.name,body.brand,body.model,body.serial_number,body.device_type,
      body.ip_address||null,body.mgmt_protocol||null,body.mgmt_url||null,
      body.site,body.location_detail||null,body.lifecycle_status,body.device_status,
      body.risk_score||null,calcTechnicalDebt(body.lifecycle_status,body.device_status,body.device_type),body.remark||null,
      body.cost||null,body.purchase_date||null,
      body.purchase_vendor||null,body.ma_vendor||null,
+     body.support_contract_number||null,body.support_vendor||null,
+     body.support_start_date||null,body.support_end_date||null,
+     body.support_cost||null,body.support_currency||'THB',
      parseInt(user.id),id])
   await query(
     `INSERT INTO audit_log (device_id, changed_by, field_name, old_value, new_value) VALUES ($1,$2,'updated',$3,$4)`,

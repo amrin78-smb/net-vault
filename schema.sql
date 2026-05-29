@@ -185,7 +185,13 @@ SELECT
     c.iso_code,
     r.name  AS region,
     pv.name AS purchase_vendor,
-    mv.name AS ma_vendor
+    mv.name AS ma_vendor,
+    sv.name AS support_vendor,
+    d.support_contract_number,
+    d.support_start_date,
+    d.support_end_date,
+    d.support_cost,
+    d.support_currency
 FROM devices d
 LEFT JOIN brands       b  ON b.id  = d.brand_id
 LEFT JOIN device_types dt ON dt.id = d.device_type_id
@@ -193,12 +199,19 @@ LEFT JOIN sites        s  ON s.id  = d.site_id
 LEFT JOIN countries    c  ON c.id  = s.country_id
 LEFT JOIN regions      r  ON r.id  = c.region_id
 LEFT JOIN vendors      pv ON pv.id = d.purchase_vendor_id
-LEFT JOIN vendors      mv ON mv.id = d.ma_vendor_id;
+LEFT JOIN vendors      mv ON mv.id = d.ma_vendor_id
+LEFT JOIN vendors      sv ON sv.id = d.support_vendor_id;
 
 -- ── Safe migrations for existing installs ────────────────────────
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_vendor_id INTEGER REFERENCES vendors(id);
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS ma_vendor_id       INTEGER REFERENCES vendors(id);
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_date      DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_vendor_id      INTEGER REFERENCES vendors(id);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS ma_vendor_id            INTEGER REFERENCES vendors(id);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_date           DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_contract_number TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_start_date      DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_end_date        DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_vendor_id       INTEGER REFERENCES vendors(id);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_cost            NUMERIC(12,2);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_currency        TEXT DEFAULT 'THB';
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS cost               NUMERIC(12,2);
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS mgmt_protocol      TEXT;
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS mgmt_url           TEXT;

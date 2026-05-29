@@ -46,7 +46,10 @@ function parseLogEntry(log: Log): { label: string; detail: string | null; dotCol
         lifecycle_status: 'Lifecycle', serial_number: 'Serial', mgmt_protocol: 'Mgmt protocol',
         mgmt_url: 'Mgmt URL', location_detail: 'Location', risk_score: 'Risk score',
         remark: 'Remark', cost: 'Cost', purchase_date: 'Purchase date',
-        purchase_vendor: 'Purchase vendor', ma_vendor: 'MA vendor'
+        purchase_vendor: 'Purchase vendor', ma_vendor: 'MA vendor',
+        support_contract_number: 'Contract number', support_vendor: 'Support vendor',
+        support_start_date: 'Support start', support_end_date: 'Support end',
+        support_cost: 'Support cost', support_currency: 'Support currency'
       }
       for (const key of Object.keys(newObj)) {
         const oldVal = oldObj[key]
@@ -191,6 +194,13 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
             <DeviceField label="Purchase date" value={device.purchase_date ? new Date(device.purchase_date).toLocaleDateString() : null} />
             <DeviceField label="Purchase vendor" value={device.purchase_vendor} />
             <DeviceField label="MA vendor" value={device.ma_vendor} />
+          </DeviceSection>
+          <DeviceSection title="Support Contract">
+            <DeviceField label="Contract number" value={device.support_contract_number} />
+            <DeviceField label="Support vendor" value={device.support_vendor} />
+            <DeviceField label="Support start" value={device.support_start_date ? new Date(device.support_start_date).toLocaleDateString() : null} />
+            <DeviceField label="Support end" value={device.support_end_date ? new Date(device.support_end_date).toLocaleDateString() : null} />
+            <DeviceField label="Support cost" value={device.support_cost ? `${device.support_currency || 'THB'} ${parseFloat(device.support_cost).toLocaleString()}` : null} />
           </DeviceSection>
         </div>
 
