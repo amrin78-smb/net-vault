@@ -234,6 +234,7 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
             </select>
           </Field>
 
+        </Section>
         {error && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', marginBottom: '16px' }}>{error}</div>}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : deviceId ? 'Save changes' : 'Add device'}</button>
