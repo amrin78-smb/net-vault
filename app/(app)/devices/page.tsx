@@ -10,6 +10,7 @@ type Device = {
   id: string; name: string; brand: string; model: string; device_type: string
   ip_address: string; site: string; country: string; region: string
   lifecycle_status: string; device_status: string; serial_number: string
+  support_end_date: string | null
 }
 
 type Duplicate = { field: string; value: string; count: number; classification: string; color: string; devices: { id: string; name: string; site: string; device_type: string; serial: string }[] }
@@ -36,6 +37,7 @@ export default function DevicesPage() {
   const [type, setType] = useState('')
   const [status, setStatus] = useState('')
   const [lifecycle, setLifecycle] = useState('')
+  const [supportExpiry, setSupportExpiry] = useState('')
   const [lookups, setLookups] = useState<{ regions: string[]; sites: {site:string;id:number;region:string}[]; deviceTypes: string[] }>({ regions: [], sites: [], deviceTypes: [] })
   const [stats, setStats] = useState({ total: 0, active: 0, eol: 0, decommed: 0 })
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -64,6 +66,7 @@ export default function DevicesPage() {
     setType(searchParams.get('type') || '')
     setStatus(searchParams.get('status') || '')
     setLifecycle(searchParams.get('lifecycle') || '')
+    setSupportExpiry(searchParams.get('support_expiry') || '')
     setPage(1)
   }, [searchParams])
 
@@ -90,6 +93,7 @@ export default function DevicesPage() {
     const st = searchParams.get('status') || ''
     const lc = searchParams.get('lifecycle') || ''
     const md = searchParams.get('model') || ''
+    const se = searchParams.get('support_expiry') || ''
     const params = new URLSearchParams({ page: String(page), limit: String(limit) })
     if (s)  params.set('search', s)
     if (r)  params.set('region', r)
@@ -98,6 +102,7 @@ export default function DevicesPage() {
     if (st) params.set('status', st)
     if (lc) params.set('lifecycle', lc)
     if (md) params.set('model', md)
+    if (se) params.set('support_expiry', se)
     const res = await fetch(`/api/devices?${params}`)
     const data = await res.json()
     setDevices(data.devices || [])
@@ -109,14 +114,15 @@ export default function DevicesPage() {
 
   function pushFilters(overrides: Record<string, string> = {}) {
     const params = new URLSearchParams()
-    const current = { search, region, site, type, status, lifecycle, model, ...overrides }
-    if (current.search)    params.set('search', current.search)
-    if (current.region)    params.set('region', current.region)
-    if (current.site)      params.set('site', current.site)
-    if (current.type)      params.set('type', current.type)
-    if (current.status)    params.set('status', current.status)
-    if (current.lifecycle) params.set('lifecycle', current.lifecycle)
-    if (current.model)     params.set('model', current.model)
+    const current = { search, region, site, type, status, lifecycle, model, support_expiry: supportExpiry, ...overrides }
+    if (current.search)          params.set('search', current.search)
+    if (current.region)          params.set('region', current.region)
+    if (current.site)            params.set('site', current.site)
+    if (current.type)            params.set('type', current.type)
+    if (current.status)          params.set('status', current.status)
+    if (current.lifecycle)       params.set('lifecycle', current.lifecycle)
+    if (current.model)           params.set('model', current.model)
+    if (current.support_expiry)  params.set('support_expiry', current.support_expiry)
     router.push(`/devices${params.toString() ? '?' + params.toString() : ''}`)
   }
 
@@ -224,7 +230,7 @@ export default function DevicesPage() {
   async function confirmImport() { await runImport(false) }
 
   const totalPages = Math.ceil(total / limit)
-  const hasFilters = !!(search || region || site || type || status || lifecycle || model)
+  const hasFilters = !!(search || region || site || type || status || lifecycle || model || supportExpiry)
 
   // For site admins, filter lookups to only show their assigned sites
   const availableSites = isSiteAdmin && sessionUser?.siteIds?.length
@@ -483,7 +489,7 @@ export default function DevicesPage() {
           onClick={() => setShowFilterPanel(f => !f)}
           style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || hasFilters ? '#1a2744' : 'white', color: showFilterPanel || hasFilters ? 'white' : '#374151', border: '1px solid ' + (showFilterPanel || hasFilters ? '#1a2744' : '#e5e7eb'), borderRadius: '7px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-          Filters {hasFilters && `(${[region,site,type,status,lifecycle,model].filter(Boolean).length})`}
+          Filters {hasFilters && `(${[region,site,type,status,lifecycle,model,supportExpiry].filter(Boolean).length})`}
         </button>
         {hasFilters && (
           <button onClick={() => router.push('/devices')} style={{ fontSize: '12px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap' as const }}>
@@ -539,6 +545,15 @@ export default function DevicesPage() {
               onBlur={e => pushFilters({ model: e.target.value })}
               onKeyDown={e => { if (e.key === 'Enter') pushFilters({ model: (e.target as HTMLInputElement).value }) }} />
           </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Support End</div>
+            <select className="select" style={{ width: '100%' }} value={supportExpiry} onChange={e => pushFilters({ support_expiry: e.target.value })}>
+              <option value="">All</option>
+              <option value="expired">Expired</option>
+              <option value="expiring">Expiring (90d)</option>
+              <option value="active">Active</option>
+            </select>
+          </div>
         </div>
       )}
 
@@ -551,6 +566,7 @@ export default function DevicesPage() {
           {status && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Status: {status}<button onClick={() => pushFilters({ status: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {lifecycle && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Lifecycle: {lifecycle}<button onClick={() => pushFilters({ lifecycle: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {model && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Model: {model}<button onClick={() => { setModel(''); pushFilters({ model: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {supportExpiry && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: supportExpiry === 'expired' ? '#fee2e2' : supportExpiry === 'expiring' ? '#fff7ed' : '#dcfce7', color: supportExpiry === 'expired' ? '#991b1b' : supportExpiry === 'expiring' ? '#92400e' : '#166534', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Support: {supportExpiry}<button onClick={() => { setSupportExpiry(''); pushFilters({ support_expiry: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {search && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: '12px', fontWeight: '500' }}>Search: {search}<button onClick={() => pushFilters({ search: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: '14px', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
         </div>
       )}
@@ -622,7 +638,7 @@ export default function DevicesPage() {
                 <tr>
                   {isAdmin && <th style={{ width: '40px' }}><input type="checkbox" checked={selected.size === devices.length && devices.length > 0} onChange={toggleAll} /></th>}
                   <th>Name</th><th>Type</th><th>Brand / Model</th><th>IP address</th>
-                  <th>Site</th><th>Region</th><th>Lifecycle</th><th>Status</th><th>Actions</th>
+                  <th>Site</th><th>Region</th><th>Lifecycle</th><th>Status</th><th>Support End</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -639,6 +655,15 @@ export default function DevicesPage() {
                     <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{d.region}</span></td>
                     <td><LifecycleBadge status={d.lifecycle_status} /></td>
                     <td><StatusBadge status={d.device_status} /></td>
+                    <td>{(() => {
+                      if (!d.support_end_date) return null
+                      const end = new Date(d.support_end_date)
+                      const now = new Date()
+                      const in90 = new Date(); in90.setDate(in90.getDate() + 90)
+                      if (end < now) return <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap' }}>Expired</span>
+                      if (end <= in90) return <span style={{ background: '#fff7ed', color: '#92400e', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600', whiteSpace: 'nowrap' }}>Expiring Soon</span>
+                      return <span style={{ fontSize: '12px', color: '#374151' }}>{end.toLocaleDateString()}</span>
+                    })()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <Link href={`/devices/${d.id}`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }}>View</button></Link>
