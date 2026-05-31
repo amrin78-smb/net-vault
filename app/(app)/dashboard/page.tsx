@@ -9,10 +9,11 @@ type TypeRow = { device_type: string; total: string }
 type EolRow = { site: string; country: string; region: string; eol_count: string }
 type ActivityRow = { field_name: string; changed_at: string; changed_by_name: string; device_name: string }
 type CircuitStats = { total_circuits: string; main_circuits: string; backup_circuits: string; sites_with_circuits: string; total_cost_thb: string; total_cost_usd: string; total_cost_eur: string; total_isps: string; pingable_count: string }
+type ContractStats = { expired_contracts: string; expiring_contracts: string }
 
 export default function DashboardPage() {
   const router = useRouter()
-  const [data, setData] = useState<{ summary: Summary; byRegion: RegionRow[]; byType: TypeRow[]; topEol: EolRow[]; recentActivity: ActivityRow[]; circuitStats: CircuitStats } | null>(null)
+  const [data, setData] = useState<{ summary: Summary; byRegion: RegionRow[]; byType: TypeRow[]; topEol: EolRow[]; recentActivity: ActivityRow[]; circuitStats: CircuitStats; contractStats: ContractStats } | null>(null)
   const [loading, setLoading] = useState(true)
   const [chartsReady, setChartsReady] = useState(false)
 
@@ -129,7 +130,7 @@ export default function DashboardPage() {
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading dashboard...</div>
   if (!data) return null
 
-  const { summary, byRegion, topEol, recentActivity, circuitStats } = data
+  const { summary, byRegion, topEol, recentActivity, circuitStats, contractStats } = data
   const total = parseInt(summary.total)
   const eol = parseInt(summary.eol)
   const eolPct = total > 0 ? Math.round((eol / total) * 100) : 0
@@ -183,6 +184,32 @@ export default function DashboardPage() {
           </Link>
         ))}
       </div>
+
+      {/* Contract expiry cards */}
+      {(parseInt(contractStats.expiring_contracts) > 0 || parseInt(contractStats.expired_contracts) > 0) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px', marginBottom: '20px' }}>
+          <Link href="/devices?support_expiry=expiring" style={{ textDecoration: 'none' }}>
+            <div style={{ background: '#fff7ed', borderRadius: '8px', border: '1px solid #fdba74', padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
+              <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#92400e' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+              <div style={{ fontSize: '11px', color: '#92400e', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>Expiring Contracts</div>
+              <div style={{ fontSize: '26px', fontWeight: '700', color: '#92400e' }}>{parseInt(contractStats.expiring_contracts).toLocaleString()}</div>
+              <div style={{ fontSize: '11px', color: '#92400e', opacity: 0.6, marginTop: '2px' }}>support end within 90 days</div>
+            </div>
+          </Link>
+          <Link href="/devices?support_expiry=expired" style={{ textDecoration: 'none' }}>
+            <div style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #fca5a5', padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
+              <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#991b1b' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+              <div style={{ fontSize: '11px', color: '#991b1b', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>Expired Contracts</div>
+              <div style={{ fontSize: '26px', fontWeight: '700', color: '#991b1b' }}>{parseInt(contractStats.expired_contracts).toLocaleString()}</div>
+              <div style={{ fontSize: '11px', color: '#991b1b', opacity: 0.6, marginTop: '2px' }}>support has lapsed</div>
+            </div>
+          </Link>
+        </div>
+      )}
 
       {/* Circuit stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '12px', marginBottom: '20px' }}>

@@ -15,7 +15,7 @@ export async function GET() {
   const siteFilter = isSiteAdmin && siteIds.length ? `AND site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''
   const vFilter = isSiteAdmin && siteIds.length ? `WHERE site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''
 
-  const [summary, byRegion, byType, topEol, recentActivity, circuitStats] = await Promise.all([
+  const [summary, byRegion, byType, topEol, recentActivity, circuitStats, contractStats] = await Promise.all([
     query(`
       SELECT
         COUNT(*) as total,
@@ -74,6 +74,12 @@ export async function GET() {
       FROM circuits
       ${isSiteAdmin && siteIds.length ? `WHERE site_id = ANY(ARRAY[${siteIds.join(',')}])` : ''}
     `),
+    query(`
+      SELECT
+        COUNT(*) FILTER (WHERE support_end_date IS NOT NULL AND support_end_date < CURRENT_DATE) as expired_contracts,
+        COUNT(*) FILTER (WHERE support_end_date IS NOT NULL AND support_end_date >= CURRENT_DATE AND support_end_date <= CURRENT_DATE + INTERVAL '90 days') as expiring_contracts
+      FROM v_devices_flat ${vFilter}
+    `),
   ])
 
   return NextResponse.json({
@@ -83,5 +89,6 @@ export async function GET() {
     topEol: topEol.rows,
     recentActivity: recentActivity.rows,
     circuitStats: circuitStats.rows[0],
+    contractStats: contractStats.rows[0],
   })
 }
