@@ -44,6 +44,7 @@ export default function DevicesPage() {
   const [bulkField, setBulkField] = useState('device_status')
   const [bulkValue, setBulkValue] = useState('')
   const [bulkLoading, setBulkLoading] = useState(false)
+  const [showBulkModal, setShowBulkModal] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importPreview, setImportPreview] = useState<any[]>([])
@@ -168,9 +169,25 @@ export default function DevicesPage() {
     } else {
       showToast('Failed to update devices', 'error')
     }
-    setBulkLoading(false)
-    setSelected(new Set())
-    setBulkValue('')
+    setBulkLoading(false); setSelected(new Set()); setBulkValue(''); setShowBulkModal(false)
+    fetchDevices()
+  }
+
+  async function bulkDelete() {
+    if (!selected.size) return
+    setBulkLoading(true)
+    const ids = Array.from(selected)
+    const errors: string[] = []
+    for (const id of ids) {
+      const res = await fetch(`/api/devices/${id}`, { method: 'DELETE' })
+      if (!res.ok) errors.push(id)
+    }
+    if (errors.length === 0) {
+      showToast(`${ids.length} device${ids.length > 1 ? 's' : ''} deleted`)
+    } else {
+      showToast(`Deleted ${ids.length - errors.length}, failed ${errors.length}`, 'error')
+    }
+    setBulkLoading(false); setSelected(new Set()); setShowBulkModal(false)
     fetchDevices()
   }
 
@@ -429,25 +446,72 @@ export default function DevicesPage() {
 
       {/* Bulk action bar */}
       {isAdmin && selected.size > 0 && (
-        <div style={{ background: '#1a2744', borderRadius: '8px', padding: '10px 16px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ background: '#1a2744', borderRadius: '8px', padding: '10px 16px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
           <span style={{ fontSize: '13px', color: 'white', fontWeight: '500' }}>{selected.size} device{selected.size > 1 ? 's' : ''} selected</span>
-          <select value={bulkField} onChange={e => { setBulkField(e.target.value); setBulkValue('') }} style={{ padding: '5px 10px', borderRadius: '5px', fontSize: '12px', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
-            <option value="device_status">Device status</option>
-            <option value="lifecycle_status">Lifecycle status</option>
-            <option value="site_id">Move to site</option>
-          </select>
-          <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} style={{ padding: '5px 10px', borderRadius: '5px', fontSize: '12px', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
-            <option value="">Set value...</option>
-            {bulkField === 'device_status' && ['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
-            {bulkField === 'lifecycle_status' && ['Active, Supported','EOL / EOS','Unknown'].map(s => <option key={s}>{s}</option>)}
-            {bulkField === 'site_id' && lookups.sites.map((s: any) => <option key={s.id} value={s.id}>{s.site}</option>)}
-          </select>
-          <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ padding: '5px 14px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '5px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}>
-            {bulkLoading ? 'Updating...' : 'Apply'}
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const }}>
+            {[
+              { label: 'Update Status', field: 'device_status' },
+              { label: 'Update Lifecycle', field: 'lifecycle_status' },
+              { label: 'Move to Site', field: 'site_id' },
+            ].map(action => (
+              <button key={action.field} onClick={() => { setBulkField(action.field); setBulkValue(''); setShowBulkModal(true) }}
+                style={{ padding: '5px 12px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '5px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.25)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}>
+                {action.label}
+              </button>
+            ))}
+            <button onClick={() => { setBulkField('delete'); setShowBulkModal(true) }}
+              style={{ padding: '5px 12px', background: '#991b1b', color: 'white', border: '1px solid #7f1d1d', borderRadius: '5px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#7f1d1d')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#991b1b')}>
+              Delete
+            </button>
+          </div>
+          <button onClick={() => setSelected(new Set())} style={{ marginLeft: 'auto', padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '5px', fontSize: '12px', cursor: 'pointer' }}>
+            Deselect all
           </button>
-          <button onClick={() => setSelected(new Set())} style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '5px', fontSize: '12px', cursor: 'pointer' }}>
-            Cancel
-          </button>
+        </div>
+      )}
+
+      {/* Bulk action modal */}
+      {showBulkModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: 'white', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+            {bulkField === 'delete' ? (
+              <>
+                <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: '0 0 8px' }}>Delete {selected.size} device{selected.size > 1 ? 's' : ''}?</h2>
+                <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 20px' }}>This will permanently delete {selected.size} device{selected.size > 1 ? 's' : ''}. This cannot be undone.</p>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={bulkDelete} disabled={bulkLoading} style={{ flex: 1, padding: '9px', background: '#991b1b', color: 'white', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                    {bulkLoading ? 'Deleting...' : `Delete ${selected.size} device${selected.size > 1 ? 's' : ''}`}
+                  </button>
+                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: '0 0 8px' }}>
+                  {bulkField === 'device_status' ? 'Update Status' : bulkField === 'lifecycle_status' ? 'Update Lifecycle' : 'Move to Site'}
+                </h2>
+                <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 16px' }}>Apply to {selected.size} selected device{selected.size > 1 ? 's' : ''}.</p>
+                <div style={{ marginBottom: '16px' }}>
+                  <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} className="select" style={{ width: '100%' }}>
+                    <option value="">Select new value...</option>
+                    {bulkField === 'device_status' && ['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
+                    {bulkField === 'lifecycle_status' && ['Active, Supported','EOL / EOS','Unknown'].map(s => <option key={s}>{s}</option>)}
+                    {bulkField === 'site_id' && lookups.sites.map((s: any) => <option key={s.id} value={s.id}>{s.site}</option>)}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ flex: 1, padding: '9px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: !bulkValue ? 0.5 : 1 }}>
+                    {bulkLoading ? 'Applying...' : 'Apply'}
+                  </button>
+                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
