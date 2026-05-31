@@ -79,7 +79,10 @@ CREATE TABLE IF NOT EXISTS devices (
     created_by         INTEGER,
     updated_by         INTEGER,
     created_at         TIMESTAMPTZ DEFAULT NOW(),
-    updated_at         TIMESTAMPTZ DEFAULT NOW()
+    updated_at         TIMESTAMPTZ DEFAULT NOW(),
+    os_type            TEXT,
+    os_version         TEXT,
+    os_eol_date        DATE
 );
 
 -- Partial unique index on serial number (allows NULLs and empty strings)
@@ -191,7 +194,10 @@ SELECT
     d.support_start_date,
     d.support_end_date,
     d.support_cost,
-    d.support_currency
+    d.support_currency,
+    d.os_type,
+    d.os_version,
+    d.os_eol_date
 FROM devices d
 LEFT JOIN brands       b  ON b.id  = d.brand_id
 LEFT JOIN device_types dt ON dt.id = d.device_type_id
@@ -224,6 +230,9 @@ ALTER TABLE devices  ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMPTZ DEF
 ALTER TABLE sites    ADD COLUMN IF NOT EXISTS site_status        TEXT NOT NULL DEFAULT 'Active';
 ALTER TABLE circuits ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE users    ADD COLUMN IF NOT EXISTS password_hash      TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_type            TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_version         TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_eol_date        DATE;
 
 -- Fix role constraint
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;

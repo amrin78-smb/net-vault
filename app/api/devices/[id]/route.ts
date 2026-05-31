@@ -48,8 +48,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       support_end_date=$23,
       support_cost=$24,
       support_currency=$25,
-      updated_by=$26
-    WHERE id=$27`,
+      os_type=$26,os_version=$27,os_eol_date=$28,
+      updated_by=$29
+    WHERE id=$30`,
     [body.name,body.brand,body.model,body.serial_number,body.device_type,
      body.ip_address||null,body.mgmt_protocol||null,body.mgmt_url||null,
      body.site,body.location_detail||null,body.lifecycle_status,body.device_status,
@@ -59,6 +60,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
      body.support_contract_number||null,body.support_vendor||null,
      body.support_start_date||null,body.support_end_date||null,
      body.support_cost||null,body.support_currency||'THB',
+     body.os_type||null,body.os_version||null,body.os_eol_date||null,
      parseInt(user.id),id])
   await query(
     `INSERT INTO audit_log (device_id, changed_by, field_name, old_value, new_value) VALUES ($1,$2,'updated',$3,$4)`,

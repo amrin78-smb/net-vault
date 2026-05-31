@@ -202,6 +202,11 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
             <DeviceField label="Support end" value={device.support_end_date ? new Date(device.support_end_date).toLocaleDateString() : null} />
             <DeviceField label="Support cost" value={device.support_cost ? `${device.support_currency || 'THB'} ${parseFloat(device.support_cost).toLocaleString()}` : null} />
           </DeviceSection>
+          <DeviceSection title="Software / Firmware">
+            <DeviceField label="OS Type" value={device.os_type} />
+            <DeviceField label="OS Version" value={device.os_version} />
+            <DeviceField label="OS EOL Date" value={device.os_eol_date ? new Date(device.os_eol_date).toLocaleDateString() : null} />
+          </DeviceSection>
         </div>
 
         <div>

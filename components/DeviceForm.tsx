@@ -41,7 +41,7 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
   const [lookups, setLookups] = useState<Lookups | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [form, setForm] = useState({ name: '', brand: '', model: '', serial_number: '', device_type: '', device_type_other: '', ip_address: '', mgmt_protocol: '', mgmt_url: '', site: '', location_detail: '', lifecycle_status: 'Unknown', device_status: 'Active', risk_score: '', technical_debt: '', remark: '', cost: '', purchase_date: '', purchase_vendor: '', ma_vendor: '', support_contract_number: '', support_vendor: '', support_start_date: '', support_end_date: '', support_cost: '', support_currency: 'THB', ...initialData })
+  const [form, setForm] = useState({ name: '', brand: '', model: '', serial_number: '', device_type: '', device_type_other: '', ip_address: '', mgmt_protocol: '', mgmt_url: '', site: '', location_detail: '', lifecycle_status: 'Unknown', device_status: 'Active', risk_score: '', technical_debt: '', remark: '', cost: '', purchase_date: '', purchase_vendor: '', ma_vendor: '', support_contract_number: '', support_vendor: '', support_start_date: '', support_end_date: '', support_cost: '', support_currency: 'THB', os_type: '', os_version: '', os_eol_date: '', ...initialData })
 
   useEffect(() => {
     fetch('/api/lookup').then(r => r.json()).then(data => {
@@ -226,6 +226,22 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
           </Field>
 
         </Section>
+
+        <Section title="Software / Firmware">
+          <Field label="OS Type">
+            <input {...inp} list="os-type-list" value={form.os_type} onChange={e => set('os_type', e.target.value)} placeholder="e.g. PAN-OS, FortiOS" />
+            <datalist id="os-type-list">
+              {['PAN-OS','FortiOS','ArubaOS','IOS-XE','IOS-XR','NX-OS','EOS','JunOS','SonicOS','Other'].map(t => <option key={t} value={t} />)}
+            </datalist>
+          </Field>
+          <Field label="OS Version">
+            <input {...inp} value={form.os_version} onChange={e => set('os_version', e.target.value)} placeholder="e.g. 10.2.4" />
+          </Field>
+          <Field label="OS EOL Date">
+            <input {...inp} type="date" value={form.os_eol_date} onChange={e => set('os_eol_date', e.target.value)} />
+          </Field>
+        </Section>
+
         {error && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', marginBottom: '16px' }}>{error}</div>}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : deviceId ? 'Save changes' : 'Add device'}</button>

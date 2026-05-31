@@ -1,17 +1,23 @@
 'use client'
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
+
 type SiteRow = { region: string; country: string; site: string; eol_count: number; total_count: number }
+type SoftwareRow = { id: string; name: string; site: string; device_type: string; os_type: string; os_version: string; os_eol_date: string }
 
 export default function EolPage() {
   const [rows, setRows] = useState<SiteRow[]>([])
+  const [softwareRows, setSoftwareRows] = useState<SoftwareRow[]>([])
   const [loading, setLoading] = useState(true)
   const [region, setRegion] = useState('')
+  const [tab, setTab] = useState<'hardware' | 'software'>('hardware')
 
   useEffect(() => {
     Promise.all([
       fetch('/api/devices?lifecycle=EOL+%2F+EOS&limit=3000').then(r => r.json()),
       fetch('/api/devices?limit=3000').then(r => r.json()),
-    ]).then(([eolData, allData]) => {
+      fetch('/api/devices?os_eol=past_or_soon&limit=3000').then(r => r.json()),
+    ]).then(([eolData, allData, swData]) => {
       const sites: Record<string, SiteRow> = {}
       for (const dev of allData.devices || []) {
         const key = `${dev.region}|${dev.country}|${dev.site}`
@@ -24,6 +30,15 @@ export default function EolPage() {
         sites[key].eol_count++
       }
       setRows(Object.values(sites).filter(s => s.eol_count > 0).sort((a, b) => b.eol_count - a.eol_count))
+
+      const sw: SoftwareRow[] = (swData.devices || [])
+        .filter((d: any) => d.os_eol_date)
+        .map((d: any) => ({
+          id: d.id, name: d.name, site: d.site, device_type: d.device_type,
+          os_type: d.os_type, os_version: d.os_version, os_eol_date: d.os_eol_date
+        }))
+        .sort((a: SoftwareRow, b: SoftwareRow) => new Date(a.os_eol_date).getTime() - new Date(b.os_eol_date).getTime())
+      setSoftwareRows(sw)
       setLoading(false)
     })
   }, [])
@@ -32,63 +47,133 @@ export default function EolPage() {
   const regions = [...new Set(rows.map(r => r.region))]
   const totalEol = filtered.reduce((s, r) => s + r.eol_count, 0)
 
+  const now = new Date()
+  const in90 = new Date(); in90.setDate(in90.getDate() + 90)
+  const swExpired  = softwareRows.filter(r => new Date(r.os_eol_date) < now)
+  const swExpiring = softwareRows.filter(r => { const d = new Date(r.os_eol_date); return d >= now && d <= in90 })
+
+  function OsStatus({ date }: { date: string }) {
+    const d = new Date(date)
+    if (d < now) return <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>Expired</span>
+    if (d <= in90) return <span style={{ background: '#fff7ed', color: '#92400e', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>Expiring Soon</span>
+    return <span style={{ fontSize: '12px', color: '#374151' }}>{d.toLocaleDateString()}</span>
+  }
+
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>EOL / Risk report</h1>
-        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Devices at end-of-life by site</p>
+        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Hardware lifecycle and software EOL tracking</p>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
-        <a href="/devices?lifecycle=EOL+%2F+EOS" style={{ textDecoration: 'none' }}>
-          <div style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #fca5a5', padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
-            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
-            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
-            <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#991b1b' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
-            <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>EOL devices</div>
-            <div style={{ fontSize: '28px', fontWeight: '700', color: '#991b1b' }}>{totalEol.toLocaleString()}</div>
-            <div style={{ fontSize: '11px', color: '#991b1b', opacity: 0.6, marginTop: '4px' }}>View all →</div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid #e5e7eb' }}>
+        {(['hardware', 'software'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
+            style={{ padding: '8px 18px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: tab === t ? '600' : '400', color: tab === t ? '#111827' : '#6b7280', borderBottom: tab === t ? '2px solid #C8102E' : '2px solid transparent', marginBottom: '-1px' }}>
+            {t === 'hardware' ? 'Hardware EOL' : `Software EOL${softwareRows.length > 0 ? ` (${softwareRows.length})` : ''}`}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'hardware' && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
+            <a href="/devices?lifecycle=EOL+%2F+EOS" style={{ textDecoration: 'none' }}>
+              <div style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #fca5a5', padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
+                onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
+                <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#991b1b' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+                <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>EOL devices</div>
+                <div style={{ fontSize: '28px', fontWeight: '700', color: '#991b1b' }}>{totalEol.toLocaleString()}</div>
+                <div style={{ fontSize: '11px', color: '#991b1b', opacity: 0.6, marginTop: '4px' }}>View all →</div>
+              </div>
+            </a>
+            <div style={{ background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d', padding: '16px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#92400e' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg></div>
+              <div style={{ fontSize: '12px', color: '#92400e', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Sites affected</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: '#92400e' }}>{filtered.length}</div>
+            </div>
+            <div style={{ background: '#f0f4f8', borderRadius: '8px', border: '1px solid #c7d8e8', padding: '16px', position: 'relative', overflow: 'hidden' }}>
+              <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#1a2744' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
+              <div style={{ fontSize: '12px', color: '#1a2744', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Regions</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: '#1a2744' }}>{regions.length}</div>
+            </div>
           </div>
-        </a>
-        <div style={{ background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d', padding: '16px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#92400e' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg></div>
-          <div style={{ fontSize: '12px', color: '#92400e', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Sites affected</div>
-          <div style={{ fontSize: '28px', fontWeight: '700', color: '#92400e' }}>{filtered.length}</div>
-        </div>
-        <div style={{ background: '#f0f4f8', borderRadius: '8px', border: '1px solid #c7d8e8', padding: '16px', position: 'relative', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#1a2744' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
-          <div style={{ fontSize: '12px', color: '#1a2744', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Regions</div>
-          <div style={{ fontSize: '28px', fontWeight: '700', color: '#1a2744' }}>{regions.length}</div>
-        </div>
-      </div>
-      <div style={{ marginBottom: '16px' }}>
-        <select className="select" style={{ width: "auto", minWidth: "130px" }} value={region} onChange={e => setRegion(e.target.value)}>
-          <option value="">All regions</option>
-          {regions.map(r => <option key={r}>{r}</option>)}
-        </select>
-      </div>
-      <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-        {loading ? <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div> : (
-          <table>
-            <thead><tr><th>Site</th><th>Country</th><th>Region</th><th>EOL devices</th><th>% of site</th><th>Risk level</th></tr></thead>
-            <tbody>
-              {filtered.map(row => {
-                const pct = row.total_count > 0 ? Math.round((row.eol_count / row.total_count) * 100) : 0
-                const risk = pct >= 50 ? { label: 'High', bg: '#fee2e2', color: '#991b1b' } : pct >= 25 ? { label: 'Medium', bg: '#fef3c7', color: '#92400e' } : { label: 'Low', bg: '#dcfce7', color: '#166534' }
-                return (
-                  <tr key={`${row.site}-${row.region}`}>
-                    <td style={{ fontWeight: '500', color: '#111827' }}>{row.site}</td>
-                    <td>{row.country}</td>
-                    <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{row.region}</span></td>
-                    <td style={{ fontWeight: '600', color: '#991b1b' }}>{row.eol_count}</td>
-                    <td style={{ color: '#6b7280' }}>{pct}%</td>
-                    <td><span className="badge" style={{ background: risk.bg, color: risk.color }}>{risk.label}</span></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+          <div style={{ marginBottom: '16px' }}>
+            <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={region} onChange={e => setRegion(e.target.value)}>
+              <option value="">All regions</option>
+              {regions.map(r => <option key={r}>{r}</option>)}
+            </select>
+          </div>
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            {loading ? <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div> : (
+              <table>
+                <thead><tr><th>Site</th><th>Country</th><th>Region</th><th>EOL devices</th><th>% of site</th><th>Risk level</th></tr></thead>
+                <tbody>
+                  {filtered.map(row => {
+                    const pct = row.total_count > 0 ? Math.round((row.eol_count / row.total_count) * 100) : 0
+                    const risk = pct >= 50 ? { label: 'High', bg: '#fee2e2', color: '#991b1b' } : pct >= 25 ? { label: 'Medium', bg: '#fef3c7', color: '#92400e' } : { label: 'Low', bg: '#dcfce7', color: '#166534' }
+                    return (
+                      <tr key={`${row.site}-${row.region}`}>
+                        <td style={{ fontWeight: '500', color: '#111827' }}>{row.site}</td>
+                        <td>{row.country}</td>
+                        <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{row.region}</span></td>
+                        <td style={{ fontWeight: '600', color: '#991b1b' }}>{row.eol_count}</td>
+                        <td style={{ color: '#6b7280' }}>{pct}%</td>
+                        <td><span className="badge" style={{ background: risk.bg, color: risk.color }}>{risk.label}</span></td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      {tab === 'software' && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #fca5a5', padding: '16px' }}>
+              <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>OS EOL expired</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: '#991b1b' }}>{swExpired.length}</div>
+            </div>
+            <div style={{ background: '#fff7ed', borderRadius: '8px', border: '1px solid #fdba74', padding: '16px' }}>
+              <div style={{ fontSize: '12px', color: '#92400e', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Expiring within 90 days</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: '#92400e' }}>{swExpiring.length}</div>
+            </div>
+            <div style={{ background: '#f0f4f8', borderRadius: '8px', border: '1px solid #c7d8e8', padding: '16px' }}>
+              <div style={{ fontSize: '12px', color: '#1a2744', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Total tracked</div>
+              <div style={{ fontSize: '28px', fontWeight: '700', color: '#1a2744' }}>{softwareRows.length}</div>
+            </div>
+          </div>
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            {loading ? <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div> : softwareRows.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>No devices have OS EOL dates recorded yet.</div>
+            ) : (
+              <table>
+                <thead><tr><th>Device</th><th>Site</th><th>Type</th><th>OS Type</th><th>OS Version</th><th>OS EOL Date</th><th>Status</th></tr></thead>
+                <tbody>
+                  {softwareRows.map(row => (
+                    <tr key={row.id}>
+                      <td style={{ fontWeight: '500' }}>
+                        <Link href={`/devices/${row.id}`} style={{ color: '#111827', textDecoration: 'none' }}>{row.name}</Link>
+                      </td>
+                      <td>{row.site}</td>
+                      <td>{row.device_type}</td>
+                      <td>{row.os_type || '—'}</td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{row.os_version || '—'}</td>
+                      <td>{row.os_eol_date ? new Date(row.os_eol_date).toLocaleDateString() : '—'}</td>
+                      <td><OsStatus date={row.os_eol_date} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
     </div>
   )
 }

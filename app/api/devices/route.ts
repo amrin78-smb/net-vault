@@ -76,12 +76,13 @@ export async function POST(req: NextRequest) {
   }
 
   const res = await query(`
-    INSERT INTO devices (name, brand_id, model, serial_number, device_type_id, ip_address, site_id, lifecycle_status, device_status, technical_debt, created_by, updated_by)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$11) RETURNING id`,
+    INSERT INTO devices (name, brand_id, model, serial_number, device_type_id, ip_address, site_id, lifecycle_status, device_status, technical_debt, os_type, os_version, os_eol_date, created_by, updated_by)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$14) RETURNING id`,
     [body.name||null, brandId, body.model||null, body.serial_number||null,
      typeId, body.ip_address||null, siteId,
      body.lifecycle_status||'Unknown', body.device_status||'Active',
      calcTechnicalDebt(body.lifecycle_status||'Unknown', body.device_status||'Active', body.device_type||''),
+     body.os_type||null, body.os_version||null, body.os_eol_date||null,
      parseInt(sessionUser.id)]
   )
   return NextResponse.json({ id: res.rows[0].id, name: body.name, site: body.site }, { status: 201 })
