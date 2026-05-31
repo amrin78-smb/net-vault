@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
   const res = await query(
     `SELECT name, brand, model, serial_number, device_type, ip_address,
             site, location_detail, country, lifecycle_status, region,
-            device_status, technical_debt, risk_score, cost
+            device_status, technical_debt, risk_score, cost,
+            support_contract_number, support_vendor, support_start_date,
+            support_end_date, support_cost, support_currency,
+            os_type, os_version, os_eol_date
      FROM v_devices_flat ${where} ORDER BY region, country, site, name`, params)
 
   // PowerBI-friendly column names matching expected format
@@ -54,6 +57,15 @@ export async function GET(req: NextRequest) {
     technical_debt: 'Technical Debt',
     risk_score: 'Risk Score',
     cost: 'Cost',
+    support_contract_number: 'Support Contract #',
+    support_vendor: 'Support Vendor',
+    support_start_date: 'Support Start Date',
+    support_end_date: 'Support End Date',
+    support_cost: 'Support Cost',
+    support_currency: 'Support Currency',
+    os_type: 'OS Type',
+    os_version: 'OS Version',
+    os_eol_date: 'OS EOL Date',
   }
 
   const dbCols = Object.keys(colMap)
