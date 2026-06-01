@@ -3,8 +3,8 @@
 .SYNOPSIS
     NocVault Suite Installer v1.0
 .DESCRIPTION
-    Installs NetVault, LogVault and DDIVault on a Windows Server.
-    NetVault is mandatory. LogVault and DDIVault are optional.
+    Installs NetVault, LogVault, DDIVault and SpanVault on a Windows Server.
+    NetVault is mandatory. LogVault, DDIVault and SpanVault are optional.
     Requires internet access to clone from GitHub.
 .PARAMETER InstallDir
     Root installation directory (default: C:\Apps)
@@ -14,16 +14,19 @@
     Install LogVault add-on (default: true)
 .PARAMETER InstallDDIVault
     Install DDIVault add-on (default: true)
+.PARAMETER InstallSpanVault
+    Install SpanVault add-on (default: true)
 .EXAMPLE
     .\Install-NocVault-Suite.ps1
     .\Install-NocVault-Suite.ps1 -InstallDir "D:\Apps" -ServerIP "10.10.1.50"
-    .\Install-NocVault-Suite.ps1 -InstallLogVault $false -InstallDDIVault $false
+    .\Install-NocVault-Suite.ps1 -InstallLogVault $false -InstallDDIVault $false -InstallSpanVault $false
 #>
 param(
     [string]$InstallDir      = "C:\Apps",
     [string]$ServerIP        = "",
     [bool]$InstallLogVault   = $true,
     [bool]$InstallDDIVault   = $true,
+    [bool]$InstallSpanVault  = $true,
     [string]$PgAdminPassword = ""
 )
 
@@ -48,9 +51,11 @@ $DepsDir        = "$ScriptDir\dependencies"
 $NVDir          = "$InstallDir\NetVault"
 $LVDir          = "$InstallDir\LogVault"
 $DDIDir         = "$InstallDir\DDIVault"
+$SVDir          = "$InstallDir\SpanVault"
 $NVAppDir       = "$NVDir\app"
 $LVAppDir       = "$LVDir\app"
 $DDIAppDir      = "$DDIDir\app"
+$SVAppDir       = "$SVDir\app"
 $PgBin          = "C:\Program Files\PostgreSQL\16\bin"
 $NssmZip        = "$DepsDir\nssm-2.24.zip"
 $NssmDir        = "$NVDir\nssm"
@@ -64,11 +69,13 @@ $VcRedist       = "$DepsDir\VC_redist.x64.exe"
 $NVGitUrl       = "https://github.com/amrin78-smb/net-vault"
 $LVGitUrl       = "https://github.com/amrin78-smb/logvault"
 $DDIGitUrl      = "https://github.com/amrin78-smb/ddivault"
+$SVGitUrl       = "https://github.com/amrin78-smb/spanvault"
 
 # ── Credentials ───────────────────────────────────────────────────
 $NVDbPass     = "PgAdmin@2026!"
 $LVDbPass     = "NVAdmin@2026"
 $DDIDbPass    = "NVAdmin@2026"
+$SVDbPass     = "NVAdmin@2026"
 $SharedSecret = "bue3VdWszntJ24GMhfKg1QkPIEaZYC95"
 
 # ── Auto-detect server IP ─────────────────────────────────────────
@@ -105,6 +112,7 @@ Write-Host "  Server IP          : $ServerIP" -ForegroundColor Gray
 Write-Host "  PostgreSQL service : $PgSvcName" -ForegroundColor Gray
 Write-Host "  Install LogVault   : $InstallLogVault" -ForegroundColor Gray
 Write-Host "  Install DDIVault   : $InstallDDIVault" -ForegroundColor Gray
+Write-Host "  Install SpanVault  : $InstallSpanVault" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  NOTE: Internet access required (cloning from GitHub)." -ForegroundColor Yellow
 Write-Host "  Estimated install time: 15-20 minutes." -ForegroundColor Gray
@@ -135,6 +143,10 @@ if ($InstallLogVault) {
 if ($InstallDDIVault) {
     New-Item -ItemType Directory -Force -Path $DDIDir | Out-Null
     New-Item -ItemType Directory -Force -Path "$DDIDir\logs" | Out-Null
+}
+if ($InstallSpanVault) {
+    New-Item -ItemType Directory -Force -Path $SVDir | Out-Null
+    New-Item -ItemType Directory -Force -Path "$SVDir\logs" | Out-Null
 }
 Write-OK "Directories created"
 
@@ -228,6 +240,16 @@ if ($InstallDDIVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE ddivault OWNER ddivault_user;" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE ddivault TO ddivault_user;" 2>$null
     Write-OK "DDIVault database ready"
+}
+
+if ($InstallSpanVault) {
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER spanvault_user WITH PASSWORD '$SVDbPass';" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE spanvault OWNER spanvault_user;" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE spanvault TO spanvault_user;" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT CONNECT ON DATABASE netvault TO spanvault_user;" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT USAGE ON SCHEMA public TO spanvault_user;" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON devices, sites, countries, regions, brands, device_types, vendors TO spanvault_user;" 2>$null
+    Write-OK "SpanVault database ready"
 }
 
 # ================================================================
@@ -512,7 +534,101 @@ if ($InstallDDIVault) {
 }
 
 # ================================================================
-# STEP 11 — Start services
+# STEP 11 — SpanVault
+# ================================================================
+if ($InstallSpanVault) {
+    Write-Step "Installing SpanVault"
+
+    if (Test-Path $SVAppDir) { Remove-Item $SVAppDir -Recurse -Force }
+    Write-Info "Cloning SpanVault from GitHub..."
+    & git clone $SVGitUrl $SVAppDir
+    if ($LASTEXITCODE -ne 0) { throw "Failed to clone SpanVault" }
+    New-Item -ItemType Directory -Force -Path "$SVAppDir\logs" | Out-Null
+    Write-OK "SpanVault cloned"
+
+    # Run schema
+    $env:PGPASSWORD = $PgAdminPassword
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -f "$SVAppDir\scripts\schema.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO spanvault_user;"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO spanvault_user;"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL ON SCHEMA public TO spanvault_user;"
+    Write-OK "SpanVault schema applied"
+
+    # Create .env.local in root AND frontend
+    $svEnv = "SV_APP_PORT=3008`nSV_API_PORT=3009`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass"
+    $SVFrontendDir = "$SVAppDir\frontend"
+    $svEnv | Out-File -FilePath "$SVAppDir\.env.local" -Encoding UTF8 -NoNewline
+    $svEnv | Out-File -FilePath "$SVFrontendDir\.env.local" -Encoding UTF8 -NoNewline
+    Write-OK "SpanVault .env.local created (root + frontend)"
+
+    # npm install root
+    Set-Location $SVAppDir
+    Write-Info "Installing SpanVault root dependencies..."
+    & npm install 2>&1 | Tee-Object -FilePath "$SVDir\logs\npm-install-root.log"
+    if ($LASTEXITCODE -ne 0) { throw "SpanVault root npm install failed" }
+
+    # npm install + build frontend
+    Set-Location $SVFrontendDir
+    Write-Info "Installing SpanVault frontend dependencies..."
+    & npm install 2>&1 | Tee-Object -FilePath "$SVDir\logs\npm-install-frontend.log"
+    if ($LASTEXITCODE -ne 0) { throw "SpanVault frontend npm install failed" }
+    Write-Info "Building SpanVault frontend..."
+    & npm run build 2>&1 | Tee-Object -FilePath "$SVDir\logs\npm-build.log"
+    if ($LASTEXITCODE -ne 0) { throw "SpanVault frontend build failed. Check $SVDir\logs\npm-build.log" }
+    Write-OK "SpanVault built"
+
+    # NSSM — SpanVault-API
+    & $NssmExe stop SpanVault-API confirm 2>$null
+    & $NssmExe remove SpanVault-API confirm 2>$null
+    & $NssmExe install SpanVault-API "C:\Program Files\nodejs\node.exe" "api\server.js"
+    & $NssmExe set SpanVault-API AppDirectory        $SVAppDir
+    & $NssmExe set SpanVault-API DisplayName         "SpanVault - API"
+    & $NssmExe set SpanVault-API Start               SERVICE_AUTO_START
+    & $NssmExe set SpanVault-API DependOnService     $PgSvcName
+    & $NssmExe set SpanVault-API AppStdout           "$SVAppDir\logs\api.log"
+    & $NssmExe set SpanVault-API AppStderr           "$SVAppDir\logs\api-err.log"
+    & $NssmExe set SpanVault-API AppRotateFiles      1
+    & $NssmExe set SpanVault-API AppRotateBytes      10485760
+    & $NssmExe set SpanVault-API AppRotateOnline     1
+    & $NssmExe set SpanVault-API AppRestartDelay     3000
+
+    # NSSM — SpanVault-App (uses node.exe with next start)
+    & $NssmExe stop SpanVault-App confirm 2>$null
+    & $NssmExe remove SpanVault-App confirm 2>$null
+    & $NssmExe install SpanVault-App "C:\Program Files\nodejs\node.exe" "node_modules\next\dist\bin\next start -p 3008"
+    & $NssmExe set SpanVault-App AppDirectory        $SVFrontendDir
+    & $NssmExe set SpanVault-App DisplayName         "SpanVault - App"
+    & $NssmExe set SpanVault-App Start               SERVICE_AUTO_START
+    & $NssmExe set SpanVault-App DependOnService     $PgSvcName
+    & $NssmExe set SpanVault-App AppStdout           "$SVAppDir\logs\app.log"
+    & $NssmExe set SpanVault-App AppStderr           "$SVAppDir\logs\app-err.log"
+    & $NssmExe set SpanVault-App AppRotateFiles      1
+    & $NssmExe set SpanVault-App AppRotateBytes      10485760
+    & $NssmExe set SpanVault-App AppRotateOnline     1
+    & $NssmExe set SpanVault-App AppRestartDelay     3000
+
+    # NSSM — SpanVault-Collector
+    & $NssmExe stop SpanVault-Collector confirm 2>$null
+    & $NssmExe remove SpanVault-Collector confirm 2>$null
+    & $NssmExe install SpanVault-Collector "C:\Program Files\nodejs\node.exe" "collector\collector.js"
+    & $NssmExe set SpanVault-Collector AppDirectory        $SVAppDir
+    & $NssmExe set SpanVault-Collector DisplayName         "SpanVault - Collector"
+    & $NssmExe set SpanVault-Collector Start               SERVICE_AUTO_START
+    & $NssmExe set SpanVault-Collector DependOnService     $PgSvcName
+    & $NssmExe set SpanVault-Collector AppStdout           "$SVAppDir\logs\collector.log"
+    & $NssmExe set SpanVault-Collector AppStderr           "$SVAppDir\logs\collector-err.log"
+    & $NssmExe set SpanVault-Collector AppRotateFiles      1
+    & $NssmExe set SpanVault-Collector AppRotateBytes      10485760
+    & $NssmExe set SpanVault-Collector AppRotateOnline     1
+    & $NssmExe set SpanVault-Collector AppRestartDelay     3000
+    Write-OK "SpanVault services registered"
+
+    New-NetFirewallRule -DisplayName "NocVault SpanVault 3008" -Direction Inbound -Protocol TCP -LocalPort 3008 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Write-OK "Firewall rule added: port 3008"
+}
+
+# ================================================================
+# STEP 12 — Start services
 # ================================================================
 Write-Step "Starting services"
 
@@ -540,8 +656,18 @@ if ($InstallDDIVault) {
     Write-OK "DDIVault services started"
 }
 
+if ($InstallSpanVault) {
+    & sc.exe start SpanVault-API | Out-Null
+    Start-Sleep -Seconds 5
+    & sc.exe start SpanVault-App | Out-Null
+    Start-Sleep -Seconds 8
+    & sc.exe start SpanVault-Collector | Out-Null
+    Start-Sleep -Seconds 3
+    Write-OK "SpanVault services started"
+}
+
 # ================================================================
-# STEP 12 — Verify
+# STEP 13 — Verify
 # ================================================================
 Write-Step "Verifying installation"
 Start-Sleep -Seconds 15
@@ -549,6 +675,7 @@ Start-Sleep -Seconds 15
 $services = @("NetVault")
 if ($InstallLogVault)  { $services += @("LogVault-Collector","LogVault-API","LogVault-App") }
 if ($InstallDDIVault)  { $services += @("DDIVault-API","DDIVault-App","DDIVault-Collector") }
+if ($InstallSpanVault) { $services += @("SpanVault-API","SpanVault-App","SpanVault-Collector") }
 
 $allOK = $true
 foreach ($svc in $services) {
@@ -562,8 +689,9 @@ foreach ($svc in $services) {
 }
 
 $ports = @(3000)
-if ($InstallLogVault) { $ports += 3004 }
-if ($InstallDDIVault) { $ports += 3006 }
+if ($InstallLogVault)  { $ports += 3004 }
+if ($InstallDDIVault)  { $ports += 3006 }
+if ($InstallSpanVault) { $ports += 3008 }
 foreach ($port in $ports) {
     $listening = netstat -ano 2>$null | Select-String ":$port.*LISTENING"
     if ($listening) {
@@ -592,6 +720,7 @@ Write-Host "  NocVault Hub : http://${ServerIP}:3000  (login here)" -ForegroundC
 Write-Host "  NetVault     : http://${ServerIP}:3000" -ForegroundColor Cyan
 if ($InstallLogVault)  { Write-Host "  LogVault     : http://${ServerIP}:3004" -ForegroundColor Cyan }
 if ($InstallDDIVault)  { Write-Host "  DDIVault     : http://${ServerIP}:3006" -ForegroundColor Cyan }
+if ($InstallSpanVault) { Write-Host "  SpanVault    : http://${ServerIP}:3008" -ForegroundColor Cyan }
 Write-Host ""
 Write-Host "  Default login : admin@yourcompany.com / Admin1234!" -ForegroundColor Yellow
 Write-Host "  IMPORTANT: Change the default password immediately!" -ForegroundColor Yellow
@@ -606,9 +735,14 @@ if ($InstallDDIVault) {
     Write-Host "  [4] Add DHCP/DNS servers in DDIVault > Known Servers" -ForegroundColor Gray
     Write-Host "  [5] Run Enable-PSRemoting -Force on each DHCP/DNS server" -ForegroundColor Gray
 }
+if ($InstallSpanVault) {
+    Write-Host "  [6] Add devices to SpanVault for monitoring in SpanVault > Devices" -ForegroundColor Gray
+    Write-Host "  [7] Configure SNMP community strings per device in SpanVault > Settings" -ForegroundColor Gray
+}
 Write-Host ""
 Write-Host "  Logs location:" -ForegroundColor White
 Write-Host "  NetVault  : $NVDir\logs\" -ForegroundColor Gray
-if ($InstallLogVault) { Write-Host "  LogVault  : $LVAppDir\logs\" -ForegroundColor Gray }
-if ($InstallDDIVault) { Write-Host "  DDIVault  : $DDIAppDir\logs\" -ForegroundColor Gray }
+if ($InstallLogVault)  { Write-Host "  LogVault  : $LVAppDir\logs\" -ForegroundColor Gray }
+if ($InstallDDIVault)  { Write-Host "  DDIVault  : $DDIAppDir\logs\" -ForegroundColor Gray }
+if ($InstallSpanVault) { Write-Host "  SpanVault : $SVAppDir\logs\" -ForegroundColor Gray }
 Write-Host ""
