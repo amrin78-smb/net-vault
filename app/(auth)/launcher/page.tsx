@@ -50,6 +50,16 @@ export default function LauncherPage() {
       color: '#7c3aed',
       bg: '#1a2744',
     },
+    {
+      name: 'SpanVault',
+      subtitle: 'Network Monitoring',
+      description: 'Real-time network device monitoring, availability tracking and performance alerting for your infrastructure.',
+      href: process.env.NEXT_PUBLIC_SPANVAULT_URL || 'http://localhost:3008',
+      external: true,
+      icon: <img src="/spanvault-logo-white.png" alt="SpanVault" style={{ width: '240px', objectFit: 'contain' }} />,
+      color: navy,
+      bg: '#1a2744',
+    },
   ]
 
   return (
@@ -82,7 +92,7 @@ export default function LauncherPage() {
           <p style={{ fontSize: '16px', color: '#6b7280', margin: 0 }}>Select an application to get started</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 320px)', gap: '24px', alignItems: 'stretch' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 320px)', gap: '24px', alignItems: 'stretch' }}>
           {apps.map(app => (
             <a key={app.name} href={app.href} target={app.external ? '_blank' : '_self'} rel={app.external ? 'noopener noreferrer' : undefined} style={{ textDecoration: 'none', display: 'flex' }}>
               <div
