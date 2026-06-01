@@ -26,7 +26,7 @@ export default function LauncherPage() {
       description: 'Manage network devices, sites, circuits and track EOL/EOS across your global infrastructure.',
       href: '/dashboard',
       external: false,
-      icon: <img src="/netvault-logo-white.png" alt="NetVault" style={{ width: '240px', objectFit: 'contain' }} />,
+      icon: <img src="/netvault-logo-white.png" alt="NetVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
       color: primary,
       bg: '#1a2744',
     },
@@ -36,7 +36,7 @@ export default function LauncherPage() {
       description: 'Real-time syslog collection, analysis and alerting for your network infrastructure.',
       href: '/api/sso/logvault',
       external: false,
-      icon: <img src="/logvault-logo-white.png" alt="LogVault" style={{ width: '240px', objectFit: 'contain' }} />,
+      icon: <img src="/logvault-logo-white.png" alt="LogVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
       color: '#0369a1',
       bg: '#1a2744',
     },
@@ -46,7 +46,7 @@ export default function LauncherPage() {
       description: 'Centralised DNS, DHCP and IP address management for your network infrastructure.',
       href: '/api/sso/ddivault',
       external: false,
-      icon: <img src="/ddivault-logo-white.png" alt="DDIVault" style={{ width: '240px', objectFit: 'contain' }} />,
+      icon: <img src="/ddivault-logo-white.png" alt="DDIVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
       color: '#7c3aed',
       bg: '#1a2744',
     },
@@ -56,7 +56,7 @@ export default function LauncherPage() {
       description: 'Real-time network device monitoring, availability tracking and performance alerting for your infrastructure.',
       href: process.env.NEXT_PUBLIC_SPANVAULT_URL || 'http://localhost:3008',
       external: true,
-      icon: <img src="/spanvault-logo-white.png" alt="SpanVault" style={{ width: '240px', objectFit: 'contain' }} />,
+      icon: <img src="/spanvault-logo-white.png" alt="SpanVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
       color: navy,
       bg: '#1a2744',
     },
@@ -86,29 +86,29 @@ export default function LauncherPage() {
       </div>
 
       {/* Main content */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
-          <h1 style={{ fontSize: '32px', fontWeight: '700', color: '#111827', margin: '0 0 8px' }}>Welcome back, {user?.name?.split(' ')[0]}</h1>
-          <p style={{ fontSize: '16px', color: '#6b7280', margin: 0 }}>Select an application to get started</p>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '26px', fontWeight: '700', color: '#111827', margin: '0 0 6px' }}>Welcome back, {user?.name?.split(' ')[0]}</h1>
+          <p style={{ fontSize: '14px', color: '#6b7280', margin: 0 }}>Select an application to get started</p>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 320px)', gap: '24px', alignItems: 'stretch' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 280px)', gap: '20px', alignItems: 'stretch' }}>
           {apps.map(app => (
             <a key={app.name} href={app.href} target={app.external ? '_blank' : '_self'} rel={app.external ? 'noopener noreferrer' : undefined} style={{ textDecoration: 'none', display: 'flex' }}>
               <div
-                style={{ background: 'white', borderRadius: '16px', border: '1px solid #e5e7eb', padding: '32px', cursor: 'pointer', transition: 'all 0.15s', boxSizing: 'border-box' as const, height: '100%', display: 'flex', flexDirection: 'column' as const }}
+                style={{ background: 'white', borderRadius: '14px', border: '1px solid #e5e7eb', padding: '20px', cursor: 'pointer', transition: 'all 0.15s', boxSizing: 'border-box' as const, height: '100%', display: 'flex', flexDirection: 'column' as const }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 32px rgba(0,0,0,0.12)'; (e.currentTarget as HTMLDivElement).style.borderColor = app.color }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; (e.currentTarget as HTMLDivElement).style.borderColor = '#e5e7eb' }}
               >
-                <div style={{ width: '100%', height: '120px', borderRadius: '10px', background: app.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', padding: '16px' }}>
+                <div style={{ width: '100%', height: '110px', borderRadius: '10px', background: app.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px', padding: '16px' }}>
                   {app.icon}
                 </div>
-                <div style={{ fontSize: '20px', fontWeight: '700', color: '#111827', marginBottom: '4px' }}>{app.name}</div>
-                <div style={{ fontSize: '13px', color: app.color, fontWeight: '500', marginBottom: '12px' }}>{app.subtitle}</div>
-                <div style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.5', marginBottom: '24px' }}>{app.description}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: app.color, fontSize: '14px', fontWeight: '500' }}>
+                <div style={{ fontSize: '17px', fontWeight: '700', color: '#111827', marginBottom: '3px' }}>{app.name}</div>
+                <div style={{ fontSize: '12px', color: app.color, fontWeight: '500', marginBottom: '8px' }}>{app.subtitle}</div>
+                <div style={{ fontSize: '12px', color: '#6b7280', lineHeight: '1.5', marginBottom: '16px', flex: 1 }}>{app.description}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: app.color, fontSize: '13px', fontWeight: '500' }}>
                   Open {app.name}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                 </div>
               </div>
             </a>
