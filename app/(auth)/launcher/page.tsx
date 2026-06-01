@@ -19,6 +19,10 @@ export default function LauncherPage() {
   const primary = settings.app_primary_color || '#C8102E'
   const navy = settings.app_navy_color || '#1a2744'
 
+  const spanvaultUrl = typeof window !== 'undefined'
+    ? `http://${window.location.hostname}:3008`
+    : 'http://localhost:3008'
+
   const apps = [
     {
       name: 'NetVault',
@@ -54,7 +58,7 @@ export default function LauncherPage() {
       name: 'SpanVault',
       subtitle: 'Network Monitoring',
       description: 'Real-time network device monitoring, availability tracking and performance alerting for your infrastructure.',
-      href: process.env.NEXT_PUBLIC_SPANVAULT_URL || 'http://localhost:3008',
+      href: spanvaultUrl,
       external: true,
       icon: <img src="/spanvault-logo-white.png" alt="SpanVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
       color: navy,
