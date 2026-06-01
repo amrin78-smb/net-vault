@@ -60,7 +60,7 @@ export default function LauncherPage() {
       description: 'Real-time network device monitoring, availability tracking and performance alerting for your infrastructure.',
       href: spanvaultUrl,
       external: true,
-      icon: <img src="/spanvault-logo-white.png" alt="SpanVault" style={{ width: '220px', height: '72px', objectFit: 'cover', objectPosition: 'center' }} />,
+      icon: <img src="/spanvault-logo-white.png" alt="SpanVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
       color: navy,
       bg: '#1a2744',
     },
