@@ -4,6 +4,27 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { getServerId, validateLicenseKey, getLicenseStatus } from '@/lib/license'
 
+export async function checkWriteAllowed(): Promise<NextResponse | null> {
+  try {
+    const result = await query(
+      "SELECT key, value FROM app_settings WHERE key IN ('install_date','license_key')"
+    )
+    const s: Record<string, string> = {}
+    for (const row of result.rows) s[row.key] = row.value ?? ''
+    const serverId = getServerId()
+    const { status } = getLicenseStatus(s['install_date'] ?? '', s['license_key'] ?? '', serverId)
+    if (status === 'expired') {
+      return NextResponse.json(
+        { error: 'License expired. Please activate a license key to continue.' },
+        { status: 403 }
+      )
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 export async function GET() {
   try {
     const serverId = getServerId()

@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { calcTechnicalDebt } from '@/lib/techDebt'
+import { checkWriteAllowed } from '@/app/api/license/route'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -55,6 +56,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock
   const sessionUser = session.user as { role: string; id: string; siteIds?: number[] }
   if (sessionUser.role === 'viewer') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const body = await req.json()

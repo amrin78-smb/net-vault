@@ -197,7 +197,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* ── Fixed sidebar ── */}
       <div style={{
-        position: 'fixed', top: 0, left: 0, bottom: 0,
+        position: 'fixed', top: 'var(--header-height)', left: 0, bottom: 0,
         width: sidebarWidth,
         background: navy,
         display: 'flex', flexDirection: 'column',
@@ -355,24 +355,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {collapsed && <div style={{ height: 8 }} />}
       </div>
 
-      {/* ── Main column — shifts with sidebar ── */}
+      {/* ── Top header — fixed full-width, unaffected by sidebar ── */}
       <div style={{
-        marginLeft: sidebarWidth,
-        flex: 1,
-        display: 'flex', flexDirection: 'column',
-        minHeight: '100vh',
-        transition: 'margin-left 0.18s ease',
+        position: 'fixed', top: 0, left: 0, right: 0,
+        height: 'var(--header-height)',
+        background: navy,
+        display: 'flex', alignItems: 'center',
+        padding: '0 24px', gap: 20,
+        zIndex: 150,
+        boxShadow: '0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.2)',
       }}>
-
-        {/* ── Top header (navy, DDIVault-style) ── */}
-        <div style={{
-          height: 'var(--header-height)',
-          background: navy,
-          display: 'flex', alignItems: 'center',
-          padding: '0 24px', gap: 20,
-          position: 'sticky', top: 0, zIndex: 50, flexShrink: 0,
-          boxShadow: '0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.2)',
-        }}>
           {/* Global search */}
           <div style={{ flex: 1, maxWidth: 460 }}>
             <GlobalSearch />
@@ -481,6 +473,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
+      {/* ── Main column — shifts with sidebar, starts below header ── */}
+      <div style={{
+        marginLeft: sidebarWidth,
+        flex: 1,
+        display: 'flex', flexDirection: 'column',
+        minHeight: '100vh',
+        paddingTop: 'var(--header-height)',
+        transition: 'margin-left 0.18s ease',
+      }}>
+
         {/* License banner */}
         {licenseStatus === 'trial' && licenseDaysRemaining <= 5 && licenseDaysRemaining > 0 && (
           <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 24px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
@@ -502,12 +504,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         )}
         {licenseStatus === 'active' && licenseExpiry && (() => {
           const days = Math.ceil((new Date(licenseExpiry).getTime() - Date.now()) / 86400000)
-          return days <= 30 ? (
+          if (days <= 30) return (
+            <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 24px', fontSize: '13px', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span>Your license expires on <strong>{licenseExpiry}</strong>. Contact <a href="mailto:support@nocvault.io" style={{ color: '#c2410c', fontWeight: '600' }}>support@nocvault.io</a> to renew.</span>
+            </div>
+          )
+          if (days <= 90) return (
             <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 24px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               <span>Your license expires on <strong>{licenseExpiry}</strong>. Contact <a href="mailto:support@nocvault.io" style={{ color: '#92400e', fontWeight: '600' }}>support@nocvault.io</a> to renew.</span>
             </div>
-          ) : null
+          )
+          return null
         })()}
 
         {/* Page content */}

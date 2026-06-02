@@ -437,6 +437,7 @@ export default function SettingsPage() {
             </div>
           )}
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
             <table>
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Site access</th><th>Created</th><th>Actions</th></tr></thead>
               <tbody>
@@ -464,6 +465,7 @@ export default function SettingsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}
@@ -626,6 +628,7 @@ export default function SettingsPage() {
           )}
 
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            <div style={{ overflowX: 'auto' }}>
             <table>
               <thead><tr><th>Site name</th><th>Code</th><th>Country</th><th>Region</th><th>Devices</th><th>Actions</th></tr></thead>
               <tbody>
@@ -646,6 +649,7 @@ export default function SettingsPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}

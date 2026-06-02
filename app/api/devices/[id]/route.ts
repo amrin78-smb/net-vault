@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { calcTechnicalDebt } from '@/lib/techDebt'
+import { checkWriteAllowed } from '@/app/api/license/route'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
@@ -20,6 +21,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock
   const user = session.user as { role: string; id: string; siteIds?: number[] }
   if (user.role === 'viewer') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
@@ -71,6 +73,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock
   const user = session.user as { role: string; id: string }
   if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params

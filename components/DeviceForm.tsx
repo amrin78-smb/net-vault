@@ -25,7 +25,7 @@ function Field({ label, required, span, children }: { label: string; required?: 
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="card" style={{ marginBottom: '16px' }}>
+    <div className="card" style={{ marginBottom: '16px', padding: '20px 24px' }}>
       <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#111827', marginBottom: '18px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>{children}</div>
     </div>

@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { calcTechnicalDebt } from '@/lib/techDebt'
+import { checkWriteAllowed } from '@/app/api/license/route'
 
 function normaliseType(t: string) {
   const map: Record<string,string> = { 'SWITCH':'Switch','switch':'Switch','Wireless controller':'Wireless Controller','ArubaMM-VA':'Aruba MM-VA','ArubaCPPM':'Aruba CPPM' }
@@ -29,6 +30,7 @@ async function getOrCreate(table: string, col: string, value: string) {
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock
   const user = session.user as { role: string; id: string; siteIds?: number[] }
   if (user.role !== 'admin' && user.role !== 'super_admin' && user.role !== 'site_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
