@@ -10,12 +10,29 @@ type Check = {
 export default function CompliancePage() {
   const [data, setData] = useState<{ score: number; total: number; checks: Check[] } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    fetch('/api/compliance').then(r => r.json()).then(d => { setData(d); setLoading(false) })
+    fetch('/api/compliance')
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(d => {
+        if (d.error) throw new Error(d.error)
+        setData(d)
+        setLoading(false)
+      })
+      .catch(e => {
+        console.error('[compliance]', e)
+        setError('Failed to load compliance data. Please try refreshing the page.')
+        setLoading(false)
+      })
   }, [])
 
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading compliance report...</div>
+  if (error) return (
+    <div style={{ padding: '40px', textAlign: 'center' }}>
+      <div style={{ background: '#fee2e2', color: '#991b1b', padding: '16px 20px', borderRadius: '10px', display: 'inline-block', fontSize: '14px' }}>{error}</div>
+    </div>
+  )
   if (!data) return null
 
   const { score, total, checks } = data

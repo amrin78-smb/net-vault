@@ -207,55 +207,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         boxShadow: '1px 0 0 rgba(255,255,255,0.05)',
       }}>
 
-        {/* Logo / branding */}
-        <div style={{
-          padding: collapsed ? '18px 0' : '18px 16px',
-          borderBottom: '1px solid rgba(255,255,255,0.07)',
-          flexShrink: 0,
-          display: 'flex',
-          justifyContent: collapsed ? 'center' : 'flex-start',
-          alignItems: 'center',
-          transition: 'padding 0.18s ease',
-          overflow: 'hidden',
-        }}>
-          {settings.app_logo_url && !collapsed ? (
-            <img src={settings.app_logo_url} alt="logo" style={{ width: '100%', maxHeight: 60, objectFit: 'contain', objectPosition: 'left' }} />
-          ) : (
-            <>
-              {/* Always-visible icon */}
-              <div style={{
-                width: 38, height: 38, flexShrink: 0,
-                background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
-                borderRadius: 9,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: `0 2px 8px ${primary}55`,
-              }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-                </svg>
-              </div>
-              {/* Text — hidden when collapsed */}
-              {!collapsed && (
-                <div style={{ marginLeft: 10, minWidth: 0 }}>
-                  <div style={{ color: 'white', fontSize: 14, fontWeight: 700, letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
-                    {settings.app_name || 'NetVault'}
-                  </div>
-                  <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', marginTop: 1, whiteSpace: 'nowrap' }}>
-                    NETWORK ASSET MANAGEMENT
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
         {/* Section label — only when expanded */}
         {!collapsed && (
-          <div style={{ padding: '12px 20px 6px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase' }}>
+          <div style={{ padding: '14px 20px 6px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase' }}>
             Navigation
           </div>
         )}
-        {collapsed && <div style={{ height: 10 }} />}
+        {collapsed && <div style={{ height: 14 }} />}
 
         {/* Navigation items */}
         <nav style={{ flex: 1, padding: '0 8px', paddingBottom: 8 }}>
@@ -364,15 +322,41 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         zIndex: 150,
         boxShadow: '0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.2)',
       }}>
+          {/* Logo — always visible, top-left of header */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+            {settings.app_logo_url ? (
+              <img src={settings.app_logo_url} alt="logo" style={{ maxHeight: 44, maxWidth: 160, objectFit: 'contain', objectPosition: 'left' }} />
+            ) : (
+              <>
+                <div style={{
+                  width: 36, height: 36, flexShrink: 0,
+                  background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
+                  borderRadius: 9,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: `0 2px 8px ${primary}55`,
+                }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ color: 'white', fontSize: 14, fontWeight: 700, letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
+                    {settings.app_name || 'NetVault'}
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', marginTop: 1, whiteSpace: 'nowrap' }}>
+                    NETWORK ASSET MANAGEMENT
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Divider */}
+          <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.15)', flexShrink: 0 }} />
+
           {/* Global search */}
           <div style={{ flex: 1, maxWidth: 460 }}>
             <GlobalSearch />
-          </div>
-
-          {/* Divider + subtitle */}
-          <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.08em', fontWeight: 600, whiteSpace: 'nowrap' }}>
-            NETWORK ASSET MANAGEMENT
           </div>
 
           <div style={{ flex: 1 }} />
