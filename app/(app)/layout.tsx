@@ -62,6 +62,10 @@ const navItems = [
   { href: '/users', label: 'Users', adminOnly: true },
 ]
 
+const SIDEBAR_COLLAPSED_KEY = 'netvault-sidebar-collapsed'
+const SIDEBAR_EXPANDED_W = 240
+const SIDEBAR_COLLAPSED_W = 64
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -72,6 +76,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     app_name: 'NetVault', app_subtitle: 'Network Asset Management',
     app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744',
   })
+  const [collapsed, setCollapsed] = useState(false)
   const [showPwModal, setShowPwModal] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
@@ -80,6 +85,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [pwSaving, setPwSaving] = useState(false)
   const settingsFetched = useRef(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+
+  // Hydrate collapsed state from localStorage after mount (avoids SSR mismatch)
+  useEffect(() => {
+    if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true') setCollapsed(true)
+  }, [])
 
   useEffect(() => {
     if (status === 'unauthenticated') router.push('/login')
@@ -110,6 +120,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
+
+  function toggleCollapsed() {
+    setCollapsed(c => {
+      const next = !c
+      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next))
+      return next
+    })
+  }
 
   function openPwModal() {
     setPwForm({ current_password: '', new_password: '', confirm_password: '' })
@@ -152,83 +170,179 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const navy = settings.app_navy_color || '#1a2744'
   const primary = settings.app_primary_color || '#C8102E'
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U'
+  const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_EXPANDED_W
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
 
       {/* ── Fixed sidebar ── */}
       <div style={{
-        position: 'fixed', top: 0, left: 0, bottom: 0, width: 'var(--sidebar-width)',
-        background: navy, display: 'flex', flexDirection: 'column', zIndex: 100,
+        position: 'fixed', top: 0, left: 0, bottom: 0,
+        width: sidebarWidth,
+        background: navy,
+        display: 'flex', flexDirection: 'column',
+        zIndex: 100,
+        overflowX: 'hidden',
+        overflowY: 'auto',
+        transition: 'width 0.18s ease',
         boxShadow: '1px 0 0 rgba(255,255,255,0.05)',
       }}>
+
         {/* Logo / branding */}
-        <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
-          {settings.app_logo_url ? (
-            <img src={settings.app_logo_url} alt="logo" style={{ width: '100%', maxHeight: '60px', objectFit: 'contain', objectPosition: 'left' }} />
+        <div style={{
+          padding: collapsed ? '18px 0' : '18px 16px',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          flexShrink: 0,
+          display: 'flex',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          alignItems: 'center',
+          transition: 'padding 0.18s ease',
+          overflow: 'hidden',
+        }}>
+          {settings.app_logo_url && !collapsed ? (
+            <img src={settings.app_logo_url} alt="logo" style={{ width: '100%', maxHeight: 60, objectFit: 'contain', objectPosition: 'left' }} />
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 38, height: 38, background: `linear-gradient(135deg, ${primary}, ${primary}cc)`, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: `0 2px 8px ${primary}55` }}>
+            <>
+              {/* Always-visible icon */}
+              <div style={{
+                width: 38, height: 38, flexShrink: 0,
+                background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
+                borderRadius: 9,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: `0 2px 8px ${primary}55`,
+              }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
                 </svg>
               </div>
-              <div>
-                <div style={{ color: 'white', fontSize: 14, fontWeight: 700, letterSpacing: '-0.2px' }}>{settings.app_name || 'NetVault'}</div>
-                <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', marginTop: 1 }}>
-                  {settings.app_subtitle || 'NETWORK ASSET MANAGEMENT'}
+              {/* Text — hidden when collapsed */}
+              {!collapsed && (
+                <div style={{ marginLeft: 10, minWidth: 0 }}>
+                  <div style={{ color: 'white', fontSize: 14, fontWeight: 700, letterSpacing: '-0.2px', whiteSpace: 'nowrap' }}>
+                    {settings.app_name || 'NetVault'}
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', marginTop: 1, whiteSpace: 'nowrap' }}>
+                    NETWORK ASSET MANAGEMENT
+                  </div>
                 </div>
-              </div>
-            </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Navigation */}
-        <nav style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
+        {/* Section label — only when expanded */}
+        {!collapsed && (
+          <div style={{ padding: '12px 20px 6px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase' }}>
+            Navigation
+          </div>
+        )}
+        {collapsed && <div style={{ height: 10 }} />}
+
+        {/* Navigation items */}
+        <nav style={{ flex: 1, padding: '0 8px', paddingBottom: 8 }}>
           {navItems.map(item => {
             if (item.adminOnly && userRole !== 'admin' && userRole !== 'super_admin') return null
             if ((item as any).hideForSiteAdmin && userRole === 'site_admin') return null
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
             const ic = navIcons[item.href]
             return (
-              <Link key={item.href} href={item.href} style={{ textDecoration: 'none', display: 'block' }}>
+              <Link
+                key={item.href}
+                href={item.href}
+                title={collapsed ? item.label : undefined}
+                style={{ textDecoration: 'none', display: 'block' }}
+              >
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '8px 10px', borderRadius: 8, marginBottom: 2,
-                  background: active ? `${primary}22` : 'transparent',
-                  borderLeft: active ? `3px solid ${primary}` : '3px solid transparent',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  justifyContent: collapsed ? 'center' : 'flex-start',
+                  padding: collapsed ? '10px 0' : '8px 10px',
+                  margin: '1px 0',
+                  borderRadius: 8,
+                  background: active ? `${primary}20` : 'transparent',
+                  position: 'relative',
                   transition: 'background 0.15s',
+                  cursor: 'pointer',
                 }}
-                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)' }}
+                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.06)' }}
                   onMouseLeave={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                 >
+                  {/* Active left-bar indicator */}
+                  {active && (
+                    <div style={{
+                      position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
+                      width: 3, height: 20, background: primary, borderRadius: '0 3px 3px 0',
+                    }} />
+                  )}
+                  {/* Colored icon box */}
                   <div style={{
-                    width: 28, height: 28, borderRadius: 7,
-                    background: active ? ic?.bg : 'rgba(255,255,255,0.06)',
+                    width: 28, height: 28, borderRadius: 7, flexShrink: 0,
+                    background: active ? ic?.bg : 'rgba(255,255,255,0.07)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
-                    color: active ? ic?.color : 'rgba(255,255,255,0.38)',
+                    color: active ? ic?.color : 'rgba(255,255,255,0.4)',
                     transition: 'all 0.15s',
                   }}>
                     {ic?.icon}
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? 'white' : 'rgba(255,255,255,0.55)', letterSpacing: '-0.1px' }}>
-                    {item.label}
-                  </span>
+                  {/* Label — hidden when collapsed */}
+                  {!collapsed && (
+                    <span style={{
+                      fontSize: 13, fontWeight: active ? 600 : 400,
+                      color: active ? 'white' : 'rgba(255,255,255,0.55)',
+                      whiteSpace: 'nowrap', letterSpacing: '-0.1px',
+                    }}>
+                      {item.label}
+                    </span>
+                  )}
                 </div>
               </Link>
             )
           })}
         </nav>
 
-        {/* Sidebar footer — version hint */}
-        <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', fontWeight: 500 }}>NocVault Suite</div>
-        </div>
+        {/* ── Collapse toggle button (exact DDIVault style) ── */}
+        <button
+          onClick={toggleCollapsed}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            justifyContent: collapsed ? 'center' : 'flex-start',
+            margin: '4px 10px',
+            padding: collapsed ? '10px 0' : '10px 12px',
+            width: 'calc(100% - 20px)',
+            background: 'transparent', border: 'none', borderRadius: 8,
+            cursor: 'pointer',
+            color: 'rgba(255,255,255,0.4)', fontSize: 12.5,
+            transition: 'all 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'white' }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+          {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>Collapse</span>}
+        </button>
+
+        {/* Footer */}
+        {!collapsed && (
+          <div style={{ padding: '6px 20px 10px', fontSize: 11, color: 'rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
+            NocVault Suite
+          </div>
+        )}
+        {collapsed && <div style={{ height: 8 }} />}
       </div>
 
-      {/* ── Main column (offset by sidebar) ── */}
-      <div style={{ marginLeft: 'var(--sidebar-width)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+      {/* ── Main column — shifts with sidebar ── */}
+      <div style={{
+        marginLeft: sidebarWidth,
+        flex: 1,
+        display: 'flex', flexDirection: 'column',
+        minHeight: '100vh',
+        transition: 'margin-left 0.18s ease',
+      }}>
 
         {/* ── Top header (navy, DDIVault-style) ── */}
         <div style={{
@@ -266,7 +380,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
               onMouseLeave={e => { if (!showUserMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
             >
-              {/* Square avatar */}
               <div style={{
                 width: 32, height: 32, borderRadius: 8,
                 background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
@@ -302,12 +415,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 minWidth: 220, overflow: 'hidden', zIndex: 999,
                 animation: 'fadeIn 0.15s ease',
               }}>
-                {/* User info */}
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-light)' }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{user?.role?.replace(/_/g, ' ')}</div>
                 </div>
-
                 <div style={{ padding: '6px 0' }}>
                   <a
                     href={process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || '/launcher'}
@@ -321,7 +432,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </svg>
                     NocVault Hub
                   </a>
-
                   <button
                     onClick={openPwModal}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
@@ -333,9 +443,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </svg>
                     Change Password
                   </button>
-
                   <div style={{ height: 1, background: 'var(--border-light)', margin: '4px 0' }} />
-
                   <button
                     onClick={() => { setShowUserMenu(false); signOut({ callbackUrl: '/login' }) }}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: '#dc2626', fontSize: 13, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
