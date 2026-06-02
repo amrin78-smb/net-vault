@@ -1,7 +1,7 @@
 'use client'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import GlobalSearch from '@/components/GlobalSearch'
 import IdleTimeout from '@/components/IdleTimeout'
@@ -12,25 +12,54 @@ type Settings = {
 }
 
 const navIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-  '/dashboard': { icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>, color: '#f87171', bg: 'rgba(200,16,46,0.25)' },
-  '/sites':     { icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>, color: '#34d399', bg: 'rgba(29,158,117,0.25)' },
-  '/devices':   { icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="2" fill="none"/></svg>, color: '#60a5fa', bg: 'rgba(55,138,221,0.25)' },
-  '/circuits':  { icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none"/><circle cx="8" cy="6" r="2.5"/><circle cx="16" cy="12" r="2.5"/><circle cx="10" cy="18" r="2.5"/></svg>, color: '#a78bfa', bg: 'rgba(127,119,221,0.25)' },
-  '/eol':       { icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 20h20L12 2zm0 4l7.5 12h-15L12 6z"/><rect x="11" y="10" width="2" height="5" rx="1"/><rect x="11" y="16" width="2" height="2" rx="1"/></svg>, color: '#fbbf24', bg: 'rgba(186,117,23,0.25)' },
-  '/audit':      { icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zm-4 4h8v1.5H9zm0 3h5v1.5H9z"/></svg>, color: '#f472b6', bg: 'rgba(212,83,126,0.25)' },
-  '/compliance': { icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>, color: '#06b6d4', bg: 'rgba(6,182,212,0.2)' },
-  '/settings':   { icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.02 7.02 0 00-1.62-.94l-.36-2.54A.484.484 0 0014 2h-4a.484.484 0 00-.48.41l-.36 2.54a7.38 7.38 0 00-1.62.94l-2.39-.96a.48.48 0 00-.59.22L2.74 8.87a.47.47 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.36 1.04.67 1.62.94l.36 2.54c.05.24.27.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54a7.38 7.38 0 001.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>, color: '#9ca3af', bg: 'rgba(136,135,128,0.25)' },
+  '/dashboard': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+    color: '#f87171', bg: 'rgba(200,16,46,0.25)',
+  },
+  '/sites': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>,
+    color: '#34d399', bg: 'rgba(29,158,117,0.25)',
+  },
+  '/devices': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="2" fill="none"/></svg>,
+    color: '#60a5fa', bg: 'rgba(55,138,221,0.25)',
+  },
+  '/circuits': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none"/><circle cx="8" cy="6" r="2.5"/><circle cx="16" cy="12" r="2.5"/><circle cx="10" cy="18" r="2.5"/></svg>,
+    color: '#a78bfa', bg: 'rgba(127,119,221,0.25)',
+  },
+  '/eol': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 20h20L12 2zm0 4l7.5 12h-15L12 6z"/><rect x="11" y="10" width="2" height="5" rx="1"/><rect x="11" y="16" width="2" height="2" rx="1"/></svg>,
+    color: '#fbbf24', bg: 'rgba(186,117,23,0.25)',
+  },
+  '/audit': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zm-4 4h8v1.5H9zm0 3h5v1.5H9z"/></svg>,
+    color: '#f472b6', bg: 'rgba(212,83,126,0.25)',
+  },
+  '/compliance': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
+    color: '#06b6d4', bg: 'rgba(6,182,212,0.2)',
+  },
+  '/settings': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.02 7.02 0 00-1.62-.94l-.36-2.54A.484.484 0 0014 2h-4a.484.484 0 00-.48.41l-.36 2.54a7.38 7.38 0 00-1.62.94l-2.39-.96a.48.48 0 00-.59.22L2.74 8.87a.47.47 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.36 1.04.67 1.62.94l.36 2.54c.05.24.27.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54a7.38 7.38 0 001.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>,
+    color: '#9ca3af', bg: 'rgba(136,135,128,0.25)',
+  },
+  '/users': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>,
+    color: '#38bdf8', bg: 'rgba(56,189,248,0.2)',
+  },
 }
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', hideForSiteAdmin: true },
   { href: '/sites', label: 'Sites' },
-  { href: '/devices', label: 'My devices' },
+  { href: '/devices', label: 'My Devices' },
   { href: '/circuits', label: 'Circuits' },
   { href: '/eol', label: 'EOL / Risk', hideForSiteAdmin: true },
-  { href: '/audit', label: 'Audit log', adminOnly: true },
+  { href: '/audit', label: 'Audit Log', adminOnly: true },
   { href: '/compliance', label: 'Compliance', adminOnly: true },
   { href: '/settings', label: 'Settings', adminOnly: true },
+  { href: '/users', label: 'Users', adminOnly: true },
 ]
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -39,9 +68,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const user = session?.user as { role?: string; name?: string } | undefined
   const userRole = user?.role
-  const userName = user?.name
   const [settings, setSettings] = useState<Settings>({
-    app_name: 'TU CMDB', app_subtitle: 'Thai Union Group',
+    app_name: 'NetVault', app_subtitle: 'Network Asset Management',
     app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744',
   })
   const [showPwModal, setShowPwModal] = useState(false)
@@ -73,9 +101,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [status])
 
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
   function openPwModal() {
     setPwForm({ current_password: '', new_password: '', confirm_password: '' })
     setPwError(''); setPwSuccess(false); setShowPwModal(true)
+    setShowUserMenu(false)
   }
 
   async function changePassword() {
@@ -101,136 +140,233 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   if (status === 'loading') return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: '#9ca3af', fontSize: '14px' }}>Loading...</div>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        <div style={{ width: 28, height: 28, border: '2.5px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+      </div>
     </div>
   )
   if (!session) return null
 
   const navy = settings.app_navy_color || '#1a2744'
   const primary = settings.app_primary_color || '#C8102E'
+  const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U'
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#f8f8f8' }}>
-      {/* Fixed sidebar */}
-      <div style={{ position: 'fixed', top: 0, left: 0, bottom: 0, width: '220px', background: navy, display: 'flex', flexDirection: 'column', zIndex: 100 }}>
-        {/* Logo */}
-        <div style={{ padding: '16px', borderBottom: '1px solid rgba(255,255,255,0.08)', flexShrink: 0 }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+
+      {/* ── Fixed sidebar ── */}
+      <div style={{
+        position: 'fixed', top: 0, left: 0, bottom: 0, width: 'var(--sidebar-width)',
+        background: navy, display: 'flex', flexDirection: 'column', zIndex: 100,
+        boxShadow: '1px 0 0 rgba(255,255,255,0.05)',
+      }}>
+        {/* Logo / branding */}
+        <div style={{ padding: '18px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
           {settings.app_logo_url ? (
-            <img src={settings.app_logo_url} alt="logo" style={{ width: '100%', maxHeight: '64px', objectFit: 'contain', objectPosition: 'left' }} />
+            <img src={settings.app_logo_url} alt="logo" style={{ width: '100%', maxHeight: '60px', objectFit: 'contain', objectPosition: 'left' }} />
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '40px', height: '40px', background: primary, borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 38, height: 38, background: `linear-gradient(135deg, ${primary}, ${primary}cc)`, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: `0 2px 8px ${primary}55` }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
                 </svg>
               </div>
               <div>
-                <div style={{ color: 'white', fontSize: '15px', fontWeight: '700' }}>{settings.app_name || 'NetVault'}</div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>{settings.app_subtitle || 'Network Intelligence Platform'}</div>
+                <div style={{ color: 'white', fontSize: 14, fontWeight: 700, letterSpacing: '-0.2px' }}>{settings.app_name || 'NetVault'}</div>
+                <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 10, fontWeight: 500, letterSpacing: '0.04em', marginTop: 1 }}>
+                  {settings.app_subtitle || 'NETWORK ASSET MANAGEMENT'}
+                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Nav */}
-        <nav style={{ flex: 1, padding: '8px 8px', overflowY: 'auto' }}>
+        {/* Navigation */}
+        <nav style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
           {navItems.map(item => {
             if (item.adminOnly && userRole !== 'admin' && userRole !== 'super_admin') return null
             if ((item as any).hideForSiteAdmin && userRole === 'site_admin') return null
             const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+            const ic = navIcons[item.href]
             return (
-              <Link key={item.href} href={item.href} style={{ textDecoration: 'none' }}>
+              <Link key={item.href} href={item.href} style={{ textDecoration: 'none', display: 'block' }}>
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: '10px',
-                  padding: '9px 12px', borderRadius: '7px', marginBottom: '2px',
-                  background: active ? `${primary}33` : 'transparent',
-                  borderLeft: active ? `3px solid ${primary}` : '3px solid transparent'
-                }}>
-                  <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: active ? navIcons[item.href]?.bg : 'rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: active ? navIcons[item.href]?.color : 'rgba(255,255,255,0.4)', transition: 'all 0.15s' }}>{navIcons[item.href]?.icon}</div>
-                  <span style={{ fontSize: '13px', fontWeight: active ? '500' : '400', color: active ? 'white' : 'rgba(255,255,255,0.6)' }}>{item.label}</span>
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 10px', borderRadius: 8, marginBottom: 2,
+                  background: active ? `${primary}22` : 'transparent',
+                  borderLeft: active ? `3px solid ${primary}` : '3px solid transparent',
+                  transition: 'background 0.15s',
+                }}
+                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.05)' }}
+                  onMouseLeave={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
+                >
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 7,
+                    background: active ? ic?.bg : 'rgba(255,255,255,0.06)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                    color: active ? ic?.color : 'rgba(255,255,255,0.38)',
+                    transition: 'all 0.15s',
+                  }}>
+                    {ic?.icon}
+                  </div>
+                  <span style={{ fontSize: 13, fontWeight: active ? 600 : 400, color: active ? 'white' : 'rgba(255,255,255,0.55)', letterSpacing: '-0.1px' }}>
+                    {item.label}
+                  </span>
                 </div>
               </Link>
             )
           })}
         </nav>
 
-
+        {/* Sidebar footer — version hint */}
+        <div style={{ padding: '10px 16px', borderTop: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', fontWeight: 500 }}>NocVault Suite</div>
+        </div>
       </div>
 
-      {/* Main content offset by sidebar */}
-      <div style={{ marginLeft: '220px', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-        {/* Top bar */}
-        <div style={{ height: '56px', background: 'white', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', position: 'sticky', top: 0, zIndex: 50, flexShrink: 0 }}>
+      {/* ── Main column (offset by sidebar) ── */}
+      <div style={{ marginLeft: 'var(--sidebar-width)', flex: 1, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
+
+        {/* ── Top header (navy, DDIVault-style) ── */}
+        <div style={{
+          height: 'var(--header-height)',
+          background: navy,
+          display: 'flex', alignItems: 'center',
+          padding: '0 24px', gap: 20,
+          position: 'sticky', top: 0, zIndex: 50, flexShrink: 0,
+          boxShadow: '0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.2)',
+        }}>
           {/* Global search */}
-          <div style={{ flex: 1, maxWidth: '480px' }}>
+          <div style={{ flex: 1, maxWidth: 460 }}>
             <GlobalSearch />
           </div>
-          {/* User area */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ position: 'relative' }}>
+
+          {/* Divider + subtitle */}
+          <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.1)', flexShrink: 0 }} />
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.08em', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            NETWORK ASSET MANAGEMENT
+          </div>
+
+          <div style={{ flex: 1 }} />
+
+          {/* User dropdown */}
+          <div ref={userMenuRef} style={{ position: 'relative' }}>
             <button
               onClick={() => setShowUserMenu(m => !m)}
-              style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: '8px', transition: 'background 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.background = '#f3f4f6')}
-              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: showUserMenu ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 10, padding: '6px 12px 6px 6px',
+                cursor: 'pointer', transition: 'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
+              onMouseLeave={e => { if (!showUserMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
             >
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '13px', fontWeight: '600', color: 'white', flexShrink: 0 }}>
-                {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+              {/* Square avatar */}
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 700, color: 'white', flexShrink: 0,
+                boxShadow: `0 2px 6px ${primary}66`,
+              }}>
+                {userInitial}
               </div>
               <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: '13px', fontWeight: '500', color: '#111827', whiteSpace: 'nowrap' }}>{user?.name}</div>
-                <div style={{ fontSize: '11px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{user?.role?.replace('_', ' ')}</div>
-              </div>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
-            </button>
-            {showUserMenu && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', boxShadow: '0 8px 24px rgba(0,0,0,0.12)', minWidth: '200px', zIndex: 999, overflow: 'hidden' }}>
-                <div style={{ padding: '12px 16px', borderBottom: '1px solid #f3f4f6' }}>
-                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827' }}>{user?.name}</div>
-                  <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '2px' }}>{user?.role?.replace('_', ' ')}</div>
+                <div style={{ color: 'white', fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>
+                  {user?.name?.split(' ')[0] || 'User'}
                 </div>
-                <a href={process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || '/launcher'}
-                  onClick={() => setShowUserMenu(false)}
-                  style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#374151', display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                  NocVault Hub
-                </a>
-                <button onClick={() => { setShowUserMenu(false); openPwModal() }}
-                  style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#374151', display: 'flex', alignItems: 'center', gap: '10px' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-                  Change password
-                </button>
-                <button onClick={() => { setShowUserMenu(false); signOut({ callbackUrl: '/login' }) }}
-                  style={{ width: '100%', padding: '10px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: '13px', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '10px', borderTop: '1px solid #f3f4f6' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'none')}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
-                  Sign out
-                </button>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, lineHeight: 1.2 }}>
+                  {user?.role?.replace(/_/g, ' ')}
+                </div>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{
+                color: 'rgba(255,255,255,0.35)',
+                transform: showUserMenu ? 'rotate(180deg)' : 'none',
+                transition: 'transform 0.2s',
+                marginLeft: 2,
+              }}>
+                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+
+            {showUserMenu && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
+                background: 'white', border: '1px solid var(--border)',
+                borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                minWidth: 220, overflow: 'hidden', zIndex: 999,
+                animation: 'fadeIn 0.15s ease',
+              }}>
+                {/* User info */}
+                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-light)' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{user?.role?.replace(/_/g, ' ')}</div>
+                </div>
+
+                <div style={{ padding: '6px 0' }}>
+                  <a
+                    href={process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || '/launcher'}
+                    onClick={() => setShowUserMenu(false)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, textDecoration: 'none', transition: 'background 0.1s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-primary)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
+                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
+                    </svg>
+                    NocVault Hub
+                  </a>
+
+                  <button
+                    onClick={openPwModal}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-primary)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
+                      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
+                    </svg>
+                    Change Password
+                  </button>
+
+                  <div style={{ height: 1, background: 'var(--border-light)', margin: '4px 0' }} />
+
+                  <button
+                    onClick={() => { setShowUserMenu(false); signOut({ callbackUrl: '/login' }) }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: '#dc2626', fontSize: 13, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
+                    </svg>
+                    Sign Out
+                  </button>
+                </div>
               </div>
             )}
           </div>
-          </div>
         </div>
+
         {/* Page content */}
         <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
       </div>
 
       <IdleTimeout />
 
-      {/* Change Password Modal */}
+      {/* ── Change Password Modal ── */}
       {showPwModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-            <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: '0 0 4px' }}>Change password</h2>
-            <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0 0 20px' }}>Enter your current password and choose a new one.</p>
+        <div className="modal-overlay">
+          <div style={{ background: 'white', borderRadius: 'var(--radius)', padding: '28px 32px', width: '100%', maxWidth: 400, boxShadow: 'var(--shadow-lg)' }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Change password</h2>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px' }}>Enter your current password and choose a new one.</p>
             {pwSuccess ? (
-              <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', textAlign: 'center' }}>
+              <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: 8, fontSize: 14, textAlign: 'center' }}>
                 Password changed successfully!
               </div>
             ) : (
@@ -240,23 +376,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   { label: 'New password', field: 'new_password' },
                   { label: 'Confirm new password', field: 'confirm_password' },
                 ].map(f => (
-                  <div key={f.field} style={{ marginBottom: '14px' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
+                  <div key={f.field} className="form-field" style={{ marginBottom: 14 }}>
+                    <label>{f.label}</label>
                     <input type="password" className="input"
                       value={pwForm[f.field as keyof typeof pwForm]}
                       onChange={e => setPwForm(p => ({ ...p, [f.field]: e.target.value }))}
                       onKeyDown={e => e.key === 'Enter' && changePassword()}
-                      style={{ width: '100%' }} />
+                    />
                   </div>
                 ))}
                 {pwError && (
-                  <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '14px' }}>{pwError}</div>
+                  <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: 6, fontSize: 13, marginBottom: 14 }}>{pwError}</div>
                 )}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="btn-primary" onClick={changePassword} disabled={pwSaving} style={{ flex: 1 }}>
-                    {pwSaving ? 'Saving...' : 'Change password'}
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-primary" onClick={changePassword} disabled={pwSaving} style={{ flex: 1 }}>
+                    {pwSaving ? 'Saving…' : 'Change password'}
                   </button>
-                  <button className="btn-secondary" onClick={() => setShowPwModal(false)} style={{ flex: 1 }}>Cancel</button>
+                  <button className="btn btn-secondary" onClick={() => setShowPwModal(false)} style={{ flex: 1 }}>Cancel</button>
                 </div>
               </>
             )}

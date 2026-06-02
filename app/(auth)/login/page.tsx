@@ -19,7 +19,7 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [settings, setSettings] = useState<Settings>({
     app_name: 'NetVault',
-    app_subtitle: 'Network Intelligence Platform',
+    app_subtitle: 'NETWORK ASSET MANAGEMENT',
     app_logo_url: '',
     app_primary_color: '#C8102E',
     app_navy_color: '#1a2744',
@@ -48,65 +48,89 @@ function LoginForm() {
 
   const navy = settings.app_navy_color || '#1a2744'
   const primary = settings.app_primary_color || '#C8102E'
-  const hasLogo = settingsLoaded && settings.app_logo_url && settings.app_logo_url.length > 0
 
   return (
-    <div style={{ minHeight: '100vh', background: `linear-gradient(135deg, ${navy} 0%, ${navy}cc 100%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
-      <div style={{ width: '100%', maxWidth: '420px' }}>
+    <div style={{
+      minHeight: '100vh',
+      background: `linear-gradient(160deg, ${navy} 0%, #0d1220 100%)`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{ width: '100%', maxWidth: 400 }}>
 
-        {/* Logo / branding */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
-          <img src="/nocvault-logo-white.png" alt="NocVault" style={{ maxWidth: '280px', maxHeight: '100px', objectFit: 'contain' }} />
+        {/* Logo */}
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          {settingsLoaded && settings.app_logo_url ? (
+            <img src={settings.app_logo_url} alt={settings.app_name} style={{ maxWidth: 240, maxHeight: 80, objectFit: 'contain' }} />
+          ) : (
+            <img src="/nocvault-logo-white.png" alt="NocVault" style={{ maxWidth: 260, maxHeight: 90, objectFit: 'contain' }} />
+          )}
         </div>
 
-        {/* Login card */}
-        <div style={{ background: 'white', borderRadius: '12px', padding: '36px 40px' }}>
-          <h1 style={{ fontSize: '20px', fontWeight: '600', color: '#111827', marginBottom: '6px', textAlign: 'center' }}>Sign in</h1>
-          <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '28px', textAlign: 'center' }}>Sign in to NocVault</p>
+        {/* Card */}
+        <div style={{
+          background: 'rgba(255,255,255,0.97)',
+          borderRadius: 16,
+          padding: '36px 40px',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.35)',
+          border: '1px solid rgba(255,255,255,0.1)',
+        }}>
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: 28 }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.3px' }}>Sign in</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>NetVault · Network Asset Management</div>
+          </div>
+
           <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '18px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Email address</label>
+            <div className="form-field" style={{ marginBottom: 16 }}>
+              <label>Email address</label>
               <input
                 type="email"
+                className="input"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="you@company.com"
                 required
                 autoFocus
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: '7px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
-            <div style={{ marginBottom: '28px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Password</label>
+
+            <div className="form-field" style={{ marginBottom: 24 }}>
+              <label>Password</label>
               <input
                 type="password"
+                className="input"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: '7px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
+
             {reason === 'timeout' && (
-              <div style={{ background: '#fef3c7', color: '#92400e', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '18px', textAlign: 'center' }}>
+              <div style={{ background: '#fef3c7', color: '#92400e', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16, textAlign: 'center', fontWeight: 500 }}>
                 Your session expired due to inactivity.
               </div>
             )}
+
             {error && (
-              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '18px', textAlign: 'center' }}>
+              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
                 {error}
               </div>
             )}
+
             <button
               type="submit"
               disabled={loading}
-              style={{ width: '100%', padding: '11px', background: primary, color: 'white', border: 'none', borderRadius: '7px', fontSize: '15px', fontWeight: '500', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1 }}
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '11px', fontSize: 14, fontWeight: 600 }}
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
         </div>
-        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '12px', marginTop: '24px' }}>
+
+        <p style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontSize: 12, marginTop: 24 }}>
           Contact your IT admin to get access
         </p>
       </div>
