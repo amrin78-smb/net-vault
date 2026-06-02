@@ -158,6 +158,7 @@ INSERT INTO app_settings (key, value) VALUES ('app_subtitle',      'Network Inte
 INSERT INTO app_settings (key, value) VALUES ('app_logo_url',      '')                              ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('app_primary_color', '#C8102E')                       ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('app_navy_color',    '#1a2744')                       ON CONFLICT (key) DO NOTHING;
+INSERT INTO app_settings (key, value) VALUES ('idle_timeout_minutes', '30')                          ON CONFLICT (key) DO NOTHING;
 
 -- ── v_devices_flat View ──────────────────────────────────────────
 CREATE OR REPLACE VIEW v_devices_flat AS

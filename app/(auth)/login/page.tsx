@@ -12,6 +12,7 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = searchParams.get('callbackUrl') || '/launcher'
+  const reason = searchParams.get('reason')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -86,6 +87,11 @@ function LoginForm() {
                 style={{ width: '100%', padding: '10px 14px', border: '1px solid #d1d5db', borderRadius: '7px', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
               />
             </div>
+            {reason === 'timeout' && (
+              <div style={{ background: '#fef3c7', color: '#92400e', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '18px', textAlign: 'center' }}>
+                Your session expired due to inactivity.
+              </div>
+            )}
             {error && (
               <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '18px', textAlign: 'center' }}>
                 {error}

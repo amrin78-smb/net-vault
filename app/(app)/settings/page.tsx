@@ -25,11 +25,15 @@ export default function SettingsPage() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   useEffect(() => { if (user && user.role !== 'admin' && user.role !== 'super_admin') router.push('/dashboard') }, [user, router])
 
-  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'>('users')
+  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'|'security'>('users')
   const [settings, setSettings] = useState<Settings>({ app_name: '', app_subtitle: '', app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744' })
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
   const [settingsSaved, setSettingsSaved] = useState(false)
+
+  const [idleTimeout, setIdleTimeout] = useState('30')
+  const [savingSecuritySettings, setSavingSecuritySettings] = useState(false)
+  const [securitySettingsSaved, setSecuritySettingsSaved] = useState(false)
 
   const [users, setUsers] = useState<User[]>([])
   const [showUserForm, setShowUserForm] = useState(false)
@@ -61,11 +65,30 @@ export default function SettingsPage() {
     fetch('/api/countries').then(r => r.json()).then(d => { if (Array.isArray(d)) setCountries(d) })
   }, [])
 
+  useEffect(() => {
+    if (!isAdmin) return
+    fetch('/api/settings').then(r => r.json()).then(d => {
+      if (d && !d.error && d.idle_timeout_minutes != null) setIdleTimeout(d.idle_timeout_minutes)
+    }).catch(() => {})
+  }, [isAdmin])
+
   async function saveSettings() {
     setSavingSettings(true)
     await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) })
     setSavingSettings(false); setSettingsSaved(true)
     setTimeout(() => setSettingsSaved(false), 3000)
+  }
+
+  async function saveSecuritySettings() {
+    setSavingSecuritySettings(true)
+    await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idle_timeout_minutes: idleTimeout }),
+    })
+    setSavingSecuritySettings(false)
+    setSecuritySettingsSaved(true)
+    setTimeout(() => setSecuritySettingsSaved(false), 3000)
   }
 
   function fetchUsers() { fetch('/api/users').then(r => r.json()).then(setUsers) }
@@ -170,9 +193,12 @@ export default function SettingsPage() {
       </div>
 
       <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: '24px' }}>
-        {(['branding', 'users', 'sites'] as const).filter(tab => tab !== 'branding' || isSuperAdmin).map(tab => (
+        {(['branding', 'users', 'sites', 'security'] as const)
+          .filter(tab => tab !== 'branding' || isSuperAdmin)
+          .filter(tab => tab !== 'security' || isAdmin)
+          .map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? '#C8102E' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #C8102E' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
-            {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : `Sites (${sites.length})`}
+            {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : 'Security'}
           </button>
         ))}
       </div>
@@ -399,6 +425,39 @@ export default function SettingsPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* SECURITY TAB */}
+      {activeTab === 'security' && (
+        <div>
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Session security</div>
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Session timeout</label>
+              <select
+                className="input select"
+                style={{ maxWidth: '280px' }}
+                value={idleTimeout}
+                onChange={e => setIdleTimeout(e.target.value)}
+              >
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+                <option value="60">60 minutes (1 hour)</option>
+                <option value="120">120 minutes (2 hours)</option>
+                <option value="0">Never</option>
+              </select>
+              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>
+                Users will be automatically logged out after this period of inactivity. Applies to all apps in the NocVault suite.
+              </p>
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button className="btn-primary" onClick={saveSecuritySettings} disabled={savingSecuritySettings} style={{ padding: '10px 24px' }}>
+                {savingSecuritySettings ? 'Saving...' : 'Save settings'}
+              </button>
+              {securitySettingsSaved && <span style={{ fontSize: '13px', color: '#166534', background: '#dcfce7', padding: '6px 12px', borderRadius: '6px' }}>Saved!</span>}
+            </div>
           </div>
         </div>
       )}

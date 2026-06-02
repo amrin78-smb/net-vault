@@ -4,6 +4,7 @@ import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState, useRef, useCallback } from 'react'
 import Link from 'next/link'
 import GlobalSearch from '@/components/GlobalSearch'
+import IdleTimeout from '@/components/IdleTimeout'
 
 type Settings = {
   app_name: string; app_subtitle: string; app_logo_url: string
@@ -219,6 +220,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Page content */}
         <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
       </div>
+
+      <IdleTimeout />
 
       {/* Change Password Modal */}
       {showPwModal && (
