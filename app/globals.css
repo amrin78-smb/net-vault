@@ -234,7 +234,11 @@ tbody tr:hover td { background: var(--bg-primary); }
 .kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
 
 /* ── Buttons ───────────────────────────────────────────────── */
-.btn {
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-navy,
+.btn-danger {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -248,6 +252,9 @@ tbody tr:hover td { background: var(--bg-primary); }
   background: var(--bg-card);
   color: var(--text-primary);
   white-space: nowrap;
+  font-family: inherit;
+  text-decoration: none;
+  line-height: 1;
 }
 .btn:hover { background: var(--bg-primary); }
 .btn-primary {

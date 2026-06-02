@@ -59,7 +59,6 @@ const navItems = [
   { href: '/audit', label: 'Audit Log', adminOnly: true },
   { href: '/compliance', label: 'Compliance', adminOnly: true },
   { href: '/settings', label: 'Settings', adminOnly: true },
-  { href: '/users', label: 'Users', adminOnly: true },
 ]
 
 const SIDEBAR_COLLAPSED_KEY = 'netvault-sidebar-collapsed'
