@@ -159,6 +159,9 @@ INSERT INTO app_settings (key, value) VALUES ('app_logo_url',      '')          
 INSERT INTO app_settings (key, value) VALUES ('app_primary_color', '#C8102E')                       ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('app_navy_color',    '#1a2744')                       ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('idle_timeout_minutes', '30')                          ON CONFLICT (key) DO NOTHING;
+INSERT INTO app_settings (key, value) VALUES ('install_date',   NOW()::date::text)                   ON CONFLICT (key) DO NOTHING;
+INSERT INTO app_settings (key, value) VALUES ('license_key',    '')                                  ON CONFLICT (key) DO NOTHING;
+INSERT INTO app_settings (key, value) VALUES ('license_status', 'trial')                             ON CONFLICT (key) DO NOTHING;
 
 -- ── v_devices_flat View ──────────────────────────────────────────
 CREATE OR REPLACE VIEW v_devices_flat AS

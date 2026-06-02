@@ -487,3 +487,12 @@ table thead tr th {
   min-width: 60px;
 }
 .util-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+
+/* ── Read-only mode (expired license) ──────────────────────── */
+body[data-readonly="true"] .btn-primary,
+body[data-readonly="true"] button[type="submit"],
+body[data-readonly="true"] .btn-danger {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: not-allowed;
+}

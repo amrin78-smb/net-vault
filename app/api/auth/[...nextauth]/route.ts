@@ -21,6 +21,19 @@ const authOptions = {
           const sitesRes = await query('SELECT site_id FROM user_sites WHERE user_id = $1', [user.id])
           siteIds = sitesRes.rows.map((r: any) => r.site_id)
         }
+        // Start the trial clock on the very first successful login
+        try {
+          const idRes = await query(
+            "SELECT value FROM app_settings WHERE key = 'install_date'"
+          )
+          if (!idRes.rows[0]?.value) {
+            await query(
+              "INSERT INTO app_settings (key, value) VALUES ('install_date', $1) ON CONFLICT (key) DO UPDATE SET value = $1 WHERE app_settings.value = ''",
+              [new Date().toISOString().split('T')[0]]
+            )
+          }
+        } catch {}
+
         return { id: String(user.id), name: user.name, email: user.email, role: user.role, siteIds }
       }
     })

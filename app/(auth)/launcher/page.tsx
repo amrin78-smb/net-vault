@@ -3,13 +3,17 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 
+type LicenseInfo = { status: string; daysRemaining: number; expiry: string | null }
+
 export default function LauncherPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [settings, setSettings] = useState({ app_primary_color: '#C8102E', app_navy_color: '#1a2744' })
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null)
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(d => { if (d && !d.error) setSettings(d) })
+    fetch('/api/license').then(r => r.json()).then(d => { if (!d.error) setLicenseInfo(d) })
   }, [])
 
   if (status === 'loading') return null
@@ -88,6 +92,35 @@ export default function LauncherPage() {
           </button>
         </div>
       </div>
+
+      {/* License banners */}
+      {licenseInfo?.status === 'trial' && licenseInfo.daysRemaining <= 5 && licenseInfo.daysRemaining > 0 && (
+        <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 32px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Your trial expires in <strong>{licenseInfo.daysRemaining} day{licenseInfo.daysRemaining !== 1 ? 's' : ''}</strong>. Contact <a href="mailto:support@nocvault.io" style={{ color: '#92400e', fontWeight: '600' }}>support@nocvault.io</a> to purchase a license.</span>
+        </div>
+      )}
+      {licenseInfo?.status === 'grace' && (
+        <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 32px', fontSize: '13px', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Your trial has expired. Enter a license key in <strong>NetVault → Settings → License</strong> to continue.</span>
+        </div>
+      )}
+      {licenseInfo?.status === 'expired' && (
+        <div style={{ background: '#fee2e2', borderBottom: '1px solid #fecaca', padding: '10px 32px', fontSize: '13px', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span><strong>NocVault license required.</strong> Enter a license key in NetVault → Settings → License or contact <a href="mailto:support@nocvault.io" style={{ color: '#991b1b', fontWeight: '600' }}>support@nocvault.io</a>.</span>
+        </div>
+      )}
+      {licenseInfo?.status === 'active' && licenseInfo.expiry && (() => {
+        const days = Math.ceil((new Date(licenseInfo.expiry).getTime() - Date.now()) / 86400000)
+        return days <= 30 ? (
+          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 32px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span>Your license expires on <strong>{licenseInfo.expiry}</strong>. Contact <a href="mailto:support@nocvault.io" style={{ color: '#92400e', fontWeight: '600' }}>support@nocvault.io</a> to renew.</span>
+          </div>
+        ) : null
+      })()}
 
       {/* Main content */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '32px 24px' }}>

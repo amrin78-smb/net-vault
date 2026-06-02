@@ -25,7 +25,7 @@ export default function SettingsPage() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   useEffect(() => { if (user && user.role !== 'admin' && user.role !== 'super_admin') router.push('/dashboard') }, [user, router])
 
-  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'|'security'>('users')
+  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'|'security'|'license'>('users')
   const [settings, setSettings] = useState<Settings>({ app_name: '', app_subtitle: '', app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744' })
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
@@ -34,6 +34,16 @@ export default function SettingsPage() {
   const [idleTimeout, setIdleTimeout] = useState('30')
   const [savingSecuritySettings, setSavingSecuritySettings] = useState(false)
   const [securitySettingsSaved, setSecuritySettingsSaved] = useState(false)
+
+  type LicenseInfo = {
+    status: string; daysRemaining: number; serverId: string; customer: string | null
+    expiry: string | null; modules: string[]; maxDevices: number | null; trialDaysTotal: number; installDate: string | null
+  }
+  const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null)
+  const [licenseKeyInput, setLicenseKeyInput] = useState('')
+  const [activatingLicense, setActivatingLicense] = useState(false)
+  const [licenseActivateMsg, setLicenseActivateMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [copiedServerId, setCopiedServerId] = useState(false)
 
   const [users, setUsers] = useState<User[]>([])
   const [showUserForm, setShowUserForm] = useState(false)
@@ -63,6 +73,7 @@ export default function SettingsPage() {
     fetch('/api/users').then(r => r.json()).then(setUsers)
     fetch('/api/sites').then(r => r.json()).then(setSites)
     fetch('/api/countries').then(r => r.json()).then(d => { if (Array.isArray(d)) setCountries(d) })
+    fetch('/api/license').then(r => r.json()).then(d => { if (!d.error) setLicenseInfo(d) })
   }, [])
 
   useEffect(() => {
@@ -179,6 +190,33 @@ export default function SettingsPage() {
     else { const d = await res.json(); showToast(d.error || 'Failed to delete site', 'error') }
   }
 
+  async function activateLicense() {
+    if (!licenseKeyInput.trim()) { setLicenseActivateMsg({ ok: false, text: 'Paste a license key first' }); return }
+    setActivatingLicense(true); setLicenseActivateMsg(null)
+    const res = await fetch('/api/license', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: licenseKeyInput.trim() }),
+    })
+    const data = await res.json()
+    if (res.ok) {
+      setLicenseActivateMsg({ ok: true, text: `License activated for ${data.customer} — expires ${data.expiry}` })
+      setLicenseKeyInput('')
+      fetch('/api/license').then(r => r.json()).then(d => { if (!d.error) setLicenseInfo(d) })
+    } else {
+      setLicenseActivateMsg({ ok: false, text: data.error || 'Activation failed' })
+    }
+    setActivatingLicense(false)
+  }
+
+  function copyServerId() {
+    if (!licenseInfo?.serverId) return
+    navigator.clipboard.writeText(licenseInfo.serverId).then(() => {
+      setCopiedServerId(true)
+      setTimeout(() => setCopiedServerId(false), 2000)
+    })
+  }
+
   if (loadingSettings) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
 
   const filteredSites = sites.filter(s =>
@@ -192,13 +230,14 @@ export default function SettingsPage() {
         <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage app branding, users and sites</p>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: '24px' }}>
-        {(['branding', 'users', 'sites', 'security'] as const)
+      <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: '24px', flexWrap: 'wrap' }}>
+        {(['branding', 'users', 'sites', 'security', 'license'] as const)
           .filter(tab => tab !== 'branding' || isSuperAdmin)
           .filter(tab => tab !== 'security' || isAdmin)
+          .filter(tab => tab !== 'license' || isSuperAdmin)
           .map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? '#C8102E' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #C8102E' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
-            {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : 'Security'}
+            {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : 'License'}
           </button>
         ))}
       </div>
@@ -610,6 +649,121 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* LICENSE TAB */}
+      {activeTab === 'license' && (
+        <div>
+          {/* Status card */}
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>License status</div>
+            {!licenseInfo ? (
+              <div style={{ color: '#9ca3af', fontSize: '13px' }}>Loading…</div>
+            ) : (
+              <div>
+                {/* Status badge row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                  {licenseInfo.status === 'active' && (
+                    <span className="badge badge-active" style={{ fontSize: '13px', padding: '5px 14px' }}>Active</span>
+                  )}
+                  {licenseInfo.status === 'trial' && licenseInfo.daysRemaining > 5 && (
+                    <span className="badge badge-blue" style={{ fontSize: '13px', padding: '5px 14px' }}>Trial — {licenseInfo.daysRemaining} days remaining</span>
+                  )}
+                  {licenseInfo.status === 'trial' && licenseInfo.daysRemaining <= 5 && (
+                    <span className="badge badge-yellow" style={{ fontSize: '13px', padding: '5px 14px' }}>Trial expiring — {licenseInfo.daysRemaining} day{licenseInfo.daysRemaining !== 1 ? 's' : ''} left</span>
+                  )}
+                  {licenseInfo.status === 'grace' && (
+                    <span className="badge badge-orange" style={{ fontSize: '13px', padding: '5px 14px' }}>Grace period</span>
+                  )}
+                  {licenseInfo.status === 'expired' && (
+                    <span className="badge badge-red" style={{ fontSize: '13px', padding: '5px 14px' }}>Expired</span>
+                  )}
+                </div>
+
+                {/* Trial progress bar */}
+                {licenseInfo.status === 'trial' && licenseInfo.installDate && (
+                  <div style={{ marginBottom: '16px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6b7280', marginBottom: '6px' }}>
+                      <span>Trial usage</span>
+                      <span>{licenseInfo.trialDaysTotal - licenseInfo.daysRemaining} / {licenseInfo.trialDaysTotal} days used</span>
+                    </div>
+                    <div style={{ height: '8px', background: '#f3f4f6', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: '4px',
+                        width: `${Math.min(100, ((licenseInfo.trialDaysTotal - licenseInfo.daysRemaining) / licenseInfo.trialDaysTotal) * 100)}%`,
+                        background: licenseInfo.daysRemaining <= 5 ? '#f59e0b' : '#C8102E',
+                        transition: 'width 0.3s',
+                      }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Active license details */}
+                {licenseInfo.status === 'active' && licenseInfo.customer && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+                    <div><span style={{ color: '#9ca3af' }}>Customer</span><div style={{ fontWeight: '600', marginTop: '2px' }}>{licenseInfo.customer}</div></div>
+                    <div><span style={{ color: '#9ca3af' }}>Expires</span><div style={{ fontWeight: '600', marginTop: '2px' }}>{licenseInfo.expiry} ({licenseInfo.daysRemaining} days)</div></div>
+                    <div><span style={{ color: '#9ca3af' }}>Licensed modules</span><div style={{ fontWeight: '600', marginTop: '2px' }}>{licenseInfo.modules.join(', ') || '—'}</div></div>
+                    <div><span style={{ color: '#9ca3af' }}>Max devices</span><div style={{ fontWeight: '600', marginTop: '2px' }}>{licenseInfo.maxDevices === 0 ? 'Unlimited' : licenseInfo.maxDevices ?? '—'}</div></div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Server ID */}
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your Server ID</div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>Provide this when purchasing a license so the key can be locked to this server.</div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <code style={{ flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '7px', padding: '10px 14px', fontFamily: 'monospace', fontSize: '13px', color: '#111827', letterSpacing: '0.02em', userSelect: 'all' }}>
+                {licenseInfo?.serverId ?? '—'}
+              </code>
+              <button
+                onClick={copyServerId}
+                className="btn-secondary"
+                style={{ padding: '10px 16px', whiteSpace: 'nowrap', flexShrink: 0 }}
+              >
+                {copiedServerId ? '✓ Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+
+          {/* Activate license */}
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Activate license</div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>Paste the license key you received after purchase.</div>
+            <textarea
+              className="input"
+              rows={4}
+              placeholder="Paste license key here…"
+              value={licenseKeyInput}
+              onChange={e => setLicenseKeyInput(e.target.value)}
+              style={{ fontFamily: 'monospace', fontSize: '12px', resize: 'vertical', marginBottom: '12px' }}
+            />
+            {licenseActivateMsg && (
+              <div style={{
+                background: licenseActivateMsg.ok ? '#dcfce7' : '#fee2e2',
+                color: licenseActivateMsg.ok ? '#166534' : '#991b1b',
+                padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '12px',
+              }}>
+                {licenseActivateMsg.text}
+              </div>
+            )}
+            <button className="btn-primary" onClick={activateLicense} disabled={activatingLicense}>
+              {activatingLicense ? 'Activating…' : 'Activate License'}
+            </button>
+          </div>
+
+          {/* Support link */}
+          <p style={{ fontSize: '13px', color: '#9ca3af' }}>
+            Need a license?{' '}
+            <a href="mailto:support@nocvault.io" style={{ color: '#C8102E', textDecoration: 'none' }}>
+              Contact support@nocvault.io
+            </a>
+          </p>
+        </div>
+      )}
+
     </div>
   )
 }
