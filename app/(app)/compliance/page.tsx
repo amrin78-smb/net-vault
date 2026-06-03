@@ -4,11 +4,12 @@ import Link from 'next/link'
 
 type Check = {
   key: string; label: string; href: string
-  total: number; fail: number; pass: number; pct: number
+  total: number; available: boolean
+  fail: number | null; pass: number | null; pct: number | null
 }
 
 export default function CompliancePage() {
-  const [data, setData] = useState<{ score: number; total: number; checks: Check[] } | null>(null)
+  const [data, setData] = useState<{ score: number; total: number; checks: Check[]; availableCount: number } | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -66,7 +67,8 @@ export default function CompliancePage() {
               : 'Poor — significant data quality issues require immediate action.'}
           </div>
           <div style={{ fontSize: '12px', color: scoreColor, opacity: 0.6, marginTop: '6px' }}>
-            Average pass rate across {checks.length} compliance checks · active devices only
+            Average pass rate across {data.availableCount} of {checks.length} compliance checks · active devices only
+            {data.availableCount < checks.length && ' · some checks unavailable (schema update pending)'}
           </div>
         </div>
       </div>
@@ -74,10 +76,26 @@ export default function CompliancePage() {
       {/* Check cards grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
         {checks.map(check => {
-          const c   = check.pct >= 80 ? '#166534' : check.pct >= 60 ? '#92400e' : '#991b1b'
-          const bg  = check.pct >= 80 ? '#dcfce7' : check.pct >= 60 ? '#fef3c7' : '#fee2e2'
-          const bar = check.pct >= 80 ? '#22c55e' : check.pct >= 60 ? '#f59e0b' : '#ef4444'
-          const borderColor = check.pct >= 80 ? '#86efac' : check.pct >= 60 ? '#fde68a' : '#fecaca'
+          if (!check.available) {
+            return (
+              <div key={check.key} style={{ background: '#f9fafb', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '18px 20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
+                  <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>
+                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#9ca3af', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Unavailable
+                  </div>
+                </div>
+                <div style={{ height: '6px', background: '#e5e7eb', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }} />
+                <div style={{ fontSize: '12px', color: '#9ca3af' }}>Data unavailable — schema update pending on this server</div>
+              </div>
+            )
+          }
+
+          const c   = check.pct! >= 80 ? '#166534' : check.pct! >= 60 ? '#92400e' : '#991b1b'
+          const bg  = check.pct! >= 80 ? '#dcfce7' : check.pct! >= 60 ? '#fef3c7' : '#fee2e2'
+          const bar = check.pct! >= 80 ? '#22c55e' : check.pct! >= 60 ? '#f59e0b' : '#ef4444'
+          const borderColor = check.pct! >= 80 ? '#86efac' : check.pct! >= 60 ? '#fde68a' : '#fecaca'
           return (
             <div key={check.key} style={{ background: 'white', borderRadius: '10px', border: `1px solid ${borderColor}`, padding: '18px 20px' }}>
               {/* Label + percentage */}
@@ -95,16 +113,16 @@ export default function CompliancePage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontSize: '12px', color: '#374151' }}>
                   <span style={{ fontWeight: '600', color: c }}>
-                    {check.pass.toLocaleString()}
+                    {check.pass!.toLocaleString()}
                   </span>
                   <span style={{ color: '#6b7280' }}> of {check.total.toLocaleString()} active devices passing</span>
-                  {check.fail > 0 && (
+                  {check.fail! > 0 && (
                     <span style={{ marginLeft: '8px', background: bg, color: c, padding: '1px 8px', borderRadius: '20px', fontWeight: '600', fontSize: '11px' }}>
-                      {check.fail.toLocaleString()} failing
+                      {check.fail!.toLocaleString()} failing
                     </span>
                   )}
                 </div>
-                {check.fail > 0 && (
+                {check.fail! > 0 && (
                   <Link href={check.href} style={{ fontSize: '12px', color: '#C8102E', textDecoration: 'none', fontWeight: '500', flexShrink: 0, marginLeft: '8px' }}>
                     View affected →
                   </Link>

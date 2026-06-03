@@ -3,13 +3,13 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 
-async function safeCount(sql: string): Promise<number> {
+async function safeCount(sql: string): Promise<number | null> {
   try {
     const res = await query(sql)
     return parseInt(res.rows[0]?.n ?? res.rows[0]?.total ?? res.rows[0]?.fail ?? '0')
   } catch (err) {
     console.error('[compliance] query failed (column may not exist yet):', err)
-    return 0
+    return null
   }
 }
 
@@ -28,9 +28,13 @@ export async function GET() {
     // Base: active devices only (Decommed / Spare are excluded from compliance)
     const activeBase = `${sitePrefix}device_status = 'Active'`
 
-    const total = await safeCount(
+    const totalResult = await safeCount(
       `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase}`
     )
+    if (totalResult === null) {
+      return NextResponse.json({ error: 'Unable to reach device data (v_devices_flat unavailable)' }, { status: 503 })
+    }
+    const total = totalResult
 
     const [
       missingSerial,
@@ -73,16 +77,20 @@ export async function GET() {
 
     const checks = definitions.map((def, i) => {
       const fail = rawFails[i]
+      if (fail === null) {
+        return { ...def, total, fail: null, pass: null, pct: null, available: false }
+      }
       const pass = total - fail
       const pct  = total > 0 ? Math.round((pass / total) * 100) : 100
-      return { ...def, total, fail, pass, pct }
+      return { ...def, total, fail, pass, pct, available: true }
     })
 
-    const score = checks.length > 0
-      ? Math.round(checks.reduce((s, c) => s + c.pct, 0) / checks.length)
+    const availableChecks = checks.filter(c => c.available)
+    const score = availableChecks.length > 0
+      ? Math.round(availableChecks.reduce((s, c) => s + c.pct!, 0) / availableChecks.length)
       : 100
 
-    return NextResponse.json({ score, total, checks })
+    return NextResponse.json({ score, total, checks, availableCount: availableChecks.length })
   } catch (err) {
     console.error('[compliance GET]', err)
     return NextResponse.json({ error: 'Failed to load compliance data' }, { status: 500 })
