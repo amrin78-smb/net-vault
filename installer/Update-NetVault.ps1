@@ -24,6 +24,20 @@ function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
 
+function Set-EnvVar([string]$Path, [string]$Key, [string]$Value) {
+    if (Test-Path $Path) {
+        $lines = Get-Content $Path -ErrorAction SilentlyContinue
+        $found = $false
+        $updated = $lines | ForEach-Object {
+            if ($_ -match "^$Key=") { $found = $true; "$Key=$Value" } else { $_ }
+        }
+        if (-not $found) { $updated = @($updated) + "$Key=$Value" }
+        ($updated -join "`n") | Out-File -FilePath $Path -Encoding UTF8 -NoNewline
+    } else {
+        "$Key=$Value" | Out-File -FilePath $Path -Encoding UTF8 -NoNewline
+    }
+}
+
 Write-Host ""
 Write-Host "  NetVault - Update" -ForegroundColor White
 Write-Host "  Install directory : $InstallDir" -ForegroundColor Gray
@@ -110,6 +124,22 @@ if (Test-Path "$standaloneDir\server.js") {
 } else {
     Write-Warn "server.js missing - service may not start correctly"
     exit 1
+}
+
+Write-Step "Writing env vars to standalone runtime"
+$standaloneEnvPath = "$standaloneDir\.env.local"
+$rootEnvPath = "$AppDir\.env"
+if (Test-Path $rootEnvPath) {
+    foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP')) {
+        $line = Get-Content $rootEnvPath | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
+        if ($line) {
+            $val = $line.Substring($key.Length + 1)
+            Set-EnvVar -Path $standaloneEnvPath -Key $key -Value $val
+            Write-OK "$key -> .next/standalone/.env.local"
+        }
+    }
+} else {
+    Write-Warn "Root .env not found - standalone .env.local not updated"
 }
 
 Write-Step "Starting NetVault service"
