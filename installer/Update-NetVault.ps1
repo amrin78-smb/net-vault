@@ -49,7 +49,7 @@ try {
     Write-Host "    Running: sc.exe stop NetVault" -ForegroundColor Gray
     $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -eq 'Running') {
-        & sc.exe stop NetVault | Out-Null
+        $null = & sc.exe stop NetVault 2>&1
         Start-Sleep -Seconds 3
         Write-OK "Service stopped"
     } else {
@@ -75,16 +75,19 @@ try {
     Write-Step "Pulling latest code from GitHub"
     Write-Host "    Running: git fetch origin" -ForegroundColor Gray
     Set-Location $AppDir
-    & git fetch origin 2>&1 | Out-Null
+    $null = & git fetch origin 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "git fetch failed (exit $LASTEXITCODE)" }
     Write-Host "    Running: git reset --hard origin/main" -ForegroundColor Gray
     $gitResult = & git reset --hard origin/main 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "git reset --hard failed (exit $LASTEXITCODE)" }
     Write-Host "    $gitResult" -ForegroundColor Gray
-    & git clean -fd --exclude=".env" --exclude=".env.local" --exclude="node_modules" 2>&1 | Out-Null
+    $null = & git clean -fd --exclude=".env" --exclude=".env.local" --exclude="node_modules" 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "git clean failed (exit $LASTEXITCODE)" }
     Write-OK "Git reset and clean done"
 
     # Restore known-problematic files
-    & git checkout origin/main -- app/api/settings/route.ts 2>&1 | Out-Null
-    & git checkout origin/main -- app/api/settings/logo/route.ts 2>&1 | Out-Null
+    $null = & git checkout origin/main -- app/api/settings/route.ts 2>&1
+    $null = & git checkout origin/main -- app/api/settings/logo/route.ts 2>&1
 
     # Restore .env after git reset
     Write-Step "Restoring .env"
@@ -101,12 +104,11 @@ try {
 
     Write-Step "Rebuilding NetVault"
     Write-Host "    Running: npm install" -ForegroundColor Gray
-    & npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
+    $null = & npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
+    if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE) — check $InstallDir\logs\npm-install.log" }
     Write-Host "    Running: npm run build" -ForegroundColor Gray
-    & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
-    if ($LASTEXITCODE -ne 0) {
-        throw "npm run build failed — check $InstallDir\logs\npm-build.log"
-    }
+    $null = & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
+    if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE) — check $InstallDir\logs\npm-build.log" }
     Write-OK "Build complete"
 
     Write-Step "Copying static files into standalone output"
@@ -156,7 +158,8 @@ try {
             Write-OK "Cleared port 3000"
         }
     }
-    & sc.exe start NetVault | Out-Null
+    $null = & sc.exe start NetVault 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "sc.exe start NetVault failed (exit $LASTEXITCODE)" }
     Start-Sleep -Seconds 5
     $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -eq 'Running') {
@@ -169,7 +172,7 @@ try {
     Write-Host ""
     Write-Host "=== Update failed: $_ ===" -ForegroundColor Red
     Write-Host "    Attempting to restart NetVault service..." -ForegroundColor Yellow
-    & sc.exe start NetVault 2>&1 | Out-Null
+    $null = & sc.exe start NetVault 2>&1
     Write-Host ""
     exit 1
 }
