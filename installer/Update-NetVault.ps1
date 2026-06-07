@@ -9,8 +9,13 @@
     Root installation directory (default: C:\Apps\NetVault)
 #>
 param(
-    [string]$InstallDir = "C:\Apps\NetVault"
+    [string]$InstallDir = "C:\Apps\NetVault",
+    [string]$ServerIp = ""
 )
+
+$ErrorActionPreference = 'Stop'
+Write-Host "=== Update starting in 5 seconds ==="
+Start-Sleep -Seconds 5
 
 $AppDir  = "$InstallDir\app"
 $NssmExe = "$InstallDir\nssm\nssm-2.24\win64\nssm.exe"
@@ -66,6 +71,10 @@ Write-Step "Restoring .env"
 if ($envBackup) {
     $envBackup | Out-File -FilePath "$AppDir\.env" -Encoding UTF8 -NoNewline
     Write-OK ".env restored"
+    if ($ServerIp -and -not (Select-String -Path "$AppDir\.env" -Pattern "^SERVER_IP=" -Quiet -ErrorAction SilentlyContinue)) {
+        Add-Content -Path "$AppDir\.env" -Value "`nSERVER_IP=$ServerIp"
+        Write-OK "SERVER_IP added to .env"
+    }
 } else {
     Write-Warn ".env was not backed up - check credentials before starting service"
 }

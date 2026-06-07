@@ -3,6 +3,32 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
+function UpdatedNotice() {
+  const [show, setShow] = useState(false)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('updated') === 'true') {
+      setShow(true)
+      window.history.replaceState({}, '', window.location.pathname)
+      setTimeout(() => setShow(false), 5000)
+    }
+  }, [])
+  if (!show) return null
+  return (
+    <div
+      onClick={() => setShow(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
+        marginBottom: 16, borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+        cursor: 'pointer', color: '#166534', background: 'rgba(22,163,74,0.10)',
+        border: '1px solid rgba(22,163,74,0.30)',
+      }}
+    >
+      <span aria-hidden>✓</span><span>NetVault updated successfully</span>
+    </div>
+  )
+}
+
 type Summary = { total: string; active: string; decommed: string; spare: string; eol: string; supported: string; unknown_lifecycle: string }
 type RegionRow = { region: string; total: string; eol_count: string }
 type TypeRow = { device_type: string; total: string }
@@ -159,6 +185,7 @@ export default function DashboardPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
+      <UpdatedNotice />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div>
           <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Dashboard</h1>

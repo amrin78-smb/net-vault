@@ -1,9 +1,106 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
 import { RoleBadge } from '@/components/Badges'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+
+type UpdateStatus = {
+  current_version?: string; latest_version?: string; commits_behind?: number
+  up_to_date?: boolean; changes?: string[]; error?: string
+}
+
+function UpdateConfirmModal({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: '12px', padding: '28px 32px', maxWidth: '400px', width: '90%' }}>
+        <div style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>Apply update?</div>
+        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '24px' }}>
+          Services will restart and you will lose connection for 30–60 seconds. The page will reload automatically when the update is complete.
+        </div>
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', fontSize: '13px', color: '#374151' }}>Cancel</button>
+          <button onClick={onConfirm} style={{ padding: '8px 16px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Update now</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function UpdatingOverlay() {
+  const [phase, setPhase] = useState<'starting' | 'down' | 'back_up' | 'timeout'>('starting')
+  const wentDown = useRef(false)
+
+  useEffect(() => {
+    let active = true
+    const startedAt = Date.now()
+    const UPDATE_TIMEOUT_MS = 3 * 60 * 1000
+    let pollId: ReturnType<typeof setInterval> | null = null
+    let reloadId: ReturnType<typeof setTimeout> | null = null
+
+    const tick = async () => {
+      if (!active) return
+      if (Date.now() - startedAt > UPDATE_TIMEOUT_MS) {
+        setPhase('timeout')
+        return
+      }
+      const ctrl = new AbortController()
+      const abortId = setTimeout(() => ctrl.abort(), 1800)
+      let ok = false
+      try {
+        const res = await fetch('/api/health', { cache: 'no-store', signal: ctrl.signal })
+        ok = res.ok
+      } catch {
+        ok = false
+      } finally {
+        clearTimeout(abortId)
+      }
+      if (!active) return
+      if (!ok) {
+        wentDown.current = true
+        setPhase('down')
+        return
+      }
+      if (wentDown.current) {
+        setPhase('back_up')
+        if (pollId !== null) clearInterval(pollId)
+        reloadId = setTimeout(() => { window.location.href = '/dashboard?updated=true' }, 2000)
+      }
+    }
+
+    pollId = setInterval(tick, 2000)
+    tick()
+
+    return () => {
+      active = false
+      if (pollId !== null) clearInterval(pollId)
+      if (reloadId !== null) clearTimeout(reloadId)
+    }
+  }, [])
+
+  const messages: Record<string, string> = {
+    starting: 'Starting update…',
+    down: 'Services restarting… ⟳',
+    back_up: '✓ Update complete! Reloading…',
+    timeout: 'Update is taking longer than expected. Try refreshing manually.',
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: 'white', borderRadius: '12px', padding: '32px 40px', textAlign: 'center', maxWidth: '380px', width: '90%' }}>
+        <div style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+          {phase === 'back_up' ? '✓ Update complete!' : phase === 'timeout' ? 'Taking longer than expected' : 'Updating NetVault…'}
+        </div>
+        <div style={{ fontSize: '14px', color: '#6b7280' }}>{messages[phase]}</div>
+        {phase === 'timeout' && (
+          <button onClick={() => window.location.reload()} style={{ marginTop: '16px', padding: '8px 16px', background: '#1a2744', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>
+            Reload page
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
 
 type Settings = {
   app_name: string; app_subtitle: string; app_logo_url: string
@@ -25,7 +122,7 @@ export default function SettingsPage() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   useEffect(() => { if (user && user.role !== 'admin' && user.role !== 'super_admin') router.push('/dashboard') }, [user, router])
 
-  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'|'security'|'license'>('users')
+  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'|'security'|'license'|'updates'>('users')
   const [settings, setSettings] = useState<Settings>({ app_name: '', app_subtitle: '', app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744' })
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
@@ -44,6 +141,12 @@ export default function SettingsPage() {
   const [activatingLicense, setActivatingLicense] = useState(false)
   const [licenseActivateMsg, setLicenseActivateMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [copiedServerId, setCopiedServerId] = useState(false)
+
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [checkUpdateErr, setCheckUpdateErr] = useState<string | null>(null)
+  const [confirmingUpdate, setConfirmingUpdate] = useState(false)
+  const [updatingApp, setUpdatingApp] = useState(false)
 
   const [users, setUsers] = useState<User[]>([])
   const [showUserForm, setShowUserForm] = useState(false)
@@ -101,6 +204,37 @@ export default function SettingsPage() {
     setSecuritySettingsSaved(true)
     setTimeout(() => setSecuritySettingsSaved(false), 3000)
   }
+
+  async function checkForUpdates() {
+    setCheckingUpdate(true)
+    setCheckUpdateErr(null)
+    try {
+      const res = await fetch('/api/system/update-status')
+      const data = await res.json()
+      setUpdateStatus(data)
+    } catch (e: any) {
+      setCheckUpdateErr(e?.message || 'Could not check for updates')
+    } finally {
+      setCheckingUpdate(false)
+    }
+  }
+
+  async function startUpdate() {
+    setConfirmingUpdate(false)
+    setUpdatingApp(true)
+    try {
+      await fetch('/api/system/update', { method: 'POST' })
+    } catch (_e) {
+      // connection may drop during restart
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'updates' && !updateStatus && !checkingUpdate) {
+      void checkForUpdates()
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab])
 
   function fetchUsers() { fetch('/api/users').then(r => r.json()).then(setUsers) }
   function fetchSites() { fetch('/api/sites').then(r => r.json()).then(setSites) }
@@ -231,13 +365,14 @@ export default function SettingsPage() {
       </div>
 
       <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: '24px', flexWrap: 'wrap' }}>
-        {(['branding', 'users', 'sites', 'security', 'license'] as const)
+        {(['branding', 'users', 'sites', 'security', 'license', 'updates'] as const)
           .filter(tab => tab !== 'branding' || isSuperAdmin)
           .filter(tab => tab !== 'security' || isAdmin)
           .filter(tab => tab !== 'license' || isSuperAdmin)
+          .filter(tab => tab !== 'updates' || isAdmin)
           .map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? '#C8102E' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #C8102E' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
-            {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : 'License'}
+            {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : tab === 'updates' ? 'Updates' : 'License'}
           </button>
         ))}
       </div>
@@ -763,6 +898,77 @@ export default function SettingsPage() {
           </p>
         </div>
       )}
+
+      {/* UPDATES TAB */}
+      {activeTab === 'updates' && (
+        <div>
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>NetVault version</div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>Check GitHub for the latest code and apply updates via Windows Task Scheduler.</div>
+
+            {checkUpdateErr && (
+              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '14px' }}>
+                {checkUpdateErr}
+              </div>
+            )}
+
+            {updateStatus && !updateStatus.error && (
+              <div style={{ marginBottom: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                  <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '12px 14px' }}>
+                    <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Current</div>
+                    <code style={{ fontSize: '14px', fontWeight: '600', color: '#111827', fontFamily: 'monospace' }}>{updateStatus.current_version}</code>
+                  </div>
+                  <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '12px 14px' }}>
+                    <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Latest</div>
+                    <code style={{ fontSize: '14px', fontWeight: '600', color: '#111827', fontFamily: 'monospace' }}>{updateStatus.latest_version}</code>
+                  </div>
+                </div>
+
+                {updateStatus.up_to_date ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: '7px', padding: '10px 14px', fontSize: '13px', fontWeight: '500' }}>
+                    <span>✓</span><span>NetVault is up to date</span>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '7px', padding: '10px 14px', fontSize: '13px', fontWeight: '500', marginBottom: '10px' }}>
+                      <span>↑</span><span>{updateStatus.commits_behind} commit{updateStatus.commits_behind !== 1 ? 's' : ''} behind</span>
+                    </div>
+                    {updateStatus.changes && updateStatus.changes.length > 0 && (
+                      <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '7px', padding: '10px 14px', marginBottom: '10px' }}>
+                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Pending changes</div>
+                        {updateStatus.changes.map((c, i) => (
+                          <div key={i} style={{ fontSize: '12px', color: '#374151', fontFamily: 'monospace', padding: '2px 0' }}>{c}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {updateStatus?.error && (
+              <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '14px' }}>
+                {updateStatus.error}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <button className="btn-secondary" onClick={() => void checkForUpdates()} disabled={checkingUpdate} style={{ padding: '8px 16px' }}>
+                {checkingUpdate ? 'Checking…' : 'Check for updates'}
+              </button>
+              {updateStatus && !updateStatus.up_to_date && !updateStatus.error && (
+                <button className="btn-primary" onClick={() => setConfirmingUpdate(true)} style={{ padding: '8px 16px' }}>
+                  Apply update
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmingUpdate && <UpdateConfirmModal onCancel={() => setConfirmingUpdate(false)} onConfirm={startUpdate} />}
+      {updatingApp && <UpdatingOverlay />}
 
     </div>
   )
