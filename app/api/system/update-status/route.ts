@@ -1,10 +1,23 @@
 import { NextResponse } from 'next/server'
 import { execSync } from 'child_process'
+import fs from 'fs'
+import path from 'path'
+
+function findGitRoot(start: string): string {
+  let dir = start
+  for (let i = 0; i < 6; i++) {
+    if (fs.existsSync(path.join(dir, '.git'))) return dir
+    const parent = path.dirname(dir)
+    if (parent === dir) break
+    dir = parent
+  }
+  return start
+}
 
 export async function GET() {
-  const cwd = process.cwd()
+  const repoRoot = findGitRoot(process.cwd())
   const git = (cmd: string) =>
-    execSync(cmd, { cwd, encoding: 'utf8', timeout: 30000 }).trim()
+    execSync(cmd, { cwd: repoRoot, encoding: 'utf8', timeout: 30000 }).trim()
   try {
     git('git fetch origin main')
     const current = git('git rev-parse HEAD').slice(0, 7)

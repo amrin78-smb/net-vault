@@ -43,68 +43,78 @@ Write-Host "  NetVault - Update" -ForegroundColor White
 Write-Host "  Install directory : $InstallDir" -ForegroundColor Gray
 Write-Host ""
 
-Write-Step "Stopping NetVault service"
-$svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -eq 'Running') {
-    & sc.exe stop NetVault | Out-Null
-    Start-Sleep -Seconds 3
-    Write-OK "Service stopped"
-} else {
-    Write-Warn "NetVault service was not running"
-}
-$node = Get-Process -Name node -ErrorAction SilentlyContinue
-if ($node) {
-    Stop-Process -Name node -Force
-    Start-Sleep -Seconds 2
-    Write-OK "Killed leftover node process"
-}
+try {
 
-# Backup .env before git reset
-Write-Step "Backing up .env"
-$envBackup = Get-Content "$AppDir\.env" -Raw -ErrorAction SilentlyContinue
-if ($envBackup) {
-    Write-OK ".env backed up"
-} else {
-    Write-Warn ".env not found - will need to recreate after pull"
-}
-
-Write-Step "Pulling latest code from GitHub"
-Set-Location $AppDir
-& git fetch origin 2>&1 | Out-Null
-$gitResult = & git reset --hard origin/main 2>&1
-Write-Host "    $gitResult" -ForegroundColor Gray
-& git clean -fd --exclude=".env" --exclude=".env.local" --exclude="node_modules" 2>&1 | Out-Null
-Write-OK "Git reset and clean done"
-
-# Restore known-problematic files
-& git checkout origin/main -- app/api/settings/route.ts 2>&1 | Out-Null
-& git checkout origin/main -- app/api/settings/logo/route.ts 2>&1 | Out-Null
-
-# Restore .env after git reset
-Write-Step "Restoring .env"
-if ($envBackup) {
-    $envBackup | Out-File -FilePath "$AppDir\.env" -Encoding UTF8 -NoNewline
-    Write-OK ".env restored"
-    if ($ServerIp -and -not (Select-String -Path "$AppDir\.env" -Pattern "^SERVER_IP=" -Quiet -ErrorAction SilentlyContinue)) {
-        Add-Content -Path "$AppDir\.env" -Value "`nSERVER_IP=$ServerIp"
-        Write-OK "SERVER_IP added to .env"
+    Write-Step "Stopping NetVault service"
+    Write-Host "    Running: sc.exe stop NetVault" -ForegroundColor Gray
+    $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -eq 'Running') {
+        & sc.exe stop NetVault | Out-Null
+        Start-Sleep -Seconds 3
+        Write-OK "Service stopped"
+    } else {
+        Write-Warn "NetVault service was not running"
     }
-} else {
-    Write-Warn ".env was not backed up - check credentials before starting service"
-}
+    $node = Get-Process -Name node -ErrorAction SilentlyContinue
+    if ($node) {
+        Stop-Process -Name node -Force
+        Start-Sleep -Seconds 2
+        Write-OK "Killed leftover node process"
+    }
 
-Write-Step "Rebuilding NetVault"
-& npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
-& npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
-if ($LASTEXITCODE -ne 0) {
-    Write-Warn "Build failed - check $InstallDir\logs\npm-build.log"
-    exit 1
-}
-Write-OK "Build complete"
+    # Backup .env before git reset
+    Write-Step "Backing up .env"
+    Write-Host "    Reading: $AppDir\.env" -ForegroundColor Gray
+    $envBackup = Get-Content "$AppDir\.env" -Raw -ErrorAction SilentlyContinue
+    if ($envBackup) {
+        Write-OK ".env backed up"
+    } else {
+        Write-Warn ".env not found - will need to recreate after pull"
+    }
 
-Write-Step "Copying static files into standalone output"
-$standaloneDir = "$AppDir\.next\standalone"
-if (Test-Path $standaloneDir) {
+    Write-Step "Pulling latest code from GitHub"
+    Write-Host "    Running: git fetch origin" -ForegroundColor Gray
+    Set-Location $AppDir
+    & git fetch origin 2>&1 | Out-Null
+    Write-Host "    Running: git reset --hard origin/main" -ForegroundColor Gray
+    $gitResult = & git reset --hard origin/main 2>&1
+    Write-Host "    $gitResult" -ForegroundColor Gray
+    & git clean -fd --exclude=".env" --exclude=".env.local" --exclude="node_modules" 2>&1 | Out-Null
+    Write-OK "Git reset and clean done"
+
+    # Restore known-problematic files
+    & git checkout origin/main -- app/api/settings/route.ts 2>&1 | Out-Null
+    & git checkout origin/main -- app/api/settings/logo/route.ts 2>&1 | Out-Null
+
+    # Restore .env after git reset
+    Write-Step "Restoring .env"
+    if ($envBackup) {
+        $envBackup | Out-File -FilePath "$AppDir\.env" -Encoding UTF8 -NoNewline
+        Write-OK ".env restored"
+        if ($ServerIp -and -not (Select-String -Path "$AppDir\.env" -Pattern "^SERVER_IP=" -Quiet -ErrorAction SilentlyContinue)) {
+            Add-Content -Path "$AppDir\.env" -Value "`nSERVER_IP=$ServerIp"
+            Write-OK "SERVER_IP added to .env"
+        }
+    } else {
+        Write-Warn ".env was not backed up - check credentials before starting service"
+    }
+
+    Write-Step "Rebuilding NetVault"
+    Write-Host "    Running: npm install" -ForegroundColor Gray
+    & npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
+    Write-Host "    Running: npm run build" -ForegroundColor Gray
+    & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
+    if ($LASTEXITCODE -ne 0) {
+        throw "npm run build failed — check $InstallDir\logs\npm-build.log"
+    }
+    Write-OK "Build complete"
+
+    Write-Step "Copying static files into standalone output"
+    $standaloneDir = "$AppDir\.next\standalone"
+    Write-Host "    Standalone dir: $standaloneDir" -ForegroundColor Gray
+    if (-not (Test-Path $standaloneDir)) {
+        throw "Standalone directory not found after build — check $InstallDir\logs\npm-build.log"
+    }
     $publicDest = "$standaloneDir\public"
     if (Test-Path $publicDest) { Remove-Item $publicDest -Recurse -Force }
     Copy-Item -Path "$AppDir\public" -Destination $publicDest -Recurse -Force
@@ -114,51 +124,54 @@ if (Test-Path $standaloneDir) {
     if (Test-Path $staticDest) { Remove-Item $staticDest -Recurse -Force }
     Copy-Item -Path "$AppDir\.next\static" -Destination $staticDest -Recurse -Force
     Write-OK "Copied .next/static/"
-} else {
-    Write-Warn "Standalone directory not found - check build output"
-    exit 1
-}
-
-if (Test-Path "$standaloneDir\server.js") {
+    if (-not (Test-Path "$standaloneDir\server.js")) {
+        throw "server.js missing from standalone output — build may have failed"
+    }
     Write-OK "server.js present"
-} else {
-    Write-Warn "server.js missing - service may not start correctly"
-    exit 1
-}
 
-Write-Step "Writing env vars to standalone runtime"
-$standaloneEnvPath = "$standaloneDir\.env.local"
-$rootEnvPath = "$AppDir\.env"
-if (Test-Path $rootEnvPath) {
-    foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP')) {
-        $line = Get-Content $rootEnvPath | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
-        if ($line) {
-            $val = $line.Substring($key.Length + 1)
-            Set-EnvVar -Path $standaloneEnvPath -Key $key -Value $val
-            Write-OK "$key -> .next/standalone/.env.local"
+    Write-Step "Writing env vars to standalone runtime"
+    $standaloneEnvPath = "$standaloneDir\.env.local"
+    $rootEnvPath = "$AppDir\.env"
+    if (Test-Path $rootEnvPath) {
+        foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP')) {
+            $line = Get-Content $rootEnvPath | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
+            if ($line) {
+                $val = $line.Substring($key.Length + 1)
+                Set-EnvVar -Path $standaloneEnvPath -Key $key -Value $val
+                Write-OK "$key -> .next/standalone/.env.local"
+            }
+        }
+    } else {
+        Write-Warn "Root .env not found - standalone .env.local not updated"
+    }
+
+    Write-Step "Starting NetVault service"
+    Write-Host "    Running: sc.exe start NetVault" -ForegroundColor Gray
+    $portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+    if ($portProc) {
+        $procPid = $portProc.OwningProcess
+        if ($procPid -and $procPid -gt 0) {
+            Get-Process -Id $procPid -ErrorAction SilentlyContinue | Stop-Process -Force
+            Start-Sleep -Seconds 2
+            Write-OK "Cleared port 3000"
         }
     }
-} else {
-    Write-Warn "Root .env not found - standalone .env.local not updated"
-}
-
-Write-Step "Starting NetVault service"
-$portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
-if ($portProc) {
-    $pid = $portProc.OwningProcess
-    if ($pid -and $pid -gt 0) {
-        Get-Process -Id $pid -ErrorAction SilentlyContinue | Stop-Process -Force
-        Start-Sleep -Seconds 2
-        Write-OK "Cleared port 3000"
+    & sc.exe start NetVault | Out-Null
+    Start-Sleep -Seconds 5
+    $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
+    if ($svc -and $svc.Status -eq 'Running') {
+        Write-OK "NetVault service is running"
+    } else {
+        Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
     }
-}
-& sc.exe start NetVault | Out-Null
-Start-Sleep -Seconds 5
-$svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
-if ($svc -and $svc.Status -eq 'Running') {
-    Write-OK "NetVault service is running"
-} else {
-    Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
+
+} catch {
+    Write-Host ""
+    Write-Host "=== Update failed: $_ ===" -ForegroundColor Red
+    Write-Host "    Attempting to restart NetVault service..." -ForegroundColor Yellow
+    & sc.exe start NetVault 2>&1 | Out-Null
+    Write-Host ""
+    exit 1
 }
 
 Write-Host ""
