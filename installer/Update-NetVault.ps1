@@ -105,17 +105,17 @@ try {
     Write-Step "Rebuilding NetVault"
     Write-Host "    Running: npm install" -ForegroundColor Gray
     $null = & npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
-    if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE) — check $InstallDir\logs\npm-install.log" }
+    if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE) - check $InstallDir\logs\npm-install.log" }
     Write-Host "    Running: npm run build" -ForegroundColor Gray
     $null = & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
-    if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE) — check $InstallDir\logs\npm-build.log" }
+    if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE) - check $InstallDir\logs\npm-build.log" }
     Write-OK "Build complete"
 
     Write-Step "Copying static files into standalone output"
     $standaloneDir = "$AppDir\.next\standalone"
     Write-Host "    Standalone dir: $standaloneDir" -ForegroundColor Gray
     if (-not (Test-Path $standaloneDir)) {
-        throw "Standalone directory not found after build — check $InstallDir\logs\npm-build.log"
+        throw "Standalone directory not found after build - check $InstallDir\logs\npm-build.log"
     }
     $publicDest = "$standaloneDir\public"
     if (Test-Path $publicDest) { Remove-Item $publicDest -Recurse -Force }
@@ -127,7 +127,7 @@ try {
     Copy-Item -Path "$AppDir\.next\static" -Destination $staticDest -Recurse -Force
     Write-OK "Copied .next/static/"
     if (-not (Test-Path "$standaloneDir\server.js")) {
-        throw "server.js missing from standalone output — build may have failed"
+        throw "server.js missing from standalone output - build may have failed"
     }
     Write-OK "server.js present"
 
