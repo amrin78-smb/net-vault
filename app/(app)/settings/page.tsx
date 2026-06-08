@@ -27,9 +27,13 @@ function UpdateConfirmModal({ onCancel, onConfirm }: { onCancel: () => void; onC
   )
 }
 
-function UpdatingOverlay() {
-  const [phase, setPhase] = useState<'starting' | 'down' | 'back_up' | 'timeout'>('starting')
+function UpdatingOverlay({ preVersion }: { preVersion: string }) {
+  const [phase, setPhase] = useState<'starting' | 'down' | 'back_up' | 'verify_failed' | 'timeout'>('starting')
   const wentDown = useRef(false)
+  // Capture the version that was running before the update so we can confirm
+  // the code actually changed once services come back up.
+  const preVersionRef = useRef(preVersion)
+  useEffect(() => { preVersionRef.current = preVersion }, [preVersion])
 
   useEffect(() => {
     let active = true
@@ -38,9 +42,34 @@ function UpdatingOverlay() {
     let pollId: ReturnType<typeof setInterval> | null = null
     let reloadId: ReturnType<typeof setTimeout> | null = null
 
+    // After services recover, confirm the running version actually changed.
+    // If it matches the pre-update version, the pull/build silently failed —
+    // show an error instead of redirecting with a false success banner.
+    const verifyAndRedirect = async () => {
+      try {
+        const ctrl = new AbortController()
+        const abortId = setTimeout(() => ctrl.abort(), 5000)
+        const res = await fetch('/api/system/update-status', { cache: 'no-store', signal: ctrl.signal })
+        clearTimeout(abortId)
+        const data = await res.json()
+        if (!active) return
+        const newVersion: string = data?.current_version || ''
+        if (preVersionRef.current && newVersion && newVersion === preVersionRef.current) {
+          setPhase('verify_failed')
+          return
+        }
+      } catch {
+        // Verification itself failed (e.g. transient) — the service is back up,
+        // so fall through and let the user land on the dashboard.
+      }
+      if (!active) return
+      window.location.href = '/dashboard?updated=true'
+    }
+
     const tick = async () => {
       if (!active) return
       if (Date.now() - startedAt > UPDATE_TIMEOUT_MS) {
+        if (pollId !== null) clearInterval(pollId)
         setPhase('timeout')
         return
       }
@@ -64,7 +93,7 @@ function UpdatingOverlay() {
       if (wentDown.current) {
         setPhase('back_up')
         if (pollId !== null) clearInterval(pollId)
-        reloadId = setTimeout(() => { window.location.href = '/dashboard?updated=true' }, 2000)
+        reloadId = setTimeout(() => { void verifyAndRedirect() }, 2000)
       }
     }
 
@@ -81,16 +110,19 @@ function UpdatingOverlay() {
   let statusLine = 'Starting update…'
   if (phase === 'down') statusLine = 'Services restarting… ⟳'
   else if (phase === 'back_up') statusLine = '✓ Update complete! Redirecting…'
+  else if (phase === 'verify_failed') statusLine = 'Services restarted, but the version did not change. The update may not have applied — try again or check the server logs.'
   else if (phase === 'timeout') statusLine = 'Update is taking longer than expected. Try refreshing the page manually.'
+
+  const isError = phase === 'timeout' || phase === 'verify_failed'
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ background: 'var(--bg-card)', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', padding: 28, maxWidth: 440, width: '100%', textAlign: 'center' }}>
-        {phase !== 'back_up' && phase !== 'timeout' && (
+        {phase !== 'back_up' && !isError && (
           <div style={{ fontSize: 44, lineHeight: 1, display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</div>
         )}
         {phase === 'back_up' && <div style={{ fontSize: 44, lineHeight: 1 }}>✓</div>}
-        {phase === 'timeout' && <div style={{ fontSize: 44, lineHeight: 1 }}>⚠</div>}
+        {isError && <div style={{ fontSize: 44, lineHeight: 1 }}>⚠</div>}
         <div style={{ fontSize: 18, fontWeight: 700, marginTop: 14 }}>Updating NetVault…</div>
         <p style={{ color: '#64748b', marginTop: 6 }}>Pulling latest code and restarting services. Do not close this window.</p>
         <p style={{ fontWeight: 600, margin: '14px 0' }}>{statusLine}</p>
@@ -967,7 +999,7 @@ export default function SettingsPage() {
       )}
 
       {confirmingUpdate && <UpdateConfirmModal onCancel={() => setConfirmingUpdate(false)} onConfirm={startUpdate} />}
-      {updatingApp && <UpdatingOverlay />}
+      {updatingApp && <UpdatingOverlay preVersion={updateStatus?.current_version || ''} />}
 
     </div>
   )

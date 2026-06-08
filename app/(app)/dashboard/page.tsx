@@ -7,24 +7,34 @@ function UpdatedNotice() {
   const [show, setShow] = useState(false)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (params.get('updated') === 'true') {
-      setShow(true)
-      window.history.replaceState({}, '', window.location.pathname)
-      setTimeout(() => setShow(false), 5000)
-    }
+    if (params.get('updated') !== 'true') return
+    setShow(true)
+    window.history.replaceState({}, '', window.location.pathname)
+    const dismissId = setTimeout(() => setShow(false), 5000)
+    return () => clearTimeout(dismissId)
   }, [])
   if (!show) return null
   return (
     <div
-      onClick={() => setShow(false)}
       style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
         marginBottom: 16, borderRadius: 8, fontSize: 13.5, fontWeight: 600,
-        cursor: 'pointer', color: '#166534', background: 'rgba(22,163,74,0.10)',
+        color: '#166534', background: 'rgba(22,163,74,0.10)',
         border: '1px solid rgba(22,163,74,0.30)',
       }}
     >
-      <span aria-hidden>✓</span><span>NetVault updated successfully</span>
+      <span aria-hidden>✓</span>
+      <span style={{ flex: 1 }}>NetVault updated successfully</span>
+      <button
+        onClick={() => setShow(false)}
+        aria-label="Dismiss"
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer', color: '#166534',
+          fontSize: 18, lineHeight: 1, padding: 0, opacity: 0.7,
+        }}
+      >
+        ×
+      </button>
     </div>
   )
 }

@@ -14,6 +14,19 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# The scheduled task runs as SYSTEM, which has a minimal PATH that does not
+# include git/node/npm. Without this, "git fetch/reset" silently exits 0 with
+# no binary found and the update "succeeds" with old code. Prepend the standard
+# install locations so the toolchain resolves under SYSTEM.
+$env:PATH = @(
+    "C:\Program Files\Git\cmd",
+    "C:\Program Files\Git\bin",
+    "C:\Program Files\nodejs",
+    "C:\Program Files\npm",
+    $env:PATH
+) -join ";"
+
 Write-Host "=== Update starting in 5 seconds ==="
 Start-Sleep -Seconds 5
 
@@ -73,9 +86,9 @@ try {
     }
 
     Write-Step "Pulling latest code from GitHub"
-    Write-Host "    Running: git fetch origin" -ForegroundColor Gray
+    Write-Host "    Running: git fetch origin main" -ForegroundColor Gray
     Set-Location $AppDir
-    $null = & git fetch origin 2>&1
+    $null = & git fetch origin main 2>&1
     if ($LASTEXITCODE -ne 0) { throw "git fetch failed (exit $LASTEXITCODE)" }
     Write-Host "    Running: git reset --hard origin/main" -ForegroundColor Gray
     $gitResult = & git reset --hard origin/main 2>&1
@@ -83,6 +96,7 @@ try {
     Write-Host "    $gitResult" -ForegroundColor Gray
     $null = & git clean -fd --exclude=".env" --exclude=".env.local" --exclude="node_modules" 2>&1
     if ($LASTEXITCODE -ne 0) { throw "git clean failed (exit $LASTEXITCODE)" }
+    Write-Host "==> HEAD now: $(& git rev-parse --short HEAD 2>&1)" -ForegroundColor Cyan
     Write-OK "Git reset and clean done"
 
     # Restore known-problematic files
