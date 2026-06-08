@@ -3,8 +3,9 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
 interface UpdateInfo {
-  version_update_available?: boolean
-  latest_semver?: string
+  update_available?: boolean
+  latest_version?: string
+  latest_commit?: string
 }
 
 const DISMISS_KEY_PREFIX = 'netvault-update-dismissed-'
@@ -21,9 +22,12 @@ export default function UpdateNotifier() {
         const data: UpdateInfo = await res.json()
         if (cancelled) return
         setInfo(data)
-        if (data.version_update_available && data.latest_semver) {
+        // Key dismissal on the latest commit so a freshly pushed patch (no
+        // version bump) re-shows the banner instead of staying dismissed.
+        const key = data.latest_commit || data.latest_version
+        if (data.update_available && key) {
           try {
-            setDismissed(!!sessionStorage.getItem(DISMISS_KEY_PREFIX + data.latest_semver))
+            setDismissed(!!sessionStorage.getItem(DISMISS_KEY_PREFIX + key))
           } catch {
             setDismissed(false)
           }
@@ -38,13 +42,14 @@ export default function UpdateNotifier() {
   }, [])
 
   const handleDismiss = () => {
-    if (info?.latest_semver) {
-      try { sessionStorage.setItem(DISMISS_KEY_PREFIX + info.latest_semver, '1') } catch {}
+    const key = info?.latest_commit || info?.latest_version
+    if (key) {
+      try { sessionStorage.setItem(DISMISS_KEY_PREFIX + key, '1') } catch {}
     }
     setDismissed(true)
   }
 
-  if (!info || !info.version_update_available || dismissed) return null
+  if (!info || !info.update_available || dismissed) return null
 
   return (
     <div style={{
@@ -61,7 +66,7 @@ export default function UpdateNotifier() {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span>🔄</span>
-        <span>NetVault v{info.latest_semver} is available</span>
+        <span>{info.latest_version ? `NetVault v${info.latest_version} is available` : 'A NetVault update is available'}</span>
         <span style={{ opacity: 0.7 }}>→</span>
         <Link
           href="/settings?tab=updates"

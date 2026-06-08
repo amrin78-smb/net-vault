@@ -4,88 +4,11 @@ import fs from 'fs'
 import path from 'path'
 import pkg from '../../../../package.json'
 
-const RAW_BASE = 'https://raw.githubusercontent.com/amrin78-smb/net-vault/main/'
+export const dynamic = 'force-dynamic'
 
-function parseSemver(v: string): number[] {
-  return String(v).replace(/^v/, '').split('.').map(n => parseInt(n, 10) || 0)
-}
-
-function isRemoteNewer(local: string, remote: string): boolean {
-  const a = parseSemver(local)
-  const b = parseSemver(remote)
-  for (let i = 0; i < 3; i++) {
-    const la = a[i] || 0
-    const rb = b[i] || 0
-    if (rb > la) return true
-    if (rb < la) return false
-  }
-  return false
-}
-
-async function fetchText(url: string): Promise<string> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 6000)
-  try {
-    const res = await fetch(url, { signal: controller.signal })
-    if (!res.ok) throw new Error('HTTP ' + res.status)
-    return await res.text()
-  } finally {
-    clearTimeout(timer)
-  }
-}
-
-async function getSemverInfo(): Promise<{
-  current_semver: string | undefined
-  latest_semver: string | undefined
-  changelog: string | undefined
-  release_date: string | undefined
-  version_update_available: boolean
-}> {
-  const current_semver = pkg.version
-  try {
-    const remotePkgText = await fetchText(`${RAW_BASE}package.json`)
-    const remotePkg = JSON.parse(remotePkgText)
-    const latest_semver = remotePkg.version as string
-
-    let changelog: string | undefined
-    let release_date: string | undefined
-    try {
-      const changelogText = await fetchText(`${RAW_BASE}CHANGELOG.md`)
-      const lines = changelogText.split('\n')
-      const startIdx = lines.findIndex(l => l.startsWith('## '))
-      if (startIdx !== -1) {
-        let endIdx = lines.length
-        for (let i = startIdx + 1; i < lines.length; i++) {
-          if (lines[i].startsWith('## ')) {
-            endIdx = i
-            break
-          }
-        }
-        changelog = lines.slice(startIdx, endIdx).join('\n').trim()
-        const headingMatch = lines[startIdx].match(/[—-]\s*(.+)\s*$/)
-        if (headingMatch) release_date = headingMatch[1].trim()
-      }
-    } catch (e) {
-      // changelog is optional; leave changelog/release_date undefined
-    }
-
-    return {
-      current_semver,
-      latest_semver,
-      changelog,
-      release_date,
-      version_update_available: isRemoteNewer(current_semver, latest_semver),
-    }
-  } catch (e) {
-    return {
-      current_semver,
-      latest_semver: undefined,
-      changelog: undefined,
-      release_date: undefined,
-      version_update_available: false,
-    }
-  }
-}
+const REPO = 'amrin78-smb/net-vault'
+const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main/`
+const COMMITS_API = `https://api.github.com/repos/${REPO}/commits/main`
 
 function findGitRoot(start: string): string {
   let dir = start
@@ -98,37 +21,127 @@ function findGitRoot(start: string): string {
   return start
 }
 
+// Short git commit hash for the deployed checkout, or null if git is
+// unavailable (e.g. a non-git on-prem deploy). Update detection degrades
+// gracefully to "up to date" when this is null.
+function localCommitHash(repoRoot: string): string | null {
+  try {
+    return execSync('git rev-parse HEAD', { cwd: repoRoot, encoding: 'utf8', timeout: 30000 })
+      .trim().slice(0, 7)
+  } catch {
+    return null
+  }
+}
+
+async function fetchText(url: string): Promise<string> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 6000)
+  try {
+    const res = await fetch(url, { cache: 'no-store', signal: controller.signal })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    return await res.text()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Fetch the latest commit SHA on GitHub's main branch via the commits API.
+// Returns the first 7 chars, or null on any failure.
+async function remoteCommitHash(): Promise<string | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 6000)
+  try {
+    const res = await fetch(COMMITS_API, {
+      headers: { Accept: 'application/vnd.github.v3+json' },
+      cache: 'no-store',
+      signal: controller.signal,
+    })
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const commit = await res.json()
+    return commit && commit.sha ? String(commit.sha).slice(0, 7) : null
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Pull the latest version's section out of CHANGELOG.md — everything from the
+// first "## " header up to the next one — plus the release date in the header.
+function extractLatestChangelog(md: string): { changelog?: string; release_date?: string } {
+  const lines = md.split('\n')
+  const startIdx = lines.findIndex(l => l.startsWith('## '))
+  if (startIdx === -1) return {}
+  let endIdx = lines.length
+  for (let i = startIdx + 1; i < lines.length; i++) {
+    if (lines[i].startsWith('## ')) { endIdx = i; break }
+  }
+  const changelog = lines.slice(startIdx, endIdx).join('\n').trim()
+  const headingMatch = lines[startIdx].match(/[—-]\s*(.+)\s*$/)
+  const release_date = headingMatch ? headingMatch[1].trim() : undefined
+  return { changelog, release_date }
+}
+
+// Compares the local git commit hash against the latest commit on GitHub's main
+// branch. ANY differing commit counts as an update available — the package.json
+// version is for display only, so patches pushed without a version bump are no
+// longer missed. Never 500s: a fetch/git failure degrades to "up to date" so we
+// never show a false "update available".
 export async function GET() {
   const repoRoot = findGitRoot(process.cwd())
-  const git = (cmd: string) =>
-    execSync(cmd, { cwd: repoRoot, encoding: 'utf8', timeout: 30000 }).trim()
-
-  // Fetch first, separately, so a network/auth failure surfaces as a real
-  // error instead of silently masquerading as "up to date".
-  try {
-    git('git fetch origin main')
-  } catch (e: any) {
-    const detail = (e.stderr || e.message || 'git fetch failed').toString().trim()
-    console.error('[update-status] git fetch failed:', detail)
-    return NextResponse.json({ error: 'Could not reach GitHub to check for updates: ' + detail, _gitRoot: repoRoot }, { status: 502 })
-  }
+  const current_version = pkg.version
+  const localHash = localCommitHash(repoRoot)
 
   try {
-    const current = git('git rev-parse HEAD').slice(0, 7)
-    const latest  = git('git rev-parse origin/main').slice(0, 7)
-    const behind  = parseInt(git('git rev-list HEAD..origin/main --count'), 10) || 0
-    const log     = git('git log HEAD..origin/main --pretty=format:"%h %s"')
-    const changes = log ? log.split('\n').map(l => l.trim()).filter(Boolean) : []
-    let semver: Record<string, any> = {}
+    // Cache-bust the raw files so GitHub's CDN can't return a stale copy — the
+    // "Check for updates" button must reflect a freshly pushed commit at once.
+    const bust = Date.now()
+    const [remoteHash, remotePkgText] = await Promise.all([
+      remoteCommitHash(),
+      fetchText(`${RAW_BASE}package.json?cb=${bust}`),
+    ])
+
+    let latest_version: string | undefined
     try {
-      semver = await getSemverInfo()
-    } catch (e) {
-      semver = {}
+      latest_version = JSON.parse(remotePkgText).version
+    } catch {
+      // best-effort; version is display-only
     }
-    return NextResponse.json({ current_version: current, latest_version: latest, commits_behind: behind, up_to_date: behind === 0, changes, _gitRoot: repoRoot, ...semver })
+
+    let changelog: string | undefined
+    let release_date: string | undefined
+    try {
+      const parsed = extractLatestChangelog(await fetchText(`${RAW_BASE}CHANGELOG.md?cb=${bust}`))
+      changelog = parsed.changelog
+      release_date = parsed.release_date
+    } catch {
+      // changelog is optional
+    }
+
+    // Any differing commit = update available. If either hash is missing
+    // (git unavailable or API error), treat as up to date to avoid a false alarm.
+    const update_available = !!remoteHash && !!localHash && remoteHash !== localHash
+
+    return NextResponse.json({
+      current_version,
+      latest_version,
+      current_commit: localHash,
+      latest_commit: remoteHash,
+      up_to_date: !update_available,
+      update_available,
+      changelog,
+      release_date,
+    })
   } catch (e: any) {
-    const detail = (e.stderr || e.message || 'git check failed').toString().trim()
-    console.error('[update-status] git check failed:', detail)
-    return NextResponse.json({ error: 'Could not check for updates: ' + detail, _gitRoot: repoRoot }, { status: 500 })
+    const detail = (e?.message || 'version check failed').toString().trim()
+    console.error('[update-status] version check failed:', detail)
+    // Degrade to "up to date" rather than surfacing a false update available.
+    return NextResponse.json({
+      current_version,
+      current_commit: localHash,
+      up_to_date: true,
+      update_available: false,
+      error: 'Could not check for updates',
+    })
   }
 }

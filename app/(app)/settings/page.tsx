@@ -6,10 +6,10 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 
 type UpdateStatus = {
-  current_version?: string; latest_version?: string; commits_behind?: number
-  up_to_date?: boolean; changes?: string[]; error?: string
-  current_semver?: string; latest_semver?: string; changelog?: string
-  release_date?: string; version_update_available?: boolean
+  current_version?: string; latest_version?: string
+  current_commit?: string; latest_commit?: string
+  up_to_date?: boolean; update_available?: boolean
+  changelog?: string; release_date?: string; error?: string
 }
 
 function changelogBody(raw?: string): string {
@@ -69,7 +69,10 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
         clearTimeout(abortId)
         const data = await res.json()
         if (!active) return
-        const newVersion: string = data?.current_version || ''
+        // Compare commit hashes, not the semver version: a patch pushed without
+        // a version bump still changes the commit, so the version string alone
+        // would falsely report "verify_failed".
+        const newVersion: string = data?.current_commit || ''
         if (preVersionRef.current && newVersion && newVersion === preVersionRef.current) {
           setPhase('verify_failed')
           return
@@ -429,7 +432,7 @@ export default function SettingsPage() {
           .map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? '#C8102E' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #C8102E' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
             {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : tab === 'updates' ? 'Updates' : 'License'}
-            {tab === 'updates' && updateStatus?.version_update_available && (
+            {tab === 'updates' && updateStatus?.update_available && (
               <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
             )}
           </button>
@@ -538,7 +541,7 @@ export default function SettingsPage() {
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginTop: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
             <div style={{ fontSize: '15px', fontWeight: '700', color: '#111827' }}>NetVault</div>
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Version: v{updateStatus?.current_semver || '1.0.0'}</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Version: v{updateStatus?.current_version || '1.0.0'}</div>
             <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>Part of the NocVault Intelligence Suite</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>© 2026 NocVault</div>
           </div>
@@ -973,68 +976,9 @@ export default function SettingsPage() {
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>NetVault version</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>Check GitHub for the latest code and apply updates via Windows Task Scheduler.</div>
 
-            {updateStatus?.current_semver && (
-              <div style={{ marginBottom: 16 }}>
-                {updateStatus.version_update_available ? (
-                  <p style={{ fontWeight: 700, fontSize: 16, margin: '0 0 8px' }}>
-                    🔄 Update available: v{updateStatus.current_semver} → v{updateStatus.latest_semver}
-                  </p>
-                ) : (
-                  <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 8px' }}>
-                    Version: <code style={{ fontWeight: 600 }}>v{updateStatus.current_semver}</code>
-                  </p>
-                )}
-                {updateStatus.changelog && (
-                  <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', background: '#f9fafb', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                    {changelogBody(updateStatus.changelog)}
-                  </div>
-                )}
-                {updateStatus.release_date && (
-                  <p style={{ fontSize: 13, color: '#9ca3af', margin: '8px 0 0' }}>
-                    Released: {fmtReleaseDate(updateStatus.release_date)}
-                  </p>
-                )}
-              </div>
-            )}
-
             {checkUpdateErr && (
               <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '14px' }}>
                 {checkUpdateErr}
-              </div>
-            )}
-
-            {updateStatus && !updateStatus.error && (
-              <div style={{ marginBottom: '16px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                  <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '12px 14px' }}>
-                    <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Current</div>
-                    <code style={{ fontSize: '14px', fontWeight: '600', color: '#111827', fontFamily: 'monospace' }}>{updateStatus.current_version}</code>
-                  </div>
-                  <div style={{ background: '#f9fafb', borderRadius: '8px', padding: '12px 14px' }}>
-                    <div style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Latest</div>
-                    <code style={{ fontSize: '14px', fontWeight: '600', color: '#111827', fontFamily: 'monospace' }}>{updateStatus.latest_version}</code>
-                  </div>
-                </div>
-
-                {updateStatus.up_to_date ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: '7px', padding: '10px 14px', fontSize: '13px', fontWeight: '500' }}>
-                    <span>✓</span><span>NetVault is up to date</span>
-                  </div>
-                ) : (
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#92400e', background: '#fef3c7', border: '1px solid #fcd34d', borderRadius: '7px', padding: '10px 14px', fontSize: '13px', fontWeight: '500', marginBottom: '10px' }}>
-                      <span>↑</span><span>{updateStatus.commits_behind} commit{updateStatus.commits_behind !== 1 ? 's' : ''} behind</span>
-                    </div>
-                    {updateStatus.changes && updateStatus.changes.length > 0 && (
-                      <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '7px', padding: '10px 14px', marginBottom: '10px' }}>
-                        <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>Pending changes</div>
-                        {updateStatus.changes.map((c, i) => (
-                          <div key={i} style={{ fontSize: '12px', color: '#374151', fontFamily: 'monospace', padding: '2px 0' }}>{c}</div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
 
@@ -1044,11 +988,52 @@ export default function SettingsPage() {
               </div>
             )}
 
+            {updateStatus && !updateStatus.error && (
+              <div style={{ marginBottom: '16px' }}>
+                {updateStatus.up_to_date ? (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: '7px', padding: '10px 14px', fontSize: '13px', fontWeight: '500', marginBottom: 10 }}>
+                      <span>✓</span><span>NetVault is up to date</span>
+                    </div>
+                    <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
+                      Version: <code style={{ fontWeight: 600 }}>v{updateStatus.current_version}</code>
+                      {updateStatus.current_commit && <> (<code>{updateStatus.current_commit}</code>)</>}
+                    </p>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontWeight: 700, fontSize: 16, margin: '0 0 8px' }}>
+                      {updateStatus.current_version === updateStatus.latest_version
+                        ? <>🔄 Patches available since v{updateStatus.current_version}</>
+                        : <>🔄 Update available: v{updateStatus.current_version} → v{updateStatus.latest_version}</>}
+                    </p>
+                    <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 10px' }}>
+                      Current: v{updateStatus.current_version}
+                      {updateStatus.current_commit && <> (<code>{updateStatus.current_commit}</code>)</>}
+                      {'  →  '}
+                      Latest: v{updateStatus.latest_version}
+                      {updateStatus.latest_commit && <> (<code>{updateStatus.latest_commit}</code>)</>}
+                    </p>
+                    {updateStatus.changelog && (
+                      <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', background: '#f9fafb', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                        {changelogBody(updateStatus.changelog)}
+                      </div>
+                    )}
+                    {updateStatus.release_date && (
+                      <p style={{ fontSize: 13, color: '#9ca3af', margin: '8px 0 0' }}>
+                        Released: {fmtReleaseDate(updateStatus.release_date)}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button className="btn-secondary" onClick={() => void checkForUpdates()} disabled={checkingUpdate} style={{ padding: '8px 16px' }}>
                 {checkingUpdate ? 'Checking…' : 'Check for updates'}
               </button>
-              {updateStatus && !updateStatus.up_to_date && !updateStatus.error && (
+              {updateStatus?.update_available && !updateStatus.error && (
                 <button className="btn-primary" onClick={() => setConfirmingUpdate(true)} style={{ padding: '8px 16px' }}>
                   Apply update
                 </button>
@@ -1065,7 +1050,7 @@ export default function SettingsPage() {
       )}
 
       {confirmingUpdate && <UpdateConfirmModal onCancel={() => setConfirmingUpdate(false)} onConfirm={startUpdate} />}
-      {updatingApp && <UpdatingOverlay preVersion={updateStatus?.current_version || ''} />}
+      {updatingApp && <UpdatingOverlay preVersion={updateStatus?.current_commit || ''} />}
 
     </div>
   )
