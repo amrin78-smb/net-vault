@@ -86,22 +86,46 @@ try {
     }
 
     Write-Step "Pulling latest code from GitHub"
-    Write-Host "    Running: git fetch origin main" -ForegroundColor Gray
     Set-Location $AppDir
+
+    # git writes informational messages (e.g. "From https://github.com/...") to
+    # stderr. Under $ErrorActionPreference = 'Stop', merging stderr via 2>&1 turns
+    # those lines into ErrorRecords that Stop mode treats as terminating - even
+    # when git exits 0. Relax the preference around each git call, capture the real
+    # exit code, then restore Stop and check the exit code explicitly.
+
+    Write-Host "    Running: git fetch origin main" -ForegroundColor Gray
+    $ErrorActionPreference = 'Continue'
     $null = & git fetch origin main 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "git fetch failed (exit $LASTEXITCODE)" }
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($exitCode -ne 0) { throw "git fetch failed (exit $exitCode)" }
+
     Write-Host "    Running: git reset --hard origin/main" -ForegroundColor Gray
+    $ErrorActionPreference = 'Continue'
     $gitResult = & git reset --hard origin/main 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "git reset --hard failed (exit $LASTEXITCODE)" }
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($exitCode -ne 0) { throw "git reset --hard failed (exit $exitCode)" }
     Write-Host "    $gitResult" -ForegroundColor Gray
+
+    $ErrorActionPreference = 'Continue'
     $null = & git clean -fd --exclude=".env" --exclude=".env.local" --exclude="node_modules" 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "git clean failed (exit $LASTEXITCODE)" }
-    Write-Host "==> HEAD now: $(& git rev-parse --short HEAD 2>&1)" -ForegroundColor Cyan
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($exitCode -ne 0) { throw "git clean failed (exit $exitCode)" }
+
+    $ErrorActionPreference = 'Continue'
+    $headRef = & git rev-parse --short HEAD 2>&1
+    $ErrorActionPreference = 'Stop'
+    Write-Host "==> HEAD now: $headRef" -ForegroundColor Cyan
     Write-OK "Git reset and clean done"
 
-    # Restore known-problematic files
+    # Restore known-problematic files (best-effort, informational stderr ignored)
+    $ErrorActionPreference = 'Continue'
     $null = & git checkout origin/main -- app/api/settings/route.ts 2>&1
     $null = & git checkout origin/main -- app/api/settings/logo/route.ts 2>&1
+    $ErrorActionPreference = 'Stop'
 
     # Restore .env after git reset
     Write-Step "Restoring .env"
