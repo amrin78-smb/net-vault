@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
+import { getLicenseStatus, getServerId } from '@/lib/license'
+import { query } from '@/lib/db'
 
 function findGitRoot(start: string): string {
   let dir = start
@@ -15,6 +17,22 @@ function findGitRoot(start: string): string {
 }
 
 export async function POST() {
+  const serverId = getServerId()
+  const result = await query(
+    "SELECT key, value FROM app_settings WHERE key IN ('install_date','license_key')"
+  )
+  const s: Record<string, string> = {}
+  for (const row of result.rows) s[row.key] = row.value ?? ''
+  const { status } = getLicenseStatus(
+    s['install_date'] ?? '', s['license_key'] ?? '', serverId
+  )
+  if (status === 'expired') {
+    return NextResponse.json(
+      { error: 'License expired. Renew your license to receive updates.' },
+      { status: 403 }
+    )
+  }
+
   const serverIp = process.env.SERVER_IP || ''
   if (!serverIp) {
     return NextResponse.json({ error: 'SERVER_IP not configured in .env.local' }, { status: 400 })

@@ -178,6 +178,7 @@ export default function SettingsPage() {
   const [checkUpdateErr, setCheckUpdateErr] = useState<string | null>(null)
   const [confirmingUpdate, setConfirmingUpdate] = useState(false)
   const [updatingApp, setUpdatingApp] = useState(false)
+  const [applyUpdateErr, setApplyUpdateErr] = useState<string | null>(null)
 
   const [users, setUsers] = useState<User[]>([])
   const [showUserForm, setShowUserForm] = useState(false)
@@ -252,11 +253,19 @@ export default function SettingsPage() {
 
   async function startUpdate() {
     setConfirmingUpdate(false)
-    setUpdatingApp(true)
+    setApplyUpdateErr(null)
     try {
-      await fetch('/api/system/update', { method: 'POST' })
+      const res = await fetch('/api/system/update', { method: 'POST' })
+      if (res.status === 403) {
+        // License blocked the update — do NOT show the updating overlay.
+        const data = await res.json().catch(() => ({}))
+        setApplyUpdateErr(data.error || 'Updates are not available for your license.')
+        return
+      }
+      setUpdatingApp(true)
     } catch (_e) {
       // connection may drop during restart
+      setUpdatingApp(true)
     }
   }
 
@@ -994,6 +1003,12 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
+
+            {applyUpdateErr && (
+              <div style={{ color: '#991b1b', fontSize: '13px', fontWeight: '500', marginTop: '10px' }}>
+                {applyUpdateErr}
+              </div>
+            )}
           </div>
         </div>
       )}
