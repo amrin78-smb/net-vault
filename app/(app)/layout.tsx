@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import GlobalSearch from '@/components/GlobalSearch'
 import IdleTimeout from '@/components/IdleTimeout'
+import UpdateNotifier from '@/app/components/UpdateNotifier'
 
 type Settings = {
   app_name: string; app_subtitle: string; app_logo_url: string
@@ -76,6 +77,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744',
   })
   const [collapsed, setCollapsed] = useState(false)
+  const [appVersion, setAppVersion] = useState<string | null>(null)
   const [licenseStatus, setLicenseStatus] = useState<string | null>(null)
   const [licenseDaysRemaining, setLicenseDaysRemaining] = useState(0)
   const [licenseExpiry, setLicenseExpiry] = useState<string | null>(null)
@@ -91,6 +93,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   // Hydrate collapsed state from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
     if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true') setCollapsed(true)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/health').then(r => r.json()).then(j => { if (!cancelled) setAppVersion(j.version || null) }).catch(() => {})
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -306,7 +314,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Footer */}
         {!collapsed && (
           <div style={{ padding: '6px 20px 10px', fontSize: 11, color: 'rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
-            NocVault Suite
+            <div>NocVault Suite</div>
+            <div style={{ marginTop: 2 }}>NetVault{appVersion ? ` v${appVersion}` : ''}</div>
           </div>
         )}
         {collapsed && <div style={{ height: 8 }} />}
@@ -501,6 +510,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           )
           return null
         })()}
+
+        <UpdateNotifier />
 
         {/* Page content */}
         <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>

@@ -8,6 +8,22 @@ import { useRouter } from 'next/navigation'
 type UpdateStatus = {
   current_version?: string; latest_version?: string; commits_behind?: number
   up_to_date?: boolean; changes?: string[]; error?: string
+  current_semver?: string; latest_semver?: string; changelog?: string
+  release_date?: string; version_update_available?: boolean
+}
+
+function changelogBody(raw?: string): string {
+  if (!raw) return ''
+  // drop the leading "## ..." heading line, return the rest trimmed
+  const lines = raw.split('\n')
+  if (lines[0]?.trim().startsWith('##')) lines.shift()
+  return lines.join('\n').trim()
+}
+function fmtReleaseDate(d?: string): string {
+  if (!d) return ''
+  const dt = new Date(d)
+  if (isNaN(dt.getTime())) return d
+  return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
 function UpdateConfirmModal({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
@@ -413,6 +429,9 @@ export default function SettingsPage() {
           .map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? '#C8102E' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #C8102E' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
             {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : tab === 'updates' ? 'Updates' : 'License'}
+            {tab === 'updates' && updateStatus?.version_update_available && (
+              <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
+            )}
           </button>
         ))}
       </div>
@@ -514,6 +533,14 @@ export default function SettingsPage() {
               {savingSettings ? 'Saving...' : 'Save settings'}
             </button>
             {settingsSaved && <span style={{ fontSize: '13px', color: '#166534', background: '#dcfce7', padding: '6px 12px', borderRadius: '6px' }}>Saved! Reload to see changes.</span>}
+          </div>
+
+          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginTop: '20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
+            <div style={{ fontSize: '15px', fontWeight: '700', color: '#111827' }}>NetVault</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Version: v{updateStatus?.current_semver || '1.0.0'}</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>Part of the NocVault Intelligence Suite</div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>© 2026 NocVault</div>
           </div>
         </div>
       )}
@@ -945,6 +972,30 @@ export default function SettingsPage() {
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>NetVault version</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>Check GitHub for the latest code and apply updates via Windows Task Scheduler.</div>
+
+            {updateStatus?.current_semver && (
+              <div style={{ marginBottom: 16 }}>
+                {updateStatus.version_update_available ? (
+                  <p style={{ fontWeight: 700, fontSize: 16, margin: '0 0 8px' }}>
+                    🔄 Update available: v{updateStatus.current_semver} → v{updateStatus.latest_semver}
+                  </p>
+                ) : (
+                  <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 8px' }}>
+                    Version: <code style={{ fontWeight: 600 }}>v{updateStatus.current_semver}</code>
+                  </p>
+                )}
+                {updateStatus.changelog && (
+                  <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', background: '#f9fafb', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                    {changelogBody(updateStatus.changelog)}
+                  </div>
+                )}
+                {updateStatus.release_date && (
+                  <p style={{ fontSize: 13, color: '#9ca3af', margin: '8px 0 0' }}>
+                    Released: {fmtReleaseDate(updateStatus.release_date)}
+                  </p>
+                )}
+              </div>
+            )}
 
             {checkUpdateErr && (
               <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '14px' }}>
