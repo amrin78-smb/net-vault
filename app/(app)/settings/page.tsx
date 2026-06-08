@@ -78,25 +78,24 @@ function UpdatingOverlay() {
     }
   }, [])
 
-  const messages: Record<string, string> = {
-    starting: 'Starting update…',
-    down: 'Services restarting… ⟳',
-    back_up: '✓ Update complete! Reloading…',
-    timeout: 'Update is taking longer than expected. Try refreshing manually.',
-  }
+  let statusLine = 'Starting update…'
+  if (phase === 'down') statusLine = 'Services restarting… ⟳'
+  else if (phase === 'back_up') statusLine = '✓ Update complete! Redirecting…'
+  else if (phase === 'timeout') statusLine = 'Update is taking longer than expected. Try refreshing the page manually.'
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: 'white', borderRadius: '12px', padding: '32px 40px', textAlign: 'center', maxWidth: '380px', width: '90%' }}>
-        <div style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
-          {phase === 'back_up' ? '✓ Update complete!' : phase === 'timeout' ? 'Taking longer than expected' : 'Updating NetVault…'}
-        </div>
-        <div style={{ fontSize: '14px', color: '#6b7280' }}>{messages[phase]}</div>
-        {phase === 'timeout' && (
-          <button onClick={() => window.location.reload()} style={{ marginTop: '16px', padding: '8px 16px', background: '#1a2744', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px' }}>
-            Reload page
-          </button>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', padding: 28, maxWidth: 440, width: '100%', textAlign: 'center' }}>
+        {phase !== 'back_up' && phase !== 'timeout' && (
+          <div style={{ fontSize: 44, lineHeight: 1, display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</div>
         )}
+        {phase === 'back_up' && <div style={{ fontSize: 44, lineHeight: 1 }}>✓</div>}
+        {phase === 'timeout' && <div style={{ fontSize: 44, lineHeight: 1 }}>⚠</div>}
+        <div style={{ fontSize: 18, fontWeight: 700, marginTop: 14 }}>Updating NetVault…</div>
+        <p style={{ color: '#64748b', marginTop: 6 }}>Pulling latest code and restarting services. Do not close this window.</p>
+        <p style={{ fontWeight: 600, margin: '14px 0' }}>{statusLine}</p>
+        <p style={{ color: '#64748b', fontSize: 12 }}>(This usually takes 30-60 seconds)</p>
+        <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={() => window.location.reload()}>Reload Now</button>
       </div>
     </div>
   )
