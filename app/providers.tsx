@@ -38,10 +38,11 @@ export default function Providers({ children }: { children: ReactNode }) {
     setConfirmState(null)
   }
 
-  const toastColors: Record<ToastType, { bg: string; color: string; border: string; icon: string }> = {
-    success: { bg: '#f0fdf4', color: '#166534', border: '#86efac', icon: '✓' },
-    error:   { bg: '#fef2f2', color: '#991b1b', border: '#fca5a5', icon: '✕' },
-    info:    { bg: '#eff6ff', color: '#1d4ed8', border: '#93c5fd', icon: 'i' },
+  // DDIVault toast recipe: navy box, white text, a coloured left accent border.
+  const toastAccent: Record<ToastType, string> = {
+    success: '#16a34a',
+    error:   '#dc2626',
+    info:    '#2563eb',
   }
 
   return (
@@ -52,36 +53,30 @@ export default function Providers({ children }: { children: ReactNode }) {
 
           {/* Toast container */}
           <div style={{ position: 'fixed', bottom: '24px', right: '24px', zIndex: 9999, display: 'flex', flexDirection: 'column', gap: '8px', pointerEvents: 'none' }}>
-            {toasts.map(toast => {
-              const c = toastColors[toast.type]
-              return (
-                <div key={toast.id} style={{
-                  background: c.bg, color: c.color, border: `1px solid ${c.border}`,
-                  borderRadius: '10px', padding: '12px 16px', fontSize: '13px', fontWeight: '500',
-                  boxShadow: '0 4px 16px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: '10px',
-                  minWidth: '260px', maxWidth: '380px', pointerEvents: 'auto',
-                  animation: 'slideInToast 0.2s ease-out'
-                }}>
-                  <span style={{ width: '20px', height: '20px', borderRadius: '50%', background: c.color, color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: '700', flexShrink: 0 }}>
-                    {c.icon}
-                  </span>
-                  {toast.message}
-                </div>
-              )
-            })}
+            {toasts.map(toast => (
+              <div key={toast.id} style={{
+                background: '#1a2744', color: '#fff',
+                borderLeft: `4px solid ${toastAccent[toast.type]}`,
+                borderRadius: '8px', padding: '10px 16px', fontSize: '13px', fontWeight: '500',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.3)', maxWidth: '340px', pointerEvents: 'auto',
+                animation: 'fadeIn 0.2s ease'
+              }}>
+                {toast.message}
+              </div>
+            ))}
           </div>
 
           {/* Confirm modal */}
           {confirmState && (
-            <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998 }}>
-              <div style={{ background: 'white', borderRadius: '12px', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
-                <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: '0 0 8px' }}>{confirmState.options.title}</h2>
-                <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px', lineHeight: '1.5' }}>{confirmState.options.message}</p>
+            <div className="modal-overlay" style={{ zIndex: 9998 }}>
+              <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>{confirmState.options.title}</h2>
+                <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 24px', lineHeight: '1.5' }}>{confirmState.options.message}</p>
                 <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                  <button onClick={() => handleConfirm(false)} style={{ padding: '8px 18px', background: 'white', color: '#374151', border: '1px solid #d1d5db', borderRadius: '7px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
+                  <button className="btn" onClick={() => handleConfirm(false)}>
                     Cancel
                   </button>
-                  <button onClick={() => handleConfirm(true)} style={{ padding: '8px 18px', background: confirmState.options.danger ? '#C8102E' : '#1a2744', color: 'white', border: 'none', borderRadius: '7px', fontSize: '14px', fontWeight: '500', cursor: 'pointer' }}>
+                  <button className={confirmState.options.danger ? 'btn btn-primary' : 'btn btn-navy'} onClick={() => handleConfirm(true)}>
                     {confirmState.options.confirmLabel || 'Confirm'}
                   </button>
                 </div>

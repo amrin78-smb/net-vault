@@ -65,12 +65,13 @@ export default function IdleTimeout() {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+      position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)',
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+      animation: 'fadeIn 0.15s ease',
     }}>
       <div style={{
-        background: 'white', borderRadius: '12px', padding: '32px',
-        width: '100%', maxWidth: '420px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
+        background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '32px',
+        width: '100%', maxWidth: '420px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
         textAlign: 'center',
       }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
@@ -81,31 +82,17 @@ export default function IdleTimeout() {
             </svg>
           </div>
         </div>
-        <h2 style={{ fontSize: '18px', fontWeight: '700', color: '#111827', margin: '0 0 8px' }}>
+        <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>
           Session expiring soon
         </h2>
-        <p style={{ fontSize: '14px', color: '#6b7280', margin: '0 0 24px' }}>
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 24px' }}>
           You will be logged out in 60 seconds due to inactivity.
         </p>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-          <button
-            onClick={stayLoggedIn}
-            style={{
-              padding: '10px 24px', background: '#C8102E', color: 'white',
-              border: 'none', borderRadius: '7px', fontSize: '14px',
-              fontWeight: '500', cursor: 'pointer',
-            }}
-          >
+          <button className="btn btn-primary" onClick={stayLoggedIn} style={{ padding: '10px 24px' }}>
             Stay logged in
           </button>
-          <button
-            onClick={() => signOut({ callbackUrl: '/login?reason=timeout' })}
-            style={{
-              padding: '10px 24px', background: '#f3f4f6', color: '#374151',
-              border: 'none', borderRadius: '7px', fontSize: '14px',
-              fontWeight: '500', cursor: 'pointer',
-            }}
-          >
+          <button className="btn" onClick={() => signOut({ callbackUrl: '/login?reason=timeout' })} style={{ padding: '10px 24px' }}>
             Sign out now
           </button>
         </div>
