@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 66">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 46">
   <defs><style>@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@700&amp;display=swap');</style></defs>
   <circle cx="19" cy="29" r="16" fill="none" stroke="#d97706" stroke-width="2"/><ellipse cx="19" cy="29" rx="8" ry="16" fill="none" stroke="#d97706" stroke-width="1.5"/><line x1="3" y1="29" x2="35" y2="29" stroke="#d97706" stroke-width="1.5"/><line x1="6" y1="18" x2="32" y2="18" stroke="#d97706" stroke-width="1" opacity="0.6"/><line x1="6" y1="40" x2="32" y2="40" stroke="#d97706" stroke-width="1" opacity="0.6"/>
   <text x="50" y="32" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">DDI</tspan><tspan fill="#d97706">Vault</tspan></text>
-  <text x="50" y="50" font-size="9" font-weight="500" fill="#6b7280" letter-spacing="1.8" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">DNS, DHCP &amp; IPAM</text>
 </svg>

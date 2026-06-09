@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 66">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 46">
   <defs><style>@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@700&amp;display=swap');</style></defs>
   <line x1="19" y1="5" x2="4" y2="37" stroke="#C8102E" stroke-width="2" stroke-linecap="round"/><line x1="19" y1="5" x2="34" y2="37" stroke="#C8102E" stroke-width="2" stroke-linecap="round"/><line x1="4" y1="37" x2="34" y2="37" stroke="#C8102E" stroke-width="2" stroke-linecap="round"/><circle cx="19" cy="5" r="3" fill="#C8102E"/><circle cx="4" cy="37" r="3" fill="#C8102E"/><circle cx="34" cy="37" r="3" fill="#C8102E"/>
   <text x="50" y="32" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Net</tspan><tspan fill="#C8102E">Vault</tspan></text>
-  <text x="50" y="50" font-size="9" font-weight="500" fill="#6b7280" letter-spacing="1.8" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">NETWORK ASSET MANAGEMENT</text>
 </svg>

@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 66">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 46">
   <defs><style>@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@700&amp;display=swap');</style></defs>
   <rect x="3" y="10" width="3" height="36" rx="1.5" fill="#2563eb"/><rect x="10" y="11" width="28" height="3" rx="1.5" fill="#2563eb"/><rect x="10" y="19" width="20" height="3" rx="1.5" fill="#2563eb" opacity="0.7"/><rect x="10" y="27" width="25" height="3" rx="1.5" fill="#2563eb" opacity="0.85"/><rect x="10" y="35" width="16" height="3" rx="1.5" fill="#2563eb" opacity="0.6"/><rect x="10" y="43" width="22" height="3" rx="1.5" fill="#2563eb" opacity="0.75"/>
   <text x="50" y="32" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Log</tspan><tspan fill="#2563eb">Vault</tspan></text>
-  <text x="50" y="50" font-size="9" font-weight="500" fill="#6b7280" letter-spacing="1.8" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">SYSLOG &amp; LOG ANALYSIS</text>
 </svg>

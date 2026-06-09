@@ -34,7 +34,7 @@ export default function LauncherPage() {
       description: 'Manage network devices, sites, circuits and track EOL/EOS across your global infrastructure.',
       href: '/dashboard',
       external: false,
-      icon: <img src="/netvault-logo.svg" alt="NetVault" style={{ width: '92%', height: 'auto', maxWidth: '260px' }} />,
+      icon: <img src="/netvault-logo.svg" alt="NetVault" style={{ height: '68px', width: 'auto' }} />,
       color: primary,
       bg: '#1a2744',
     },
@@ -44,7 +44,7 @@ export default function LauncherPage() {
       description: 'Real-time syslog collection, analysis and alerting for your network infrastructure.',
       href: '/api/sso/logvault',
       external: false,
-      icon: <img src="/logvault-logo.svg" alt="LogVault" style={{ width: '92%', height: 'auto', maxWidth: '260px' }} />,
+      icon: <img src="/logvault-logo.svg" alt="LogVault" style={{ height: '68px', width: 'auto' }} />,
       color: '#2563eb',
       bg: '#1a2744',
     },
@@ -54,7 +54,7 @@ export default function LauncherPage() {
       description: 'Centralised DNS, DHCP and IP address management for your network infrastructure.',
       href: '/api/sso/ddivault',
       external: false,
-      icon: <img src="/ddivault-logo.svg" alt="DDIVault" style={{ width: '92%', height: 'auto', maxWidth: '260px' }} />,
+      icon: <img src="/ddivault-logo.svg" alt="DDIVault" style={{ height: '68px', width: 'auto' }} />,
       color: '#d97706',
       bg: '#1a2744',
     },
@@ -64,7 +64,7 @@ export default function LauncherPage() {
       description: 'Real-time network device monitoring, availability tracking and performance alerting for your infrastructure.',
       href: spanvaultUrl,
       external: false,
-      icon: <img src="/spanvault-logo.svg" alt="SpanVault" style={{ width: '92%', height: 'auto', maxWidth: '260px' }} />,
+      icon: <img src="/spanvault-logo.svg" alt="SpanVault" style={{ height: '68px', width: 'auto' }} />,
       color: '#16a34a',
       bg: '#1a2744',
     },
@@ -144,7 +144,7 @@ export default function LauncherPage() {
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-4px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 12px 32px rgba(0,0,0,0.12)'; (e.currentTarget as HTMLDivElement).style.borderColor = app.color }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none'; (e.currentTarget as HTMLDivElement).style.borderColor = '#e5e7eb' }}
               >
-                <div style={{ width: '100%', height: '140px', borderRadius: '10px', background: app.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px', padding: '16px' }}>
+                <div style={{ width: '100%', height: '100px', borderRadius: '10px', background: app.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px', padding: '16px 20px' }}>
                   {app.icon}
                 </div>
                 <div style={{ fontSize: '17px', fontWeight: '700', color: '#111827', marginBottom: '3px' }}>{app.name}</div>
