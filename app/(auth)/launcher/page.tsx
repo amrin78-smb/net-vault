@@ -34,7 +34,7 @@ export default function LauncherPage() {
       description: 'Manage network devices, sites, circuits and track EOL/EOS across your global infrastructure.',
       href: '/dashboard',
       external: false,
-      icon: <img src="/netvault-logo-white.png" alt="NetVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
+      icon: <img src="/netvault-logo.svg" alt="NetVault" style={{ width: '85%', height: 'auto', maxWidth: '220px' }} />,
       color: primary,
       bg: '#1a2744',
     },
@@ -44,8 +44,8 @@ export default function LauncherPage() {
       description: 'Real-time syslog collection, analysis and alerting for your network infrastructure.',
       href: '/api/sso/logvault',
       external: false,
-      icon: <img src="/logvault-logo-white.png" alt="LogVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
-      color: '#0369a1',
+      icon: <img src="/logvault-logo.svg" alt="LogVault" style={{ width: '85%', height: 'auto', maxWidth: '220px' }} />,
+      color: '#2563eb',
       bg: '#1a2744',
     },
     {
@@ -54,8 +54,8 @@ export default function LauncherPage() {
       description: 'Centralised DNS, DHCP and IP address management for your network infrastructure.',
       href: '/api/sso/ddivault',
       external: false,
-      icon: <img src="/ddivault-logo-white.png" alt="DDIVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
-      color: '#7c3aed',
+      icon: <img src="/ddivault-logo.svg" alt="DDIVault" style={{ width: '85%', height: 'auto', maxWidth: '220px' }} />,
+      color: '#d97706',
       bg: '#1a2744',
     },
     {
@@ -64,8 +64,8 @@ export default function LauncherPage() {
       description: 'Real-time network device monitoring, availability tracking and performance alerting for your infrastructure.',
       href: spanvaultUrl,
       external: false,
-      icon: <img src="/spanvault-logo-white.png" alt="SpanVault" style={{ height: '72px', width: 'auto', maxWidth: '220px', objectFit: 'contain' }} />,
-      color: navy,
+      icon: <img src="/spanvault-logo.svg" alt="SpanVault" style={{ width: '85%', height: 'auto', maxWidth: '220px' }} />,
+      color: '#16a34a',
       bg: '#1a2744',
     },
   ]
@@ -74,7 +74,7 @@ export default function LauncherPage() {
     <div style={{ minHeight: '100vh', background: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
       {/* Top bar */}
       <div style={{ background: navy, padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <img src="/nocvault-logo-white.png" alt="NocVault" style={{ maxHeight: '52px', maxWidth: '220px', objectFit: 'contain' }} />
+        <img src="/nocvault-logo.svg" alt="NocVault" style={{ maxHeight: '52px', width: 'auto', objectFit: 'contain' }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500' }}>{user?.name}</div>
