@@ -445,68 +445,13 @@ export default function SettingsPage() {
           <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Preview</div>
             <div style={{ background: settings.app_navy_color || '#1a2744', borderRadius: '8px', padding: '14px 16px', width: '220px' }}>
-              {settings.app_logo_url ? (
-                <div style={{ marginBottom: '6px' }}>
-                  <img src={settings.app_logo_url} alt="logo" style={{ maxWidth: '160px', maxHeight: '40px', objectFit: 'contain', objectPosition: 'left' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <div style={{ width: '28px', height: '28px', background: settings.app_primary_color || '#C8102E', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                  </svg>
                 </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                  <div style={{ width: '28px', height: '28px', background: settings.app_primary_color || '#C8102E', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-                    </svg>
-                  </div>
-                  <div style={{ color: 'white', fontSize: '13px', fontWeight: '700' }}>{settings.app_name || 'App name'}</div>
-                </div>
-              )}
-              {settings.app_logo_url && <div style={{ color: 'white', fontSize: '12px', fontWeight: '600' }}>{settings.app_name}</div>}
-              <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px' }}>{settings.app_subtitle || 'Subtitle'}</div>
-            </div>
-          </div>
-
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>App identity</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>App name</label>
-                <input className="input" value={settings.app_name} onChange={e => setSettings(s => ({ ...s, app_name: e.target.value }))} placeholder="e.g. NetVault" />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Subtitle</label>
-                <input className="input" value={settings.app_subtitle} onChange={e => setSettings(s => ({ ...s, app_subtitle: e.target.value }))} placeholder="e.g. Network Intelligence Platform" />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Logo</label>
-                <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                  <div>
-                    {settings.app_logo_url ? (
-                      <div style={{ position: 'relative', display: 'inline-block' }}>
-                        <img src={settings.app_logo_url} alt="logo" style={{ width: '56px', height: '56px', borderRadius: '8px', objectFit: 'cover', border: '1px solid #e5e7eb' }} />
-                        <button onClick={() => setSettings(s => ({ ...s, app_logo_url: '' }))} style={{ position: 'absolute', top: '-6px', right: '-6px', width: '18px', height: '18px', borderRadius: '50%', background: '#ef4444', color: 'white', border: 'none', cursor: 'pointer', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
-                      </div>
-                    ) : (
-                      <div style={{ width: '56px', height: '56px', borderRadius: '8px', border: '2px dashed #d1d5db', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af', fontSize: '11px' }}>No logo</div>
-                    )}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: 'inline-block', padding: '8px 14px', background: '#f9fafb', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '13px', color: '#374151', cursor: 'pointer', marginBottom: '8px' }}>
-                      Upload image
-                      <input type="file" accept="image/png,image/jpeg,image/gif,image/svg+xml,image/webp" style={{ display: 'none' }} onChange={async e => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        const formData = new FormData()
-                        formData.append('file', file)
-                        const res = await fetch('/api/settings/logo', { method: 'POST', body: formData })
-                        const data = await res.json()
-                        if (data.url) setSettings(s => ({ ...s, app_logo_url: data.url }))
-                        else showToast(data.error || 'Upload failed', 'error')
-                      }} />
-                    </label>
-                    <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '6px' }}>PNG, JPG, SVG or WebP — max 500KB</div>
-                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>Or paste a URL:</div>
-                    <input className="input" style={{ marginTop: '4px' }} value={settings.app_logo_url} onChange={e => setSettings(s => ({ ...s, app_logo_url: e.target.value }))} placeholder="https://your-company.com/logo.png" />
-                  </div>
-                </div>
+                <div style={{ color: 'white', fontSize: '13px', fontWeight: '700' }}>NetVault</div>
               </div>
             </div>
           </div>

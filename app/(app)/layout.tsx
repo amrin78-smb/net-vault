@@ -333,31 +333,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }}>
           {/* Logo — always visible, top-left of header */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-            {settings.app_logo_url ? (
-              <img src={settings.app_logo_url} alt="logo" style={{ height: 52, maxWidth: 240, objectFit: 'contain', objectPosition: 'left' }} />
-            ) : (
-              <>
-                <div style={{
-                  width: 52, height: 52, flexShrink: 0,
-                  background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
-                  borderRadius: 13,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: `0 2px 10px ${primary}55`,
-                }}>
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-                  </svg>
-                </div>
-                <div>
-                  <div style={{ color: 'white', fontSize: 24, fontWeight: 700, letterSpacing: '-0.3px', whiteSpace: 'nowrap', lineHeight: 1.15 }}>
-                    {settings.app_name || 'NetVault'}
-                  </div>
-                  <div style={{ color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: 500, letterSpacing: '0.06em', marginTop: 2, whiteSpace: 'nowrap' }}>
-                    NETWORK ASSET MANAGEMENT
-                  </div>
-                </div>
-              </>
-            )}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 66" height="44" style={{ display: 'block' }}>
+              <line x1="19" y1="5" x2="4" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="19" y1="5" x2="34" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
+              <line x1="4" y1="37" x2="34" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
+              <circle cx="19" cy="5" r="3" fill="#C8102E"/>
+              <circle cx="4" cy="37" r="3" fill="#C8102E"/>
+              <circle cx="34" cy="37" r="3" fill="#C8102E"/>
+              <text x="50" y="32" fontSize="26" fontWeight="700" letterSpacing="-0.3" fontFamily="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">
+                <tspan fill="#ffffff">Net</tspan>
+                <tspan fill="#C8102E">Vault</tspan>
+              </text>
+              <text x="50" y="50" fontSize="9" fontWeight="500" fill="rgba(255,255,255,0.45)" letterSpacing="1.8" fontFamily="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">
+                NETWORK ASSET MANAGEMENT
+              </text>
+            </svg>
           </div>
 
           {/* Divider */}
