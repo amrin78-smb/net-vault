@@ -1,5 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 46">
-  <defs><style>@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@700&amp;display=swap');</style></defs>
-  <path d="M2,29 L8,29 L12,13 L17,45 L22,13 L27,45 L31,29 L37,29" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="50" y="32" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Span</tspan><tspan fill="#16a34a">Vault</tspan></text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 205 46">
+  <path d="M1,23 L7,23 L11,8 L16,38 L21,8 L26,38 L30,23 L38,23" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="50" y="30" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Span</tspan><tspan fill="#16a34a">Vault</tspan></text>
 </svg>
