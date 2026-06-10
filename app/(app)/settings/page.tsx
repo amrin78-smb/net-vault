@@ -43,47 +43,52 @@ function UpdateConfirmModal({ onCancel, onConfirm }: { onCancel: () => void; onC
   )
 }
 
+const UPDATE_TIMEOUT_MS = 3 * 60 * 1000 // 3 minutes
+// After the API is confirmed stably back up, wait this long before reloading so
+// the Next.js frontend (which starts AFTER the API) has time to finish booting —
+// otherwise the reload lands on "page cannot be reached" for 20-30 seconds.
+const RELOAD_COUNTDOWN_SECONDS = 15
+
 function UpdatingOverlay({ preVersion }: { preVersion: string }) {
   const [phase, setPhase] = useState<'starting' | 'down' | 'back_up' | 'verify_failed' | 'timeout'>('starting')
+  const [countdown, setCountdown] = useState(RELOAD_COUNTDOWN_SECONDS)
   const wentDown = useRef(false)
+  const consecutiveUp = useRef(0)
   // Capture the version that was running before the update so we can confirm
   // the code actually changed once services come back up.
   const preVersionRef = useRef(preVersion)
   useEffect(() => { preVersionRef.current = preVersion }, [preVersion])
 
+  // After services recover, confirm the running version actually changed.
+  // If it matches the pre-update version, the pull/build silently failed —
+  // show an error instead of redirecting with a false success banner. Driven by
+  // the countdown effect (and the "Reload Now" button) once the API is back up.
+  const verifyAndRedirect = async () => {
+    try {
+      const ctrl = new AbortController()
+      const abortId = setTimeout(() => ctrl.abort(), 5000)
+      const res = await fetch('/api/system/update-status', { cache: 'no-store', signal: ctrl.signal })
+      clearTimeout(abortId)
+      const data = await res.json()
+      // Compare commit hashes, not the semver version: a patch pushed without
+      // a version bump still changes the commit, so the version string alone
+      // would falsely report "verify_failed".
+      const newVersion: string = data?.current_commit || ''
+      if (preVersionRef.current && newVersion && newVersion === preVersionRef.current) {
+        setPhase('verify_failed')
+        return
+      }
+    } catch {
+      // Verification itself failed (e.g. transient) — the service is back up,
+      // so fall through and let the user land on the dashboard.
+    }
+    window.location.href = '/dashboard?updated=true'
+  }
+
   useEffect(() => {
     let active = true
     const startedAt = Date.now()
-    const UPDATE_TIMEOUT_MS = 3 * 60 * 1000
     let pollId: ReturnType<typeof setInterval> | null = null
-    let reloadId: ReturnType<typeof setTimeout> | null = null
-
-    // After services recover, confirm the running version actually changed.
-    // If it matches the pre-update version, the pull/build silently failed —
-    // show an error instead of redirecting with a false success banner.
-    const verifyAndRedirect = async () => {
-      try {
-        const ctrl = new AbortController()
-        const abortId = setTimeout(() => ctrl.abort(), 5000)
-        const res = await fetch('/api/system/update-status', { cache: 'no-store', signal: ctrl.signal })
-        clearTimeout(abortId)
-        const data = await res.json()
-        if (!active) return
-        // Compare commit hashes, not the semver version: a patch pushed without
-        // a version bump still changes the commit, so the version string alone
-        // would falsely report "verify_failed".
-        const newVersion: string = data?.current_commit || ''
-        if (preVersionRef.current && newVersion && newVersion === preVersionRef.current) {
-          setPhase('verify_failed')
-          return
-        }
-      } catch {
-        // Verification itself failed (e.g. transient) — the service is back up,
-        // so fall through and let the user land on the dashboard.
-      }
-      if (!active) return
-      window.location.href = '/dashboard?updated=true'
-    }
 
     const tick = async () => {
       if (!active) return
@@ -105,14 +110,26 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
       }
       if (!active) return
       if (!ok) {
+        // Fetch failed or non-200 → API is down (restarting). Reset the
+        // consecutive-success counter: during startup the API can answer one
+        // probe then drop again, so any failure restarts the stability window.
+        consecutiveUp.current = 0
         wentDown.current = true
         setPhase('down')
         return
       }
       if (wentDown.current) {
-        setPhase('back_up')
-        if (pollId !== null) clearInterval(pollId)
-        reloadId = setTimeout(() => { void verifyAndRedirect() }, 2000)
+        // Require 3 consecutive healthy probes (≈6s at the 2s cadence) before
+        // declaring the API stably back up. A single success after going down
+        // isn't enough — services may respond once then briefly drop again
+        // mid-startup, which would trigger a premature reload.
+        consecutiveUp.current += 1
+        if (consecutiveUp.current >= 3) {
+          setPhase('back_up')
+          if (pollId !== null) clearInterval(pollId)
+          // The reload is driven by the countdown effect below — the API is up,
+          // but Next.js needs a little longer before it can serve pages.
+        }
       }
     }
 
@@ -122,13 +139,21 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
     return () => {
       active = false
       if (pollId !== null) clearInterval(pollId)
-      if (reloadId !== null) clearTimeout(reloadId)
     }
   }, [])
 
+  // Once the API is confirmed stably back up, count down (15…14…13…) before
+  // reloading so the Next.js frontend has time to finish starting after the API.
+  useEffect(() => {
+    if (phase !== 'back_up') return
+    if (countdown <= 0) { void verifyAndRedirect(); return }
+    const id = setTimeout(() => setCountdown((c) => c - 1), 1000)
+    return () => clearTimeout(id)
+  }, [phase, countdown])
+
   let statusLine = 'Starting update…'
   if (phase === 'down') statusLine = 'Services restarting… ⟳'
-  else if (phase === 'back_up') statusLine = '✓ Update complete! Redirecting…'
+  else if (phase === 'back_up') statusLine = `✓ Services are back online. Reloading in ${countdown} second${countdown === 1 ? '' : 's'}…`
   else if (phase === 'verify_failed') statusLine = 'Services restarted, but the version did not change. The update may not have applied — try again or check the server logs.'
   else if (phase === 'timeout') statusLine = 'Update is taking longer than expected. Try refreshing the page manually.'
 
@@ -145,8 +170,15 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
         <div style={{ fontSize: 18, fontWeight: 700, marginTop: 14 }}>Updating NetVault…</div>
         <p style={{ color: '#64748b', marginTop: 6 }}>Pulling latest code and restarting services. Do not close this window.</p>
         <p style={{ fontWeight: 600, margin: '14px 0' }}>{statusLine}</p>
-        <p style={{ color: '#64748b', fontSize: 12 }}>(This usually takes 30-60 seconds)</p>
-        <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={() => window.location.reload()}>Reload Now</button>
+        {phase === 'back_up' && (
+          <div style={{ fontSize: 40, fontWeight: 800, lineHeight: 1, margin: '4px 0 10px', color: 'var(--primary, #C8102E)' }}>
+            {countdown}
+          </div>
+        )}
+        {phase !== 'back_up' && (
+          <p style={{ color: '#64748b', fontSize: 12 }}>(This usually takes 30-60 seconds)</p>
+        )}
+        <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={phase === 'back_up' ? () => { void verifyAndRedirect() } : () => window.location.reload()}>Reload Now</button>
       </div>
     </div>
   )
