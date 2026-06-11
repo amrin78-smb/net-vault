@@ -3,7 +3,6 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
-import GlobalSearch from '@/components/GlobalSearch'
 import IdleTimeout from '@/components/IdleTimeout'
 import UpdateNotifier from '@/app/components/UpdateNotifier'
 
@@ -41,6 +40,14 @@ const navIcons: Record<string, { icon: React.ReactNode; color: string; bg: strin
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
     color: '#06b6d4', bg: 'rgba(6,182,212,0.2)',
   },
+  '/reports': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="11" width="4" height="9" rx="1"/><rect x="10" y="6" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>,
+    color: '#2dd4bf', bg: 'rgba(45,212,191,0.2)',
+  },
+  '/alerts': {
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a6 6 0 00-6 6c0 4-2 5-2 5h16s-2-1-2-5a6 6 0 00-6-6zm0 20a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22z"/></svg>,
+    color: '#f87171', bg: 'rgba(200,16,46,0.25)',
+  },
   '/settings': {
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.02 7.02 0 00-1.62-.94l-.36-2.54A.484.484 0 0014 2h-4a.484.484 0 00-.48.41l-.36 2.54a7.38 7.38 0 00-1.62.94l-2.39-.96a.48.48 0 00-.59.22L2.74 8.87a.47.47 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.36 1.04.67 1.62.94l.36 2.54c.05.24.27.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54a7.38 7.38 0 001.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>,
     color: '#9ca3af', bg: 'rgba(136,135,128,0.25)',
@@ -54,11 +61,13 @@ const navIcons: Record<string, { icon: React.ReactNode; color: string; bg: strin
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', hideForSiteAdmin: true },
   { href: '/sites', label: 'Sites' },
-  { href: '/devices', label: 'My Devices' },
+  { href: '/devices', label: 'Devices' },
   { href: '/circuits', label: 'Circuits' },
   { href: '/eol', label: 'EOL / Risk', hideForSiteAdmin: true },
   { href: '/audit', label: 'Audit Log', adminOnly: true },
   { href: '/compliance', label: 'Compliance', adminOnly: true },
+  { href: '/reports', label: 'Reports' },
+  { href: '/alerts', label: 'Alerts', showAlertBadge: true },
   { href: '/settings', label: 'Settings', adminOnly: true },
 ]
 
@@ -87,8 +96,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [pwError, setPwError] = useState('')
   const [pwSuccess, setPwSuccess] = useState(false)
   const [pwSaving, setPwSaving] = useState(false)
+  const [alertCount, setAlertCount] = useState(0)
   const settingsFetched = useRef(false)
   const userMenuRef = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLInputElement>(null)
 
   // Hydrate collapsed state from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
@@ -128,6 +139,39 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [status])
 
+  // Alert count — fetched from dashboard overview, reused for nav + header bell badges
+  useEffect(() => {
+    if (status !== 'authenticated') return
+    let cancelled = false
+    fetch('/api/dashboard/overview')
+      .then(r => r.json())
+      .then(d => {
+        if (cancelled || !d || d.error) return
+        const count = typeof d.eol_assets === 'number' ? d.eol_assets
+          : typeof d.sites_at_risk === 'number' ? d.sites_at_risk
+          : 0
+        setAlertCount(count)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [status])
+
+  // Global "/" shortcut → focus header search; Escape → blur
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null
+      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+      if (e.key === '/' && !typing) {
+        e.preventDefault()
+        searchRef.current?.focus()
+      } else if (e.key === 'Escape' && document.activeElement === searchRef.current) {
+        searchRef.current?.blur()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   // Apply / remove data-readonly on body based on license status
   useEffect(() => {
     if (licenseStatus === 'expired') {
@@ -154,6 +198,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next))
       return next
     })
+  }
+
+  function onSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      const q = (e.target as HTMLInputElement).value.trim()
+      if (q) router.push('/devices?search=' + encodeURIComponent(q))
+    } else if (e.key === 'Escape') {
+      searchRef.current?.blur()
+    }
   }
 
   function openPwModal() {
@@ -267,8 +320,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: active ? ic?.color : 'rgba(255,255,255,0.4)',
                     transition: 'all 0.15s',
+                    position: 'relative',
                   }}>
                     {ic?.icon}
+                    {/* Collapsed alert dot */}
+                    {(item as any).showAlertBadge && alertCount > 0 && collapsed && (
+                      <span style={{
+                        position: 'absolute', top: -2, right: -2,
+                        width: 9, height: 9, borderRadius: '50%',
+                        background: '#C8102E', border: `1.5px solid ${navy}`,
+                      }} />
+                    )}
                   </div>
                   {/* Label — hidden when collapsed */}
                   {!collapsed && (
@@ -278,6 +340,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       whiteSpace: 'nowrap', letterSpacing: '-0.1px',
                     }}>
                       {item.label}
+                    </span>
+                  )}
+                  {/* Expanded alert count badge — pushed to the right */}
+                  {(item as any).showAlertBadge && alertCount > 0 && !collapsed && (
+                    <span style={{
+                      marginLeft: 'auto',
+                      minWidth: 18, height: 18, padding: '0 5px',
+                      borderRadius: 9,
+                      background: '#C8102E', color: 'white',
+                      fontSize: 11, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      lineHeight: 1,
+                    }}>
+                      {alertCount > 99 ? '99+' : alertCount}
                     </span>
                   )}
                 </div>
@@ -354,11 +430,96 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.15)', flexShrink: 0 }} />
 
           {/* Global search */}
-          <div style={{ flex: 1, maxWidth: 460 }}>
-            <GlobalSearch />
+          <div style={{ flex: 1, maxWidth: 400, position: 'relative' }}>
+            <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none' }}
+              width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Search devices, sites, circuits..."
+              onKeyDown={onSearchKeyDown}
+              style={{
+                width: '100%', padding: '9px 44px 9px 36px',
+                background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 10,
+                color: 'white', fontSize: 13,
+                outline: 'none', boxSizing: 'border-box',
+                fontFamily: 'inherit',
+                transition: 'border-color 0.15s, background 0.15s',
+              }}
+              onFocus={e => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.28)'
+                e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+              }}
+              onBlur={e => {
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
+                e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+              }}
+            />
+            <span style={{
+              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+              padding: '2px 7px', borderRadius: 6,
+              background: 'rgba(255,255,255,0.1)',
+              color: 'rgba(255,255,255,0.55)',
+              fontSize: 12, fontWeight: 600, lineHeight: 1,
+              pointerEvents: 'none',
+            }}>
+              /
+            </span>
           </div>
 
           <div style={{ flex: 1 }} />
+
+          {/* Bell + Help ghost icon buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 6 }}>
+            <Link
+              href="/alerts"
+              title="Alerts"
+              style={{
+                position: 'relative', width: 36, height: 36, borderRadius: 9,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'white' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
+              </svg>
+              {alertCount > 0 && (
+                <span style={{
+                  position: 'absolute', top: 4, right: 4,
+                  minWidth: 16, height: 16, padding: '0 4px',
+                  borderRadius: 8, background: '#C8102E', color: 'white',
+                  fontSize: 10, fontWeight: 700, lineHeight: 1,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: `1.5px solid ${navy}`,
+                }}>
+                  {alertCount > 99 ? '99+' : alertCount}
+                </span>
+              )}
+            </Link>
+            <a
+              href="/compliance"
+              title="Help"
+              style={{
+                width: 36, height: 36, borderRadius: 9,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
+                transition: 'background 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'white' }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}
+            >
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </a>
+          </div>
 
           {/* User dropdown */}
           <div ref={userMenuRef} style={{ position: 'relative' }}>
