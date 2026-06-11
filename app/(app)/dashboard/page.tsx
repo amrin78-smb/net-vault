@@ -507,21 +507,21 @@ export default function DashboardPage() {
               {sitesBadgeCount}
             </span>
           </div>
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
             {loading ? (
-              [0, 1, 2].map(i => <div key={i} style={{ padding: '10px 0' }}><Shimmer w="70%" h={14} /><div style={{ marginTop: 6 }}><Shimmer w="40%" h={11} /></div></div>)
+              [0, 1, 2].map(i => <div key={i} style={{ padding: '6px 0' }}><Shimmer w="70%" h={14} /><div style={{ marginTop: 6 }}><Shimmer w="40%" h={11} /></div></div>)
             ) : topEol.length === 0 ? (
               <div style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No sites at risk</div>
             ) : topEol.slice(0, 3).map((s, i) => {
               const high = s.eol_pct >= 50
               return (
                 <Link key={i} href="/sites?filter=eol" style={{ textDecoration: 'none' }}>
-                  <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 8px', margin: '0 -8px', borderRadius: 8, borderBottom: i < 2 ? '1px solid #f3f4f6' : 'none', cursor: 'pointer' }}>
+                  <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderRadius: 8, borderBottom: i < 2 ? '1px solid #f3f4f6' : 'none', cursor: 'pointer' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
-                      <div style={{ fontSize: 11.5, color: MUTED, marginTop: 2 }}>{s.city} • {s.region}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                        <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 5, color: high ? '#991b1b' : '#92400e', background: high ? '#fee2e2' : '#fef3c7' }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
+                      <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{s.city} • {s.region}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 5, color: high ? '#991b1b' : '#92400e', background: high ? '#fee2e2' : '#fef3c7' }}>
                           {high ? 'HIGH' : 'MEDIUM'}
                         </span>
                         <span style={{ fontSize: 11.5, color: '#991b1b', fontWeight: 600 }}>{s.eol_count} EOL Devices</span>
@@ -533,7 +533,7 @@ export default function DashboardPage() {
               )
             })}
           </div>
-          <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid #f3f4f6' }}>
             <Link href="/sites?filter=eol" style={viewLink}>View all EOL sites →</Link>
           </div>
         </div>
