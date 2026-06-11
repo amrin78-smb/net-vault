@@ -258,6 +258,8 @@ function LoginForm() {
         .nv-login-left { flex: 0 0 60%; padding: 48px 56px; display: flex; flex-direction: column; }
         .nv-login-right { flex: 0 0 40%; display: flex; align-items: center; justify-content: center; padding: 32px; }
         .nv-app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .nv-app-card { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); transition: background 0.15s; }
+        .nv-app-card:hover { background: rgba(255,255,255,0.12); }
         @media (max-width: 980px) {
           .nv-login-split { flex-direction: column; }
           .nv-login-left { flex: none; padding: 40px 28px; }
@@ -276,13 +278,18 @@ function LoginForm() {
         <span style={{ color: '#22c55e', fontWeight: 600 }}>Operational</span>
       </div>
 
+      {/* Version — fixed bottom-left of the page */}
+      <div style={{ position: 'fixed', bottom: 20, left: 32, zIndex: 2, fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+        NocVault v1.2.0  •  Build 2026.06.11
+      </div>
+
       <div className="nv-login-split" style={{ position: 'relative', zIndex: 1 }}>
 
         {/* ── LEFT: branding + showcase ── */}
         <div className="nv-login-left">
           {/* Top: logo */}
           <div>
-            <NocVaultLogo height={40} />
+            <NocVaultLogo height={44} />
             <div style={{ fontSize: 11, letterSpacing: '2px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', marginTop: 10 }}>
               NETWORK INTELLIGENCE SUITE
             </div>
@@ -303,7 +310,7 @@ function LoginForm() {
             {/* App showcase cards */}
             <div className="nv-app-grid nv-login-showcase" style={{ marginTop: 34, maxWidth: 540 }}>
               {APPS.map(app => (
-                <div key={app.name} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div key={app.name} className="nv-app-card" style={{ borderLeft: `2px solid ${app.accent}`, borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
                   <AppMark name={app.name} />
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
@@ -314,11 +321,6 @@ function LoginForm() {
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Bottom: version */}
-          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
-            NocVault v1.2.0 • Build 2026.06.11
           </div>
         </div>
 
@@ -331,6 +333,7 @@ function LoginForm() {
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
             border: '1px solid rgba(255,255,255,0.12)',
+            borderTop: `2px solid ${RED}`,
             borderRadius: 16,
             padding: 40,
             boxShadow: '0 24px 70px rgba(0,0,0,0.45)',
@@ -366,7 +369,7 @@ function LoginForm() {
               <div style={{ marginBottom: 18 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <label style={labelStyle}>Password</label>
-                  <a href="#" style={{ fontSize: 12, color: RED, fontWeight: 600, textDecoration: 'none' }}>Forgot password?</a>
+                  <a href="#" style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600, textDecoration: 'none' }}>Forgot password?</a>
                 </div>
                 <input
                   type="password"
