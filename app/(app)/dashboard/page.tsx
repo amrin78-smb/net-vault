@@ -196,6 +196,7 @@ const cardStyle: React.CSSProperties = {
   background: 'white', borderRadius: 12, boxShadow: CARD_SHADOW,
   border: '1px solid #eef1f5', padding: 20, boxSizing: 'border-box',
 }
+const cardStyleCompact: React.CSSProperties = { ...cardStyle, padding: 16 }
 const cardTitle: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: '#111827', margin: 0 }
 const viewLink: React.CSSProperties = { fontSize: 12.5, color: RED, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }
 
@@ -262,7 +263,7 @@ export default function DashboardPage() {
   const { overview, fleet, byRegion, byType, topEol, stats, activity } = data
 
   /* ------------------------- gauge geometry ------------------------ */
-  const R = 70, STROKE = 12
+  const R = 40, STROKE = 8
   const C = 2 * Math.PI * R
   const pct = Math.max(0, Math.min(100, overview.health_score)) / 100
   const gColor = scoreColor(overview.health_score)
@@ -337,11 +338,11 @@ export default function DashboardPage() {
       </div>
 
       {/* ============== SECTION 1 — HEALTH SCORE (navy) ============== */}
-      <div style={{ background: NAVY, borderRadius: 12, padding: 28, color: 'white', marginBottom: 20, boxShadow: CARD_SHADOW }}>
-        <div className="nv-health" style={{ display: 'flex', gap: 32, alignItems: 'stretch' }}>
+      <div style={{ background: NAVY, borderRadius: 12, padding: 18, color: 'white', marginBottom: 20, boxShadow: CARD_SHADOW }}>
+        <div className="nv-health" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 24 }}>
 
           {/* LEFT — gauge */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minWidth: 200 }}>
+          <div style={{ flexShrink: 0, width: 140, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ position: 'relative', width: (R + STROKE) * 2, height: (R + STROKE) * 2 }}>
               <svg width={(R + STROKE) * 2} height={(R + STROKE) * 2} style={{ transform: 'rotate(-90deg)' }}>
                 <circle cx={R + STROKE} cy={R + STROKE} r={R} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={STROKE} />
@@ -352,53 +353,53 @@ export default function DashboardPage() {
                 />
               </svg>
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                {loading ? <Shimmer w={64} h={40} light /> : (
+                {loading ? <Shimmer w={40} h={24} light /> : (
                   <>
-                    <span style={{ fontSize: 44, fontWeight: 800, lineHeight: 1 }}>{overview.health_score}</span>
-                    <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', marginTop: 2 }}>/ 100</span>
+                    <span style={{ fontSize: 26, fontWeight: 800, lineHeight: 1 }}>{overview.health_score}</span>
+                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', marginTop: 1 }}>/ 100</span>
                   </>
                 )}
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, borderRadius: 8, background: gColor, color: 'white', fontWeight: 800, fontSize: 15 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: gColor, color: 'white', fontWeight: 800, fontSize: 13 }}>
                 {overview.health_grade}
               </span>
-              <span style={{ fontSize: 12.5, color: overview.health_trend < 0 ? '#fca5a5' : '#86efac', fontWeight: 600 }}>
-                {overview.health_trend < 0 ? '▼' : '▲'} {Math.abs(overview.health_trend)} points vs last month
+              <span style={{ fontSize: 10.5, lineHeight: 1.25, color: overview.health_trend < 0 ? '#fca5a5' : '#86efac', fontWeight: 600 }}>
+                {overview.health_trend < 0 ? '▼' : '▲'} {Math.abs(overview.health_trend)} pts vs last month
               </span>
             </div>
           </div>
 
           {/* CENTER — overall status */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderLeft: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)', padding: '0 32px' }}>
-            <div style={{ fontSize: 11.5, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>Overall Status</div>
-            {loading ? <Shimmer w={160} h={34} light /> : (
-              <div style={{ fontSize: 34, fontWeight: 800, color: statusColor(overview.overall_status), margin: '8px 0 10px' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderLeft: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)', padding: '0 24px' }}>
+            <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>Overall Status</div>
+            {loading ? <div style={{ margin: '6px 0' }}><Shimmer w={150} h={28} light /></div> : (
+              <div style={{ fontSize: 28, fontWeight: 800, color: statusColor(overview.overall_status), margin: '4px 0 6px' }}>
                 {overview.overall_status}
               </div>
             )}
-            <p style={{ fontSize: 13.5, lineHeight: 1.55, color: 'rgba(255,255,255,0.66)', margin: 0, maxWidth: 460 }}>
+            <p style={{ fontSize: 12.5, lineHeight: 1.45, color: 'rgba(255,255,255,0.66)', margin: 0, maxWidth: 420 }}>
               {overview.status_description}
             </p>
           </div>
 
-          {/* RIGHT — 2x2 metric tiles */}
-          <div className="nv-health-right" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, width: 420 }}>
+          {/* RIGHT — metric tiles in a row */}
+          <div className="nv-health-right" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, flexShrink: 0 }}>
             {tiles.map((t, i) => (
-              <div key={i} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 14, display: 'flex', flexDirection: 'column', minHeight: 118 }}>
+              <div key={i} style={{ width: 180, flexShrink: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ display: 'inline-flex', width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 7, background: `${t.color}22`, color: t.color }}>
-                    {t.icon(16, t.color)}
+                  <span style={{ display: 'inline-flex', width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 7, background: `${t.color}22`, color: t.color }}>
+                    {t.icon(15, t.color)}
                   </span>
                 </div>
-                {loading ? <div style={{ margin: '8px 0' }}><Shimmer w={56} h={26} light /></div> : (
-                  <div style={{ fontSize: 26, fontWeight: 800, marginTop: 8, lineHeight: 1 }}>
+                {loading ? <div style={{ margin: '6px 0' }}><Shimmer w={50} h={22} light /></div> : (
+                  <div style={{ fontSize: 22, fontWeight: 800, marginTop: 6, lineHeight: 1 }}>
                     {typeof t.value === 'number' ? t.value.toLocaleString() : t.value}
                   </div>
                 )}
-                <div style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>{t.label}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 6 }}>{t.sub}</div>
+                <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 3 }}>{t.label}</div>
+                <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', marginBottom: 5 }}>{t.sub}</div>
                 <div style={{ marginTop: 'auto' }}><Sparkline points={t.spark} color={t.color} /></div>
               </div>
             ))}
@@ -410,39 +411,43 @@ export default function DashboardPage() {
       <div className="nv-sec2" style={{ display: 'grid', gridTemplateColumns: '40fr 35fr 25fr', gap: 20, marginBottom: 20 }}>
 
         {/* LEFT — Fleet Health donut */}
-        <div style={cardStyle}>
+        <div style={cardStyleCompact}>
           <h2 style={cardTitle}>Fleet Health</h2>
-          <div style={{ position: 'relative', height: 200, marginTop: 8 }}>
-            {loading ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><Shimmer w={150} h={150} r={75} /></div>
-            ) : fleet.segments.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 13 }}>No data</div>
-            ) : (
-              <>
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={fleet.segments} dataKey="count" nameKey="label" innerRadius={62} outerRadius={88} paddingAngle={2} stroke="none">
-                      {fleet.segments.map((s, i) => <Cell key={i} fill={s.color} />)}
-                    </Pie>
-                    <Tooltip content={<ChartTooltip />} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                  <span style={{ fontSize: 28, fontWeight: 800, color: '#111827' }}>{fleet.total.toLocaleString()}</span>
-                  <span style={{ fontSize: 11, color: MUTED }}>Total Devices</span>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 24, alignItems: 'center', marginTop: 8 }}>
+            {/* pie — left */}
+            <div style={{ position: 'relative', width: 190, height: 180, flexShrink: 0 }}>
+              {loading ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><Shimmer w={150} h={150} r={75} /></div>
+              ) : fleet.segments.length === 0 ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 13 }}>No data</div>
+              ) : (
+                <>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={fleet.segments} dataKey="count" nameKey="label" innerRadius={58} outerRadius={84} paddingAngle={2} stroke="none">
+                        {fleet.segments.map((s, i) => <Cell key={i} fill={s.color} />)}
+                      </Pie>
+                      <Tooltip content={<ChartTooltip />} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                    <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>{fleet.total.toLocaleString()}</span>
+                    <span style={{ fontSize: 11, color: MUTED }}>Total Devices</span>
+                  </div>
+                </>
+              )}
+            </div>
+            {/* legend — right */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {fleet.segments.map((s, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12.5 }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
+                  <span style={{ flex: 1, color: '#374151' }}>{s.label}</span>
+                  <span style={{ fontWeight: 700, color: '#111827' }}>{s.count.toLocaleString()}</span>
+                  <span style={{ color: MUTED, width: 42, textAlign: 'right' }}>{s.pct}%</span>
                 </div>
-              </>
-            )}
-          </div>
-          <div style={{ marginTop: 14 }}>
-            {fleet.segments.map((s, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 0', fontSize: 12.5 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color }} />
-                <span style={{ flex: 1, color: '#374151' }}>{s.label}</span>
-                <span style={{ fontWeight: 700, color: '#111827' }}>{s.count.toLocaleString()}</span>
-                <span style={{ color: MUTED, width: 42, textAlign: 'right' }}>{s.pct}%</span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
           <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 10, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
             Last updated: {minutesAgo(fleet.last_updated)}
@@ -450,7 +455,7 @@ export default function DashboardPage() {
         </div>
 
         {/* CENTER — Devices by Region */}
-        <div style={cardStyle}>
+        <div style={cardStyleCompact}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={cardTitle}>Devices by Region</h2>
             <div style={{ display: 'flex', gap: 12, fontSize: 11.5, color: MUTED }}>
@@ -458,7 +463,7 @@ export default function DashboardPage() {
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: RED }} />EOL</span>
             </div>
           </div>
-          <div style={{ height: 210, marginTop: 12 }}>
+          <div style={{ height: 180, marginTop: 12 }}>
             {loading ? (
               <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, height: '100%', padding: '20px 8px' }}>
                 {[60, 80, 45, 70].map((h, i) => <Shimmer key={i} w="100%" h={`${h}%`} />)}
@@ -481,7 +486,7 @@ export default function DashboardPage() {
         </div>
 
         {/* RIGHT — Sites Requiring Attention */}
-        <div style={cardStyle}>
+        <div style={cardStyleCompact}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <h2 style={cardTitle}>Sites Requiring Attention</h2>
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 6px', borderRadius: 11, background: RED, color: 'white', fontSize: 12, fontWeight: 700 }}>
