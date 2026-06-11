@@ -12,13 +12,6 @@ type SuiteStats = {
   ddivault: Record<string, unknown> | null
   spanvault: Record<string, unknown> | null
 }
-type AuditRow = {
-  id: number
-  field_name: string | null
-  changed_at: string
-  changed_by_name: string | null
-  device_name: string | null
-}
 
 const NAVY = '#1a2744'
 const RED = '#C8102E'
@@ -47,16 +40,6 @@ function MetricIcon({ name }: { name: string }) {
       {ICONS[name] ?? ICONS.device}
     </svg>
   )
-}
-
-// ── quick action tile icons ─────────────────────────────────────────
-const QA_ICONS: Record<string, React.ReactNode> = {
-  add: <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>,
-  discovery: <><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></>,
-  report: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="9" y1="15" x2="15" y2="15" /></>,
-  eol: <><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></>,
-  alerts: <><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" /></>,
-  settings: <><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" /></>,
 }
 
 const HEALTH_COLORS: Record<HealthStatus, string> = {
@@ -88,8 +71,6 @@ export default function LauncherPage() {
   const [netStats, setNetStats] = useState<NetvaultStats | null>(null)
   const [suiteStats, setSuiteStats] = useState<SuiteStats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
-  const [activity, setActivity] = useState<AuditRow[] | null>(null)
-  const [activityError, setActivityError] = useState(false)
   const [clock, setClock] = useState('')
 
   useEffect(() => {
@@ -98,10 +79,6 @@ export default function LauncherPage() {
     fetch('/api/suite/health').then(r => r.json()).then(d => { if (Array.isArray(d)) setHealth(d) }).catch(() => setHealth([]))
     fetch('/api/netvault-stats').then(r => r.json()).then(d => { if (d && !d.error) setNetStats(d) }).catch(() => {}).finally(() => setStatsLoading(false))
     fetch('/api/suite/stats').then(r => r.json()).then(d => { if (d && !d.error) setSuiteStats(d) }).catch(() => {})
-    fetch('/api/audit?limit=8')
-      .then(r => { if (!r.ok) throw new Error('audit'); return r.json() })
-      .then(d => { if (d && Array.isArray(d.logs)) setActivity(d.logs); else setActivityError(true) })
-      .catch(() => setActivityError(true))
   }, [])
 
   // Live clock — Asia/Bangkok (ICT), refresh every minute.
@@ -210,37 +187,14 @@ export default function LauncherPage() {
     },
   ]
 
-  const quickActions = [
-    { icon: 'add', title: 'Add Device', subtitle: 'Add new network device', href: '/devices/new' },
-    { icon: 'discovery', title: 'Run Discovery', subtitle: 'Discover network devices', href: '/devices?discovery=1' },
-    { icon: 'report', title: 'Open Latest Report', subtitle: 'View summary reports', href: '/compliance' },
-    { icon: 'eol', title: 'Review EOL Assets', subtitle: 'View EOL/EOS inventory', href: '/eol' },
-    { icon: 'alerts', title: 'View Active Alerts', subtitle: 'Monitor critical alerts', href: '/dashboard' },
-    { icon: 'settings', title: 'System Settings', subtitle: 'Manage preferences', href: '/settings' },
-  ]
-
-  // Recent activity helpers
-  const fmtTime = (iso: string) => {
-    try {
-      return new Intl.DateTimeFormat('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Bangkok' }).format(new Date(iso))
-    } catch { return '' }
-  }
-  const activityKind = (field: string | null): { color: string; verb: string } => {
-    const f = (field || '').toLowerCase()
-    if (f.includes('delete') || f.includes('remove') || f.includes('decom')) return { color: '#C8102E', verb: 'deleted' }
-    if (f.includes('eol') || f.includes('risk') || f.includes('warn') || f.includes('lifecycle')) return { color: '#d97706', verb: 'updated' }
-    if (f.includes('create') || f.includes('add')) return { color: '#16a34a', verb: 'created' }
-    return { color: '#16a34a', verb: 'updated' }
-  }
-
   const license = licenseInfo
 
   return (
     <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @keyframes nvShimmer { 0%,100% { opacity: 0.35 } 50% { opacity: 0.8 } }
-        @media (max-width: 1100px) { .nv-top-grid { grid-template-columns: 1fr !important } .nv-app-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-bottom-grid { grid-template-columns: 1fr !important } }
-        @media (max-width: 640px) { .nv-app-grid { grid-template-columns: 1fr !important } .nv-qa-grid { grid-template-columns: repeat(2, 1fr) !important } }
+        @media (max-width: 1100px) { .nv-top-grid { grid-template-columns: 1fr !important } .nv-app-grid { grid-template-columns: repeat(2, 1fr) !important } }
+        @media (max-width: 640px) { .nv-app-grid { grid-template-columns: 1fr !important } }
       `}</style>
 
       {/* Top bar */}
@@ -384,56 +338,6 @@ export default function LauncherPage() {
               </div>
             )
           })}
-        </div>
-
-        {/* Bottom row: recent activity + quick actions */}
-        <div className="nv-bottom-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-          {/* Recent activity */}
-          <div style={{ background: 'white', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 22px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
-              <div style={{ fontSize: '15px', fontWeight: 700, color: NAVY }}>Recent Activity</div>
-              <a href="/audit" style={{ fontSize: '12px', color: primary, fontWeight: 600, textDecoration: 'none' }}>View all activity →</a>
-            </div>
-            {activityError || (activity && activity.length === 0) ? (
-              <div style={{ fontSize: '13px', color: '#9ca3af', padding: '12px 0' }}>No recent activity</div>
-            ) : !activity ? (
-              <div style={{ fontSize: '13px', color: '#9ca3af', padding: '12px 0' }}>Loading…</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {activity.map(row => {
-                  const k = activityKind(row.field_name)
-                  const desc = `${row.changed_by_name || 'Someone'} ${k.verb} ${row.field_name || 'a record'}${row.device_name ? ` on ${row.device_name}` : ''}`
-                  return (
-                    <div key={row.id} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '9px 0', borderBottom: '1px solid #f1f3f5', fontSize: '12px' }}>
-                      <span style={{ color: '#9ca3af', width: '64px', flexShrink: 0 }}>{fmtTime(row.changed_at)}</span>
-                      <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: k.color, flexShrink: 0 }} />
-                      <span style={{ color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{desc}</span>
-                      <span style={{ fontSize: '10px', fontWeight: 600, color: primary, background: 'rgba(200,16,46,0.08)', padding: '2px 7px', borderRadius: '8px', flexShrink: 0 }}>NetVault</span>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Quick actions */}
-          <div style={{ background: 'white', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 22px' }}>
-            <div style={{ fontSize: '15px', fontWeight: 700, color: NAVY, marginBottom: '14px' }}>Quick Actions</div>
-            <div className="nv-qa-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
-              {quickActions.map(qa => (
-                <a key={qa.title} href={qa.href}
-                  style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '14px 12px', borderRadius: '10px', border: '1px solid #eceff2', textDecoration: 'none', background: '#fbfcfd', transition: 'all 0.15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = primary; e.currentTarget.style.background = '#fff' }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = '#eceff2'; e.currentTarget.style.background = '#fbfcfd' }}>
-                  <span style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(26,39,68,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: NAVY }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{QA_ICONS[qa.icon]}</svg>
-                  </span>
-                  <span style={{ fontSize: '12.5px', fontWeight: 700, color: NAVY }}>{qa.title}</span>
-                  <span style={{ fontSize: '11px', color: '#9ca3af', lineHeight: 1.3 }}>{qa.subtitle}</span>
-                </a>
-              ))}
-            </div>
-          </div>
         </div>
 
         {/* Footer */}
