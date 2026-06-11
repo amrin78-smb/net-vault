@@ -364,8 +364,11 @@ export default function LauncherPage() {
       {/* Main content */}
       <div style={{ flex: 1, padding: '28px 32px', maxWidth: '1400px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
 
+        {/* Welcome + Suite health on one row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px', marginBottom: '32px' }}>
+
         {/* Welcome */}
-        <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '20px' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: '15px', color: '#6b7280', marginBottom: '2px' }}>{greeting},</div>
           <h1 style={{ fontSize: '34px', fontWeight: 800, color: NAVY, margin: '0 0 10px' }}>{firstName}</h1>
           <div style={{ fontSize: '15px', color: '#374151', fontWeight: 600 }}>Welcome to the Network Intelligence Suite.</div>
@@ -377,7 +380,7 @@ export default function LauncherPage() {
         </div>
 
         {/* Suite health overview — horizontal */}
-        <div style={{ background: 'white', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 24px', marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '24px', flexWrap: 'wrap' }}>
+        <div style={{ flexShrink: 0, width: 'auto', background: 'white', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '24px' }}>
           {/* Left: overall status */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={overallColor} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -408,6 +411,8 @@ export default function LauncherPage() {
               )
             })}
           </div>
+        </div>
+
         </div>
 
         {/* App cards */}
