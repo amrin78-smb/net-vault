@@ -40,14 +40,6 @@ const navIcons: Record<string, { icon: React.ReactNode; color: string; bg: strin
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
     color: '#06b6d4', bg: 'rgba(6,182,212,0.2)',
   },
-  '/reports': {
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="11" width="4" height="9" rx="1"/><rect x="10" y="6" width="4" height="14" rx="1"/><rect x="17" y="3" width="4" height="17" rx="1"/></svg>,
-    color: '#2dd4bf', bg: 'rgba(45,212,191,0.2)',
-  },
-  '/alerts': {
-    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a6 6 0 00-6 6c0 4-2 5-2 5h16s-2-1-2-5a6 6 0 00-6-6zm0 20a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22z"/></svg>,
-    color: '#f87171', bg: 'rgba(200,16,46,0.25)',
-  },
   '/settings': {
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.02 7.02 0 00-1.62-.94l-.36-2.54A.484.484 0 0014 2h-4a.484.484 0 00-.48.41l-.36 2.54a7.38 7.38 0 00-1.62.94l-2.39-.96a.48.48 0 00-.59.22L2.74 8.87a.47.47 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.36 1.04.67 1.62.94l.36 2.54c.05.24.27.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54a7.38 7.38 0 001.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>,
     color: '#9ca3af', bg: 'rgba(136,135,128,0.25)',
@@ -66,8 +58,6 @@ const navItems = [
   { href: '/eol', label: 'EOL / Risk', hideForSiteAdmin: true },
   { href: '/audit', label: 'Audit Log', adminOnly: true },
   { href: '/compliance', label: 'Compliance', adminOnly: true },
-  { href: '/reports', label: 'Reports' },
-  { href: '/alerts', label: 'Alerts', showAlertBadge: true },
   { href: '/settings', label: 'Settings', adminOnly: true },
 ]
 
@@ -476,7 +466,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {/* Bell + Help ghost icon buttons */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 6 }}>
             <Link
-              href="/alerts"
+              href="/eol"
               title="Alerts"
               style={{
                 position: 'relative', width: 36, height: 36, borderRadius: 9,
