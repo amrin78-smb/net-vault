@@ -69,6 +69,7 @@ function Shimmer({ w = '100%', h = '14px', r = 6, light = false }: { w?: string 
 /* ------------------------------- types ----------------------------- */
 type Overview = {
   health_score: number; health_grade: string; health_trend: number
+  trend: number | null; trend_available: boolean
   overall_status: string; status_description: string
   healthy_devices: number; healthy_devices_pct: number
   eol_assets: number; eol_assets_pct: number
@@ -96,6 +97,7 @@ type DashData = {
 const FALLBACK: DashData = {
   overview: {
     health_score: 0, health_grade: '–', health_trend: 0,
+    trend: null, trend_available: false,
     overall_status: 'Unknown', status_description: 'Status data is unavailable.',
     healthy_devices: 0, healthy_devices_pct: 0,
     eol_assets: 0, eol_assets_pct: 0, sites_at_risk: 0, compliance_score: 0,
@@ -289,6 +291,20 @@ export default function DashboardPage() {
   const sitesBadgeCount = topEol.length || overview.sites_at_risk
   const maxType = Math.max(1, ...byType.map(t => t.count))
 
+  /* ----------------------- health trend node ---------------------- */
+  const trendStyle: React.CSSProperties = { fontSize: 10.5, lineHeight: 1.25, fontWeight: 600 }
+  let trendNode: React.ReactNode = null
+  if (overview.trend_available && overview.trend !== null) {
+    const t = overview.trend
+    if (t > 0) {
+      trendNode = <span style={{ ...trendStyle, color: '#86efac' }}>▲ {t} points vs last month</span>
+    } else if (t < 0) {
+      trendNode = <span style={{ ...trendStyle, color: '#fca5a5' }}>▼ {Math.abs(t)} points vs last month</span>
+    } else {
+      trendNode = <span style={{ ...trendStyle, color: 'rgba(255,255,255,0.6)' }}>→ No change vs last month</span>
+    }
+  }
+
   return (
     <div style={{ padding: '24px 28px', background: BG, minHeight: '100%' }}>
       <style>{`
@@ -365,9 +381,7 @@ export default function DashboardPage() {
               <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: gColor, color: 'white', fontWeight: 800, fontSize: 13 }}>
                 {overview.health_grade}
               </span>
-              <span style={{ fontSize: 10.5, lineHeight: 1.25, color: overview.health_trend < 0 ? '#fca5a5' : '#86efac', fontWeight: 600 }}>
-                {overview.health_trend < 0 ? '▼' : '▲'} {Math.abs(overview.health_trend)} pts vs last month
-              </span>
+              {trendNode}
             </div>
           </div>
 

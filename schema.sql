@@ -146,6 +146,24 @@ CREATE TABLE IF NOT EXISTS audit_log (
     changed_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── Health Score History ─────────────────────────────────────────
+-- Daily snapshots of the infrastructure health score, powering the
+-- month-over-month trend on the dashboard. Pruned to the last 90 days
+-- by the snapshot job (/api/system/health-snapshot).
+CREATE TABLE IF NOT EXISTS health_score_history (
+    id               SERIAL PRIMARY KEY,
+    score            INTEGER NOT NULL,
+    grade            CHAR(1) NOT NULL,
+    healthy_devices  INTEGER,
+    eol_assets       INTEGER,
+    sites_at_risk    INTEGER,
+    compliance_score INTEGER,
+    calculated_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_health_score_history_date
+    ON health_score_history (calculated_at DESC);
+
 -- ── App Settings ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS app_settings (
     key   TEXT PRIMARY KEY,

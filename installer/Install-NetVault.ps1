@@ -73,6 +73,7 @@ $PgAdminPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($PgAdminPassword))
 
 $NextAuthSecret = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 48 | % {[char]$_})
+$CronSecret = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
 
 # Detect server IP
 $ServerIP = (Get-NetIPAddress -AddressFamily IPv4 |
@@ -197,6 +198,16 @@ INSERT INTO app_settings (key, value) VALUES ('app_subtitle', 'Network Intellige
 INSERT INTO app_settings (key, value) VALUES ('app_logo_url', '') ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('app_primary_color', '#C8102E') ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('app_navy_color', '#1a2744') ON CONFLICT (key) DO NOTHING;
+
+-- Health score history (populated by the daily health-snapshot cron)
+CREATE TABLE IF NOT EXISTS health_score_history (
+    id SERIAL PRIMARY KEY, score INTEGER NOT NULL, grade CHAR(1) NOT NULL,
+    healthy_devices INTEGER, eol_assets INTEGER, sites_at_risk INTEGER,
+    compliance_score INTEGER, calculated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_health_score_history_date ON health_score_history (calculated_at DESC);
+GRANT ALL PRIVILEGES ON TABLE health_score_history TO $DbUser;
+GRANT USAGE, SELECT ON SEQUENCE health_score_history_id_seq TO $DbUser;
 "@
 $schemaSql | & "$PgBin\psql.exe" -U postgres -h localhost -p $PgPort -d $DbName
 Write-OK "Schema migration complete"
@@ -243,6 +254,7 @@ NEXTAUTH_SECRET=$NextAuthSecret
 NEXTAUTH_URL=http://${ServerIP}:${AppPort}
 NODE_ENV=production
 SSL_DISABLED=true
+CRON_SECRET=$CronSecret
 "@
 $envContent | Out-File -FilePath "$AppDir\.env" -Encoding UTF8
 Write-OK ".env created (NEXTAUTH_URL=http://${ServerIP}:${AppPort})"
@@ -306,7 +318,8 @@ if (-not $nodePath) { $nodePath = "C:\Program Files\nodejs\node.exe" }
     "SSL_DISABLED=true"                      `
     "DATABASE_URL=postgresql://${DbUser}:${PgPasswordPlain}@localhost:${PgPort}/${DbName}" `
     "NEXTAUTH_SECRET=$NextAuthSecret"        `
-    "NEXTAUTH_URL=http://${ServerIP}:${AppPort}"
+    "NEXTAUTH_URL=http://${ServerIP}:${AppPort}" `
+    "CRON_SECRET=$CronSecret"
 & $nssmExe set NetVault DisplayName    "NetVault - IT Asset Management"
 & $nssmExe set NetVault Description    "NetVault IT Asset Management Platform"
 & $nssmExe set NetVault Start          SERVICE_AUTO_START
@@ -336,6 +349,20 @@ if ($svc -and $svc.Status -eq 'Running') {
 } else {
     Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
 }
+
+# ── Daily health-snapshot scheduled task + baseline ───────────
+Write-Step "Registering daily health-snapshot task"
+$action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:$AppPort/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
+$trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
+Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
+Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
+# Immediate baseline snapshot so the trend has a starting point
+Write-Step "Taking baseline health snapshot"
+try {
+    Start-Sleep -Seconds 3
+    & curl.exe -s -X POST "http://localhost:$AppPort/api/system/health-snapshot" -H "Authorization: Bearer $CronSecret" | Out-Null
+    Write-OK "Baseline health snapshot recorded"
+} catch { Write-Warn "Baseline snapshot call failed (will be taken by the scheduler tonight)" }
 
 # ── Desktop shortcut ───────────────────────────────────────────
 Write-Step "Creating desktop shortcut"

@@ -136,6 +136,12 @@ try {
             Add-Content -Path "$AppDir\.env" -Value "`nSERVER_IP=$ServerIp"
             Write-OK "SERVER_IP added to .env"
         }
+        # Existing installs predate CRON_SECRET - generate one if missing
+        if (-not (Select-String -Path "$AppDir\.env" -Pattern "^CRON_SECRET=" -Quiet -ErrorAction SilentlyContinue)) {
+            $CronSecret = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+            Set-EnvVar -Path "$AppDir\.env" -Key 'CRON_SECRET' -Value $CronSecret
+            Write-OK "CRON_SECRET generated and added to .env"
+        }
     } else {
         Write-Warn ".env was not backed up - check credentials before starting service"
     }
@@ -173,7 +179,7 @@ try {
     $standaloneEnvPath = "$standaloneDir\.env.local"
     $rootEnvPath = "$AppDir\.env"
     if (Test-Path $rootEnvPath) {
-        foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP')) {
+        foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP', 'CRON_SECRET')) {
             $line = Get-Content $rootEnvPath | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
             if ($line) {
                 $val = $line.Substring($key.Length + 1)
@@ -204,6 +210,25 @@ try {
         Write-OK "NetVault service is running"
     } else {
         Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
+    }
+
+    Write-Step "Registering daily health-snapshot task"
+    $cronLine = Get-Content "$AppDir\.env" | Where-Object { $_ -match '^CRON_SECRET=' } | Select-Object -First 1
+    $CronSecret = if ($cronLine) { $cronLine.Substring('CRON_SECRET='.Length) } else { '' }
+    if ($CronSecret) {
+        $action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
+        $trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
+        Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
+        Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
+        # Immediate baseline snapshot so the trend has a starting point
+        Write-Step "Taking baseline health snapshot"
+        try {
+            Start-Sleep -Seconds 3
+            & curl.exe -s -X POST "http://localhost:3000/api/system/health-snapshot" -H "Authorization: Bearer $CronSecret" | Out-Null
+            Write-OK "Baseline health snapshot recorded"
+        } catch { Write-Warn "Baseline snapshot call failed (will be taken by the scheduler tonight)" }
+    } else {
+        Write-Warn "CRON_SECRET not found in .env - skipping scheduled task registration"
     }
 
 } catch {
