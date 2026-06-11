@@ -369,10 +369,10 @@ export default function LauncherPage() {
 
         {/* Welcome */}
         <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: '15px', color: '#6b7280', marginBottom: '2px' }}>{greeting},</div>
-          <h1 style={{ fontSize: '34px', fontWeight: 800, color: NAVY, margin: '0 0 10px' }}>{firstName}</h1>
-          <div style={{ fontSize: '15px', color: '#374151', fontWeight: 600 }}>Welcome to the Network Intelligence Suite.</div>
-          <div style={{ fontSize: '13px', color: '#6b7280', marginBottom: '14px' }}>Centralized visibility. Smarter operations. Better decisions.</div>
+          <div style={{ fontSize: '15px', color: '#6b7280', lineHeight: 1.2, marginBottom: '1px' }}>{greeting},</div>
+          <h1 style={{ fontSize: '34px', fontWeight: 800, color: NAVY, lineHeight: 1.1, margin: '0 0 4px' }}>{firstName}</h1>
+          <div style={{ fontSize: '15px', color: '#374151', fontWeight: 600, lineHeight: 1.25, marginBottom: '2px' }}>Welcome to the Network Intelligence Suite.</div>
+          <div style={{ fontSize: '13px', color: '#6b7280', lineHeight: 1.25, marginBottom: '8px' }}>Centralized visibility. Smarter operations. Better decisions.</div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#374151', fontWeight: 500 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={primary} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
             {clock || '—'}
