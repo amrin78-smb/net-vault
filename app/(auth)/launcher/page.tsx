@@ -368,7 +368,7 @@ export default function LauncherPage() {
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: '24px', marginBottom: '32px' }}>
 
         {/* Welcome */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ fontSize: '15px', color: '#6b7280', marginBottom: '2px' }}>{greeting},</div>
           <h1 style={{ fontSize: '34px', fontWeight: 800, color: NAVY, margin: '0 0 10px' }}>{firstName}</h1>
           <div style={{ fontSize: '15px', color: '#374151', fontWeight: 600 }}>Welcome to the Network Intelligence Suite.</div>
@@ -379,37 +379,49 @@ export default function LauncherPage() {
           </div>
         </div>
 
-        {/* Suite health overview — horizontal */}
-        <div style={{ flexShrink: 0, width: 'auto', background: 'white', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 24px', display: 'flex', alignItems: 'center', gap: '24px' }}>
-          {/* Left: overall status */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={overallColor} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-              <polyline points="9 12 11 14 15 10" />
-            </svg>
-            <div>
-              <div style={{ fontSize: '11px', color: '#6b7280' }}>Overall Status</div>
-              <div style={{ fontSize: '20px', fontWeight: 800, color: overallColor, lineHeight: 1.15 }}>{overall}</div>
-              <div style={{ fontSize: '11px', color: '#9ca3af' }}>{overallSub}</div>
-            </div>
+        {/* Suite health overview */}
+        <div style={{ flex: 1, minWidth: 0, background: 'white', borderRadius: '12px', boxShadow: CARD_SHADOW, padding: 0, overflow: 'hidden' }}>
+          {/* Title row */}
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f0f4f8', fontSize: '15px', fontWeight: 600, color: NAVY }}>
+            Suite Health Overview
           </div>
 
-          {/* Divider */}
-          <div style={{ width: '1px', alignSelf: 'stretch', minHeight: '48px', background: '#e5e7eb' }} />
+          {/* Body row */}
+          <div style={{ display: 'flex', alignItems: 'center', padding: '16px 20px' }}>
+            {/* Left: overall status */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', paddingRight: '20px' }}>
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke={overallColor} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                <polyline points="9 12 11 14 15 10" />
+              </svg>
+              <div>
+                <div style={{ fontSize: '11px', color: '#6b7280' }}>Overall Status</div>
+                <div style={{ fontSize: '20px', fontWeight: 800, color: overallColor, lineHeight: 1.15 }}>{overall}</div>
+                <div style={{ fontSize: '11px', color: '#9ca3af' }}>{overallSub}</div>
+              </div>
+            </div>
 
-          {/* Right: app pills */}
-          <div style={{ display: 'flex', gap: '32px', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
-            {['NetVault', 'LogVault', 'DDIVault', 'SpanVault'].map(app => {
-              const st = healthFor(app)
-              return (
-                <div key={app} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <AppIcon name={app} />
-                  <span style={{ fontWeight: 600, fontSize: '14px', color: '#374151' }}>{app}</span>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
-                  <span style={{ fontSize: '13px', color: HEALTH_COLORS[st] }}>{st}</span>
-                </div>
-              )
-            })}
+            {/* Divider */}
+            <div style={{ width: '1px', height: '60px', background: '#e5e7eb', flexShrink: 0 }} />
+
+            {/* Right: app pills */}
+            <div style={{ display: 'flex', alignItems: 'stretch', flex: 1 }}>
+              {['NetVault', 'LogVault', 'DDIVault', 'SpanVault'].map((app, i) => {
+                const st = healthFor(app)
+                return (
+                  <div key={app} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '6px', padding: '0 24px', borderLeft: i === 0 ? 'none' : '1px solid #f0f4f8' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AppIcon name={app} />
+                      <span style={{ fontWeight: 700, fontSize: '14px', color: NAVY }}>{app}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
+                      <span style={{ fontSize: '12px', color: HEALTH_COLORS[st] }}>{st}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
 
