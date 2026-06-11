@@ -275,14 +275,11 @@ export default function LauncherPage() {
           </div>
 
           {/* Suite health overview */}
-          <div style={{ background: 'white', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 22px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-              <div style={{ fontSize: '15px', fontWeight: 700, color: NAVY }}>Suite Health Overview</div>
-              <a href="/dashboard" style={{ fontSize: '12px', color: primary, fontWeight: 600, textDecoration: 'none' }}>View system status →</a>
-            </div>
-            <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '120px' }}>
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke={overallColor} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <div style={{ background: 'white', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '16px 18px' }}>
+            <div style={{ fontSize: '15px', fontWeight: 700, color: NAVY, marginBottom: '12px' }}>Suite Health Overview</div>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '110px' }}>
+                <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke={overallColor} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                   <polyline points="9 12 11 14 15 10" />
                 </svg>
@@ -290,12 +287,11 @@ export default function LauncherPage() {
                 <div style={{ fontSize: '15px', fontWeight: 700, color: overallColor }}>{overall === 'Healthy' ? 'Healthy' : overall}</div>
                 <div style={{ fontSize: '10px', color: '#9ca3af', textAlign: 'center' }}>All systems operational</div>
               </div>
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {['NetVault', 'LogVault', 'DDIVault', 'SpanVault'].map(app => {
                   const st = healthFor(app)
                   return (
                     <div key={app} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-                      <img src={`/${app.toLowerCase()}-logo.svg`} alt={app} style={{ width: '18px', height: '18px', objectFit: 'contain', filter: 'grayscale(0.2)' }} />
                       <span style={{ fontWeight: 600, color: '#374151' }}>{app}</span>
                       <span style={{ color: '#d1d5db' }}>•</span>
                       <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block' }} />
