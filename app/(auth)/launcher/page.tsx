@@ -55,11 +55,47 @@ const HEALTH_COLORS: Record<HealthStatus, string> = {
   Unavailable: '#9ca3af',
 }
 
-const APP_LOGOS: Record<string, string> = {
-  NetVault: '/netvault-logo.svg',
-  LogVault: '/logvault-logo.svg',
-  DDIVault: '/ddivault-logo.svg',
-  SpanVault: '/spanvault-logo.svg',
+// Compact icon-only marks for the Suite Health pills (no wordmark).
+function AppIcon({ name }: { name: string }) {
+  switch (name) {
+    case 'NetVault':
+      return (
+        <svg viewBox="0 0 38 42" width="20" height="22" style={{ flexShrink: 0 }}>
+          <line x1="19" y1="4" x2="4" y2="36" stroke="#C8102E" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="19" y1="4" x2="34" y2="36" stroke="#C8102E" strokeWidth="2.5" strokeLinecap="round" />
+          <line x1="4" y1="36" x2="34" y2="36" stroke="#C8102E" strokeWidth="2.5" strokeLinecap="round" />
+          <circle cx="19" cy="4" r="3" fill="#C8102E" />
+          <circle cx="4" cy="36" r="3" fill="#C8102E" />
+          <circle cx="34" cy="36" r="3" fill="#C8102E" />
+        </svg>
+      )
+    case 'LogVault':
+      return (
+        <svg viewBox="0 0 32 46" width="16" height="22" style={{ flexShrink: 0 }}>
+          <rect x="2" y="6" width="3" height="34" rx="1.5" fill="#2563eb" />
+          <rect x="9" y="7" width="20" height="3" rx="1.5" fill="#2563eb" />
+          <rect x="9" y="15" width="14" height="3" rx="1.5" fill="#2563eb" opacity="0.7" />
+          <rect x="9" y="23" width="18" height="3" rx="1.5" fill="#2563eb" opacity="0.85" />
+          <rect x="9" y="31" width="10" height="3" rx="1.5" fill="#2563eb" opacity="0.6" />
+        </svg>
+      )
+    case 'DDIVault':
+      return (
+        <svg viewBox="0 0 38 44" width="20" height="22" style={{ flexShrink: 0 }}>
+          <circle cx="19" cy="22" r="15" fill="none" stroke="#d97706" strokeWidth="2" />
+          <ellipse cx="19" cy="22" rx="7" ry="15" fill="none" stroke="#d97706" strokeWidth="1.5" />
+          <line x1="4" y1="22" x2="34" y2="22" stroke="#d97706" strokeWidth="1.5" />
+        </svg>
+      )
+    case 'SpanVault':
+      return (
+        <svg viewBox="0 0 40 46" width="22" height="22" style={{ flexShrink: 0 }}>
+          <path d="M1,23 L7,23 L11,8 L16,38 L21,8 L26,38 L30,23 L38,23" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )
+    default:
+      return null
+  }
 }
 
 function num(v: unknown): string {
@@ -359,16 +395,14 @@ export default function LauncherPage() {
           <div style={{ width: '1px', alignSelf: 'stretch', minHeight: '48px', background: '#e5e7eb' }} />
 
           {/* Right: app pills */}
-          <div style={{ display: 'flex', gap: '28px', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
+          <div style={{ display: 'flex', gap: '32px', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
             {['NetVault', 'LogVault', 'DDIVault', 'SpanVault'].map(app => {
               const st = healthFor(app)
               return (
-                <div key={app} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', background: NAVY, borderRadius: '8px', padding: '6px 10px' }}>
-                    <img src={APP_LOGOS[app]} alt={app} style={{ height: '32px', width: 'auto', objectFit: 'contain', display: 'block' }} />
-                  </span>
+                <div key={app} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AppIcon name={app} />
                   <span style={{ fontWeight: 600, fontSize: '14px', color: '#374151' }}>{app}</span>
-                  <span style={{ width: '9px', height: '9px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
                   <span style={{ fontSize: '13px', color: HEALTH_COLORS[st] }}>{st}</span>
                 </div>
               )
