@@ -7,9 +7,29 @@ export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const user = session.user as { role: string }
-  if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { searchParams } = new URL(req.url)
+
+  // Recent-activity feed mode: `?limit=N` returns a small, read-only recent
+  // feed available to any authenticated user (for the launcher widget).
+  // Full paginated/filterable audit log remains admin-only.
+  const limitParam = searchParams.get('limit')
+  if (limitParam) {
+    const feedLimit = Math.min(Math.max(parseInt(limitParam, 10) || 8, 1), 25)
+    const feed = await query(`
+      SELECT a.id, a.field_name, a.changed_at,
+             u.name as changed_by_name,
+             d.name as device_name
+      FROM audit_log a
+      LEFT JOIN users u ON u.id = a.changed_by
+      LEFT JOIN devices d ON d.id = a.device_id
+      ORDER BY a.changed_at DESC LIMIT $1
+    `, [feedLimit])
+    return NextResponse.json({ logs: feed.rows })
+  }
+
+  if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const page     = parseInt(searchParams.get('page') || '1')
   const action   = searchParams.get('action') || ''
   const userId   = searchParams.get('user') || ''
