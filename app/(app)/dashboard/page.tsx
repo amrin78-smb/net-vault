@@ -121,32 +121,6 @@ async function safeFetch<T>(url: string, fallback: T): Promise<T> {
   }
 }
 
-/* ----------------------- deterministic sparklines ------------------ */
-// Precomputed constant arrays so SSR/CSR match (no Math.random at render).
-const SPARK_HEALTHY = [40, 42, 41, 44, 45, 46, 48, 50]   // stable / gentle up
-const SPARK_EOL     = [20, 24, 27, 33, 38, 44, 52, 60]   // upward
-const SPARK_SITES   = [32, 30, 33, 31, 34, 32, 33, 31]   // amber flat-ish
-const SPARK_COMP    = [44, 45, 44, 46, 45, 45, 46, 45]   // stable
-
-function Sparkline({ points, color }: { points: number[]; color: string }) {
-  const W = 96, H = 26, PAD = 2
-  const max = Math.max(...points), min = Math.min(...points)
-  const span = max - min || 1
-  const stepX = (W - PAD * 2) / (points.length - 1)
-  const coords = points.map((p, i) => {
-    const x = PAD + i * stepX
-    const y = PAD + (H - PAD * 2) * (1 - (p - min) / span)
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  })
-  const areaPath = `M${coords[0]} L${coords.slice(1).join(' L')} L${(PAD + (points.length - 1) * stepX).toFixed(1)},${H} L${PAD},${H} Z`
-  return (
-    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{ display: 'block', width: '100%' }} preserveAspectRatio="none">
-      <path d={areaPath} fill={color} opacity={0.12} />
-      <polyline points={coords.join(' ')} fill="none" stroke={color} strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 /* -------------------------------- icons ---------------------------- */
 const ico = (path: React.ReactNode, size = 18, color = 'currentColor', sw = 1.7) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round">{path}</svg>
@@ -273,10 +247,10 @@ export default function DashboardPage() {
 
   /* ------------------------- tiles config -------------------------- */
   const tiles = [
-    { icon: IconMonitor, value: overview.healthy_devices, label: 'Healthy Devices', sub: `${overview.healthy_devices_pct}% of fleet`, color: GREEN, spark: SPARK_HEALTHY },
-    { icon: IconWarning, value: overview.eol_assets, label: 'EOL Assets', sub: `${overview.eol_assets_pct}% action needed`, color: RED, spark: SPARK_EOL },
-    { icon: IconShield, value: overview.sites_at_risk, label: 'Sites at Risk', sub: 'High impact', color: AMBER, spark: SPARK_SITES },
-    { icon: IconClipboard, value: `${overview.compliance_score}%`, label: 'Compliance Score', sub: 'Good standing', color: BLUE, spark: SPARK_COMP },
+    { icon: IconMonitor, value: overview.healthy_devices, label: 'Healthy Devices', sub: `${overview.healthy_devices_pct}% of fleet`, color: GREEN },
+    { icon: IconWarning, value: overview.eol_assets, label: 'EOL Assets', sub: `${overview.eol_assets_pct}% action needed`, color: RED },
+    { icon: IconShield, value: overview.sites_at_risk, label: 'Sites at Risk', sub: 'High impact', color: AMBER },
+    { icon: IconClipboard, value: `${overview.compliance_score}%`, label: 'Compliance Score', sub: 'Good standing', color: BLUE },
   ]
 
   /* --------------------------- stats row --------------------------- */
@@ -401,20 +375,19 @@ export default function DashboardPage() {
           {/* RIGHT — metric tiles in a row */}
           <div className="nv-health-right" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, flexShrink: 0 }}>
             {tiles.map((t, i) => (
-              <div key={i} style={{ width: 180, flexShrink: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: 12, display: 'flex', flexDirection: 'column' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ display: 'inline-flex', width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 7, background: `${t.color}22`, color: t.color }}>
-                    {t.icon(15, t.color)}
-                  </span>
+              <div key={i} style={{ width: 180, flexShrink: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  {t.icon(32, t.color)}
+                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                  {loading ? <Shimmer w={50} h={26} light /> : (
+                    <div style={{ fontSize: 28, fontWeight: 800, color: 'white', lineHeight: 1 }}>
+                      {typeof t.value === 'number' ? t.value.toLocaleString() : t.value}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{t.label}</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{t.sub}</div>
                 </div>
-                {loading ? <div style={{ margin: '6px 0' }}><Shimmer w={50} h={22} light /></div> : (
-                  <div style={{ fontSize: 22, fontWeight: 800, marginTop: 6, lineHeight: 1 }}>
-                    {typeof t.value === 'number' ? t.value.toLocaleString() : t.value}
-                  </div>
-                )}
-                <div style={{ fontSize: 11.5, fontWeight: 600, marginTop: 3 }}>{t.label}</div>
-                <div style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.5)', marginBottom: 5 }}>{t.sub}</div>
-                <div style={{ marginTop: 'auto' }}><Sparkline points={t.spark} color={t.color} /></div>
               </div>
             ))}
           </div>
@@ -507,7 +480,7 @@ export default function DashboardPage() {
               {sitesBadgeCount}
             </span>
           </div>
-          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
             {loading ? (
               [0, 1, 2].map(i => <div key={i} style={{ padding: '6px 0' }}><Shimmer w="70%" h={14} /><div style={{ marginTop: 6 }}><Shimmer w="40%" h={11} /></div></div>)
             ) : topEol.length === 0 ? (
@@ -516,24 +489,24 @@ export default function DashboardPage() {
               const high = s.eol_pct >= 50
               return (
                 <Link key={i} href="/sites?filter=eol" style={{ textDecoration: 'none' }}>
-                  <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderRadius: 8, borderBottom: i < 2 ? '1px solid #f3f4f6' : 'none', cursor: 'pointer' }}>
+                  <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderRadius: 8, borderBottom: i < 2 ? '1px solid #f3f4f6' : 'none', cursor: 'pointer' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
-                      <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{s.city} • {s.region}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 5, color: high ? '#991b1b' : '#92400e', background: high ? '#fee2e2' : '#fef3c7' }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
+                      <div style={{ fontSize: 10, color: MUTED, marginTop: 1 }}>{s.city} • {s.region}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 5, color: high ? '#991b1b' : '#92400e', background: high ? '#fee2e2' : '#fef3c7' }}>
                           {high ? 'HIGH' : 'MEDIUM'}
                         </span>
                         <span style={{ fontSize: 11.5, color: '#991b1b', fontWeight: 600 }}>{s.eol_count} EOL Devices</span>
                       </div>
                     </div>
-                    <span style={{ color: '#9ca3af', display: 'flex' }}>{IconChevron(18, '#9ca3af')}</span>
+                    <span style={{ color: '#9ca3af', display: 'flex' }}>{IconChevron(14, '#9ca3af')}</span>
                   </div>
                 </Link>
               )
             })}
           </div>
-          <div style={{ marginTop: 8, paddingTop: 10, borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ marginTop: 6, paddingTop: 8, borderTop: '1px solid #f3f4f6' }}>
             <Link href="/sites?filter=eol" style={viewLink}>View all EOL sites →</Link>
           </div>
         </div>

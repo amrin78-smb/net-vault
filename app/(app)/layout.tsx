@@ -463,36 +463,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div style={{ flex: 1 }} />
 
-          {/* Bell + Help ghost icon buttons */}
+          {/* Help ghost icon button */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 6 }}>
-            <Link
-              href="/eol"
-              title="Alerts"
-              style={{
-                position: 'relative', width: 36, height: 36, borderRadius: 9,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
-                transition: 'background 0.15s, color 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'white' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}
-            >
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/>
-              </svg>
-              {alertCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: 4, right: 4,
-                  minWidth: 16, height: 16, padding: '0 4px',
-                  borderRadius: 8, background: '#C8102E', color: 'white',
-                  fontSize: 10, fontWeight: 700, lineHeight: 1,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  border: `1.5px solid ${navy}`,
-                }}>
-                  {alertCount > 99 ? '99+' : alertCount}
-                </span>
-              )}
-            </Link>
             <a
               href="/compliance"
               title="Help"
