@@ -66,20 +66,19 @@ async function remoteCommitHash(): Promise<string | null> {
   }
 }
 
-// Pull the latest version's section out of CHANGELOG.md — everything from the
-// first "## " header up to the next one — plus the release date in the header.
-function extractLatestChangelog(md: string): { changelog?: string; release_date?: string } {
-  const lines = md.split('\n')
-  const startIdx = lines.findIndex(l => l.startsWith('## '))
-  if (startIdx === -1) return {}
-  let endIdx = lines.length
-  for (let i = startIdx + 1; i < lines.length; i++) {
-    if (lines[i].startsWith('## ')) { endIdx = i; break }
-  }
-  const changelog = lines.slice(startIdx, endIdx).join('\n').trim()
-  const headingMatch = lines[startIdx].match(/[—-]\s*(.+)\s*$/)
-  const release_date = headingMatch ? headingMatch[1].trim() : undefined
-  return { changelog, release_date }
+// Hardcoded structured release notes, keyed by version. When bumping the
+// version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
+// release notes live here only.
+const releaseNotes: Record<string, string[]> = {
+  '1.2.0': [
+    'Enterprise dashboard with health score and charts',
+    'Animated login page redesign',
+    'Server status monitoring',
+    'Automatic versioning across suite',
+  ],
+  'default': [
+    'Bug fixes and performance improvements',
+  ],
 }
 
 // Compares the local git commit hash against the latest commit on GitHub's main
@@ -108,15 +107,9 @@ export async function GET() {
       // best-effort; version is display-only
     }
 
-    let changelog: string | undefined
-    let release_date: string | undefined
-    try {
-      const parsed = extractLatestChangelog(await fetchText(`${RAW_BASE}CHANGELOG.md?cb=${bust}`))
-      changelog = parsed.changelog
-      release_date = parsed.release_date
-    } catch {
-      // changelog is optional
-    }
+    // Release notes for the version being offered (the latest), falling back to
+    // a generic message when there's no curated entry for that version.
+    const release_notes = (latest_version && releaseNotes[latest_version]) || releaseNotes['default']
 
     // Any differing commit = update available. If either hash is missing
     // (git unavailable or API error), treat as up to date to avoid a false alarm.
@@ -127,10 +120,12 @@ export async function GET() {
       latest_version,
       current_commit: localHash,
       latest_commit: remoteHash,
+      current_hash: localHash,
+      latest_hash: remoteHash,
       up_to_date: !update_available,
       update_available,
-      changelog,
-      release_date,
+      release_notes,
+      release_date: new Date().toISOString().slice(0, 10),
     })
   } catch (e: any) {
     const detail = (e?.message || 'version check failed').toString().trim()

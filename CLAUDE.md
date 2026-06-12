@@ -28,3 +28,4 @@ Rules:
 - Run npm version BEFORE npm run build
 - The app reads version from package.json via /api/health
 - NocVault suite itself has no version number — only the 4 apps
+- When bumping version, also update the releaseNotes object in the update status API with 3-5 bullets describing what changed. No CHANGELOG.md — release notes live in the update status API only.

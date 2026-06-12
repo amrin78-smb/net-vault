@@ -9,19 +9,12 @@ type UpdateStatus = {
   current_version?: string; latest_version?: string
   current_commit?: string; latest_commit?: string
   up_to_date?: boolean; update_available?: boolean
-  changelog?: string; release_date?: string; error?: string
+  release_notes?: string[]; release_date?: string; error?: string
 }
 
-function changelogBody(raw?: string): string {
-  if (!raw) return ''
-  // drop the leading "## ..." heading line, return the rest trimmed
-  const lines = raw.split('\n')
-  if (lines[0]?.trim().startsWith('##')) lines.shift()
-  return lines.join('\n').trim()
-}
 function fmtReleaseDate(d?: string): string {
   if (!d) return ''
-  const dt = new Date(d)
+  const dt = new Date(d + 'T00:00:00')
   if (isNaN(dt.getTime())) return d
   return dt.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
@@ -1001,9 +994,16 @@ export default function SettingsPage() {
                       Latest: v{updateStatus.latest_version}
                       {updateStatus.latest_commit && <> (<code>{updateStatus.latest_commit}</code>)</>}
                     </p>
-                    {updateStatus.changelog && (
-                      <div style={{ marginTop: 6, maxHeight: 200, overflowY: 'auto', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 14px', background: '#f9fafb', fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-                        {changelogBody(updateStatus.changelog)}
+                    {updateStatus.release_notes && updateStatus.release_notes.length > 0 && (
+                      <div style={{ marginTop: 6, border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px', background: '#f9fafb' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2744', marginBottom: 8 }}>
+                          What's new in v{updateStatus.latest_version}
+                        </div>
+                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6, color: '#374151' }}>
+                          {updateStatus.release_notes.map((note, i) => (
+                            <li key={i}>{note}</li>
+                          ))}
+                        </ul>
                       </div>
                     )}
                     {updateStatus.release_date && (
