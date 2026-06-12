@@ -205,6 +205,16 @@ export default function SettingsPage() {
   useEffect(() => { if (user && user.role !== 'admin' && user.role !== 'super_admin') router.push('/dashboard') }, [user, router])
 
   const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'|'security'|'license'|'updates'>('users')
+
+  // Deep-link support: the suite apps' "Manage License" link points at
+  // /settings/license (which redirects here as ?tab=license). Honour ?tab=<name>
+  // on load so the correct tab opens instead of the default.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t && ['branding', 'users', 'sites', 'security', 'license', 'updates'].includes(t)) {
+      setActiveTab(t as 'branding' | 'users' | 'sites' | 'security' | 'license' | 'updates')
+    }
+  }, [])
   const [settings, setSettings] = useState<Settings>({ app_name: '', app_subtitle: '', app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744' })
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [savingSettings, setSavingSettings] = useState(false)
