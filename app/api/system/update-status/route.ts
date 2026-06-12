@@ -76,6 +76,12 @@ const releaseNotes: Record<string, string[]> = {
     'Server status monitoring',
     'Automatic versioning across suite',
   ],
+  '1.2.1': [
+    'More reliable auto-reload after applying an update',
+    'Extended the update recovery window so slower builds finish cleanly',
+    'Cleaner update screen with structured release notes',
+    'Removed the legacy CHANGELOG file',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
