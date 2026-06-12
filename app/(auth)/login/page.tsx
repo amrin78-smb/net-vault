@@ -254,17 +254,14 @@ function LoginForm() {
       <style>{`
         .nv-login-input::placeholder { color: rgba(255,255,255,0.35); }
         .nv-login-input:focus { border-color: ${RED}; background: rgba(255,255,255,0.12); }
-        .nv-login-split { display: flex; min-height: 100vh; }
-        .nv-login-left { flex: 0 0 60%; padding: 48px 56px; display: flex; flex-direction: column; }
-        .nv-login-right { flex: 0 0 40%; display: flex; align-items: center; justify-content: center; padding: 32px; }
-        .nv-app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .nv-login-center { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: 56px; margin-top: -40px; padding: 24px; position: relative; z-index: 1; }
+        .nv-login-left { width: 460px; flex-shrink: 0; }
+        .nv-app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .nv-app-card { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); transition: background 0.15s; }
         .nv-app-card:hover { background: rgba(255,255,255,0.12); }
         @media (max-width: 980px) {
-          .nv-login-split { flex-direction: column; }
-          .nv-login-left { flex: none; padding: 40px 28px; }
-          .nv-login-right { flex: none; }
-          .nv-login-showcase { display: none; }
+          .nv-login-center { gap: 0; margin-top: 0; }
+          .nv-login-left { display: none; }
           .nv-status-badge { display: none; }
         }
       `}</style>
@@ -283,52 +280,49 @@ function LoginForm() {
         NocVault v1.2.0  •  Build 2026.06.11
       </div>
 
-      <div className="nv-login-split" style={{ position: 'relative', zIndex: 1 }}>
+      {/* Logo + suite name — fixed top-left */}
+      <div style={{ position: 'fixed', top: 24, left: 32, zIndex: 2 }}>
+        <NocVaultLogo height={40} />
+        <div style={{ fontSize: 11, letterSpacing: '2px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', marginTop: 8 }}>
+          NETWORK INTELLIGENCE SUITE
+        </div>
+      </div>
 
-        {/* ── LEFT: branding + showcase ── */}
+      {/* Centered pair: left showcase + login card */}
+      <div className="nv-login-center">
+
+        {/* ── LEFT: headline + showcase ── */}
         <div className="nv-login-left">
-          {/* Top: logo */}
-          <div>
-            <NocVaultLogo height={44} />
-            <div style={{ fontSize: 11, letterSpacing: '2px', fontWeight: 600, color: 'rgba(255,255,255,0.5)', marginTop: 10 }}>
-              NETWORK INTELLIGENCE SUITE
-            </div>
-          </div>
+          <h1 style={{ fontSize: 48, fontWeight: 800, lineHeight: 1.15, margin: 0, marginBottom: 12, color: '#fff', letterSpacing: '-1px' }}>
+            Unified Visibility.<br />
+            Smarter Operations.<br />
+            Better Decisions.
+          </h1>
+          <div style={{ width: 56, height: 3, background: RED, borderRadius: 2, marginBottom: 16 }} />
+          <p style={{ fontSize: 15, lineHeight: 1.6, color: 'rgba(255,255,255,0.6)', margin: 0, marginBottom: 28 }}>
+            NocVault delivers real-time intelligence across your network infrastructure, assets, logs and IP services.
+          </p>
 
-          {/* Center: headline + showcase */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', maxWidth: 620, paddingTop: 32, paddingBottom: 32 }}>
-            <h1 style={{ fontSize: 48, fontWeight: 800, lineHeight: 1.2, margin: 0, color: '#fff', letterSpacing: '-1px' }}>
-              Unified Visibility.<br />
-              Smarter Operations.<br />
-              Better Decisions.
-            </h1>
-            <div style={{ width: 60, height: 3, background: RED, borderRadius: 2, marginTop: 22 }} />
-            <p style={{ fontSize: 16, lineHeight: 1.6, color: 'rgba(255,255,255,0.6)', marginTop: 22, maxWidth: 520 }}>
-              NocVault delivers real-time intelligence across your network infrastructure, assets, logs and IP services.
-            </p>
-
-            {/* App showcase cards */}
-            <div className="nv-app-grid nv-login-showcase" style={{ marginTop: 34, maxWidth: 540 }}>
-              {APPS.map(app => (
-                <div key={app.name} className="nv-app-card" style={{ borderLeft: `2px solid ${app.accent}`, borderRadius: 12, padding: 16, display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <AppMark name={app.name} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
-                      {app.prefix}<span style={{ color: app.accent }}>Vault</span>
-                    </div>
-                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{app.subtitle}</div>
+          {/* App showcase cards */}
+          <div className="nv-app-grid">
+            {APPS.map(app => (
+              <div key={app.name} className="nv-app-card" style={{ borderLeft: `2px solid ${app.accent}`, borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                <AppMark name={app.name} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
+                    {app.prefix}<span style={{ color: app.accent }}>Vault</span>
                   </div>
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{app.subtitle}</div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         </div>
 
         {/* ── RIGHT: login card ── */}
-        <div className="nv-login-right">
-          <div style={{
-            width: '100%',
-            maxWidth: 400,
+        <div style={{
+            width: 400,
+            flexShrink: 0,
             background: 'rgba(255,255,255,0.05)',
             backdropFilter: 'blur(20px)',
             WebkitBackdropFilter: 'blur(20px)',
@@ -431,9 +425,8 @@ function LoginForm() {
               </button>
             </form>
 
-            <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-              Need help? Contact your IT administrator
-            </div>
+          <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+            Need help? Contact your IT administrator
           </div>
         </div>
       </div>
