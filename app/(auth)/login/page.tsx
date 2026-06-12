@@ -254,8 +254,8 @@ function LoginForm() {
       <style>{`
         .nv-login-input::placeholder { color: rgba(255,255,255,0.35); }
         .nv-login-input:focus { border-color: ${RED}; background: rgba(255,255,255,0.12); }
-        .nv-login-center { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: 56px; margin-top: -40px; padding: 24px; position: relative; z-index: 1; }
-        .nv-login-left { width: 460px; flex-shrink: 0; }
+        .nv-login-center { min-height: 100vh; display: flex; align-items: center; justify-content: center; gap: 56px; margin-top: -60px; margin-left: -60px; padding: 24px; position: relative; z-index: 1; }
+        .nv-login-left { width: 500px; flex-shrink: 0; }
         .nv-app-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         .nv-app-card { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); transition: background 0.15s; }
         .nv-app-card:hover { background: rgba(255,255,255,0.12); }
@@ -293,7 +293,7 @@ function LoginForm() {
 
         {/* ── LEFT: headline + showcase ── */}
         <div className="nv-login-left">
-          <h1 style={{ fontSize: 48, fontWeight: 800, lineHeight: 1.15, margin: 0, marginBottom: 12, color: '#fff', letterSpacing: '-1px' }}>
+          <h1 style={{ fontSize: 40, fontWeight: 800, lineHeight: 1.15, margin: 0, marginBottom: 12, color: '#fff', letterSpacing: '-1px' }}>
             Unified Visibility.<br />
             Smarter Operations.<br />
             Better Decisions.
