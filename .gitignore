@@ -47,3 +47,6 @@ scripts/generate-license.js
 
 # runtime disk-usage history for /api/server-stats forecast
 .data/
+
+# packaging archives (build/distribution output, never source)
+*.zip
