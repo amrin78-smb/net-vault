@@ -13,6 +13,7 @@ type SuiteStats = {
   spanvault: Record<string, unknown> | null
 }
 type ServerStats = {
+  host?: string
   disk: { total: number; used: number; free: number; percent: number; path: string }
   memory: { total: number; used: number; free: number; percent: number }
   cpu: { percent: number }
@@ -341,7 +342,7 @@ export default function LauncherPage() {
       {license?.status === 'expired' && (
         <div style={{ background: '#fee2e2', borderBottom: '1px solid #fecaca', padding: '10px 32px', fontSize: '13px', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '10px' }}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-          <span><strong>NocVault license required.</strong> Contact <a href="mailto:support@nocvault.io" style={{ color: '#991b1b', fontWeight: '600' }}>support@nocvault.io</a></span>
+          <span><strong>NocVault license required.</strong> Contact <a href="mailto:sales@nocvault.com" style={{ color: '#991b1b', fontWeight: '600' }}>sales@nocvault.com</a></span>
         </div>
       )}
       {license?.status === 'active' && license.expiry && (() => {
@@ -349,13 +350,13 @@ export default function LauncherPage() {
         if (days <= 30) return (
           <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 32px', fontSize: '13px', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-            <span>Your license expires on <strong>{license.expiry}</strong>. Contact <a href="mailto:support@nocvault.io" style={{ color: '#c2410c', fontWeight: '600' }}>support@nocvault.io</a> to renew.</span>
+            <span>Your license expires on <strong>{license.expiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#c2410c', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
           </div>
         )
         if (days <= 90) return (
           <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 32px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-            <span>Your license expires on <strong>{license.expiry}</strong>. Contact <a href="mailto:support@nocvault.io" style={{ color: '#92400e', fontWeight: '600' }}>support@nocvault.io</a> to renew.</span>
+            <span>Your license expires on <strong>{license.expiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#92400e', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
           </div>
         )
         return null
@@ -431,6 +432,7 @@ export default function LauncherPage() {
         <div className="nv-app-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '18px', marginBottom: '24px' }}>
           {cards.map(card => {
             const st = healthFor(card.name)
+            const netvaultEmpty = card.name === 'NetVault' && !statsLoading && netStats != null && netStats.devices_total === 0 && netStats.sites_total === 0 && netStats.eol_total === 0
             return (
               <div key={card.name} style={{ background: NAVY, borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '18px', display: 'flex', flexDirection: 'column', color: 'white' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -442,13 +444,24 @@ export default function LauncherPage() {
                 <div style={{ fontSize: '12px', fontWeight: 600, color: card.color, marginBottom: '4px' }}>{card.subtitle}</div>
                 <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.45, marginBottom: '14px', minHeight: '34px' }}>{card.description}</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', marginBottom: '16px', flex: 1 }}>
-                  {card.metrics.map((m, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-                      <span style={{ color: card.color }}><MetricIcon name={m.icon} /></span>
-                      <span style={{ fontWeight: 700, color: 'white', minWidth: '20px' }}>{m.value === '' ? <Skeleton /> : m.value}</span>
-                      <span style={{ color: 'rgba(255,255,255,0.55)' }}>{m.label}</span>
+                  {netvaultEmpty ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '6px', flex: 1, padding: '8px 0' }}>
+                      <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.color }}>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                      </div>
+                      <div style={{ fontWeight: 700, color: 'white', fontSize: '13px' }}>No devices yet</div>
+                      <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', lineHeight: 1.4 }}>Import or add devices to get started</div>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginTop: '2px' }}><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>
                     </div>
-                  ))}
+                  ) : (
+                    card.metrics.map((m, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
+                        <span style={{ color: card.color }}><MetricIcon name={m.icon} /></span>
+                        <span style={{ fontWeight: 700, color: 'white', minWidth: '20px' }}>{m.value === '' ? <Skeleton /> : m.value}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.55)' }}>{m.label}</span>
+                      </div>
+                    ))
+                  )}
                 </div>
                 <a href={card.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: card.color, color: 'white', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: '8px', textDecoration: 'none' }}>
                   Open {card.name}
@@ -484,7 +497,7 @@ export default function LauncherPage() {
                 </svg>
                 <div style={{ fontSize: '15px', fontWeight: 700, color: NAVY }}>Server Status</div>
               </div>
-              <div style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 18px' }}>192.168.6.111 — shared infrastructure for all suite apps</div>
+              <div style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 18px' }}>{(s?.host || (typeof window !== 'undefined' ? window.location.hostname : 'localhost'))} — shared infrastructure for all suite apps</div>
 
               {serverError && !s ? (
                 <div style={{ padding: '20px 0', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>Server metrics unavailable</div>

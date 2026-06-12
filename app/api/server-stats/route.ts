@@ -9,9 +9,17 @@ import { execSync } from 'child_process'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
+function resolveHost(): string {
+  if (process.env.SERVER_IP && process.env.SERVER_IP.trim() !== '') return process.env.SERVER_IP.trim()
+  if (process.env.NEXTAUTH_URL) {
+    try { return new URL(process.env.NEXTAUTH_URL).hostname } catch {}
+  }
+  return 'localhost'
+}
+
 // ── DISK ─────────────────────────────────────────────────────────────
 // Mirrors LogVault's approach (api/server.js /api/stats/disk): shell out to
-// PowerShell Get-PSDrive for real C: drive usage. Windows host (192.168.6.111).
+// PowerShell Get-PSDrive for real C: drive usage on the Windows host.
 function readDisk(): { total: number; used: number; free: number; percent: number; path: string } | null {
   try {
     const ps =
@@ -125,6 +133,7 @@ export async function GET() {
     const disk_forecast_days = disk ? await diskForecastDays(disk.used, disk.free) : null
 
     return NextResponse.json({
+      host: resolveHost(),
       disk: disk ?? { total: 0, used: 0, free: 0, percent: 0, path: 'C:' },
       memory,
       cpu: { percent: cpu },

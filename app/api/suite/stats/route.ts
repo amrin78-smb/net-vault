@@ -4,9 +4,9 @@ import { NextResponse } from 'next/server'
 // parallel (avoids browser CORS). Any failure/timeout yields null for that app.
 
 const APPS: { key: 'logvault' | 'ddivault' | 'spanvault'; url: string }[] = [
-  { key: 'logvault', url: process.env.LOGVAULT_STATS_URL || 'http://192.168.6.111:3004/api/stats' },
-  { key: 'ddivault', url: process.env.DDIVAULT_STATS_URL || 'http://192.168.6.111:3006/api/stats' },
-  { key: 'spanvault', url: process.env.SPANVAULT_STATS_URL || 'http://192.168.6.111:3008/api/stats' },
+  { key: 'logvault', url: process.env.LOGVAULT_STATS_URL || 'http://localhost:3004/api/stats' },
+  { key: 'ddivault', url: process.env.DDIVAULT_STATS_URL || 'http://localhost:3006/api/stats' },
+  { key: 'spanvault', url: process.env.SPANVAULT_STATS_URL || 'http://localhost:3008/api/stats' },
 ]
 
 async function fetchOne(url: string): Promise<unknown | null> {

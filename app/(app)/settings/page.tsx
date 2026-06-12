@@ -939,8 +939,8 @@ export default function SettingsPage() {
           {/* Support link */}
           <p style={{ fontSize: '13px', color: '#9ca3af' }}>
             Need a license?{' '}
-            <a href="mailto:support@nocvault.io" style={{ color: '#C8102E', textDecoration: 'none' }}>
-              Contact support@nocvault.io
+            <a href="mailto:sales@nocvault.com" style={{ color: '#C8102E', textDecoration: 'none' }}>
+              Contact sales@nocvault.com
             </a>
           </p>
         </div>
