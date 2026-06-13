@@ -4,6 +4,14 @@ import { signOut } from 'next-auth/react'
 
 const ACTIVITY_EVENTS = ['mousemove', 'keydown', 'click'] as const
 
+// Sign out and send the user back to where they were once they log in again.
+// The current path is passed through as callbackUrl so login can restore it.
+function timeoutSignOut() {
+  const here = window.location.pathname + window.location.search
+  const dest = here && !here.startsWith('/login') ? here : '/launcher'
+  signOut({ callbackUrl: `/login?reason=timeout&callbackUrl=${encodeURIComponent(dest)}` })
+}
+
 export default function IdleTimeout() {
   const [showWarning, setShowWarning] = useState(false)
   const timeoutMs = useRef(0)
@@ -27,7 +35,7 @@ export default function IdleTimeout() {
         warnTimerId.current = setTimeout(() => setShowWarning(true), warnDelay)
       }
       mainTimerId.current = setTimeout(() => {
-        signOut({ callbackUrl: '/login?reason=timeout' })
+        timeoutSignOut()
       }, ms)
     }
 
@@ -92,7 +100,7 @@ export default function IdleTimeout() {
           <button className="btn btn-primary" onClick={stayLoggedIn} style={{ padding: '10px 24px' }}>
             Stay logged in
           </button>
-          <button className="btn" onClick={() => signOut({ callbackUrl: '/login?reason=timeout' })} style={{ padding: '10px 24px' }}>
+          <button className="btn" onClick={timeoutSignOut} style={{ padding: '10px 24px' }}>
             Sign out now
           </button>
         </div>

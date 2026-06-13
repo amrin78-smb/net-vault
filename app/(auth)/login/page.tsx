@@ -227,7 +227,16 @@ const labelStyle: React.CSSProperties = {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/launcher'
+  // Only honour internal, non-looping targets. A bare /sso is not a real page,
+  // and /login would loop — fall back to the launcher in those cases.
+  const rawCallback = searchParams.get('callbackUrl') || ''
+  const callbackUrl =
+    rawCallback.startsWith('/') &&
+    !rawCallback.startsWith('//') &&
+    !rawCallback.startsWith('/sso') &&
+    !rawCallback.startsWith('/login')
+      ? rawCallback
+      : '/launcher'
   const reason = searchParams.get('reason')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

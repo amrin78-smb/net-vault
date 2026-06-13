@@ -82,6 +82,11 @@ const releaseNotes: Record<string, string[]> = {
     'Cleaner update screen with structured release notes',
     'Removed the legacy CHANGELOG file',
   ],
+  '1.2.2': [
+    'Idle timeout now returns you to the page you were on after logging back in',
+    'Fixed a redirect that could send users to a non-existent /sso page',
+    'Login safely ignores invalid or looping callback URLs',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
