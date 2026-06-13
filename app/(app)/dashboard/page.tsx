@@ -133,7 +133,6 @@ const IconSites = (s?: number, c?: string) => ico(<><path d="M3 21h18M5 21V7l8-4
 const IconCircuit = (s?: number, c?: string) => ico(<><path d="M6 2v6a6 6 0 0 0 12 0V2M6 22v-6a6 6 0 0 1 12 0v6" /></>, s, c)
 const IconLink = (s?: number, c?: string) => ico(<><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></>, s, c)
 const IconGlobe = (s?: number, c?: string) => ico(<><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20" /></>, s, c)
-const IconRefresh = (s?: number, c?: string) => ico(<><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" /></>, s, c)
 const IconChevron = (s?: number, c?: string) => ico(<polyline points="9 18 15 12 9 6" />, s, c)
 const IconGrid = (s?: number, c?: string) => ico(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>, s, c)
 
@@ -195,11 +194,9 @@ function ChartTooltip({ active, payload, label }: any) {
 export default function DashboardPage() {
   const [data, setData] = useState<DashData>(FALLBACK)
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [clock, setClock] = useState('')
 
   const loadAll = useCallback(async () => {
-    setRefreshing(true)
     const [overview, fleet, byRegion, byType, topEol, stats, activity] = await Promise.all([
       safeFetch<Overview>('/api/dashboard/overview', FALLBACK.overview),
       safeFetch<FleetHealth>('/api/dashboard/fleet-health', FALLBACK.fleet),
@@ -219,7 +216,6 @@ export default function DashboardPage() {
       activity: Array.isArray(activity) ? activity : FALLBACK.activity,
     })
     setLoading(false)
-    setRefreshing(false)
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])
@@ -315,15 +311,6 @@ export default function DashboardPage() {
             <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{clock || '—'}</div>
             <div style={{ fontSize: 11, color: MUTED }}>ICT · Asia/Bangkok</div>
           </div>
-          <button
-            onClick={loadAll}
-            className="nv-icon-btn"
-            aria-label="Refresh"
-            title="Refresh"
-            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 38, height: 38, background: 'white', border: '1px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', color: NAVY }}
-          >
-            <span className={refreshing ? 'nv-spin' : ''} style={{ display: 'flex' }}>{IconRefresh(17, NAVY)}</span>
-          </button>
         </div>
       </div>
 

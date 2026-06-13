@@ -87,6 +87,9 @@ const releaseNotes: Record<string, string[]> = {
     'Fixed a redirect that could send users to a non-existent /sso page',
     'Login safely ignores invalid or looping callback URLs',
   ],
+  '1.2.3': [
+    'Removed the redundant refresh button from the dashboard header',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
