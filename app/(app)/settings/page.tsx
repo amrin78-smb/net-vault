@@ -454,18 +454,18 @@ export default function SettingsPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Settings</h1>
+        <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Settings</h1>
         <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage app branding, users and sites</p>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '2px solid #f3f4f6', marginBottom: '24px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', flexWrap: 'wrap' }}>
         {(['branding', 'users', 'sites', 'security', 'license', 'updates'] as const)
           .filter(tab => tab !== 'branding' || isSuperAdmin)
           .filter(tab => tab !== 'security' || isAdmin)
           .filter(tab => tab !== 'license' || isSuperAdmin)
           .filter(tab => tab !== 'updates' || isAdmin)
           .map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? '#C8102E' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid #C8102E' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
+          <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 18px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
             {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : tab === 'updates' ? 'Updates' : 'License'}
             {tab === 'updates' && updateStatus?.update_available && (
               <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
@@ -477,7 +477,7 @@ export default function SettingsPage() {
       {/* BRANDING TAB */}
       {activeTab === 'branding' && (
         <div>
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Preview</div>
             <div style={{ background: settings.app_navy_color || '#1a2744', borderRadius: '8px', padding: '14px 16px', width: '220px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -491,7 +491,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colors</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div>
@@ -518,7 +518,7 @@ export default function SettingsPage() {
             {settingsSaved && <span style={{ fontSize: '13px', color: '#166534', background: '#dcfce7', padding: '6px 12px', borderRadius: '6px' }}>Saved! Reload to see changes.</span>}
           </div>
 
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginTop: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginTop: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
             <div style={{ fontSize: '15px', fontWeight: '700', color: '#111827' }}>NetVault</div>
             <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Version: v{updateStatus?.current_version || '1.0.0'}</div>
@@ -536,7 +536,7 @@ export default function SettingsPage() {
             <button className="btn-primary" onClick={openAddUser}>+ Add user</button>
           </div>
           {showUserForm && (
-            <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>{editUser ? 'Edit user' : 'Add new user'}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 {[
@@ -621,7 +621,7 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
             <table>
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Site access</th><th>Created</th><th>Actions</th></tr></thead>
               <tbody>
@@ -656,7 +656,7 @@ export default function SettingsPage() {
       {/* SECURITY TAB */}
       {activeTab === 'security' && (
         <div>
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Session security</div>
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Session timeout</label>
@@ -695,7 +695,7 @@ export default function SettingsPage() {
           </div>
 
           {showSiteForm && (
-            <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Add new site</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 <div>
@@ -767,7 +767,7 @@ export default function SettingsPage() {
           )}
 
           {editSite && (
-            <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Edit site — {editSite.name || (editSite as any).site}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 {[
@@ -810,7 +810,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
             <table>
               <thead><tr><th>Site name</th><th>Code</th><th>Country</th><th>Region</th><th>Devices</th><th>Actions</th></tr></thead>
               <tbody>
@@ -839,7 +839,7 @@ export default function SettingsPage() {
       {activeTab === 'license' && (
         <div>
           {/* Status card */}
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>License status</div>
             {!licenseInfo ? (
               <div style={{ color: '#9ca3af', fontSize: '13px' }}>Loading…</div>
@@ -896,7 +896,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Server ID */}
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your Server ID</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>Provide this when purchasing a license so the key can be locked to this server.</div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -914,7 +914,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Activate license */}
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Activate license</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>Paste the license key you received after purchase.</div>
             <textarea
@@ -952,7 +952,7 @@ export default function SettingsPage() {
       {/* UPDATES TAB */}
       {activeTab === 'updates' && (
         <div>
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>NetVault version</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>Check GitHub for the latest code and apply updates via Windows Task Scheduler.</div>
 

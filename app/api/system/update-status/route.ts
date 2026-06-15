@@ -90,6 +90,9 @@ const releaseNotes: Record<string, string[]> = {
   '1.2.3': [
     'Removed the redundant refresh button from the dashboard header',
   ],
+  '1.2.4': [
+    'Standardized Settings page styling to match NocVault suite',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
