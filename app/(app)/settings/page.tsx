@@ -437,7 +437,7 @@ export default function SettingsPage() {
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
         <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Settings</h1>
-        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage app branding, users and sites</p>
+        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage users, sites and licensing</p>
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', flexWrap: 'wrap' }}>
@@ -481,7 +481,7 @@ export default function SettingsPage() {
                   <select className="input select" value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value, site_ids: [] }))}>
                     <option value="viewer">Viewer — read only, all sites</option>
                     <option value="site_admin">Site Admin — full edit, assigned sites only</option>
-                    {isSuperAdmin && <option value="super_admin">Super Admin — full access including branding and deletes</option>}
+                    {isSuperAdmin && <option value="super_admin">Super Admin — full access including user management and deletes</option>}
                     <option value="admin">Admin — full access, all sites</option>
                   </select>
                 </div>

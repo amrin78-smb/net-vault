@@ -97,6 +97,9 @@ const releaseNotes: Record<string, string[]> = {
     'Standardized Settings menu (removed Branding, added About tab, Security→General)',
     'Theming continues to apply from stored or default values',
   ],
+  '1.2.6': [
+    'Settings copy cleanup (removed stale branding references)',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
