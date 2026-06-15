@@ -100,6 +100,9 @@ const releaseNotes: Record<string, string[]> = {
   '1.2.6': [
     'Settings copy cleanup (removed stale branding references)',
   ],
+  '1.2.7': [
+    'Standardized Updates and About tabs to NocVault suite spec',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],

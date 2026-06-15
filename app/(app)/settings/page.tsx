@@ -23,13 +23,13 @@ function UpdateConfirmModal({ onCancel, onConfirm }: { onCancel: () => void; onC
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: 'white', borderRadius: '12px', padding: '28px 32px', maxWidth: '400px', width: '90%' }}>
-        <div style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>Apply update?</div>
+        <div style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>Start Update?</div>
         <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '24px' }}>
-          Services will restart and you will lose connection for 30–60 seconds. The page will reload automatically when the update is complete.
+          Services will restart and you'll lose connection for 30–60 seconds. The page reloads automatically when the update completes.
         </div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
           <button onClick={onCancel} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', fontSize: '13px', color: '#374151' }}>Cancel</button>
-          <button onClick={onConfirm} style={{ padding: '8px 16px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Update now</button>
+          <button onClick={onConfirm} style={{ padding: '8px 16px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Start Update</button>
         </div>
       </div>
     </div>
@@ -145,7 +145,7 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
   }, [phase, countdown])
 
   let statusLine = 'Starting update…'
-  if (phase === 'down') statusLine = 'Services restarting… ⟳'
+  if (phase === 'down') statusLine = 'Services restarting…'
   else if (phase === 'back_up') statusLine = `✓ Services are back online. Reloading in ${countdown} second${countdown === 1 ? '' : 's'}…`
   else if (phase === 'verify_failed') statusLine = 'Services restarted, but the version did not change. The update may not have applied — try again or check the server logs.'
   else if (phase === 'timeout') statusLine = 'Update is taking longer than expected. Try refreshing the page manually.'
@@ -880,8 +880,7 @@ export default function SettingsPage() {
       {activeTab === 'updates' && (
         <div>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>NetVault version</div>
-            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>Check GitHub for the latest code and apply updates via Windows Task Scheduler.</div>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Software Updates</div>
 
             {checkUpdateErr && (
               <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '14px' }}>
@@ -903,7 +902,7 @@ export default function SettingsPage() {
                       <span>✓</span><span>NetVault is up to date</span>
                     </div>
                     <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
-                      Version: <code style={{ fontWeight: 600 }}>v{updateStatus.current_version}</code>
+                      Current version: <code style={{ fontWeight: 600 }}>v{updateStatus.current_version}</code>
                       {updateStatus.current_commit && <> (<code>{updateStatus.current_commit}</code>)</>}
                     </p>
                   </div>
@@ -938,6 +937,9 @@ export default function SettingsPage() {
                         Released: {fmtReleaseDate(updateStatus.release_date)}
                       </p>
                     )}
+                    <p style={{ fontSize: 13, color: '#92400e', margin: '10px 0 0' }}>
+                      ⚠ Services will restart during the update — you may lose connection for 30–60 seconds.
+                    </p>
                   </div>
                 )}
               </div>
@@ -945,19 +947,26 @@ export default function SettingsPage() {
 
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
               <button className="btn-secondary" onClick={() => void checkForUpdates()} disabled={checkingUpdate} style={{ padding: '8px 16px' }}>
-                {checkingUpdate ? 'Checking…' : 'Check for updates'}
+                {checkingUpdate ? 'Checking…' : 'Check for Updates'}
               </button>
               {updateStatus?.update_available && !updateStatus.error && (
                 <button className="btn-primary" onClick={() => setConfirmingUpdate(true)} style={{ padding: '8px 16px' }}>
-                  Apply update
+                  Update Now
                 </button>
               )}
             </div>
 
             {applyUpdateErr && (
-              <div style={{ color: '#991b1b', fontSize: '13px', fontWeight: '500', marginTop: '10px' }}>
-                {applyUpdateErr}
-              </div>
+              /license|expire/i.test(applyUpdateErr) ? (
+                <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginTop: '10px' }}>
+                  ⚠ License expired — updates disabled. Renew your license to receive updates.{' '}
+                  <a href={`${process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || ''}/settings/license`} style={{ color: '#C8102E', textDecoration: 'none', fontWeight: 600 }}>Manage License →</a>
+                </div>
+              ) : (
+                <div style={{ color: '#991b1b', fontSize: '13px', fontWeight: '500', marginTop: '10px' }}>
+                  {applyUpdateErr}
+                </div>
+              )
             )}
           </div>
         </div>
@@ -967,10 +976,28 @@ export default function SettingsPage() {
       {activeTab === 'about' && (
         <div>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#111827' }}>NetVault</div>
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Version: v{updateStatus?.current_version || '1.0.0'}</div>
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>Part of the NocVault Intelligence Suite</div>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <tbody>
+                {[
+                  { label: 'Product', value: 'NetVault — IT Asset Management' },
+                  { label: 'Family', value: 'NocVault Network Intelligence Suite' },
+                  { label: 'Version', value: `v${updateStatus?.current_version || '1.0.0'}` },
+                  { label: 'App Port', value: '3000' },
+                  { label: 'Database', value: 'PostgreSQL 16' },
+                  { label: 'Runtime', value: 'Node.js 20 · Next.js 16' },
+                ].map(row => (
+                  <tr key={row.label} style={{ borderBottom: '1px solid var(--border-light, #f3f4f6)' }}>
+                    <td style={{ padding: '8px 0', color: '#9ca3af', width: '180px', verticalAlign: 'top' }}>{row.label}</td>
+                    <td style={{ padding: '8px 0', color: '#111827', fontWeight: 500 }}>{row.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '14px', fontWeight: '700', color: '#111827' }}>NetVault v{updateStatus?.current_version || '1.0.0'}</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Part of the NocVault Network Intelligence Suite</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>© 2026 NocVault</div>
           </div>
         </div>
