@@ -177,10 +177,6 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
   )
 }
 
-type Settings = {
-  app_name: string; app_subtitle: string; app_logo_url: string
-  app_primary_color: string; app_navy_color: string
-}
 type User = { id: number; name: string; email: string; role: string; created_at: string; sites?: { id: number; name: string; code: string }[] }
 type Site = { id: number; site: string; name: string; code: string; country: string; country_id: number; region: string; total: string }
 type Country = { id: number; name: string; iso_code: string; region: string }
@@ -197,21 +193,18 @@ export default function SettingsPage() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   useEffect(() => { if (user && user.role !== 'admin' && user.role !== 'super_admin') router.push('/dashboard') }, [user, router])
 
-  const [activeTab, setActiveTab] = useState<'branding'|'users'|'sites'|'security'|'license'|'updates'>('users')
+  const [activeTab, setActiveTab] = useState<'general'|'users'|'sites'|'license'|'updates'|'about'>('general')
 
   // Deep-link support: the suite apps' "Manage License" link points at
   // /settings/license (which redirects here as ?tab=license). Honour ?tab=<name>
   // on load so the correct tab opens instead of the default.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t && ['branding', 'users', 'sites', 'security', 'license', 'updates'].includes(t)) {
-      setActiveTab(t as 'branding' | 'users' | 'sites' | 'security' | 'license' | 'updates')
+    if (t && ['general', 'users', 'sites', 'license', 'updates', 'about'].includes(t)) {
+      setActiveTab(t as 'general' | 'users' | 'sites' | 'license' | 'updates' | 'about')
     }
   }, [])
-  const [settings, setSettings] = useState<Settings>({ app_name: '', app_subtitle: '', app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744' })
   const [loadingSettings, setLoadingSettings] = useState(true)
-  const [savingSettings, setSavingSettings] = useState(false)
-  const [settingsSaved, setSettingsSaved] = useState(false)
 
   const [idleTimeout, setIdleTimeout] = useState('30')
   const [savingSecuritySettings, setSavingSecuritySettings] = useState(false)
@@ -254,11 +247,7 @@ export default function SettingsPage() {
   const [siteSearch, setSiteSearch] = useState('')
 
   useEffect(() => {
-    if (user?.role === 'super_admin') {
-      fetch('/api/settings').then(r => r.json()).then(d => { setSettings(d); setLoadingSettings(false) })
-    } else {
-      setLoadingSettings(false)
-    }
+    setLoadingSettings(false)
     fetch('/api/users').then(r => r.json()).then(setUsers)
     fetch('/api/sites').then(r => r.json()).then(setSites)
     fetch('/api/countries').then(r => r.json()).then(d => { if (Array.isArray(d)) setCountries(d) })
@@ -271,13 +260,6 @@ export default function SettingsPage() {
       if (d && !d.error && d.idle_timeout_minutes != null) setIdleTimeout(d.idle_timeout_minutes)
     }).catch(() => {})
   }, [isAdmin])
-
-  async function saveSettings() {
-    setSavingSettings(true)
-    await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) })
-    setSavingSettings(false); setSettingsSaved(true)
-    setTimeout(() => setSettingsSaved(false), 3000)
-  }
 
   async function saveSecuritySettings() {
     setSavingSecuritySettings(true)
@@ -459,74 +441,19 @@ export default function SettingsPage() {
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', flexWrap: 'wrap' }}>
-        {(['branding', 'users', 'sites', 'security', 'license', 'updates'] as const)
-          .filter(tab => tab !== 'branding' || isSuperAdmin)
-          .filter(tab => tab !== 'security' || isAdmin)
+        {(['general', 'users', 'sites', 'license', 'updates', 'about'] as const)
+          .filter(tab => tab !== 'general' || isAdmin)
           .filter(tab => tab !== 'license' || isSuperAdmin)
           .filter(tab => tab !== 'updates' || isAdmin)
           .map(tab => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 18px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
-            {tab === 'branding' ? 'Branding' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : tab === 'updates' ? 'Updates' : 'License'}
+            {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
             {tab === 'updates' && updateStatus?.update_available && (
               <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
             )}
           </button>
         ))}
       </div>
-
-      {/* BRANDING TAB */}
-      {activeTab === 'branding' && (
-        <div>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Preview</div>
-            <div style={{ background: settings.app_navy_color || '#1a2744', borderRadius: '8px', padding: '14px 16px', width: '220px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <div style={{ width: '28px', height: '28px', background: settings.app_primary_color || '#C8102E', borderRadius: '5px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-                  </svg>
-                </div>
-                <div style={{ color: 'white', fontSize: '13px', fontWeight: '700' }}>NetVault</div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Colors</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Primary color <span style={{ fontWeight: '400', color: '#9ca3af' }}>(buttons, accents)</span></label>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <input type="color" value={settings.app_primary_color} onChange={e => setSettings(s => ({ ...s, app_primary_color: e.target.value }))} style={{ width: '48px', height: '36px', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', padding: '2px' }} />
-                  <input className="input" value={settings.app_primary_color} onChange={e => setSettings(s => ({ ...s, app_primary_color: e.target.value }))} style={{ fontFamily: 'monospace', flex: 1 }} />
-                </div>
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Sidebar color</label>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-                  <input type="color" value={settings.app_navy_color} onChange={e => setSettings(s => ({ ...s, app_navy_color: e.target.value }))} style={{ width: '48px', height: '36px', border: '1px solid #d1d5db', borderRadius: '6px', cursor: 'pointer', padding: '2px' }} />
-                  <input className="input" value={settings.app_navy_color} onChange={e => setSettings(s => ({ ...s, app_navy_color: e.target.value }))} style={{ fontFamily: 'monospace', flex: 1 }} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button className="btn-primary" onClick={saveSettings} disabled={savingSettings} style={{ padding: '10px 24px' }}>
-              {savingSettings ? 'Saving...' : 'Save settings'}
-            </button>
-            {settingsSaved && <span style={{ fontSize: '13px', color: '#166534', background: '#dcfce7', padding: '6px 12px', borderRadius: '6px' }}>Saved! Reload to see changes.</span>}
-          </div>
-
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginTop: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
-            <div style={{ fontSize: '15px', fontWeight: '700', color: '#111827' }}>NetVault</div>
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Version: v{updateStatus?.current_version || '1.0.0'}</div>
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>Part of the NocVault Intelligence Suite</div>
-            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>© 2026 NocVault</div>
-          </div>
-        </div>
-      )}
 
       {/* USERS TAB */}
       {activeTab === 'users' && (
@@ -653,8 +580,8 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* SECURITY TAB */}
-      {activeTab === 'security' && (
+      {/* GENERAL TAB */}
+      {activeTab === 'general' && (
         <div>
           <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Session security</div>
@@ -1032,6 +959,19 @@ export default function SettingsPage() {
                 {applyUpdateErr}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ABOUT TAB */}
+      {activeTab === 'about' && (
+        <div>
+          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
+            <div style={{ fontSize: '15px', fontWeight: '700', color: '#111827' }}>NetVault</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Version: v{updateStatus?.current_version || '1.0.0'}</div>
+            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '2px' }}>Part of the NocVault Intelligence Suite</div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>© 2026 NocVault</div>
           </div>
         </div>
       )}

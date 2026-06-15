@@ -93,6 +93,10 @@ const releaseNotes: Record<string, string[]> = {
   '1.2.4': [
     'Standardized Settings page styling to match NocVault suite',
   ],
+  '1.2.5': [
+    'Standardized Settings menu (removed Branding, added About tab, Security→General)',
+    'Theming continues to apply from stored or default values',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
