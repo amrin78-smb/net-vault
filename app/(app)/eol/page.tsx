@@ -54,23 +54,23 @@ export default function EolPage() {
 
   function OsStatus({ date }: { date: string }) {
     const d = new Date(date)
-    if (d < now) return <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>Expired</span>
-    if (d <= in90) return <span style={{ background: '#fff7ed', color: '#92400e', padding: '2px 8px', borderRadius: '20px', fontSize: '11px', fontWeight: '600' }}>Expiring Soon</span>
-    return <span style={{ fontSize: '12px', color: '#374151' }}>{d.toLocaleDateString()}</span>
+    if (d < now) return <span style={{ background: '#fee2e2', color: '#991b1b', padding: '2px 8px', borderRadius: '20px', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expired</span>
+    if (d <= in90) return <span style={{ background: '#fff7ed', color: '#92400e', padding: '2px 8px', borderRadius: '20px', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expiring Soon</span>
+    return <span style={{ fontSize: 'var(--text-sm)', color: '#374151' }}>{d.toLocaleDateString()}</span>
   }
 
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>EOL / Risk report</h1>
-        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Hardware lifecycle and software EOL tracking</p>
+        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>EOL / Risk report</h1>
+        <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af', margin: '2px 0 0' }}>Hardware lifecycle and software EOL tracking</p>
       </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid #e5e7eb' }}>
         {(['hardware', 'software'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding: '8px 18px', background: 'none', border: 'none', cursor: 'pointer', fontSize: '13px', fontWeight: tab === t ? '600' : '400', color: tab === t ? '#111827' : '#6b7280', borderBottom: tab === t ? '2px solid #C8102E' : '2px solid transparent', marginBottom: '-1px' }}>
+            style={{ padding: '8px 18px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--text-base)', fontWeight: tab === t ? '600' : '400', color: tab === t ? '#111827' : '#6b7280', borderBottom: tab === t ? '2px solid var(--primary)' : '2px solid transparent', marginBottom: '-1px' }}>
             {t === 'hardware' ? 'Hardware EOL' : `Software EOL${softwareRows.length > 0 ? ` (${softwareRows.length})` : ''}`}
           </button>
         ))}
@@ -84,20 +84,20 @@ export default function EolPage() {
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
                 <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#991b1b' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
-                <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>EOL devices</div>
-                <div style={{ fontSize: '28px', fontWeight: '700', color: '#991b1b' }}>{totalEol.toLocaleString()}</div>
-                <div style={{ fontSize: '11px', color: '#991b1b', opacity: 0.6, marginTop: '4px' }}>View all →</div>
+                <div style={{ fontSize: 'var(--text-sm)', color: '#991b1b', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>EOL devices</div>
+                <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: '#991b1b' }}>{totalEol.toLocaleString()}</div>
+                <div style={{ fontSize: 'var(--text-xs)', color: '#991b1b', opacity: 0.6, marginTop: '4px' }}>View all →</div>
               </div>
             </a>
             <div style={{ background: '#fef3c7', borderRadius: '8px', border: '1px solid #fcd34d', padding: '16px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#92400e' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg></div>
-              <div style={{ fontSize: '12px', color: '#92400e', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Sites affected</div>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: '#92400e' }}>{filtered.length}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: '#92400e', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Sites affected</div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: '#92400e' }}>{filtered.length}</div>
             </div>
             <div style={{ background: '#f0f4f8', borderRadius: '8px', border: '1px solid #c7d8e8', padding: '16px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#1a2744' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
-              <div style={{ fontSize: '12px', color: '#1a2744', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Regions</div>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: '#1a2744' }}>{regions.length}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: '#1a2744', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Regions</div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: '#1a2744' }}>{regions.length}</div>
             </div>
           </div>
           <div style={{ marginBottom: '16px' }}>
@@ -118,7 +118,7 @@ export default function EolPage() {
                       <tr key={`${row.site}-${row.region}`}>
                         <td style={{ fontWeight: '500', color: '#111827' }}>{row.site}</td>
                         <td>{row.country}</td>
-                        <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{row.region}</span></td>
+                        <td><span style={{ fontSize: 'var(--text-xs)', color: '#6b7280' }}>{row.region}</span></td>
                         <td style={{ fontWeight: '600', color: '#991b1b' }}>{row.eol_count}</td>
                         <td style={{ color: '#6b7280' }}>{pct}%</td>
                         <td><span className="badge" style={{ background: risk.bg, color: risk.color }}>{risk.label}</span></td>
@@ -136,16 +136,16 @@ export default function EolPage() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
             <div style={{ background: '#fee2e2', borderRadius: '8px', border: '1px solid #fca5a5', padding: '16px' }}>
-              <div style={{ fontSize: '12px', color: '#991b1b', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>OS EOL expired</div>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: '#991b1b' }}>{swExpired.length}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: '#991b1b', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>OS EOL expired</div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: '#991b1b' }}>{swExpired.length}</div>
             </div>
             <div style={{ background: '#fff7ed', borderRadius: '8px', border: '1px solid #fdba74', padding: '16px' }}>
-              <div style={{ fontSize: '12px', color: '#92400e', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Expiring within 90 days</div>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: '#92400e' }}>{swExpiring.length}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: '#92400e', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Expiring within 90 days</div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: '#92400e' }}>{swExpiring.length}</div>
             </div>
             <div style={{ background: '#f0f4f8', borderRadius: '8px', border: '1px solid #c7d8e8', padding: '16px' }}>
-              <div style={{ fontSize: '12px', color: '#1a2744', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Total tracked</div>
-              <div style={{ fontSize: '28px', fontWeight: '700', color: '#1a2744' }}>{softwareRows.length}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: '#1a2744', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Total tracked</div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: '#1a2744' }}>{softwareRows.length}</div>
             </div>
           </div>
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
@@ -163,7 +163,7 @@ export default function EolPage() {
                       <td>{row.site}</td>
                       <td>{row.device_type}</td>
                       <td>{row.os_type || '—'}</td>
-                      <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{row.os_version || '—'}</td>
+                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{row.os_version || '—'}</td>
                       <td>{row.os_eol_date ? new Date(row.os_eol_date).toLocaleDateString() : '—'}</td>
                       <td><OsStatus date={row.os_eol_date} /></td>
                     </tr>

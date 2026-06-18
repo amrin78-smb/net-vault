@@ -231,7 +231,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         <div style={{ width: 28, height: 28, border: '2.5px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
       </div>
     </div>
   )
@@ -260,7 +260,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Section label — only when expanded */}
         {!collapsed && (
-          <div style={{ padding: '14px 20px 6px', fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase' }}>
+          <div style={{ padding: '14px 20px 6px', fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase' }}>
             Navigation
           </div>
         )}
@@ -318,14 +318,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       <span style={{
                         position: 'absolute', top: -2, right: -2,
                         width: 9, height: 9, borderRadius: '50%',
-                        background: '#C8102E', border: `1.5px solid ${navy}`,
+                        background: 'var(--primary)', border: `1.5px solid ${navy}`,
                       }} />
                     )}
                   </div>
                   {/* Label — hidden when collapsed */}
                   {!collapsed && (
                     <span style={{
-                      fontSize: 13, fontWeight: active ? 600 : 400,
+                      fontSize: 'var(--text-base)', fontWeight: active ? 600 : 400,
                       color: active ? 'white' : 'rgba(255,255,255,0.55)',
                       whiteSpace: 'nowrap', letterSpacing: '-0.1px',
                     }}>
@@ -338,8 +338,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       marginLeft: 'auto',
                       minWidth: 18, height: 18, padding: '0 5px',
                       borderRadius: 9,
-                      background: '#C8102E', color: 'white',
-                      fontSize: 11, fontWeight: 700,
+                      background: 'var(--primary)', color: 'white',
+                      fontSize: 'var(--text-xs)', fontWeight: 700,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       lineHeight: 1,
                     }}>
@@ -364,7 +364,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             width: 'calc(100% - 20px)',
             background: 'transparent', border: 'none', borderRadius: 8,
             cursor: 'pointer',
-            color: 'rgba(255,255,255,0.4)', fontSize: 12.5,
+            color: 'rgba(255,255,255,0.4)', fontSize: 'var(--text-sm)',
             transition: 'all 0.15s',
           }}
           onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'white' }}
@@ -379,7 +379,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* Footer */}
         {!collapsed && (
-          <div style={{ padding: '6px 20px 10px', fontSize: 11, color: 'rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
+          <div style={{ padding: '6px 20px 10px', fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
             <div>NocVault Suite</div>
             <div style={{ marginTop: 2 }}>NetVault{appVersion ? ` v${appVersion}` : ''}</div>
           </div>
@@ -435,7 +435,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
                 borderRadius: 6,
-                color: 'white', fontSize: 13,
+                color: 'white', fontSize: 'var(--text-base)',
                 outline: 'none', boxSizing: 'border-box',
                 fontFamily: 'inherit',
                 transition: 'border-color 0.15s, background 0.15s',
@@ -454,7 +454,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               padding: '2px 7px', borderRadius: 6,
               background: 'rgba(255,255,255,0.1)',
               color: 'rgba(255,255,255,0.55)',
-              fontSize: 12, fontWeight: 600, lineHeight: 1,
+              fontSize: 'var(--text-sm)', fontWeight: 600, lineHeight: 1,
               pointerEvents: 'none',
             }}>
               /
@@ -501,16 +501,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 width: 32, height: 32, borderRadius: 8,
                 background: `linear-gradient(135deg, ${primary}, ${primary}cc)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 700, color: 'white', flexShrink: 0,
+                fontSize: 'var(--text-base)', fontWeight: 700, color: 'white', flexShrink: 0,
                 boxShadow: `0 2px 6px ${primary}66`,
               }}>
                 {userInitial}
               </div>
               <div style={{ textAlign: 'left' }}>
-                <div style={{ color: 'white', fontSize: 13, fontWeight: 600, lineHeight: 1.2 }}>
+                <div style={{ color: 'white', fontSize: 'var(--text-base)', fontWeight: 600, lineHeight: 1.2 }}>
                   {user?.name?.split(' ')[0] || 'User'}
                 </div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, lineHeight: 1.2 }}>
+                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'var(--text-xs)', lineHeight: 1.2 }}>
                   {user?.role?.replace(/_/g, ' ')}
                 </div>
               </div>
@@ -533,14 +533,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 animation: 'fadeIn 0.15s ease',
               }}>
                 <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-light)' }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name}</div>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{user?.role?.replace(/_/g, ' ')}</div>
+                  <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name}</div>
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>{user?.role?.replace(/_/g, ' ')}</div>
                 </div>
                 <div style={{ padding: '6px 0' }}>
                   <a
                     href={process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || '/launcher'}
                     onClick={() => setShowUserMenu(false)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, textDecoration: 'none', transition: 'background 0.1s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', color: 'var(--text-secondary)', fontSize: 'var(--text-base)', fontWeight: 500, textDecoration: 'none', transition: 'background 0.1s' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-primary)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
@@ -551,7 +551,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </a>
                   <button
                     onClick={openPwModal}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: 'var(--text-secondary)', fontSize: 'var(--text-base)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
                     onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-primary)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
@@ -563,7 +563,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <div style={{ height: 1, background: 'var(--border-light)', margin: '4px 0' }} />
                   <button
                     onClick={() => { setShowUserMenu(false); signOut({ callbackUrl: '/login' }) }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: '#dc2626', fontSize: 13, fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: '#dc2626', fontSize: 'var(--text-base)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
                     onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
@@ -590,19 +590,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* License banner */}
         {licenseStatus === 'trial' && licenseDaysRemaining <= 5 && licenseDaysRemaining > 0 && (
-          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 24px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             <span>Your trial expires in <strong>{licenseDaysRemaining} day{licenseDaysRemaining !== 1 ? 's' : ''}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#92400e', fontWeight: '600' }}>sales@nocvault.com</a> to purchase a license.</span>
           </div>
         )}
         {licenseStatus === 'grace' && (
-          <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 24px', fontSize: '13px', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             <span>Your trial has expired. Enter a license key in <a href="/settings" style={{ color: '#c2410c', fontWeight: '600' }}>Settings → License</a> to continue.</span>
           </div>
         )}
         {licenseStatus === 'expired' && (
-          <div style={{ background: '#fee2e2', borderBottom: '1px solid #fecaca', padding: '10px 24px', fontSize: '13px', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <div style={{ background: '#fee2e2', borderBottom: '1px solid #fecaca', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
             <span><strong>NocVault license required.</strong> The system is in read-only mode. Enter a license key in <a href="/settings" style={{ color: '#991b1b', fontWeight: '600' }}>Settings → License</a> or contact <a href="mailto:sales@nocvault.com" style={{ color: '#991b1b', fontWeight: '600' }}>sales@nocvault.com</a>.</span>
           </div>
@@ -610,13 +610,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {licenseStatus === 'active' && licenseExpiry && (() => {
           const days = Math.ceil((new Date(licenseExpiry).getTime() - Date.now()) / 86400000)
           if (days <= 30) return (
-            <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 24px', fontSize: '13px', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               <span>Your license expires on <strong>{licenseExpiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#c2410c', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
             </div>
           )
           if (days <= 90) return (
-            <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 24px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
               <span>Your license expires on <strong>{licenseExpiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#92400e', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
             </div>
@@ -636,10 +636,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {showPwModal && (
         <div className="modal-overlay">
           <div style={{ background: 'white', borderRadius: 'var(--radius)', padding: '28px 32px', width: '100%', maxWidth: 400, boxShadow: 'var(--shadow-lg)' }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Change password</h2>
-            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 20px' }}>Enter your current password and choose a new one.</p>
+            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Change password</h2>
+            <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 20px' }}>Enter your current password and choose a new one.</p>
             {pwSuccess ? (
-              <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: 8, fontSize: 14, textAlign: 'center' }}>
+              <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: 8, fontSize: 'var(--text-md)', textAlign: 'center' }}>
                 Password changed successfully!
               </div>
             ) : (
@@ -659,7 +659,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </div>
                 ))}
                 {pwError && (
-                  <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: 6, fontSize: 13, marginBottom: 14 }}>{pwError}</div>
+                  <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: 6, fontSize: 'var(--text-base)', marginBottom: 14 }}>{pwError}</div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-primary" onClick={changePassword} disabled={pwSaving} style={{ flex: 1 }}>

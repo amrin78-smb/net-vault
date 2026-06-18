@@ -23,13 +23,13 @@ function UpdateConfirmModal({ onCancel, onConfirm }: { onCancel: () => void; onC
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <div style={{ background: 'white', borderRadius: '8px', padding: '28px 32px', maxWidth: '400px', width: '90%' }}>
-        <div style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>Start Update?</div>
-        <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '24px' }}>
+        <div style={{ fontSize: 'var(--text-lg)', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>Start Update?</div>
+        <div style={{ fontSize: 'var(--text-md)', color: '#6b7280', marginBottom: '24px' }}>
           Services will restart and you'll lose connection for 30–60 seconds. The page reloads automatically when the update completes.
         </div>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
-          <button onClick={onCancel} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', fontSize: '13px', color: '#374151' }}>Cancel</button>
-          <button onClick={onConfirm} style={{ padding: '8px 16px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' }}>Start Update</button>
+          <button onClick={onCancel} style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', fontSize: 'var(--text-base)', color: '#374151' }}>Cancel</button>
+          <button onClick={onConfirm} style={{ padding: '8px 16px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize: 'var(--text-base)', fontWeight: '600' }}>Start Update</button>
         </div>
       </div>
     </div>
@@ -160,8 +160,8 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
         )}
         {phase === 'back_up' && <div style={{ fontSize: 44, lineHeight: 1 }}>✓</div>}
         {isError && <div style={{ fontSize: 44, lineHeight: 1 }}>⚠</div>}
-        <div style={{ fontSize: 18, fontWeight: 700, marginTop: 14 }}>Updating NetVault…</div>
-        <p style={{ color: '#64748b', marginTop: 6 }}>Pulling latest code and restarting services. Do not close this window.</p>
+        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginTop: 14 }}>Updating NetVault…</div>
+        <p style={{ color: 'var(--text-muted)', marginTop: 6 }}>Pulling latest code and restarting services. Do not close this window.</p>
         <p style={{ fontWeight: 600, margin: '14px 0' }}>{statusLine}</p>
         {phase === 'back_up' && (
           <div style={{ fontSize: 40, fontWeight: 800, lineHeight: 1, margin: '4px 0 10px', color: 'var(--primary, #C8102E)' }}>
@@ -169,7 +169,7 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
           </div>
         )}
         {phase !== 'back_up' && (
-          <p style={{ color: '#64748b', fontSize: 12 }}>(This usually takes 1-3 minutes)</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>(This usually takes 1-3 minutes)</p>
         )}
         <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={phase === 'back_up' ? () => { void verifyAndRedirect() } : () => window.location.reload()}>Reload Now</button>
       </div>
@@ -436,8 +436,8 @@ export default function SettingsPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '20px', fontWeight: '700', color: '#111827', margin: 0 }}>Settings</h1>
-        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Manage users, sites and licensing</p>
+        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>Settings</h1>
+        <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af', margin: '2px 0 0' }}>Manage users, sites and licensing</p>
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', flexWrap: 'wrap' }}>
@@ -446,7 +446,7 @@ export default function SettingsPage() {
           .filter(tab => tab !== 'license' || isSuperAdmin)
           .filter(tab => tab !== 'updates' || isAdmin)
           .map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 18px', fontSize: '14px', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
+          <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 18px', fontSize: 'var(--text-md)', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
             {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
             {tab === 'updates' && updateStatus?.update_available && (
               <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
@@ -459,12 +459,12 @@ export default function SettingsPage() {
       {activeTab === 'users' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>Manage who can access this system</p>
+            <p style={{ fontSize: 'var(--text-base)', color: '#6b7280', margin: 0 }}>Manage who can access this system</p>
             <button className="btn-primary" onClick={openAddUser}>+ Add user</button>
           </div>
           {showUserForm && (
             <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>{editUser ? 'Edit user' : 'Add new user'}</h3>
+              <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>{editUser ? 'Edit user' : 'Add new user'}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 {[
                   { label: 'Full name', field: 'name', type: 'text', placeholder: 'e.g. John Smith' },
@@ -472,12 +472,12 @@ export default function SettingsPage() {
                   { label: editUser ? 'New password (leave blank to keep)' : 'Password', field: 'password', type: 'password', placeholder: '••••••••' },
                 ].map(f => (
                   <div key={f.field}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
+                    <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
                     <input className="input" type={f.type} placeholder={f.placeholder} value={String(userForm[f.field as keyof typeof userForm] ?? '')} onChange={e => setUserForm(p => ({ ...p, [f.field]: e.target.value }))} />
                   </div>
                 ))}
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Role</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Role</label>
                   <select className="input select" value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value, site_ids: [] }))}>
                     <option value="viewer">Viewer — read only, all sites</option>
                     <option value="site_admin">Site Admin — full edit, assigned sites only</option>
@@ -487,13 +487,13 @@ export default function SettingsPage() {
                 </div>
                 {userForm.role === 'site_admin' && (
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
-                      Assigned sites <span style={{ color: '#C8102E' }}>*</span>
+                    <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '8px' }}>
+                      Assigned sites <span style={{ color: 'var(--primary)' }}>*</span>
                       <span style={{ fontWeight: '400', color: '#9ca3af', marginLeft: '6px' }}>({userForm.site_ids.length} selected)</span>
                     </label>
                     <div style={{ border: '1px solid #e5e7eb', borderRadius: '8px', maxHeight: '200px', overflowY: 'auto', padding: '8px' }}>
                       {sites.length === 0 ? (
-                        <div style={{ color: '#9ca3af', fontSize: '13px', padding: '8px' }}>Loading sites...</div>
+                        <div style={{ color: '#9ca3af', fontSize: 'var(--text-base)', padding: '8px' }}>Loading sites...</div>
                       ) : (
                         Object.entries(
                           sites.reduce((acc: any, s: any) => {
@@ -504,7 +504,7 @@ export default function SettingsPage() {
                           }, {})
                         ).map(([country, countrySites]: [string, any]) => (
                           <div key={country} style={{ marginBottom: '8px' }}>
-                            <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '4px 6px' }}>{country}</div>
+                            <div style={{ fontSize: 'var(--text-xs)', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '4px 6px' }}>{country}</div>
                             {countrySites.map((s: any) => (
                               <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px', borderRadius: '6px', cursor: 'pointer', background: userForm.site_ids.includes(s.id) ? '#fef2f2' : 'transparent' }}>
                                 <input type="checkbox"
@@ -519,8 +519,8 @@ export default function SettingsPage() {
                                     }))
                                   }}
                                 />
-                                <span style={{ fontSize: '13px', color: '#374151' }}>{s.site || s.name}</span>
-                                {s.code && <span style={{ fontSize: '11px', color: '#9ca3af' }}>{s.code}</span>}
+                                <span style={{ fontSize: 'var(--text-base)', color: '#374151' }}>{s.site || s.name}</span>
+                                {s.code && <span style={{ fontSize: 'var(--text-xs)', color: '#9ca3af' }}>{s.code}</span>}
                               </label>
                             ))}
                           </div>
@@ -528,12 +528,12 @@ export default function SettingsPage() {
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
-                      <button type="button" style={{ fontSize: '12px', color: '#C8102E', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                      <button type="button" style={{ fontSize: 'var(--text-sm)', color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                         onClick={() => setUserForm(p => ({ ...p, site_ids: sites.map((s: any) => s.id) }))}>
                         Select all
                       </button>
                       <span style={{ color: '#d1d5db' }}>·</span>
-                      <button type="button" style={{ fontSize: '12px', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                      <button type="button" style={{ fontSize: 'var(--text-sm)', color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                         onClick={() => setUserForm(p => ({ ...p, site_ids: [] }))}>
                         Clear all
                       </button>
@@ -541,7 +541,7 @@ export default function SettingsPage() {
                   </div>
                 )}
               </div>
-              {userError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{userError}</div>}
+              {userError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{userError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button className="btn-primary" onClick={saveUser} disabled={savingUser}>{savingUser ? 'Saving...' : editUser ? 'Save changes' : 'Create user'}</button>
                 <button className="btn-secondary" onClick={() => setShowUserForm(false)}>Cancel</button>
@@ -559,17 +559,17 @@ export default function SettingsPage() {
                     <td>
                       <RoleBadge role={u.role} />
                     </td>
-                    <td style={{ fontSize: '12px', color: '#6b7280', maxWidth: '200px' }}>
+                    <td style={{ fontSize: 'var(--text-sm)', color: '#6b7280', maxWidth: '200px' }}>
                       {u.role === 'site_admin' && u.sites && u.sites.length > 0
                         ? u.sites.map((s: any) => s.name || s.code).join(', ')
                         : u.role === 'site_admin' ? <span style={{ color: '#f59e0b' }}>No sites assigned</span>
                         : <span style={{ color: '#9ca3af' }}>All sites</span>}
                     </td>
-                    <td style={{ color: '#9ca3af', fontSize: '12px' }}>{new Date(u.created_at).toLocaleDateString()}</td>
+                    <td style={{ color: '#9ca3af', fontSize: 'var(--text-sm)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        {(isSuperAdmin || u.role !== 'super_admin') && <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }} onClick={() => openEditUser(u)}>Edit</button>}
-                        {isSuperAdmin && <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteUser(u.id, u.name)}>Delete</button>}
+                        {(isSuperAdmin || u.role !== 'super_admin') && <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }} onClick={() => openEditUser(u)}>Edit</button>}
+                        {isSuperAdmin && <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => deleteUser(u.id, u.name)}>Delete</button>}
                       </div>
                     </td>
                   </tr>
@@ -584,9 +584,9 @@ export default function SettingsPage() {
       {activeTab === 'general' && (
         <div>
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Session security</div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Session security</div>
             <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Session timeout</label>
+              <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Session timeout</label>
               <select
                 className="input select"
                 style={{ maxWidth: '280px' }}
@@ -599,7 +599,7 @@ export default function SettingsPage() {
                 <option value="120">120 minutes (2 hours)</option>
                 <option value="0">Never</option>
               </select>
-              <p style={{ fontSize: '12px', color: '#9ca3af', margin: '6px 0 0' }}>
+              <p style={{ fontSize: 'var(--text-sm)', color: '#9ca3af', margin: '6px 0 0' }}>
                 Users will be automatically logged out after this period of inactivity. Applies to all apps in the NocVault suite.
               </p>
             </div>
@@ -607,7 +607,7 @@ export default function SettingsPage() {
               <button className="btn-primary" onClick={saveSecuritySettings} disabled={savingSecuritySettings} style={{ padding: '10px 24px' }}>
                 {savingSecuritySettings ? 'Saving...' : 'Save settings'}
               </button>
-              {securitySettingsSaved && <span style={{ fontSize: '13px', color: '#166534', background: '#dcfce7', padding: '6px 12px', borderRadius: '6px' }}>Saved!</span>}
+              {securitySettingsSaved && <span style={{ fontSize: 'var(--text-base)', color: '#166534', background: '#dcfce7', padding: '6px 12px', borderRadius: '6px' }}>Saved!</span>}
             </div>
           </div>
         </div>
@@ -623,25 +623,25 @@ export default function SettingsPage() {
 
           {showSiteForm && (
             <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Add new site</h3>
+              <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>Add new site</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site name <span style={{ color: '#C8102E' }}>*</span></label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site name <span style={{ color: 'var(--primary)' }}>*</span></label>
                   <input className="input" placeholder="e.g. Bangkok Office" value={siteForm.name} onChange={e => setSiteForm(f => ({ ...f, name: e.target.value }))} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site code</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site code</label>
                   <input className="input" placeholder="e.g. BKK-01" value={siteForm.code} onChange={e => setSiteForm(f => ({ ...f, code: e.target.value }))} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Country <span style={{ color: '#C8102E' }}>*</span></label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Country <span style={{ color: 'var(--primary)' }}>*</span></label>
                   <select className="input select" value={siteForm.country_id} onChange={e => setSiteForm(f => ({ ...f, country_id: e.target.value }))}>
                     <option value="">Select country</option>
                     {countries.map(c => <option key={c.id} value={c.id}>{c.name} — {c.region}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site type</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site type</label>
                   <select className="input select" value={siteForm.site_type} onChange={e => setSiteForm(f => ({ ...f, site_type: e.target.value }))}>
                     <option value="">Select type</option>
                     <option>Head Office</option>
@@ -654,38 +654,38 @@ export default function SettingsPage() {
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>City</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>City</label>
                   <input className="input" placeholder="e.g. Bangkok" value={siteForm.city} onChange={e => setSiteForm(f => ({ ...f, city: e.target.value }))} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Postal code</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Postal code</label>
                   <input className="input" placeholder="e.g. 10110" value={siteForm.postal_code} onChange={e => setSiteForm(f => ({ ...f, postal_code: e.target.value }))} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>GPS coordinates</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>GPS coordinates</label>
                   <input className="input" placeholder="e.g. 13.7563, 100.5018" value={siteForm.coordinates} onChange={e => setSiteForm(f => ({ ...f, coordinates: e.target.value }))} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Address</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Address</label>
                   <textarea className="input" rows={2} placeholder="Full street address" value={siteForm.address} onChange={e => setSiteForm(f => ({ ...f, address: e.target.value }))} style={{ resize: 'vertical' }} />
                 </div>
                 <div style={{ borderTop: '1px solid #f3f4f6', gridColumn: '1 / -1', paddingTop: '12px', marginTop: '4px' }}>
-                  <div style={{ fontSize: '12px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px' }}>Site contact</div>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px' }}>Site contact</div>
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Contact name</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Contact name</label>
                   <input className="input" placeholder="e.g. John Smith" value={siteForm.contact_name} onChange={e => setSiteForm(f => ({ ...f, contact_name: e.target.value }))} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Contact email</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Contact email</label>
                   <input className="input" type="email" placeholder="e.g. john@company.com" value={siteForm.contact_email} onChange={e => setSiteForm(f => ({ ...f, contact_email: e.target.value }))} />
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Phone</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Phone</label>
                   <input className="input" placeholder="e.g. +66 2 123 4567" value={siteForm.phone} onChange={e => setSiteForm(f => ({ ...f, phone: e.target.value }))} />
                 </div>
               </div>
-              {siteError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{siteError}</div>}
+              {siteError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{siteError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button className="btn-primary" onClick={addSite} disabled={savingSite}>{savingSite ? 'Saving...' : 'Add site'}</button>
                 <button className="btn-secondary" onClick={() => setShowSiteForm(false)}>Cancel</button>
@@ -695,7 +695,7 @@ export default function SettingsPage() {
 
           {editSite && (
             <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Edit site — {editSite.name || (editSite as any).site}</h3>
+              <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>Edit site — {editSite.name || (editSite as any).site}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 {[
                   { label: 'Site name *', field: 'name', placeholder: 'e.g. Bangkok Office' },
@@ -708,28 +708,28 @@ export default function SettingsPage() {
                   { label: 'Contact email', field: 'contact_email', placeholder: 'e.g. john@company.com' },
                 ].map(f => (
                   <div key={f.field}>
-                    <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
+                    <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
                     <input className="input" placeholder={f.placeholder}
                       value={editSiteForm[f.field as keyof typeof editSiteForm]}
                       onChange={e => setEditSiteForm(p => ({ ...p, [f.field]: e.target.value }))} />
                   </div>
                 ))}
                 <div>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site type</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Site type</label>
                   <select className="input select" value={editSiteForm.site_type} onChange={e => setEditSiteForm(p => ({ ...p, site_type: e.target.value }))}>
                     <option value="">Select type</option>
                     {['Head Office','Factory','Warehouse','Branch Office','Data Center','Cloud','Other'].map(t => <option key={t}>{t}</option>)}
                   </select>
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Address</label>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>Address</label>
                   <textarea className="input" rows={2} placeholder="Full street address"
                     value={editSiteForm.address}
                     onChange={e => setEditSiteForm(p => ({ ...p, address: e.target.value }))}
                     style={{ resize: 'vertical' }} />
                 </div>
               </div>
-              {editSiteError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{editSiteError}</div>}
+              {editSiteError && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{editSiteError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button className="btn-primary" onClick={saveEditSite} disabled={savingEditSite}>{savingEditSite ? 'Saving...' : 'Save changes'}</button>
                 <button className="btn-secondary" onClick={() => setEditSite(null)}>Cancel</button>
@@ -744,14 +744,14 @@ export default function SettingsPage() {
                 {filteredSites.map(s => (
                   <tr key={s.id}>
                     <td style={{ fontWeight: '500', color: '#111827' }}>{s.site || s.name}</td>
-                    <td style={{ fontFamily: 'monospace', fontSize: '12px', color: '#6b7280' }}>{s.code || '—'}</td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: '#6b7280' }}>{s.code || '—'}</td>
                     <td>{s.country}</td>
-                    <td><span style={{ fontSize: '11px', color: '#6b7280' }}>{s.region}</span></td>
-                    <td><span style={{ fontSize: '12px', fontWeight: '500', color: parseInt(s.total) > 0 ? '#111827' : '#9ca3af' }}>{s.total}</span></td>
+                    <td><span style={{ fontSize: 'var(--text-xs)', color: '#6b7280' }}>{s.region}</span></td>
+                    <td><span style={{ fontSize: 'var(--text-sm)', fontWeight: '500', color: parseInt(s.total) > 0 ? '#111827' : '#9ca3af' }}>{s.total}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }} onClick={() => openEditSite(s)}>Edit</button>
-                        {isSuperAdmin && <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteSite(s.id, s.name || (s as any).site)}>Delete</button>}
+                        <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }} onClick={() => openEditSite(s)}>Edit</button>
+                        {isSuperAdmin && <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => deleteSite(s.id, s.name || (s as any).site)}>Delete</button>}
                       </div>
                     </td>
                   </tr>
@@ -767,34 +767,34 @@ export default function SettingsPage() {
         <div>
           {/* Status card */}
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>License status</div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>License status</div>
             {!licenseInfo ? (
-              <div style={{ color: '#9ca3af', fontSize: '13px' }}>Loading…</div>
+              <div style={{ color: '#9ca3af', fontSize: 'var(--text-base)' }}>Loading…</div>
             ) : (
               <div>
                 {/* Status badge row */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                   {licenseInfo.status === 'active' && (
-                    <span className="badge badge-active" style={{ fontSize: '13px', padding: '5px 14px' }}>Active</span>
+                    <span className="badge badge-active" style={{ fontSize: 'var(--text-base)', padding: '5px 14px' }}>Active</span>
                   )}
                   {licenseInfo.status === 'trial' && licenseInfo.daysRemaining > 5 && (
-                    <span className="badge badge-blue" style={{ fontSize: '13px', padding: '5px 14px' }}>Trial — {licenseInfo.daysRemaining} days remaining</span>
+                    <span className="badge badge-blue" style={{ fontSize: 'var(--text-base)', padding: '5px 14px' }}>Trial — {licenseInfo.daysRemaining} days remaining</span>
                   )}
                   {licenseInfo.status === 'trial' && licenseInfo.daysRemaining <= 5 && (
-                    <span className="badge badge-yellow" style={{ fontSize: '13px', padding: '5px 14px' }}>Trial expiring — {licenseInfo.daysRemaining} day{licenseInfo.daysRemaining !== 1 ? 's' : ''} left</span>
+                    <span className="badge badge-yellow" style={{ fontSize: 'var(--text-base)', padding: '5px 14px' }}>Trial expiring — {licenseInfo.daysRemaining} day{licenseInfo.daysRemaining !== 1 ? 's' : ''} left</span>
                   )}
                   {licenseInfo.status === 'grace' && (
-                    <span className="badge badge-orange" style={{ fontSize: '13px', padding: '5px 14px' }}>Grace period</span>
+                    <span className="badge badge-orange" style={{ fontSize: 'var(--text-base)', padding: '5px 14px' }}>Grace period</span>
                   )}
                   {licenseInfo.status === 'expired' && (
-                    <span className="badge badge-red" style={{ fontSize: '13px', padding: '5px 14px' }}>Expired</span>
+                    <span className="badge badge-red" style={{ fontSize: 'var(--text-base)', padding: '5px 14px' }}>Expired</span>
                   )}
                 </div>
 
                 {/* Trial progress bar */}
                 {licenseInfo.status === 'trial' && licenseInfo.installDate && (
                   <div style={{ marginBottom: '16px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6b7280', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#6b7280', marginBottom: '6px' }}>
                       <span>Trial usage</span>
                       <span>{licenseInfo.trialDaysTotal - licenseInfo.daysRemaining} / {licenseInfo.trialDaysTotal} days used</span>
                     </div>
@@ -802,7 +802,7 @@ export default function SettingsPage() {
                       <div style={{
                         height: '100%', borderRadius: '4px',
                         width: `${Math.min(100, ((licenseInfo.trialDaysTotal - licenseInfo.daysRemaining) / licenseInfo.trialDaysTotal) * 100)}%`,
-                        background: licenseInfo.daysRemaining <= 5 ? '#f59e0b' : '#C8102E',
+                        background: licenseInfo.daysRemaining <= 5 ? '#f59e0b' : 'var(--primary)',
                         transition: 'width 0.3s',
                       }} />
                     </div>
@@ -811,7 +811,7 @@ export default function SettingsPage() {
 
                 {/* Active license details */}
                 {licenseInfo.status === 'active' && licenseInfo.customer && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '13px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: 'var(--text-base)' }}>
                     <div><span style={{ color: '#9ca3af' }}>Customer</span><div style={{ fontWeight: '600', marginTop: '2px' }}>{licenseInfo.customer}</div></div>
                     <div><span style={{ color: '#9ca3af' }}>Expires</span><div style={{ fontWeight: '600', marginTop: '2px' }}>{licenseInfo.expiry} ({licenseInfo.daysRemaining} days)</div></div>
                     <div><span style={{ color: '#9ca3af' }}>Licensed modules</span><div style={{ fontWeight: '600', marginTop: '2px' }}>{licenseInfo.modules.join(', ') || '—'}</div></div>
@@ -824,10 +824,10 @@ export default function SettingsPage() {
 
           {/* Server ID */}
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your Server ID</div>
-            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>Provide this when purchasing a license so the key can be locked to this server.</div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your Server ID</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: '#9ca3af', marginBottom: '12px' }}>Provide this when purchasing a license so the key can be locked to this server.</div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <code style={{ flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '10px 14px', fontFamily: 'monospace', fontSize: '13px', color: '#111827', letterSpacing: '0.02em', userSelect: 'all' }}>
+              <code style={{ flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '10px 14px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-base)', color: '#111827', letterSpacing: '0.02em', userSelect: 'all' }}>
                 {licenseInfo?.serverId ?? '—'}
               </code>
               <button
@@ -842,21 +842,21 @@ export default function SettingsPage() {
 
           {/* Activate license */}
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Activate license</div>
-            <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>Paste the license key you received after purchase.</div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Activate license</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: '#9ca3af', marginBottom: '12px' }}>Paste the license key you received after purchase.</div>
             <textarea
               className="input"
               rows={4}
               placeholder="Paste license key here…"
               value={licenseKeyInput}
               onChange={e => setLicenseKeyInput(e.target.value)}
-              style={{ fontFamily: 'monospace', fontSize: '12px', resize: 'vertical', marginBottom: '12px' }}
+              style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', resize: 'vertical', marginBottom: '12px' }}
             />
             {licenseActivateMsg && (
               <div style={{
                 background: licenseActivateMsg.ok ? '#dcfce7' : '#fee2e2',
                 color: licenseActivateMsg.ok ? '#166534' : '#991b1b',
-                padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px',
+                padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px',
               }}>
                 {licenseActivateMsg.text}
               </div>
@@ -867,9 +867,9 @@ export default function SettingsPage() {
           </div>
 
           {/* Support link */}
-          <p style={{ fontSize: '13px', color: '#9ca3af' }}>
+          <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af' }}>
             Need a license?{' '}
-            <a href="mailto:sales@nocvault.com" style={{ color: '#C8102E', textDecoration: 'none' }}>
+            <a href="mailto:sales@nocvault.com" style={{ color: 'var(--primary)', textDecoration: 'none' }}>
               Contact sales@nocvault.com
             </a>
           </p>
@@ -880,16 +880,16 @@ export default function SettingsPage() {
       {activeTab === 'updates' && (
         <div>
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Software Updates</div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Software Updates</div>
 
             {checkUpdateErr && (
-              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '14px' }}>
+              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '14px' }}>
                 {checkUpdateErr}
               </div>
             )}
 
             {updateStatus?.error && (
-              <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '14px' }}>
+              <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '14px' }}>
                 {updateStatus.error}
               </div>
             )}
@@ -898,22 +898,22 @@ export default function SettingsPage() {
               <div style={{ marginBottom: '16px' }}>
                 {updateStatus.up_to_date ? (
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: '6px', padding: '10px 14px', fontSize: '13px', fontWeight: '500', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: '6px', padding: '10px 14px', fontSize: 'var(--text-base)', fontWeight: '500', marginBottom: 10 }}>
                       <span>✓</span><span>NetVault is up to date</span>
                     </div>
-                    <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
+                    <p style={{ fontSize: 'var(--text-base)', color: '#6b7280', margin: 0 }}>
                       Current version: <code style={{ fontWeight: 600 }}>v{updateStatus.current_version}</code>
                       {updateStatus.current_commit && <> (<code>{updateStatus.current_commit}</code>)</>}
                     </p>
                   </div>
                 ) : (
                   <div>
-                    <p style={{ fontWeight: 700, fontSize: 16, margin: '0 0 8px' }}>
+                    <p style={{ fontWeight: 700, fontSize: 'var(--text-lg)', margin: '0 0 8px' }}>
                       {updateStatus.current_version === updateStatus.latest_version
                         ? <>🔄 Patches available since v{updateStatus.current_version}</>
                         : <>🔄 Update available: v{updateStatus.current_version} → v{updateStatus.latest_version}</>}
                     </p>
-                    <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 10px' }}>
+                    <p style={{ fontSize: 'var(--text-base)', color: '#6b7280', margin: '0 0 10px' }}>
                       Current: v{updateStatus.current_version}
                       {updateStatus.current_commit && <> (<code>{updateStatus.current_commit}</code>)</>}
                       {'  →  '}
@@ -922,10 +922,10 @@ export default function SettingsPage() {
                     </p>
                     {updateStatus.release_notes && updateStatus.release_notes.length > 0 && (
                       <div style={{ marginTop: 6, border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px', background: '#f9fafb' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: '#1a2744', marginBottom: 8 }}>
+                        <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: '#1a2744', marginBottom: 8 }}>
                           What's new in v{updateStatus.latest_version}
                         </div>
-                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6, color: '#374151' }}>
+                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--text-base)', lineHeight: 1.6, color: '#374151' }}>
                           {updateStatus.release_notes.map((note, i) => (
                             <li key={i}>{note}</li>
                           ))}
@@ -933,11 +933,11 @@ export default function SettingsPage() {
                       </div>
                     )}
                     {updateStatus.release_date && (
-                      <p style={{ fontSize: 13, color: '#9ca3af', margin: '8px 0 0' }}>
+                      <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af', margin: '8px 0 0' }}>
                         Released: {fmtReleaseDate(updateStatus.release_date)}
                       </p>
                     )}
-                    <p style={{ fontSize: 13, color: '#92400e', margin: '10px 0 0' }}>
+                    <p style={{ fontSize: 'var(--text-base)', color: '#92400e', margin: '10px 0 0' }}>
                       ⚠ Services will restart during the update — you may lose connection for 30–60 seconds.
                     </p>
                   </div>
@@ -958,12 +958,12 @@ export default function SettingsPage() {
 
             {applyUpdateErr && (
               /license|expire/i.test(applyUpdateErr) ? (
-                <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginTop: '10px' }}>
+                <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)', marginTop: '10px' }}>
                   ⚠ License expired — updates disabled. Renew your license to receive updates.{' '}
-                  <a href={`${process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || ''}/settings/license`} style={{ color: '#C8102E', textDecoration: 'none', fontWeight: 600 }}>Manage License →</a>
+                  <a href={`${process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || ''}/settings/license`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>Manage License →</a>
                 </div>
               ) : (
-                <div style={{ color: '#991b1b', fontSize: '13px', fontWeight: '500', marginTop: '10px' }}>
+                <div style={{ color: '#991b1b', fontSize: 'var(--text-base)', fontWeight: '500', marginTop: '10px' }}>
                   {applyUpdateErr}
                 </div>
               )
@@ -976,8 +976,8 @@ export default function SettingsPage() {
       {activeTab === 'about' && (
         <div>
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-base)' }}>
               <tbody>
                 {[
                   { label: 'Product', value: 'NetVault — IT Asset Management' },
@@ -996,9 +996,9 @@ export default function SettingsPage() {
             </table>
           </div>
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: '14px', fontWeight: '700', color: '#111827' }}>NetVault v{updateStatus?.current_version || '1.0.0'}</div>
-            <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Part of the NocVault Network Intelligence Suite</div>
-            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>© 2026 NocVault</div>
+            <div style={{ fontSize: 'var(--text-md)', fontWeight: '700', color: '#111827' }}>NetVault v{updateStatus?.current_version || '1.0.0'}</div>
+            <div style={{ fontSize: 'var(--text-base)', color: '#6b7280', marginTop: '4px' }}>Part of the NocVault Network Intelligence Suite</div>
+            <div style={{ fontSize: 'var(--text-sm)', color: '#9ca3af', marginTop: '8px' }}>© 2026 NocVault</div>
           </div>
         </div>
       )}

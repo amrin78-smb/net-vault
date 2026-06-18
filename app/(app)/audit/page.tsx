@@ -48,35 +48,35 @@ export default function AuditPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Audit log</h1>
-        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Full history of all changes - {total.toLocaleString()} entries</p>
+        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>Audit log</h1>
+        <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af', margin: '2px 0 0' }}>Full history of all changes - {total.toLocaleString()} entries</p>
       </div>
 
       <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px', marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>Action</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>Action</div>
           <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={action} onChange={e => { setAction(e.target.value); setPage(1) }}>
             <option value="">All actions</option>
             {Object.entries(ACTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </div>
         <div>
-          <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>User</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>User</div>
           <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={userId} onChange={e => { setUserId(e.target.value); setPage(1) }}>
             <option value="">All users</option>
             {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
         <div>
-          <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>From</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>From</div>
           <input type="date" className="input" style={{ width: 'auto' }} value={dateFrom} onChange={e => { setDateFrom(e.target.value); setPage(1) }} />
         </div>
         <div>
-          <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>To</div>
+          <div style={{ fontSize: 'var(--text-xs)', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>To</div>
           <input type="date" className="input" style={{ width: 'auto' }} value={dateTo} onChange={e => { setDateTo(e.target.value); setPage(1) }} />
         </div>
         {hasFilters && (
-          <button className="btn-secondary" onClick={clearFilters} style={{ fontSize: '12px' }}>Clear filters</button>
+          <button className="btn-secondary" onClick={clearFilters} style={{ fontSize: 'var(--text-sm)' }}>Clear filters</button>
         )}
       </div>
 
@@ -91,10 +91,10 @@ export default function AuditPage() {
             <tbody>
               {logs.map(log => (
                 <tr key={log.id}>
-                  <td style={{ fontSize: '12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{new Date(log.changed_at).toLocaleString()}</td>
+                  <td style={{ fontSize: 'var(--text-sm)', color: '#6b7280', whiteSpace: 'nowrap' }}>{new Date(log.changed_at).toLocaleString()}</td>
                   <td><span className="badge" style={{ background: actionBg[log.field_name] || '#f3f4f6', color: actionColor[log.field_name] || '#374151' }}>{ACTION_LABELS[log.field_name] || log.field_name}</span></td>
                   <td style={{ fontWeight: '500', color: '#111827' }}>{log.device_name || '—'}</td>
-                  <td style={{ fontSize: '12px' }}>
+                  <td style={{ fontSize: 'var(--text-sm)' }}>
                     <div style={{ fontWeight: '500' }}>{log.changed_by_name}</div>
                     <div style={{ color: '#9ca3af' }}>{log.changed_by_email}</div>
                   </td>
@@ -105,10 +105,10 @@ export default function AuditPage() {
         )}
         {total > 50 && (
           <div style={{ padding: '12px 16px', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: '#6b7280' }}>Page {page} of {totalPages} - {total.toLocaleString()} entries</span>
+            <span style={{ fontSize: 'var(--text-base)', color: '#6b7280' }}>Page {page} of {totalPages} - {total.toLocaleString()} entries</span>
             <div style={{ display: 'flex', gap: '6px' }}>
-              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: '12px' }} onClick={() => setPage(p => p-1)} disabled={page === 1}>Prev</button>
-              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: '12px' }} onClick={() => setPage(p => p+1)} disabled={page >= totalPages}>Next</button>
+              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: 'var(--text-sm)' }} onClick={() => setPage(p => p-1)} disabled={page === 1}>Prev</button>
+              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: 'var(--text-sm)' }} onClick={() => setPage(p => p+1)} disabled={page >= totalPages}>Next</button>
             </div>
           </div>
         )}

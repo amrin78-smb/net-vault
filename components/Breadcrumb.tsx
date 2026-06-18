@@ -4,7 +4,7 @@ type Crumb = { label: string; href?: string }
 
 export default function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '20px', fontSize: '13px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '20px', fontSize: 'var(--text-base)' }}>
       {crumbs.map((crumb, i) => (
         <span key={i} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {i > 0 && <span style={{ color: '#d1d5db' }}>›</span>}

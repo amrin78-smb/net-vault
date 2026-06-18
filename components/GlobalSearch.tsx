@@ -101,7 +101,7 @@ export default function GlobalSearch() {
             border: '1px solid rgba(255,255,255,0.12)',
             borderRadius: 8,
             color: 'rgba(255,255,255,0.9)',
-            fontSize: 13,
+            fontSize: 'var(--text-base)',
             outline: 'none',
             boxSizing: 'border-box',
             transition: 'border-color 0.15s, background 0.15s',
@@ -116,7 +116,7 @@ export default function GlobalSearch() {
             e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
           }}
         />
-        {loading && <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', fontSize: 11 }}>…</div>}
+        {loading && <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', fontSize: 'var(--text-xs)' }}>…</div>}
       </div>
 
       {open && hasResults && (
@@ -130,19 +130,19 @@ export default function GlobalSearch() {
         }}>
           {results.devices.length > 0 && (
             <>
-              <div style={{ padding: '7px 14px 5px', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
                 Devices
               </div>
               {results.devices.map(d => (
                 <div key={d.id} onMouseDown={() => navigate({ type: 'device', id: d.id })}
                   style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('device', d.id) ? 'var(--bg-primary)' : 'white', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                    <div style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>
                       {d.device_type} · {d.site}{d.ip_address && <span className="mono"> · {d.ip_address}</span>}
                     </div>
                   </div>
-                  <span className="badge" style={{ background: statusBg[d.device_status] || '#f1f5f9', color: statusColor[d.device_status] || 'var(--text-secondary)', flexShrink: 0, fontSize: 10 }}>
+                  <span className="badge" style={{ background: statusBg[d.device_status] || '#f1f5f9', color: statusColor[d.device_status] || 'var(--text-secondary)', flexShrink: 0, fontSize: 'var(--text-xs)' }}>
                     {d.device_status}
                   </span>
                 </div>
@@ -152,14 +152,14 @@ export default function GlobalSearch() {
 
           {results.sites.length > 0 && (
             <>
-              <div style={{ padding: '7px 14px 5px', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
                 Sites
               </div>
               {results.sites.map(s => (
                 <div key={s.id} onMouseDown={() => navigate({ type: 'site', id: s.id })}
                   style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('site', s.id) ? 'var(--bg-primary)' : 'white', borderBottom: '1px solid var(--border-light)' }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{s.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{s.code} · {s.country} · {s.region}</div>
+                  <div style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-primary)' }}>{s.name}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{s.code} · {s.country} · {s.region}</div>
                 </div>
               ))}
             </>
@@ -167,20 +167,20 @@ export default function GlobalSearch() {
 
           {results.circuits.length > 0 && (
             <>
-              <div style={{ padding: '7px 14px 5px', fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
                 Circuits
               </div>
               {results.circuits.map(c => (
                 <div key={c.id} onMouseDown={() => navigate({ type: 'circuit', id: c.id })}
                   style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('circuit', c.id) ? 'var(--bg-primary)' : 'white', borderBottom: '1px solid var(--border-light)' }}>
-                  <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{c.isp}{c.circuit_id ? ' · ' + c.circuit_id : ''}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{c.usage} · {c.site}</div>
+                  <div style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-primary)' }}>{c.isp}{c.circuit_id ? ' · ' + c.circuit_id : ''}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{c.usage} · {c.site}</div>
                 </div>
               ))}
             </>
           )}
 
-          <div style={{ padding: '7px 14px', background: 'var(--bg-primary)', fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ padding: '7px 14px', background: 'var(--bg-primary)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)' }}>
             ↑↓ navigate · Enter to open · Esc to close
           </div>
         </div>
@@ -192,7 +192,7 @@ export default function GlobalSearch() {
           background: 'white', borderRadius: 'var(--radius)',
           border: '1px solid var(--border)',
           padding: '20px 14px', textAlign: 'center',
-          fontSize: 13, color: 'var(--text-muted)', zIndex: 999,
+          fontSize: 'var(--text-base)', color: 'var(--text-muted)', zIndex: 999,
           boxShadow: 'var(--shadow-lg)',
         }}>
           No results for "{q}"

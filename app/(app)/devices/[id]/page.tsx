@@ -96,8 +96,8 @@ function parseLogEntry(log: Log): { label: string; detail: string | null; dotCol
 function DeviceField({ label, value }: { label: string; value: any }) {
   return (
     <div style={{ marginBottom: '12px' }}>
-      <div style={{ fontSize: '11px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
-      <div style={{ fontSize: '14px', color: value ? '#111827' : '#d1d5db', fontFamily: label === 'IP address' || label === 'Serial number' ? 'monospace' : undefined }}>
+      <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
+      <div style={{ fontSize: 'var(--text-md)', color: value ? '#111827' : '#d1d5db', fontFamily: label === 'IP address' || label === 'Serial number' ? 'var(--font-mono)' : undefined }}>
         {value || '—'}
       </div>
     </div>
@@ -107,7 +107,7 @@ function DeviceField({ label, value }: { label: string; value: any }) {
 function DeviceSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
-      <h2 style={{ fontSize: '13px', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
+      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>{children}</div>
     </div>
   )
@@ -161,11 +161,11 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: '0 0 6px' }}>{device.name}</h1>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: '0 0 6px' }}>{device.name}</h1>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <StatusBadge status={device.device_status} />
             <LifecycleBadge status={device.lifecycle_status} />
-            <span style={{ fontSize: '13px', color: '#9ca3af' }}>{device.device_type} · {device.brand} {device.model}</span>
+            <span style={{ fontSize: 'var(--text-base)', color: '#9ca3af' }}>{device.device_type} · {device.brand} {device.model}</span>
           </div>
         </div>
         {isAdmin && (
@@ -226,12 +226,12 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
 
           {/* Change history timeline */}
           <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '20px 24px' }}>
-            <h2 style={{ fontSize: '13px', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>
+            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>
               Change history {logs.length > 0 && <span style={{ fontWeight: '400', color: '#9ca3af', textTransform: 'none', letterSpacing: 0 }}>({logs.length})</span>}
             </h2>
 
             {logs.length === 0 ? (
-              <div style={{ fontSize: '13px', color: '#9ca3af' }}>No changes recorded yet</div>
+              <div style={{ fontSize: 'var(--text-base)', color: '#9ca3af' }}>No changes recorded yet</div>
             ) : (
               <div style={{ position: 'relative' }}>
                 {/* Timeline line */}
@@ -246,18 +246,18 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                          <div style={{ fontSize: '13px', fontWeight: '500', color: '#111827' }}>{label}</div>
-                          <div style={{ fontSize: '11px', color: '#9ca3af', flexShrink: 0 }} title={formatDateTime(log.changed_at)}>
+                          <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: '#111827' }}>{label}</div>
+                          <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', flexShrink: 0 }} title={formatDateTime(log.changed_at)}>
                             {timeAgo(log.changed_at)}
                           </div>
                         </div>
-                        <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '1px' }}>
+                        <div style={{ fontSize: 'var(--text-sm)', color: '#6b7280', marginTop: '1px' }}>
                           {log.changed_by_name || 'System'}
                         </div>
                         {detail && (
                           <div style={{ marginTop: '6px', background: '#f9fafb', borderRadius: '6px', padding: '8px 10px', border: '1px solid #f3f4f6' }}>
                             {detail.split('\n').map((line, j) => (
-                              <div key={j} style={{ fontSize: '12px', color: '#374151', fontFamily: 'monospace', lineHeight: '1.6' }}>{line}</div>
+                              <div key={j} style={{ fontSize: 'var(--text-sm)', color: '#374151', fontFamily: 'var(--font-mono)', lineHeight: '1.6' }}>{line}</div>
                             ))}
                           </div>
                         )}

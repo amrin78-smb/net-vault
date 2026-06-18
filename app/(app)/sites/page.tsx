@@ -57,8 +57,8 @@ export default function SitesPage() {
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div>
-          <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>Sites</h1>
-          <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>{filtered.length} sites · {totalDevices.toLocaleString()} devices · {totalEol.toLocaleString()} EOL</p>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>Sites</h1>
+          <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af', margin: '2px 0 0' }}>{filtered.length} sites · {totalDevices.toLocaleString()} devices · {totalEol.toLocaleString()} EOL</p>
         </div>
       </div>
 
@@ -74,9 +74,9 @@ export default function SitesPage() {
               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
-              <div style={{ fontSize: '11px', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
-              <div style={{ fontSize: '26px', fontWeight: '700', color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: '11px', color: s.color, opacity: 0.6, marginTop: '4px' }}>View all →</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: s.color, opacity: 0.6, marginTop: '4px' }}>View all →</div>
             </div>
           </a>
         ))}
@@ -91,7 +91,7 @@ export default function SitesPage() {
           {regions.map(r => <option key={r}>{r}</option>)}
         </select>
         {(search || region) && (
-          <button className="btn-secondary" style={{ fontSize: '13px' }} onClick={() => { setSearch(''); setRegion('') }}>Clear</button>
+          <button className="btn-secondary" style={{ fontSize: 'var(--text-base)' }} onClick={() => { setSearch(''); setRegion('') }}>Clear</button>
         )}
       </div>
 
@@ -102,9 +102,9 @@ export default function SitesPage() {
           <div key={`${group.region}-${group.country}`} style={{ marginBottom: '24px' }}>
             {/* Country header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <div style={{ fontSize: '15px', fontWeight: '600', color: '#111827' }}>{group.country}</div>
-              <div style={{ fontSize: '11px', color: '#9ca3af', background: '#f3f4f6', padding: '2px 8px', borderRadius: '20px' }}>{group.region}</div>
-              <div style={{ fontSize: '12px', color: '#9ca3af' }}>{group.sites.length} site{group.sites.length > 1 ? 's' : ''}</div>
+              <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: '#111827' }}>{group.country}</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', background: '#f3f4f6', padding: '2px 8px', borderRadius: '20px' }}>{group.region}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: '#9ca3af' }}>{group.sites.length} site{group.sites.length > 1 ? 's' : ''}</div>
             </div>
 
             {/* Site cards */}
@@ -120,10 +120,10 @@ export default function SitesPage() {
                       onMouseLeave={e => (e.currentTarget.style.borderColor = isDecommed ? '#d1d5db' : '#e5e7eb')}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
-                          <div style={{ fontSize: '14px', fontWeight: '600', color: '#111827' }}>{site.site}</div>
+                          <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: '#111827' }}>{site.site}</div>
 
                         </div>
-                        <span style={{ fontSize: '10px', fontWeight: '500', padding: '3px 8px', borderRadius: '20px', background: risk.bg, color: risk.color }}>{isDecommed ? risk.label : `${risk.label} risk`}</span>
+                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: '500', padding: '3px 8px', borderRadius: '20px', background: risk.bg, color: risk.color }}>{isDecommed ? risk.label : `${risk.label} risk`}</span>
                       </div>
 
                       {/* Device count row */}
@@ -135,8 +135,8 @@ export default function SitesPage() {
                           { label: 'Decommed', value: site.decommed, color: '#92400e' },
                         ].map(stat => (
                           <div key={stat.label} style={{ textAlign: 'center', background: '#f9fafb', borderRadius: '6px', padding: '6px 4px' }}>
-                            <div style={{ fontSize: '14px', fontWeight: '700', color: stat.color }}>{stat.value}</div>
-                            <div style={{ fontSize: '9px', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{stat.label}</div>
+                            <div style={{ fontSize: 'var(--text-md)', fontWeight: '700', color: stat.color }}>{stat.value}</div>
+                            <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{stat.label}</div>
                           </div>
                         ))}
                       </div>
@@ -145,8 +145,8 @@ export default function SitesPage() {
                       {parseInt(site.total) > 0 && (
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                            <span style={{ fontSize: '10px', color: '#9ca3af' }}>EOL exposure</span>
-                            <span style={{ fontSize: '10px', color: risk.color, fontWeight: '500' }}>{eolPct}%</span>
+                            <span style={{ fontSize: 'var(--text-xs)', color: '#9ca3af' }}>EOL exposure</span>
+                            <span style={{ fontSize: 'var(--text-xs)', color: risk.color, fontWeight: '500' }}>{eolPct}%</span>
                           </div>
                           <div style={{ height: '4px', background: '#f3f4f6', borderRadius: '2px', overflow: 'hidden' }}>
                             <div style={{ width: `${eolPct}%`, height: '100%', borderRadius: '2px', background: risk.color }} />
@@ -154,7 +154,7 @@ export default function SitesPage() {
                         </div>
                       )}
 
-                      <div style={{ fontSize: '10px', color: '#d1d5db', marginTop: '10px' }}>Updated {timeAgo(site.last_updated)}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: '#d1d5db', marginTop: '10px' }}>Updated {timeAgo(site.last_updated)}</div>
                     </div>
                   </Link>
                 )

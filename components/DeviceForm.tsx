@@ -15,8 +15,8 @@ type DeviceFormProps = { initialData?: Record<string, any>; deviceId?: string }
 function Field({ label, required, span, children }: { label: string; required?: boolean; span?: boolean; children: React.ReactNode }) {
   return (
     <div style={{ gridColumn: span ? '1 / -1' : undefined }}>
-      <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
-        {label}{required && <span style={{ color: '#C8102E' }}> *</span>}
+      <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>
+        {label}{required && <span style={{ color: 'var(--primary)' }}> *</span>}
       </label>
       {children}
     </div>
@@ -26,7 +26,7 @@ function Field({ label, required, span, children }: { label: string; required?: 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="card" style={{ marginBottom: '16px', padding: '20px 24px' }}>
-      <h2 style={{ fontSize: '15px', fontWeight: '600', color: '#111827', marginBottom: '18px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
+      <h2 style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: '#111827', marginBottom: '18px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>{children}</div>
     </div>
   )
@@ -92,8 +92,8 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
   return (
     <div style={{ padding: '24px 28px', maxWidth: '900px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: '13px', cursor: 'pointer', padding: 0, marginBottom: '12px' }}>← Back</button>
-        <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{deviceId ? 'Edit device' : 'Add new device'}</h1>
+        <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#6b7280', fontSize: 'var(--text-base)', cursor: 'pointer', padding: 0, marginBottom: '12px' }}>← Back</button>
+        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>{deviceId ? 'Edit device' : 'Add new device'}</h1>
       </div>
       <form onSubmit={handleSubmit}>
 
@@ -242,7 +242,7 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
           </Field>
         </Section>
 
-        {error && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', fontSize: '14px', marginBottom: '16px' }}>{error}</div>}
+        {error && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '12px 16px', borderRadius: '8px', fontSize: 'var(--text-md)', marginBottom: '16px' }}>{error}</div>}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : deviceId ? 'Save changes' : 'Add device'}</button>
           <button className="btn-secondary" type="button" onClick={() => router.back()}>Cancel</button>

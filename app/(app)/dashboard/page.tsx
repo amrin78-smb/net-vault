@@ -32,7 +32,7 @@ function UpdatedNotice() {
     <div
       style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
-        marginBottom: 16, borderRadius: 8, fontSize: 13.5, fontWeight: 600,
+        marginBottom: 16, borderRadius: 8, fontSize: 'var(--text-base)', fontWeight: 600,
         color: '#166534', background: 'rgba(22,163,74,0.10)',
         border: '1px solid rgba(22,163,74,0.30)',
       }}
@@ -44,7 +44,7 @@ function UpdatedNotice() {
         aria-label="Dismiss"
         style={{
           background: 'none', border: 'none', cursor: 'pointer', color: '#166534',
-          fontSize: 18, lineHeight: 1, padding: 0, opacity: 0.7,
+          fontSize: 'var(--text-lg)', lineHeight: 1, padding: 0, opacity: 0.7,
         }}
       >
         ×
@@ -172,13 +172,13 @@ const cardStyle: React.CSSProperties = {
   border: '1px solid #eef1f5', padding: 20, boxSizing: 'border-box',
 }
 const cardStyleCompact: React.CSSProperties = { ...cardStyle, padding: 16 }
-const cardTitle: React.CSSProperties = { fontSize: 14, fontWeight: 700, color: '#111827', margin: 0 }
-const viewLink: React.CSSProperties = { fontSize: 12.5, color: RED, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }
+const cardTitle: React.CSSProperties = { fontSize: 'var(--text-md)', fontWeight: 700, color: '#111827', margin: 0 }
+const viewLink: React.CSSProperties = { fontSize: 'var(--text-sm)', color: RED, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload || !payload.length) return null
   return (
-    <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', fontSize: 12 }}>
+    <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', fontSize: 'var(--text-sm)' }}>
       {label != null && <div style={{ fontWeight: 700, color: '#111827', marginBottom: 4 }}>{label}</div>}
       {payload.map((p: any, i: number) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, color: MUTED }}>
@@ -262,7 +262,7 @@ export default function DashboardPage() {
   const maxType = Math.max(1, ...byType.map(t => t.count))
 
   /* ----------------------- health trend node ---------------------- */
-  const trendStyle: React.CSSProperties = { fontSize: 10.5, lineHeight: 1.25, fontWeight: 600 }
+  const trendStyle: React.CSSProperties = { fontSize: 'var(--text-xs)', lineHeight: 1.25, fontWeight: 600 }
   let trendNode: React.ReactNode = null
   if (overview.trend_available && overview.trend !== null) {
     const t = overview.trend
@@ -297,19 +297,19 @@ export default function DashboardPage() {
       {/* ============================ HEADER ========================= */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#111827', margin: 0 }}>Dashboard</h1>
-          <p style={{ fontSize: 13.5, color: MUTED, margin: '4px 0 0' }}>Infrastructure overview</p>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: '#111827', margin: 0 }}>Dashboard</h1>
+          <p style={{ fontSize: 'var(--text-base)', color: MUTED, margin: '4px 0 0' }}>Infrastructure overview</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
             className="nv-ghost-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', background: 'white', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', background: 'white', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 'var(--text-base)', fontWeight: 600, cursor: 'pointer' }}
           >
             {IconGrid(15, '#6b7280')} Custom View
           </button>
           <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{clock || '—'}</div>
-            <div style={{ fontSize: 11, color: MUTED }}>ICT · Asia/Bangkok</div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: '#111827' }}>{clock || '—'}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: MUTED }}>ICT · Asia/Bangkok</div>
           </div>
         </div>
       </div>
@@ -332,14 +332,14 @@ export default function DashboardPage() {
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                 {loading ? <Shimmer w={40} h={24} light /> : (
                   <>
-                    <span style={{ fontSize: 26, fontWeight: 800, lineHeight: 1 }}>{overview.health_score}</span>
-                    <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', marginTop: 1 }}>/ 100</span>
+                    <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, lineHeight: 1 }}>{overview.health_score}</span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.55)', marginTop: 1 }}>/ 100</span>
                   </>
                 )}
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: gColor, color: 'white', fontWeight: 800, fontSize: 13 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: gColor, color: 'white', fontWeight: 800, fontSize: 'var(--text-base)' }}>
                 {overview.health_grade}
               </span>
               {trendNode}
@@ -348,13 +348,13 @@ export default function DashboardPage() {
 
           {/* CENTER — overall status */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', borderLeft: '1px solid rgba(255,255,255,0.08)', borderRight: '1px solid rgba(255,255,255,0.08)', padding: '0 24px' }}>
-            <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>Overall Status</div>
+            <div style={{ fontSize: 'var(--text-xs)', letterSpacing: '0.08em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>Overall Status</div>
             {loading ? <div style={{ margin: '6px 0' }}><Shimmer w={150} h={28} light /></div> : (
-              <div style={{ fontSize: 28, fontWeight: 800, color: statusColor(overview.overall_status), margin: '4px 0 6px' }}>
+              <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: statusColor(overview.overall_status), margin: '4px 0 6px' }}>
                 {overview.overall_status}
               </div>
             )}
-            <p style={{ fontSize: 12.5, lineHeight: 1.45, color: 'rgba(255,255,255,0.66)', margin: 0, maxWidth: 420 }}>
+            <p style={{ fontSize: 'var(--text-sm)', lineHeight: 1.45, color: 'rgba(255,255,255,0.66)', margin: 0, maxWidth: 420 }}>
               {overview.status_description}
             </p>
           </div>
@@ -368,12 +368,12 @@ export default function DashboardPage() {
                 </span>
                 <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                   {loading ? <Shimmer w={50} h={26} light /> : (
-                    <div style={{ fontSize: 28, fontWeight: 800, color: 'white', lineHeight: 1 }}>
+                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'white', lineHeight: 1 }}>
                       {typeof t.value === 'number' ? t.value.toLocaleString() : t.value}
                     </div>
                   )}
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>{t.label}</div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>{t.sub}</div>
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.6)' }}>{t.label}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.45)' }}>{t.sub}</div>
                 </div>
               </div>
             ))}
@@ -393,7 +393,7 @@ export default function DashboardPage() {
               {loading ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><Shimmer w={150} h={150} r={75} /></div>
               ) : fleet.segments.length === 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 13 }}>No data</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 'var(--text-base)' }}>No data</div>
               ) : (
                 <>
                   <ResponsiveContainer width="100%" height="100%">
@@ -405,8 +405,8 @@ export default function DashboardPage() {
                     </PieChart>
                   </ResponsiveContainer>
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                    <span style={{ fontSize: 26, fontWeight: 800, color: '#111827' }}>{fleet.total.toLocaleString()}</span>
-                    <span style={{ fontSize: 11, color: MUTED }}>Total Devices</span>
+                    <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#111827' }}>{fleet.total.toLocaleString()}</span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: MUTED }}>Total Devices</span>
                   </div>
                 </>
               )}
@@ -414,7 +414,7 @@ export default function DashboardPage() {
             {/* legend — right */}
             <div style={{ flex: 1, minWidth: 0 }}>
               {fleet.segments.map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12.5 }}>
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 'var(--text-sm)' }}>
                   <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
                   <span style={{ flex: 1, color: '#374151' }}>{s.label}</span>
                   <span style={{ fontWeight: 700, color: '#111827' }}>{s.count.toLocaleString()}</span>
@@ -423,7 +423,7 @@ export default function DashboardPage() {
               ))}
             </div>
           </div>
-          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 10, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', marginTop: 10, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
             Last updated: {minutesAgo(fleet.last_updated)}
           </div>
         </div>
@@ -432,7 +432,7 @@ export default function DashboardPage() {
         <div style={cardStyleCompact}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={cardTitle}>Devices by Region</h2>
-            <div style={{ display: 'flex', gap: 12, fontSize: 11.5, color: MUTED }}>
+            <div style={{ display: 'flex', gap: 12, fontSize: 'var(--text-xs)', color: MUTED }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY }} />Healthy</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: RED }} />EOL</span>
             </div>
@@ -463,7 +463,7 @@ export default function DashboardPage() {
         <div style={cardStyleCompact}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <h2 style={cardTitle}>Sites Requiring Attention</h2>
-            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 6px', borderRadius: 11, background: RED, color: 'white', fontSize: 12, fontWeight: 700 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 6px', borderRadius: 11, background: RED, color: 'white', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
               {sitesBadgeCount}
             </span>
           </div>
@@ -471,20 +471,20 @@ export default function DashboardPage() {
             {loading ? (
               [0, 1, 2].map(i => <div key={i} style={{ padding: '6px 0' }}><Shimmer w="70%" h={14} /><div style={{ marginTop: 6 }}><Shimmer w="40%" h={11} /></div></div>)
             ) : topEol.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No sites at risk</div>
+              <div style={{ fontSize: 'var(--text-base)', color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No sites at risk</div>
             ) : topEol.slice(0, 3).map((s, i) => {
               const high = s.eol_pct >= 50
               return (
                 <Link key={i} href="/sites?filter=eol" style={{ textDecoration: 'none' }}>
                   <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderRadius: 8, borderBottom: i < 2 ? '1px solid #f3f4f6' : 'none', cursor: 'pointer' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
-                      <div style={{ fontSize: 10, color: MUTED, marginTop: 1 }}>{s.city} • {s.region}</div>
+                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: MUTED, marginTop: 1 }}>{s.city} • {s.region}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 4px', borderRadius: 5, color: high ? '#991b1b' : '#92400e', background: high ? '#fee2e2' : '#fef3c7' }}>
+                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, padding: '1px 4px', borderRadius: 5, color: high ? '#991b1b' : '#92400e', background: high ? '#fee2e2' : '#fef3c7' }}>
                           {high ? 'HIGH' : 'MEDIUM'}
                         </span>
-                        <span style={{ fontSize: 11.5, color: '#991b1b', fontWeight: 600 }}>{s.eol_count} EOL Devices</span>
+                        <span style={{ fontSize: 'var(--text-xs)', color: '#991b1b', fontWeight: 600 }}>{s.eol_count} EOL Devices</span>
                       </div>
                     </div>
                     <span style={{ color: '#9ca3af', display: 'flex' }}>{IconChevron(14, '#9ca3af')}</span>
@@ -508,10 +508,10 @@ export default function DashboardPage() {
                 {s.icon(18, NAVY)}
               </span>
               {loading ? <div style={{ margin: '10px 0 2px' }}><Shimmer w={60} h={26} /></div> : (
-                <div style={{ fontSize: 26, fontWeight: 800, color: '#111827', marginTop: 10 }}>{s.value.toLocaleString()}</div>
+                <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#111827', marginTop: 10 }}>{s.value.toLocaleString()}</div>
               )}
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: '#374151', marginTop: 2 }}>{s.label}</div>
-              <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{s.sub}</div>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#374151', marginTop: 2 }}>{s.label}</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: MUTED, marginTop: 1 }}>{s.sub}</div>
             </div>
           </Link>
         ))}
@@ -532,7 +532,7 @@ export default function DashboardPage() {
                 {[80, 65, 55, 40, 30].map((w, i) => <Shimmer key={i} w={`${w}%`} h={16} />)}
               </div>
             ) : byType.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 13 }}>No data</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 'var(--text-base)' }}>No data</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart layout="vertical" data={byType} margin={{ top: 0, right: 28, left: 0, bottom: 0 }}>
@@ -558,15 +558,15 @@ export default function DashboardPage() {
             {loading ? (
               [0, 1, 2, 3, 4].map(i => <div key={i} style={{ padding: '9px 0' }}><Shimmer w="60%" h={13} /><div style={{ marginTop: 6 }}><Shimmer w="100%" h={6} r={3} /></div></div>)
             ) : topEol.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No EOL sites</div>
+              <div style={{ fontSize: 'var(--text-base)', color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No EOL sites</div>
             ) : topEol.slice(0, 5).map((s, i) => (
               <Link key={i} href="/sites?filter=eol" style={{ textDecoration: 'none', display: 'block' }}>
                 <div className="nv-row" style={{ padding: '10px 8px', margin: '0 -8px', borderRadius: 8, cursor: 'pointer' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</span>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#991b1b', flexShrink: 0 }}>{s.eol_count}</span>
+                    <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</span>
+                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#991b1b', flexShrink: 0 }}>{s.eol_count}</span>
                   </div>
-                  <div style={{ fontSize: 11, color: MUTED, margin: '2px 0 5px' }}>{s.city} • {s.region}</div>
+                  <div style={{ fontSize: 'var(--text-xs)', color: MUTED, margin: '2px 0 5px' }}>{s.city} • {s.region}</div>
                   <div style={{ height: 6, background: '#f3f4f6', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{ width: `${Math.min(100, s.eol_pct)}%`, height: '100%', background: RED, borderRadius: 3 }} />
                   </div>
@@ -586,19 +586,19 @@ export default function DashboardPage() {
             {loading ? (
               [0, 1, 2, 3, 4, 5].map(i => <div key={i} style={{ padding: '9px 0' }}><Shimmer w="80%" h={13} /><div style={{ marginTop: 5 }}><Shimmer w="50%" h={11} /></div></div>)
             ) : activity.length === 0 ? (
-              <div style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No recent activity</div>
+              <div style={{ fontSize: 'var(--text-base)', color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No recent activity</div>
             ) : activity.slice(0, 6).map((a, i) => {
               const c = activityColor(a.action)
               return (
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < Math.min(6, activity.length) - 1 ? '1px solid #f3f4f6' : 'none' }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', background: c, flexShrink: 0, marginTop: 5 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, color: '#111827', textTransform: 'capitalize' }}>{a.action}</div>
-                    <div style={{ fontSize: 11.5, color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#111827', textTransform: 'capitalize' }}>{a.action}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {a.entity}{a.user ? ` · ${a.user}` : ''}
                     </div>
                   </div>
-                  <span style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0, whiteSpace: 'nowrap' }}>{a.time}</span>
+                  <span style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', flexShrink: 0, whiteSpace: 'nowrap' }}>{a.time}</span>
                 </div>
               )
             })}

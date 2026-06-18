@@ -90,10 +90,10 @@ export default function IdleTimeout() {
             </svg>
           </div>
         </div>
-        <h2 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>
+        <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>
           Session expiring soon
         </h2>
-        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 24px' }}>
+        <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: '0 0 24px' }}>
           You will be logged out in 60 seconds due to inactivity.
         </p>
         <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>

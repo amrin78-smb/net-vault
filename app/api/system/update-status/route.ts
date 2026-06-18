@@ -109,6 +109,13 @@ const releaseNotes: Record<string, string[]> = {
     'Replaced heavier card shadows with a subtle border-plus-faint-shadow elevation',
     'Kept pill toggles, status dots, and avatars fully rounded',
   ],
+  '1.2.9': [
+    'Standardized typography on a shared 7-step type scale (suite-wide standard)',
+    'Unified the monospace font into a single token across all app screens',
+    'Replaced duplicated hardcoded colors with design tokens for consistent theming',
+    'Snapped ad-hoc font sizes onto the scale, collapsing ~12 sizes down to 7',
+    'Login and launcher hero typography intentionally left unchanged',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],

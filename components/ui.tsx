@@ -67,8 +67,8 @@ export function EmptyState({ icon, title, message, actionLabel, onAction }: {
           {icon}
         </div>
       )}
-      <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
-      {message && <div style={{ fontSize: 13, marginTop: 6, maxWidth: 420 }}>{message}</div>}
+      <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>{title}</div>
+      {message && <div style={{ fontSize: 'var(--text-base)', marginTop: 6, maxWidth: 420 }}>{message}</div>}
       {actionLabel && onAction && (
         <button className="btn btn-primary" style={{ marginTop: 18 }} onClick={onAction}>
           {actionLabel}
