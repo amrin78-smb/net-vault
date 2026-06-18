@@ -34,6 +34,10 @@ Rules:
 
 ## UI design
 
+The sidebar uses suite-standard colored nav icon chips (28×28, radius 8, per-route tint,
+only the active item is colored), 14px nav labels, and a 34px circular avatar — shared
+across the NocVault suite.
+
 Styling is a custom CSS design system in `app/globals.css` (CSS custom properties in
 `:root` + theme) plus inline `style={{ ... }}` on components — NOT Tailwind. Inter is the
 body font (loaded via `next/font` in `app/layout.tsx`). `--radius: 8px` / `--radius-sm: 6px`.

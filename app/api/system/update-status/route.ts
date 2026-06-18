@@ -116,6 +116,11 @@ const releaseNotes: Record<string, string[]> = {
     'Snapped ad-hoc font sizes onto the scale, collapsing ~12 sizes down to 7',
     'Login and launcher hero typography intentionally left unchanged',
   ],
+  '1.2.10': [
+    'Standardized sidebar nav icon chips (28×28, radius 8, per-route tint) to match the NocVault suite',
+    'Bumped nav labels to 14px for suite-wide typographic parity',
+    'Switched the header avatar to a 34px circular badge on solid primary',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
