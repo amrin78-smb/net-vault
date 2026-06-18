@@ -397,9 +397,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         zIndex: 150,
         boxShadow: '0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.2)',
       }}>
-          {/* Logo — always visible, top-left of header */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 66" height="44" style={{ display: 'block' }}>
+          {/* Logo + tagline — single-line wordmark, divider, inline tagline (suite pattern) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 185 46" height="44" style={{ display: 'block' }}>
               <line x1="19" y1="5" x2="4" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
               <line x1="19" y1="5" x2="34" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
               <line x1="4" y1="37" x2="34" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
@@ -410,14 +410,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 <tspan fill="#ffffff">Net</tspan>
                 <tspan fill="#C8102E">Vault</tspan>
               </text>
-              <text x="50" y="50" fontSize="9" fontWeight="500" fill="rgba(255,255,255,0.45)" letterSpacing="1.8" fontFamily="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">
-                NETWORK ASSET MANAGEMENT
-              </text>
             </svg>
+            <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.15)' }} />
+            <div style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+              Network Asset Management
+            </div>
           </div>
-
-          {/* Divider */}
-          <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.15)', flexShrink: 0 }} />
 
           {/* Global search */}
           <div style={{ flex: 1, maxWidth: 400, position: 'relative' }}>

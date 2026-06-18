@@ -121,6 +121,9 @@ const releaseNotes: Record<string, string[]> = {
     'Bumped nav labels to 14px for suite-wide typographic parity',
     'Switched the header avatar to a 34px circular badge on solid primary',
   ],
+  '1.2.11': [
+    'Moved the header tagline beside the logo (after a divider) instead of stacked beneath it, matching the rest of the NocVault suite',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
