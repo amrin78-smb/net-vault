@@ -30,7 +30,7 @@ function CircuitEditField({ label, field, form, setForm, type = 'text' }: { labe
 
 function CircuitSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '18px 22px', marginBottom: '16px' }}>
+    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '18px 22px', marginBottom: '16px' }}>
       <h2 style={{ fontSize: '13px', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>{children}</div>
     </div>

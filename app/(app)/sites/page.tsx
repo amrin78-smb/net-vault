@@ -115,7 +115,7 @@ export default function SitesPage() {
                 const eolPct = parseInt(site.total) > 0 ? Math.round(parseInt(site.eol) / parseInt(site.total) * 100) : 0
                 return (
                   <Link key={site.id} href={`/sites/${site.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ background: isDecommed ? '#f9fafb' : 'white', borderRadius: '10px', border: isDecommed ? '1px solid #d1d5db' : '1px solid #e5e7eb', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s', opacity: isDecommed ? 0.7 : 1 }}
+                    <div style={{ background: isDecommed ? '#f9fafb' : 'white', borderRadius: '8px', border: isDecommed ? '1px solid #d1d5db' : '1px solid #e5e7eb', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s', opacity: isDecommed ? 0.7 : 1 }}
                       onMouseEnter={e => (e.currentTarget.style.borderColor = isDecommed ? '#d1d5db' : '#C8102E')}
                       onMouseLeave={e => (e.currentTarget.style.borderColor = isDecommed ? '#d1d5db' : '#e5e7eb')}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>

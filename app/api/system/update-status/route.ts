@@ -103,6 +103,12 @@ const releaseNotes: Record<string, string[]> = {
   '1.2.7': [
     'Standardized Updates and About tabs to NocVault suite spec',
   ],
+  '1.2.8': [
+    'Tightened card corners and elevation for a cleaner operations-console look',
+    'Standardized border radius across the suite — 8px panels/cards/tables/modals, 6px buttons/inputs/dropdowns',
+    'Replaced heavier card shadows with a subtle border-plus-faint-shadow elevation',
+    'Kept pill toggles, status dots, and avatars fully rounded',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],

@@ -52,7 +52,7 @@ export default function AuditPage() {
         <p style={{ fontSize: '13px', color: '#9ca3af', margin: '2px 0 0' }}>Full history of all changes - {total.toLocaleString()} entries</p>
       </div>
 
-      <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '14px 16px', marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '14px 16px', marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px', fontWeight: '500' }}>Action</div>
           <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={action} onChange={e => { setAction(e.target.value); setPage(1) }}>
@@ -80,7 +80,7 @@ export default function AuditPage() {
         )}
       </div>
 
-      <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
         ) : logs.length === 0 ? (

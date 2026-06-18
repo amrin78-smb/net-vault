@@ -95,7 +95,7 @@ export default function CircuitsPage() {
     return `${currency || 'THB'} ${parseFloat(cost).toLocaleString()}`
   }
 
-  const selectStyle = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '7px', fontSize: '14px', background: 'white', outline: 'none', cursor: 'pointer' }
+  const selectStyle = { padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: '6px', fontSize: '14px', background: 'white', outline: 'none', cursor: 'pointer' }
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -129,7 +129,7 @@ export default function CircuitsPage() {
         <input className="input" style={{ flex: '1', maxWidth: '400px' }} placeholder="Search circuit ID, ISP, subnet..."
           value={search} onChange={e => setSearch(e.target.value)} />
         <button onClick={() => setShowFilterPanel(f => !f)}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : 'white', color: showFilterPanel || !!(isp||usage||technology||country||site) ? 'white' : '#374151', border: '1px solid ' + (showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : '#e5e7eb'), borderRadius: '7px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : 'white', color: showFilterPanel || !!(isp||usage||technology||country||site) ? 'white' : '#374151', border: '1px solid ' + (showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : '#e5e7eb'), borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
           Filters {!!(isp||usage||technology||country||site) && `(${[isp,usage,technology,country,site].filter(Boolean).length})`}
         </button>
@@ -143,7 +143,7 @@ export default function CircuitsPage() {
 
       {/* Filter panel */}
       {showFilterPanel && (
-        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Country</div>
             <select className="select" style={{ width: '100%' }} value={country} onChange={e => { setCountry(e.target.value); setSite('') }}>
@@ -205,7 +205,7 @@ export default function CircuitsPage() {
         </span>
         {isAdmin && (
           <Link href="/circuits/new">
-            <button style={{ padding: '7px 14px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '500' }}>
+            <button style={{ padding: '7px 14px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '500' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
               Add circuit
             </button>
@@ -214,7 +214,7 @@ export default function CircuitsPage() {
       </div>
 
       {/* Table */}
-      <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading circuits...</div>
         ) : circuits.length === 0 ? (
@@ -253,10 +253,10 @@ export default function CircuitsPage() {
                     <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <Link href={`/circuits/${c.id}`}>
-                          <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }}>View</button>
+                          <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>View</button>
                         </Link>
                         {isAdmin && (
-                          <button style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: '5px', cursor: 'pointer' }}
+                          <button style={{ padding: '4px 10px', fontSize: '12px', background: '#fee2e2', color: '#991b1b', border: '1px solid #fca5a5', borderRadius: '6px', cursor: 'pointer' }}
                             onClick={() => deleteCircuit(c.id, c.circuit_id)}>Delete</button>
                         )}
                       </div>

@@ -434,7 +434,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 width: '100%', padding: '9px 44px 9px 36px',
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 10,
+                borderRadius: 6,
                 color: 'white', fontSize: 13,
                 outline: 'none', boxSizing: 'border-box',
                 fontFamily: 'inherit',
@@ -491,7 +491,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 display: 'flex', alignItems: 'center', gap: 10,
                 background: showUserMenu ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 10, padding: '6px 12px 6px 6px',
+                borderRadius: 6, padding: '6px 12px 6px 6px',
                 cursor: 'pointer', transition: 'background 0.15s',
               }}
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
@@ -528,7 +528,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div style={{
                 position: 'absolute', top: 'calc(100% + 8px)', right: 0,
                 background: 'white', border: '1px solid var(--border)',
-                borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+                borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                 minWidth: 220, overflow: 'hidden', zIndex: 999,
                 animation: 'fadeIn 0.15s ease',
               }}>

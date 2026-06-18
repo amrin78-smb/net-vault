@@ -106,7 +106,7 @@ export default function EolPage() {
               {regions.map(r => <option key={r}>{r}</option>)}
             </select>
           </div>
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
             {loading ? <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div> : (
               <table>
                 <thead><tr><th>Site</th><th>Country</th><th>Region</th><th>EOL devices</th><th>% of site</th><th>Risk level</th></tr></thead>
@@ -148,7 +148,7 @@ export default function EolPage() {
               <div style={{ fontSize: '28px', fontWeight: '700', color: '#1a2744' }}>{softwareRows.length}</div>
             </div>
           </div>
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
             {loading ? <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div> : softwareRows.length === 0 ? (
               <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>No devices have OS EOL dates recorded yet.</div>
             ) : (

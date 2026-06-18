@@ -106,7 +106,7 @@ function DeviceField({ label, value }: { label: string; value: any }) {
 
 function DeviceSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
+    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
       <h2 style={{ fontSize: '13px', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>{children}</div>
     </div>
@@ -225,7 +225,7 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
           </DeviceSection>
 
           {/* Change history timeline */}
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '20px 24px' }}>
             <h2 style={{ fontSize: '13px', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>
               Change history {logs.length > 0 && <span style={{ fontWeight: '400', color: '#9ca3af', textTransform: 'none', letterSpacing: 0 }}>({logs.length})</span>}
             </h2>

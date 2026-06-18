@@ -22,7 +22,7 @@ function fmtReleaseDate(d?: string): string {
 function UpdateConfirmModal({ onCancel, onConfirm }: { onCancel: () => void; onConfirm: () => void }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9998, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: 'white', borderRadius: '12px', padding: '28px 32px', maxWidth: '400px', width: '90%' }}>
+      <div style={{ background: 'white', borderRadius: '8px', padding: '28px 32px', maxWidth: '400px', width: '90%' }}>
         <div style={{ fontSize: '16px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>Start Update?</div>
         <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '24px' }}>
           Services will restart and you'll lose connection for 30–60 seconds. The page reloads automatically when the update completes.
@@ -154,7 +154,7 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: 'var(--bg-card)', borderRadius: 12, boxShadow: '0 20px 60px rgba(0,0,0,0.35)', padding: 28, maxWidth: 440, width: '100%', textAlign: 'center' }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)', padding: 28, maxWidth: 440, width: '100%', textAlign: 'center' }}>
         {phase !== 'back_up' && !isError && (
           <div style={{ fontSize: 44, lineHeight: 1, display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</div>
         )}
@@ -463,7 +463,7 @@ export default function SettingsPage() {
             <button className="btn-primary" onClick={openAddUser}>+ Add user</button>
           </div>
           {showUserForm && (
-            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
+            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>{editUser ? 'Edit user' : 'Add new user'}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 {[
@@ -506,7 +506,7 @@ export default function SettingsPage() {
                           <div key={country} style={{ marginBottom: '8px' }}>
                             <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '4px 6px' }}>{country}</div>
                             {countrySites.map((s: any) => (
-                              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px', borderRadius: '5px', cursor: 'pointer', background: userForm.site_ids.includes(s.id) ? '#fef2f2' : 'transparent' }}>
+                              <label key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 6px', borderRadius: '6px', cursor: 'pointer', background: userForm.site_ids.includes(s.id) ? '#fef2f2' : 'transparent' }}>
                                 <input type="checkbox"
                                   checked={userForm.site_ids.includes(s.id)}
                                   onChange={e => {
@@ -548,7 +548,7 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
             <table>
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Site access</th><th>Created</th><th>Actions</th></tr></thead>
               <tbody>
@@ -568,7 +568,7 @@ export default function SettingsPage() {
                     <td style={{ color: '#9ca3af', fontSize: '12px' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        {(isSuperAdmin || u.role !== 'super_admin') && <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }} onClick={() => openEditUser(u)}>Edit</button>}
+                        {(isSuperAdmin || u.role !== 'super_admin') && <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }} onClick={() => openEditUser(u)}>Edit</button>}
                         {isSuperAdmin && <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteUser(u.id, u.name)}>Delete</button>}
                       </div>
                     </td>
@@ -583,7 +583,7 @@ export default function SettingsPage() {
       {/* GENERAL TAB */}
       {activeTab === 'general' && (
         <div>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Session security</div>
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', color: '#374151', marginBottom: '6px' }}>Session timeout</label>
@@ -622,7 +622,7 @@ export default function SettingsPage() {
           </div>
 
           {showSiteForm && (
-            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
+            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Add new site</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 <div>
@@ -694,7 +694,7 @@ export default function SettingsPage() {
           )}
 
           {editSite && (
-            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
+            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: '15px', fontWeight: '600', marginBottom: '16px' }}>Edit site — {editSite.name || (editSite as any).site}</h3>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 {[
@@ -737,7 +737,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
             <table>
               <thead><tr><th>Site name</th><th>Code</th><th>Country</th><th>Region</th><th>Devices</th><th>Actions</th></tr></thead>
               <tbody>
@@ -750,7 +750,7 @@ export default function SettingsPage() {
                     <td><span style={{ fontSize: '12px', fontWeight: '500', color: parseInt(s.total) > 0 ? '#111827' : '#9ca3af' }}>{s.total}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }} onClick={() => openEditSite(s)}>Edit</button>
+                        <button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }} onClick={() => openEditSite(s)}>Edit</button>
                         {isSuperAdmin && <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteSite(s.id, s.name || (s as any).site)}>Delete</button>}
                       </div>
                     </td>
@@ -766,7 +766,7 @@ export default function SettingsPage() {
       {activeTab === 'license' && (
         <div>
           {/* Status card */}
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>License status</div>
             {!licenseInfo ? (
               <div style={{ color: '#9ca3af', fontSize: '13px' }}>Loading…</div>
@@ -823,11 +823,11 @@ export default function SettingsPage() {
           </div>
 
           {/* Server ID */}
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Your Server ID</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>Provide this when purchasing a license so the key can be locked to this server.</div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <code style={{ flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '7px', padding: '10px 14px', fontFamily: 'monospace', fontSize: '13px', color: '#111827', letterSpacing: '0.02em', userSelect: 'all' }}>
+              <code style={{ flex: 1, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '6px', padding: '10px 14px', fontFamily: 'monospace', fontSize: '13px', color: '#111827', letterSpacing: '0.02em', userSelect: 'all' }}>
                 {licenseInfo?.serverId ?? '—'}
               </code>
               <button
@@ -841,7 +841,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Activate license */}
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Activate license</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '12px' }}>Paste the license key you received after purchase.</div>
             <textarea
@@ -856,7 +856,7 @@ export default function SettingsPage() {
               <div style={{
                 background: licenseActivateMsg.ok ? '#dcfce7' : '#fee2e2',
                 color: licenseActivateMsg.ok ? '#166534' : '#991b1b',
-                padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '12px',
+                padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px',
               }}>
                 {licenseActivateMsg.text}
               </div>
@@ -879,17 +879,17 @@ export default function SettingsPage() {
       {/* UPDATES TAB */}
       {activeTab === 'updates' && (
         <div>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Software Updates</div>
 
             {checkUpdateErr && (
-              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '14px' }}>
+              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '14px' }}>
                 {checkUpdateErr}
               </div>
             )}
 
             {updateStatus?.error && (
-              <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginBottom: '14px' }}>
+              <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginBottom: '14px' }}>
                 {updateStatus.error}
               </div>
             )}
@@ -898,7 +898,7 @@ export default function SettingsPage() {
               <div style={{ marginBottom: '16px' }}>
                 {updateStatus.up_to_date ? (
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: '7px', padding: '10px 14px', fontSize: '13px', fontWeight: '500', marginBottom: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#166534', background: 'rgba(22,163,74,0.08)', border: '1px solid rgba(22,163,74,0.25)', borderRadius: '6px', padding: '10px 14px', fontSize: '13px', fontWeight: '500', marginBottom: 10 }}>
                       <span>✓</span><span>NetVault is up to date</span>
                     </div>
                     <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>
@@ -958,7 +958,7 @@ export default function SettingsPage() {
 
             {applyUpdateErr && (
               /license|expire/i.test(applyUpdateErr) ? (
-                <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '7px', fontSize: '13px', marginTop: '10px' }}>
+                <div style={{ background: '#fff7ed', color: '#92400e', border: '1px solid #fcd34d', padding: '10px 14px', borderRadius: '6px', fontSize: '13px', marginTop: '10px' }}>
                   ⚠ License expired — updates disabled. Renew your license to receive updates.{' '}
                   <a href={`${process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || ''}/settings/license`} style={{ color: '#C8102E', textDecoration: 'none', fontWeight: 600 }}>Manage License →</a>
                 </div>
@@ -975,7 +975,7 @@ export default function SettingsPage() {
       {/* ABOUT TAB */}
       {activeTab === 'about' && (
         <div>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>About</div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
               <tbody>
@@ -995,7 +995,7 @@ export default function SettingsPage() {
               </tbody>
             </table>
           </div>
-          <div style={{ background: 'white', borderRadius: '12px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
             <div style={{ fontSize: '14px', fontWeight: '700', color: '#111827' }}>NetVault v{updateStatus?.current_version || '1.0.0'}</div>
             <div style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>Part of the NocVault Network Intelligence Suite</div>
             <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>© 2026 NocVault</div>

@@ -204,7 +204,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
                 <h1 style={{ fontSize: '22px', fontWeight: '700', color: '#111827', margin: 0 }}>{site.site}</h1>
                 {isAdmin && (
-                  <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer', color: '#6b7280' }}>Edit</button>
+                  <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#6b7280' }}>Edit</button>
                 )}
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -223,7 +223,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                 <span style={{ background: '#f3f4f6', color: '#6b7280', fontSize: '12px', fontWeight: '600', padding: '4px 12px', borderRadius: '20px', border: '1px solid #d1d5db' }}>⚠ Decommed site</span>
               )}
               {isAdmin && (
-                <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '7px', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? '#166534' : '#991b1b', borderColor: site?.site_status === 'Decommed' ? '#bbf7d0' : '#fca5a5', background: site?.site_status === 'Decommed' ? '#dcfce7' : '#fee2e2' }}>
+                <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: '13px', padding: '6px 14px', borderRadius: '6px', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? '#166534' : '#991b1b', borderColor: site?.site_status === 'Decommed' ? '#bbf7d0' : '#fca5a5', background: site?.site_status === 'Decommed' ? '#dcfce7' : '#fee2e2' }}>
                   {togglingDecomm ? 'Updating...' : site?.site_status === 'Decommed' ? 'Reactivate site' : 'Decommission site'}
                 </button>
               )}
@@ -297,7 +297,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
       {activeTab === 'devices' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px' }}>
-          <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '16px 20px' }}>
+          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px 20px' }}>
             <div style={{ fontSize: '13px', fontWeight: '600', color: '#374151', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>By device type</div>
             {byType.map(t => {
               const pct = Math.round(t.count / total * 100)
@@ -321,19 +321,19 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             {isAdmin && selected.size > 0 && (
               <div style={{ background: '#1a2744', borderRadius: '8px', padding: '10px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: '13px', color: 'white', fontWeight: '500' }}>{selected.size} device{selected.size > 1 ? 's' : ''} selected</span>
-                <select value={bulkField} onChange={e => { setBulkField(e.target.value); setBulkValue('') }} style={{ padding: '5px 10px', borderRadius: '5px', fontSize: '12px', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
+                <select value={bulkField} onChange={e => { setBulkField(e.target.value); setBulkValue('') }} style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '12px', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
                   <option value="device_status">Device status</option>
                   <option value="lifecycle_status">Lifecycle status</option>
                 </select>
-                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} style={{ padding: '5px 10px', borderRadius: '5px', fontSize: '12px', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
+                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} style={{ padding: '5px 10px', borderRadius: '6px', fontSize: '12px', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
                   <option value="">Set value...</option>
                   {bulkField === 'device_status' && ['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
                   {bulkField === 'lifecycle_status' && ['Active, Supported','EOL / EOS','Unknown'].map(s => <option key={s}>{s}</option>)}
                 </select>
-                <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ padding: '5px 14px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '5px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}>
+                <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ padding: '5px 14px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}>
                   {bulkLoading ? 'Updating...' : 'Apply'}
                 </button>
-                <button onClick={() => setSelected(new Set())} style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '5px', fontSize: '12px', cursor: 'pointer' }}>
+                <button onClick={() => setSelected(new Set())} style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
                   Cancel
                 </button>
               </div>
@@ -351,7 +351,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
               {(typeFilter || statusFilter) && <button className="btn-secondary" style={{ fontSize: '13px' }} onClick={() => { setTypeFilter(''); setStatusFilter('') }}>Clear</button>}
               <span style={{ fontSize: '13px', color: '#9ca3af', alignSelf: 'center', marginLeft: 'auto' }}>{filtered.length} devices</span>
             </div>
-            <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table>
                   <thead><tr>{isAdmin && <th style={{ width: '40px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>}<th>Name</th><th>Type</th><th>Brand / Model</th><th>IP</th><th>Lifecycle</th><th>Status</th>{isAdmin && <th>Actions</th>}</tr></thead>
@@ -365,7 +365,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                         <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{d.ip_address || '—'}</td>
                         <td><LifecycleBadge status={d.lifecycle_status} /></td>
                         <td><StatusBadge status={d.device_status} /></td>
-                        {isAdmin && <td><Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }}>Edit</button></Link></td>}
+                        {isAdmin && <td><Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>Edit</button></Link></td>}
                       </tr>
                     ))}
                   </tbody>
@@ -379,13 +379,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       {activeTab === 'circuits' && (
         <div>
           {circuits.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af', background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb' }}>No Circuits for this site</div>
+            <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af', background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' }}>No Circuits for this site</div>
           ) : (
             <>
               {[{ label: 'Main links', items: mainCircuits, color: '#075985' }, { label: 'Backup links', items: backupCircuits, color: '#6b7280' }, { label: 'Other', items: otherCircuits, color: '#92400e' }].filter(g => g.items.length > 0).map(group => (
                 <div key={group.label} style={{ marginBottom: '16px' }}>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: group.color, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>{group.label} — {group.items.length}</div>
-                  <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                  <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
                     <table>
                       <thead><tr><th>ISP</th><th>Circuit ID</th><th>Product</th><th>Usage</th><th>Max speed</th><th>Public subnet</th><th>Cost/month</th><th></th></tr></thead>
                       <tbody>
@@ -399,7 +399,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                             <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>{c.public_subnet && c.public_subnet !== '-' && c.public_subnet !== 'nan' ? c.public_subnet : '—'}</td>
                             <td style={{ fontSize: '12px' }}>{c.cost_month ? `${c.currency || 'THB'} ${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
                             
-                            <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }}>View</button></Link></td>
+                            <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>View</button></Link></td>
                           </tr>
                         ))}
                       </tbody>

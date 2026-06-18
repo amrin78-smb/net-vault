@@ -14,7 +14,7 @@ const AMBER = '#f59e0b'
 const BLUE = '#0284c7'
 const BG = '#f4f6f9'
 const MUTED = '#6b7280'
-const CARD_SHADOW = '0 4px 24px rgba(0,0,0,0.06)'
+const CARD_SHADOW = '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)'
 
 /* --------------------------- success notice ------------------------ */
 function UpdatedNotice() {
@@ -168,7 +168,7 @@ function activityColor(action: string) {
 
 /* ------------------------------ card shell ------------------------- */
 const cardStyle: React.CSSProperties = {
-  background: 'white', borderRadius: 12, boxShadow: CARD_SHADOW,
+  background: 'white', borderRadius: 8, boxShadow: CARD_SHADOW,
   border: '1px solid #eef1f5', padding: 20, boxSizing: 'border-box',
 }
 const cardStyleCompact: React.CSSProperties = { ...cardStyle, padding: 16 }
@@ -315,7 +315,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ============== SECTION 1 — HEALTH SCORE (navy) ============== */}
-      <div style={{ background: NAVY, borderRadius: 12, padding: 18, color: 'white', marginBottom: 20, boxShadow: CARD_SHADOW }}>
+      <div style={{ background: NAVY, borderRadius: 8, padding: 18, color: 'white', marginBottom: 20, boxShadow: CARD_SHADOW }}>
         <div className="nv-health" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 24 }}>
 
           {/* LEFT — gauge */}

@@ -52,7 +52,7 @@ export default function CompliancePage() {
       </div>
 
       {/* Score card */}
-      <div style={{ background: scoreBg, border: `1px solid ${scoreBorder}`, borderRadius: '12px', padding: '24px 28px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '28px' }}>
+      <div style={{ background: scoreBg, border: `1px solid ${scoreBorder}`, borderRadius: '8px', padding: '24px 28px', marginBottom: '28px', display: 'flex', alignItems: 'center', gap: '28px' }}>
         <div style={{ textAlign: 'center', flexShrink: 0 }}>
           <div style={{ fontSize: '52px', fontWeight: '800', color: scoreColor, lineHeight: 1 }}>{score}%</div>
           <div style={{ fontSize: '13px', fontWeight: '600', color: scoreColor, marginTop: '4px' }}>Compliance Score</div>
@@ -78,7 +78,7 @@ export default function CompliancePage() {
         {checks.map(check => {
           if (!check.available) {
             return (
-              <div key={check.key} style={{ background: '#f9fafb', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '18px 20px' }}>
+              <div key={check.key} style={{ background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '18px 20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                   <div style={{ fontSize: '13px', fontWeight: '600', color: '#6b7280', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>
                   <div style={{ fontSize: '12px', fontWeight: '600', color: '#9ca3af', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -97,7 +97,7 @@ export default function CompliancePage() {
           const bar = check.pct! >= 80 ? '#22c55e' : check.pct! >= 60 ? '#f59e0b' : '#ef4444'
           const borderColor = check.pct! >= 80 ? '#86efac' : check.pct! >= 60 ? '#fde68a' : '#fecaca'
           return (
-            <div key={check.key} style={{ background: 'white', borderRadius: '10px', border: `1px solid ${borderColor}`, padding: '18px 20px' }}>
+            <div key={check.key} style={{ background: 'white', borderRadius: '8px', border: `1px solid ${borderColor}`, padding: '18px 20px' }}>
               {/* Label + percentage */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
                 <div style={{ fontSize: '13px', fontWeight: '600', color: '#111827', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>

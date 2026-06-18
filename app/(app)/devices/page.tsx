@@ -270,7 +270,7 @@ export default function DevicesPage() {
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           {/* Export */}
           <button onClick={exportCSV} title={hasFilters ? 'Export filtered CSV' : 'Export CSV'}
-            style={{ padding: '7px 10px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#374151' }}
+            style={{ padding: '7px 10px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#374151' }}
             onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
             onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
@@ -279,7 +279,7 @@ export default function DevicesPage() {
           {isAdmin && <>
             {/* Import */}
             <button onClick={() => { setShowImport(!showImport); setImportResult('') }} title="Import devices"
-              style={{ padding: '7px 10px', background: showImport ? '#eff6ff' : 'white', border: showImport ? '1px solid #bfdbfe' : '1px solid #e5e7eb', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: showImport ? '#1d4ed8' : '#374151' }}
+              style={{ padding: '7px 10px', background: showImport ? '#eff6ff' : 'white', border: showImport ? '1px solid #bfdbfe' : '1px solid #e5e7eb', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: showImport ? '#1d4ed8' : '#374151' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
               onMouseLeave={e => (e.currentTarget.style.background = showImport ? '#eff6ff' : 'white')}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
@@ -287,7 +287,7 @@ export default function DevicesPage() {
             </button>
             {/* Check duplicates */}
             <button onClick={checkDuplicates} disabled={dupLoading} title="Check for duplicate devices"
-              style={{ padding: '7px 10px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#374151' }}
+              style={{ padding: '7px 10px', background: 'white', border: '1px solid #e5e7eb', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: '#374151' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#f9fafb')}
               onMouseLeave={e => (e.currentTarget.style.background = 'white')}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
@@ -295,7 +295,7 @@ export default function DevicesPage() {
             </button>
             {/* Add device */}
             <Link href="/devices/new">
-              <button style={{ padding: '7px 14px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '7px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '500' }}>
+              <button style={{ padding: '7px 14px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: '500' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                 Add device
               </button>
@@ -306,7 +306,7 @@ export default function DevicesPage() {
 
       {/* Duplicates panel */}
       {showDuplicates && (
-        <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #fbbf24', padding: '20px 24px', marginBottom: '16px' }}>
+        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #fbbf24', padding: '20px 24px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#92400e', margin: 0 }}>
               Duplicate detection {duplicates.length === 0 ? '— No duplicates found' : `— ${duplicates.length} groups found`}
@@ -357,7 +357,7 @@ export default function DevicesPage() {
 
       {/* Import panel */}
       {showImport && isAdmin && (
-        <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
+        <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '14px', fontWeight: '600', color: '#111827', marginBottom: '12px' }}>Import devices from Excel / CSV</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <p style={{ fontSize: '13px', color: '#6b7280', margin: 0 }}>File must have columns: Name, Brand, Model, S/N, Type, IP Address, Site, Country, Lifecycle Status, Device Status</p>
@@ -455,20 +455,20 @@ export default function DevicesPage() {
               { label: 'Move to Site', field: 'site_id' },
             ].map(action => (
               <button key={action.field} onClick={() => { setBulkField(action.field); setBulkValue(''); setShowBulkModal(true) }}
-                style={{ padding: '5px 12px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '5px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
+                style={{ padding: '5px 12px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.25)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}>
                 {action.label}
               </button>
             ))}
             <button onClick={() => { setBulkField('delete'); setShowBulkModal(true) }}
-              style={{ padding: '5px 12px', background: '#991b1b', color: 'white', border: '1px solid #7f1d1d', borderRadius: '5px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
+              style={{ padding: '5px 12px', background: '#991b1b', color: 'white', border: '1px solid #7f1d1d', borderRadius: '6px', fontSize: '12px', cursor: 'pointer', fontWeight: '500' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#7f1d1d')}
               onMouseLeave={e => (e.currentTarget.style.background = '#991b1b')}>
               Delete
             </button>
           </div>
-          <button onClick={() => setSelected(new Set())} style={{ marginLeft: 'auto', padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '5px', fontSize: '12px', cursor: 'pointer' }}>
+          <button onClick={() => setSelected(new Set())} style={{ marginLeft: 'auto', padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
             Deselect all
           </button>
         </div>
@@ -477,16 +477,16 @@ export default function DevicesPage() {
       {/* Bulk action modal */}
       {showBulkModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'white', borderRadius: '12px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+          <div style={{ background: 'white', borderRadius: '8px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
             {bulkField === 'delete' ? (
               <>
                 <h2 style={{ fontSize: '16px', fontWeight: '700', color: '#111827', margin: '0 0 8px' }}>Delete {selected.size} device{selected.size > 1 ? 's' : ''}?</h2>
                 <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 20px' }}>This will permanently delete {selected.size} device{selected.size > 1 ? 's' : ''}. This cannot be undone.</p>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={bulkDelete} disabled={bulkLoading} style={{ flex: 1, padding: '9px', background: '#991b1b', color: 'white', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
+                  <button onClick={bulkDelete} disabled={bulkLoading} style={{ flex: 1, padding: '9px', background: '#991b1b', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>
                     {bulkLoading ? 'Deleting...' : `Delete ${selected.size} device${selected.size > 1 ? 's' : ''}`}
                   </button>
-                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
                 </div>
               </>
             ) : (
@@ -504,10 +504,10 @@ export default function DevicesPage() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ flex: 1, padding: '9px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '7px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: !bulkValue ? 0.5 : 1 }}>
+                  <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ flex: 1, padding: '9px', background: '#C8102E', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', opacity: !bulkValue ? 0.5 : 1 }}>
                     {bulkLoading ? 'Applying...' : 'Apply'}
                   </button>
-                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '7px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>Cancel</button>
                 </div>
               </>
             )}
@@ -551,7 +551,7 @@ export default function DevicesPage() {
           onKeyDown={e => { if (e.key === 'Enter') pushFilters({ search: (e.target as HTMLInputElement).value }) }} />
         <button
           onClick={() => setShowFilterPanel(f => !f)}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || hasFilters ? '#1a2744' : 'white', color: showFilterPanel || hasFilters ? 'white' : '#374151', border: '1px solid ' + (showFilterPanel || hasFilters ? '#1a2744' : '#e5e7eb'), borderRadius: '7px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || hasFilters ? '#1a2744' : 'white', color: showFilterPanel || hasFilters ? 'white' : '#374151', border: '1px solid ' + (showFilterPanel || hasFilters ? '#1a2744' : '#e5e7eb'), borderRadius: '6px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
           Filters {hasFilters && `(${[region,site,type,status,lifecycle,model,supportExpiry].filter(Boolean).length})`}
         </button>
@@ -564,7 +564,7 @@ export default function DevicesPage() {
 
       {/* Filter panel */}
       {showFilterPanel && (
-        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '10px', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+        <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: '8px', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
           <div>
             <div style={{ fontSize: '11px', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Region</div>
             <select className="select" style={{ width: '100%' }} value={region} onChange={e => { setSite(''); pushFilters({ region: e.target.value, site: '' }) }}>
@@ -670,7 +670,7 @@ export default function DevicesPage() {
       </div>
 
       {/* Table */}
-      <div style={{ background: 'white', borderRadius: '10px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '16px' }}>
             {[...Array(8)].map((_, i) => (
@@ -730,9 +730,9 @@ export default function DevicesPage() {
                     })()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <Link href={`/devices/${d.id}`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }}>View</button></Link>
+                        <Link href={`/devices/${d.id}`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>View</button></Link>
                         {isAdmin && <>
-                          <Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '5px', background: 'white', cursor: 'pointer' }}>Edit</button></Link>
+                          <Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: '12px', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>Edit</button></Link>
                           <button className="btn-danger" style={{ padding: '4px 10px', fontSize: '12px' }} onClick={() => deleteDevice(d.id, d.name)}>Delete</button>
                         </>}
                       </div>
