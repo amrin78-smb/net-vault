@@ -124,6 +124,10 @@ const releaseNotes: Record<string, string[]> = {
   '1.2.11': [
     'Moved the header tagline beside the logo (after a divider) instead of stacked beneath it, matching the rest of the NocVault suite',
   ],
+  '1.2.12': [
+    'Opening the suite at the root URL now lands on the launcher (or the login screen if signed out) instead of dropping straight into the NetVault dashboard',
+    'NetVault is now opened from the launcher like the other suite apps',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],
