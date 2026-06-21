@@ -120,3 +120,46 @@ Use it to:
 The password is **never** stored in this repo — it lives in Claude Code's project
 memory and is provided at the start of each session. Never log it or commit it to
 any repo.
+
+## Live Server Verification (Diagnostics)
+
+The suite runs on the production server **192.168.6.111**. Verify the *running*
+deployment directly from the dev host over HTTP — no SSH needed — using `curl`
+(Bash tool) or `Invoke-WebRequest` (PowerShell). Pair this with the read-only DB
+access above: **curl answers "is it up / what version / what HTTP status", the DB
+answers "is the data correct".**
+
+**Health / deployed version** (unauthenticated — safe to hit anytime; use it to
+confirm a deploy actually landed):
+
+```bash
+curl http://192.168.6.111:3000/api/health        # -> { status, version, ... }
+```
+```powershell
+Invoke-WebRequest -Uri "http://192.168.6.111:3000/api/health" -UseBasicParsing | Select-Object -ExpandProperty Content
+```
+
+Use each app's **frontend** port (it also serves `/api/*`). The separate backend
+API ports (3005/3007/3009) are internal/proxied and not reliably reachable from
+outside, so verify via the frontend port:
+
+| App | Health URL |
+|---|---|
+| netvault  | http://192.168.6.111:3000/api/health |
+| logvault  | http://192.168.6.111:3004/api/health |
+| ddivault  | http://192.168.6.111:3006/api/health |
+| spanvault | http://192.168.6.111:3008/api/health |
+
+**This app: netvault → port 3000.**
+
+**Verifying behaviour & data:**
+- Most endpoints require an authenticated session + RBAC. An unauthenticated
+  `curl` of them returns empty / 401 / a login redirect — that does **not** prove
+  the endpoint is broken. To check the DATA an endpoint should return, query the
+  read-only DB (above) or use the logged-in browser UI.
+- Use `curl` for: `/api/health` (version), any explicitly public endpoint, and
+  HTTP-status/redirect sanity — e.g. `curl -s -o /dev/null -D - http://192.168.6.111:3000/`
+  to see the status code and `Location` (the root should 307 → `/launcher`).
+- Deploys are **manual** — Amrin runs the app's updater script; Claude never
+  deploys. Always verify **after** the deploy: confirm `/api/health` shows the new
+  version, then confirm data via the read-only DB, then eyeball the UI.
