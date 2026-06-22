@@ -99,7 +99,7 @@ export async function GET() {
     if (alerts.length < 6) {
       const sec = await queryDb<{ name: string; src: string; n: string }>(
         'logvault',
-        `SELECT COALESCE(r.name, 'Security alert') AS name, e.source_ip::text AS src, e.match_count AS n
+        `SELECT COALESCE(r.name, 'Security alert') AS name, host(e.source_ip) AS src, e.match_count AS n
            FROM alert_events e LEFT JOIN alert_rules r ON r.id = e.rule_id
           WHERE e.acknowledged = false
           ORDER BY e.fired_at DESC
