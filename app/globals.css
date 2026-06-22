@@ -9,6 +9,7 @@
 }
 
 :root {
+  color-scheme: light;
   --primary:        #C8102E;
   --primary-dark:   #a00d24;
   --primary-light:  #fef2f4;
@@ -47,7 +48,47 @@
   --text-xl:   20px;  /* page titles */
   --text-2xl:  28px;  /* stat numbers / display */
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Courier New', monospace;
+
+  /* Adaptive surface + status tint tokens (NocVault suite-wide standard —
+     tinted/neutral surfaces behind text MUST use these so they adapt to dark mode) */
+  --surface-subtle: #f8fafc;
+  --tint-info:    #eff6ff;  --tint-info-fg:    #1d4ed8;
+  --tint-success: #f0fdf4;  --tint-success-fg: #15803d;
+  --tint-warn:    #fffbeb;  --tint-warn-fg:    #b45309;
+  --tint-danger:  #fef2f2;  --tint-danger-fg:  #b91c1c;
+  --tint-purple:  #f5f3ff;  --tint-purple-fg:  #6d28d9;
 }
+
+/* ── Dark theme (NocVault suite-standard dark palette) ──────────
+   Brand colors (--primary, --navy*) and status colors
+   (--green/--yellow/--red/...) intentionally stay the same in both
+   themes — only the neutral surfaces/text/borders/shadows flip. */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --primary-light:  rgba(200,16,46,0.18);
+  --bg-primary:     #0d1220;
+  --bg-card:        #1a2235;
+  --border:         #2d3a52;
+  --border-light:   #243050;
+  --text-primary:   #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted:     #94a3b8;
+  --shadow-sm:      0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md:      0 4px 16px rgba(0,0,0,0.4);
+  --shadow-lg:      0 10px 40px rgba(0,0,0,0.5);
+
+  /* Adaptive surface + status tints (dark) */
+  --surface-subtle: rgba(255,255,255,0.04);
+  --tint-info:    rgba(59,130,246,0.13);  --tint-info-fg:    #93c5fd;
+  --tint-success: rgba(34,197,94,0.13);   --tint-success-fg: #86efac;
+  --tint-warn:    rgba(217,119,6,0.15);   --tint-warn-fg:    #fcd34d;
+  --tint-danger:  rgba(220,38,38,0.13);   --tint-danger-fg:  #fca5a5;
+  --tint-purple:  rgba(139,92,246,0.15);  --tint-purple-fg:  #c4b5fd;
+}
+
+/* Native form controls (option lists, scrollbars, date pickers) follow color-scheme */
+[data-theme="dark"] th { background: rgba(255,255,255,0.03); }
+[data-theme="dark"] tbody tr:hover td { background: rgba(255,255,255,0.03); }
 
 html, body {
   height: 100%;

@@ -128,6 +128,12 @@ const releaseNotes: Record<string, string[]> = {
     'Opening the suite at the root URL now lands on the launcher (or the login screen if signed out) instead of dropping straight into the NetVault dashboard',
     'NetVault is now opened from the launcher like the other suite apps',
   ],
+  '1.3.0': [
+    'Added suite-standard dark mode with a sun/moon theme switcher in the top bar (launcher + app), bringing NetVault to parity with the rest of the NocVault suite',
+    'Your theme choice is remembered and applied before the page paints, so there is no flash of the wrong theme on load',
+    'Tokenized the launcher surfaces (background, Suite Health Overview, Server Status, headings/body text) so they adapt cleanly to dark mode',
+    'Kept the navy top bar, per-app brand accent colors, and status colors unchanged in both themes',
+  ],
   'default': [
     'Bug fixes and performance improvements',
   ],

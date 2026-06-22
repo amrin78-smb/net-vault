@@ -2,6 +2,7 @@
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import ThemeToggle from '@/components/ThemeToggle'
 
 type LicenseInfo = { status: string; daysRemaining: number; expiry: string | null }
 type HealthStatus = 'Healthy' | 'Warning' | 'Unavailable'
@@ -23,7 +24,6 @@ type ServerStats = {
 
 const NAVY = '#1a2744'
 const RED = '#C8102E'
-const BG = '#f4f6f9'
 const CARD_SHADOW = '0 4px 24px rgba(0,0,0,0.15)'
 
 // ── lightweight inline metric icons ─────────────────────────────────
@@ -128,17 +128,17 @@ function fmtUptime(s: number): string {
 
 function ProgressBar({ pct, color }: { pct: number; color: string }) {
   return (
-    <div style={{ height: '8px', background: '#e5e7eb', borderRadius: '4px', overflow: 'hidden' }}>
+    <div style={{ height: '8px', background: 'var(--surface-subtle)', borderRadius: '4px', overflow: 'hidden' }}>
       <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: color, borderRadius: '4px', transition: 'width 0.5s' }} />
     </div>
   )
 }
 
 function ValueSkeleton({ w = '120px', h = '16px' }: { w?: string; h?: string }) {
-  return <span style={{ display: 'inline-block', width: w, height: h, borderRadius: '4px', background: '#e5e7eb', animation: 'nvShimmer 1.4s ease-in-out infinite' }} />
+  return <span style={{ display: 'inline-block', width: w, height: h, borderRadius: '4px', background: 'var(--surface-subtle)', animation: 'nvShimmer 1.4s ease-in-out infinite' }} />
 }
 
-const SS_LABEL: React.CSSProperties = { fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', color: '#9ca3af', textTransform: 'uppercase', marginBottom: '8px' }
+const SS_LABEL: React.CSSProperties = { fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }
 
 export default function LauncherPage() {
   const { data: session, status } = useSession()
@@ -295,7 +295,7 @@ export default function LauncherPage() {
   const license = licenseInfo
 
   return (
-    <div style={{ minHeight: '100vh', background: BG, display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @keyframes nvShimmer { 0%,100% { opacity: 0.35 } 50% { opacity: 0.8 } }
         @media (max-width: 1100px) { .nv-top-grid { grid-template-columns: 1fr !important } .nv-app-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-server-grid { grid-template-columns: repeat(2, 1fr) !important } }
@@ -309,6 +309,7 @@ export default function LauncherPage() {
           <div style={{ color: 'rgba(255,255,255,0.55)', fontSize: '10px', letterSpacing: '1.5px', fontWeight: 600 }}>NETWORK INTELLIGENCE SUITE</div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <ThemeToggle />
           <div style={{ textAlign: 'right' }}>
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500' }}>{user?.name}</div>
             <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{user?.role?.replace('_', ' ')}</div>
@@ -370,20 +371,20 @@ export default function LauncherPage() {
 
         {/* Welcome */}
         <div style={{ flex: '0 0 35%', display: 'flex', flexDirection: 'column' }}>
-          <div style={{ fontSize: '15px', color: '#6b7280', lineHeight: 1.2, marginBottom: '1px' }}>{greeting},</div>
-          <h1 style={{ fontSize: '34px', fontWeight: 800, color: NAVY, lineHeight: 1.1, margin: '0 0 4px' }}>{firstName}</h1>
-          <div style={{ fontSize: '15px', color: '#374151', fontWeight: 600, lineHeight: 1.25, marginBottom: '2px' }}>Welcome to the Network Intelligence Suite.</div>
-          <div style={{ fontSize: '13px', color: '#6b7280', lineHeight: 1.25, marginBottom: '8px' }}>Centralized visibility. Smarter operations. Better decisions.</div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#374151', fontWeight: 500 }}>
+          <div style={{ fontSize: '15px', color: 'var(--text-muted)', lineHeight: 1.2, marginBottom: '1px' }}>{greeting},</div>
+          <h1 style={{ fontSize: '34px', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1, margin: '0 0 4px' }}>{firstName}</h1>
+          <div style={{ fontSize: '15px', color: 'var(--text-secondary)', fontWeight: 600, lineHeight: 1.25, marginBottom: '2px' }}>Welcome to the Network Intelligence Suite.</div>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.25, marginBottom: '8px' }}>Centralized visibility. Smarter operations. Better decisions.</div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={primary} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
             {clock || '—'}
           </div>
         </div>
 
         {/* Suite health overview */}
-        <div style={{ flex: 1, minWidth: 0, background: 'white', borderRadius: '12px', boxShadow: CARD_SHADOW, padding: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minWidth: 0, background: 'var(--bg-card)', borderRadius: '12px', boxShadow: CARD_SHADOW, padding: 0, overflow: 'hidden' }}>
           {/* Title row */}
-          <div style={{ padding: '14px 20px', borderBottom: '1px solid #f0f4f8', fontSize: '15px', fontWeight: 600, color: NAVY }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-light)', fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
             Suite Health Overview
           </div>
 
@@ -396,24 +397,24 @@ export default function LauncherPage() {
                 <polyline points="9 12 11 14 15 10" />
               </svg>
               <div>
-                <div style={{ fontSize: '11px', color: '#6b7280' }}>Overall Status</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Overall Status</div>
                 <div style={{ fontSize: '20px', fontWeight: 800, color: overallColor, lineHeight: 1.15 }}>{overall}</div>
-                <div style={{ fontSize: '11px', color: '#9ca3af' }}>{overallSub}</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{overallSub}</div>
               </div>
             </div>
 
             {/* Divider */}
-            <div style={{ width: '1px', height: '60px', background: '#e5e7eb', flexShrink: 0 }} />
+            <div style={{ width: '1px', height: '60px', background: 'var(--border)', flexShrink: 0 }} />
 
             {/* Right: app pills */}
             <div style={{ display: 'flex', alignItems: 'stretch', flex: 1 }}>
               {['NetVault', 'LogVault', 'DDIVault', 'SpanVault'].map((app, i) => {
                 const st = healthFor(app)
                 return (
-                  <div key={app} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '6px', padding: '0 24px', borderLeft: i === 0 ? 'none' : '1px solid #f0f4f8' }}>
+                  <div key={app} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '6px', padding: '0 24px', borderLeft: i === 0 ? 'none' : '1px solid var(--border-light)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <AppIcon name={app} />
-                      <span style={{ fontWeight: 700, fontSize: '14px', color: NAVY }}>{app}</span>
+                      <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{app}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                       <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
@@ -487,27 +488,27 @@ export default function LauncherPage() {
           let fcColor = '#16a34a'
           if (fc != null) {
             fcText = `~${fc.toLocaleString()} day${fc !== 1 ? 's' : ''} until full`
-            fcColor = fc < 30 ? '#dc2626' : fc < 90 ? '#d97706' : '#6b7280'
+            fcColor = fc < 30 ? '#dc2626' : fc < 90 ? '#d97706' : 'var(--text-muted)'
           }
           return (
-            <div style={{ background: 'white', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 24px', marginBottom: '8px' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 24px', marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: 'var(--text-primary)' }}>
                   <rect x="2" y="3" width="20" height="7" rx="2" /><rect x="2" y="14" width="20" height="7" rx="2" /><line x1="6" y1="6.5" x2="6.01" y2="6.5" /><line x1="6" y1="17.5" x2="6.01" y2="17.5" />
                 </svg>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: NAVY }}>Server Status</div>
+                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Server Status</div>
               </div>
-              <div style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 18px' }}>{(s?.host || (typeof window !== 'undefined' ? window.location.hostname : 'localhost'))} — shared infrastructure for all suite apps</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 18px' }}>{(s?.host || (typeof window !== 'undefined' ? window.location.hostname : 'localhost'))} — shared infrastructure for all suite apps</div>
 
               {serverError && !s ? (
-                <div style={{ padding: '20px 0', textAlign: 'center', color: '#9ca3af', fontSize: '13px' }}>Server metrics unavailable</div>
+                <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Server metrics unavailable</div>
               ) : (
                 <div className="nv-server-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '28px' }}>
                   {/* DISK */}
                   <div>
                     <div style={SS_LABEL}>Disk</div>
                     {loading ? <ValueSkeleton w="100%" h="8px" /> : <ProgressBar pct={diskPct} color={diskColor} />}
-                    <div style={{ fontSize: '12px', color: '#374151', marginTop: '6px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
                       {loading || !s ? <ValueSkeleton w="150px" /> : `${gb(s.disk.used)} GB used of ${gb(s.disk.total)} GB (${diskPct}%)`}
                     </div>
                     <div style={{ fontSize: '12px', fontWeight: 600, color: fcColor, marginTop: '3px' }}>
@@ -518,7 +519,7 @@ export default function LauncherPage() {
                   <div>
                     <div style={SS_LABEL}>Memory</div>
                     {loading ? <ValueSkeleton w="100%" h="8px" /> : <ProgressBar pct={memPct} color={memColor} />}
-                    <div style={{ fontSize: '12px', color: '#374151', marginTop: '6px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '6px' }}>
                       {loading || !s ? <ValueSkeleton w="150px" /> : `${gb(s.memory.used)} GB used of ${gb(s.memory.total)} GB (${memPct}%)`}
                     </div>
                   </div>
@@ -528,15 +529,15 @@ export default function LauncherPage() {
                     <div style={{ fontSize: '30px', fontWeight: 800, color: cpuColor, lineHeight: 1.1 }}>
                       {loading || !s ? <ValueSkeleton w="70px" h="28px" /> : `${cpuPct}%`}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>CPU Usage</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>CPU Usage</div>
                   </div>
                   {/* UPTIME */}
                   <div>
                     <div style={SS_LABEL}>Uptime</div>
-                    <div style={{ fontSize: '22px', fontWeight: 800, color: NAVY, lineHeight: 1.15 }}>
+                    <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.15 }}>
                       {loading || !s ? <ValueSkeleton w="120px" h="20px" /> : fmtUptime(s.uptime_seconds)}
                     </div>
-                    <div style={{ fontSize: '12px', color: '#6b7280', marginTop: '2px' }}>Server Uptime</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>Server Uptime</div>
                   </div>
                 </div>
               )}
@@ -545,7 +546,7 @@ export default function LauncherPage() {
         })()}
 
         {/* Footer */}
-        <div style={{ textAlign: 'center', marginTop: '32px', fontSize: '12px', color: '#9ca3af' }}>
+        <div style={{ textAlign: 'center', marginTop: '32px', fontSize: '12px', color: 'var(--text-muted)' }}>
           NocVault Intelligence Suite&nbsp;&nbsp;•&nbsp;&nbsp;All rights reserved © 2026
         </div>
       </div>

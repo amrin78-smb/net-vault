@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import IdleTimeout from '@/components/IdleTimeout'
 import UpdateNotifier from '@/app/components/UpdateNotifier'
+import ThemeToggle from '@/components/ThemeToggle'
 
 type Settings = {
   app_name: string; app_subtitle: string; app_logo_url: string
@@ -461,8 +462,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div style={{ flex: 1 }} />
 
-          {/* Help ghost icon button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginRight: 6 }}>
+          {/* Theme toggle + Help ghost icon button */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 6 }}>
+            <ThemeToggle />
             <a
               href="/compliance"
               title="Help"
