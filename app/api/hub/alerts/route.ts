@@ -27,13 +27,13 @@ export async function GET() {
     const [eol, spanOpen, logSec] = await Promise.all([
       queryDb<{ name: string; ip: string }>(
         'netvault',
-        `SELECT name, host(ip_address) AS ip FROM devices
+        `SELECT name, ip_address AS ip FROM devices
           WHERE ip_address IS NOT NULL
             AND (lifecycle_status ILIKE '%EOL%' OR lifecycle_status ILIKE '%EOS%')`,
       ),
       queryDb<{ ip: string; n: string }>(
         'spanvault',
-        `SELECT host(d.ip_address) AS ip, count(*) AS n
+        `SELECT d.ip_address AS ip, count(*) AS n
            FROM alerts a JOIN monitored_devices d ON d.id = a.device_id
           WHERE a.status NOT IN ('resolved', 'suppressed') AND d.ip_address IS NOT NULL
           GROUP BY 1`,

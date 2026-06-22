@@ -85,6 +85,13 @@ try {
         Write-Warn ".env not found - will need to recreate after pull"
     }
 
+    # Also back up the standalone .env.local. `npm run build` regenerates
+    # .next\standalone from scratch and wipes it, so without this any keys placed
+    # there (including manual edits) are lost on every update. We restore it
+    # verbatim after the build, then refresh the managed keys on top.
+    $standaloneEnvBackup = Get-Content "$AppDir\.next\standalone\.env.local" -Raw -ErrorAction SilentlyContinue
+    if ($standaloneEnvBackup) { Write-OK "standalone .env.local backed up" }
+
     Write-Step "Pulling latest code from GitHub"
     Set-Location $AppDir
 
@@ -185,6 +192,13 @@ try {
     Write-Step "Writing env vars to standalone runtime"
     $standaloneEnvPath = "$standaloneDir\.env.local"
     $rootEnvPath = "$AppDir\.env"
+    # Restore the pre-build standalone .env.local first, so any keys we don't
+    # explicitly propagate (manual edits) survive the rebuild. The whitelist
+    # below then refreshes the managed keys on top.
+    if ($standaloneEnvBackup) {
+        $standaloneEnvBackup | Out-File -FilePath $standaloneEnvPath -Encoding UTF8 -NoNewline
+        Write-OK "standalone .env.local restored (manual keys preserved)"
+    }
     if (Test-Path $rootEnvPath) {
         foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP', 'CRON_SECRET', 'NOCVAULT_RO_HOST', 'NOCVAULT_RO_PORT', 'NOCVAULT_RO_USER', 'NOCVAULT_RO_PASS')) {
             $line = Get-Content $rootEnvPath | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
