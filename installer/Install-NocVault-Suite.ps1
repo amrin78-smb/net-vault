@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    NocVault Suite Installer v1.0
+    NocVault Suite Installer v1.1
 .DESCRIPTION
     Installs NetVault, LogVault, DDIVault and SpanVault on a Windows Server.
     NetVault is mandatory. LogVault, DDIVault and SpanVault are optional.
@@ -27,8 +27,20 @@ param(
     [bool]$InstallLogVault   = $true,
     [bool]$InstallDDIVault   = $true,
     [bool]$InstallSpanVault  = $true,
-    [string]$PgAdminPassword = ""
+    [string]$PgAdminPassword = "",
+    [string]$NocReadOnlyPass = "",
+    [switch]$Unattended
 )
+
+# Default PostgreSQL superuser password used for fully unattended (one-click)
+# installs when -PgAdminPassword is not supplied. Printed at the end so the
+# admin can change it. Interactive runs still prompt instead.
+$DefaultPgPassword = "NocV@ult_Pg#2026"
+
+# Default password for the cross-DB read-only role (nocvault_readonly) the NocVault
+# Hub uses to read across all suite DBs. Used only in -Unattended mode (printed at
+# the end so it can be changed); interactive installs prompt for it instead.
+$DefaultNocRoPassword = "NocV@ult_RO#2026"
 
 # ── Helpers ───────────────────────────────────────────────────────
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
@@ -36,11 +48,21 @@ function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
 function Write-Info($msg) { Write-Host "    [--] $msg" -ForegroundColor Gray }
 
+# Grant the cross-DB read-only role (nocvault_readonly) SELECT on a database. Call
+# AFTER that DB's schema is applied so existing AND future tables are covered. Feeds
+# the NocVault Hub's cross-app reads (unified search / asset 360 / suite alerting).
+function GrantNocRoRead($db) {
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c "GRANT CONNECT ON DATABASE $db TO nocvault_readonly;" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c "GRANT USAGE ON SCHEMA public TO nocvault_readonly;" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO nocvault_readonly;" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO nocvault_readonly;" 2>$null
+}
+
 # ── Banner ────────────────────────────────────────────────────────
 Clear-Host
 Write-Host ""
 Write-Host "  +============================================+" -ForegroundColor White
-Write-Host "  |   NocVault Suite Installer v1.0           |" -ForegroundColor White
+Write-Host "  |   NocVault Suite Installer v1.1           |" -ForegroundColor White
 Write-Host "  |   Network Intelligence Suite              |" -ForegroundColor White
 Write-Host "  +============================================+" -ForegroundColor White
 Write-Host ""
@@ -77,12 +99,21 @@ $LVDbPass     = "NVAdmin@2026"
 $DDIDbPass    = "NVAdmin@2026"
 $SVDbPass     = "NVAdmin@2026"
 $SharedSecret = "bue3VdWszntJ24GMhfKg1QkPIEaZYC95"
+# CRON_SECRET authorises NetVault's daily health-snapshot job (Bearer token).
+# Generated once here so .env, standalone .env.local, the NSSM service env and
+# the scheduled task all share the same value.
+$CronSecret   = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
 
 # ── Auto-detect server IP ─────────────────────────────────────────
 if (-not $ServerIP) {
     $ServerIP = (Get-NetIPAddress -AddressFamily IPv4 |
         Where-Object { $_.IPAddress -notmatch '^(127\.|169\.)' -and $_.PrefixOrigin -ne 'WellKnown' } |
         Select-Object -First 1).IPAddress
+}
+# Never leave ServerIP empty - it would produce broken URLs like http://:3000
+if (-not $ServerIP) {
+    $ServerIP = "127.0.0.1"
+    Write-Warn "Could not auto-detect a server IP - falling back to 127.0.0.1. Pass -ServerIP to override."
 }
 
 # ── Detect PostgreSQL service name ────────────────────────────────
@@ -120,14 +151,33 @@ Write-Host ""
 
 # ── PostgreSQL admin password ─────────────────────────────────────
 if (-not $PgAdminPassword) {
-    $secPwd = Read-Host "Set PostgreSQL admin (postgres) password" -AsSecureString
-    $PgAdminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secPwd))
+    if ($Unattended) {
+        $PgAdminPassword = $DefaultPgPassword
+        Write-Info "Unattended mode: using default PostgreSQL password (shown at end)."
+    } else {
+        $secPwd = Read-Host "Set PostgreSQL admin (postgres) password" -AsSecureString
+        $PgAdminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secPwd))
+    }
 }
 
-Write-Host ""
-Write-Host "  Ready to install. Press Enter to continue or Ctrl+C to cancel." -ForegroundColor Yellow
-Read-Host
+# ── NocVault Hub read-only role password (cross-app reads across all suite DBs) ──
+if (-not $NocReadOnlyPass) {
+    if ($Unattended) {
+        $NocReadOnlyPass = $DefaultNocRoPassword
+        Write-Info "Unattended mode: using default NocVault read-only password (shown at end)."
+    } else {
+        $secRo = Read-Host "Set NocVault read-only (nocvault_readonly) DB password" -AsSecureString
+        $NocReadOnlyPass = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secRo))
+    }
+}
+
+if (-not $Unattended) {
+    Write-Host ""
+    Write-Host "  Ready to install. Press Enter to continue or Ctrl+C to cancel." -ForegroundColor Yellow
+    Read-Host
+}
 
 # ================================================================
 # STEP 1 — Directories
@@ -228,6 +278,13 @@ $env:PGPASSWORD = $PgAdminPassword
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE netvault TO netvault;" 2>$null
 Write-OK "NetVault database ready"
 
+# Cross-DB read-only role for the NocVault Hub (reads across all suite DBs).
+# Created once here; per-DB SELECT grants are applied after each schema below.
+# ALTER ... PASSWORD keeps it idempotent if the role already exists from a prior run.
+& "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER nocvault_readonly WITH PASSWORD '$NocReadOnlyPass';" 2>$null
+& "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "ALTER USER nocvault_readonly WITH PASSWORD '$NocReadOnlyPass';" 2>$null
+Write-OK "NocVault read-only role ready"
+
 if ($InstallLogVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER logvault_user WITH PASSWORD '$LVDbPass';" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE logvault OWNER logvault_user;" 2>$null
@@ -261,6 +318,9 @@ if (Test-Path $NVAppDir) { Remove-Item $NVAppDir -Recurse -Force }
 Write-Info "Cloning NetVault from GitHub..."
 & git clone $NVGitUrl $NVAppDir
 if ($LASTEXITCODE -ne 0) { throw "Failed to clone NetVault" }
+# Mark repo safe for the SYSTEM account (services/update jobs run git as SYSTEM).
+# --system is machine-wide so it covers SYSTEM even though the installer runs as admin.
+& git config --system --add safe.directory ($NVAppDir -replace '\\','/') 2>$null
 Write-OK "NetVault cloned"
 
 # Run schema
@@ -269,6 +329,7 @@ $env:PGPASSWORD = $PgAdminPassword
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO netvault;"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO netvault;"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -f "$NVAppDir\setup.sql"
+GrantNocRoRead "netvault"
 Write-OK "NetVault schema applied"
 
 # Create .env
@@ -278,6 +339,12 @@ NEXTAUTH_SECRET=$SharedSecret
 NEXTAUTH_URL=http://${ServerIP}:3000
 NODE_ENV=production
 SSL_DISABLED=true
+SERVER_IP=$ServerIP
+CRON_SECRET=$CronSecret
+NOCVAULT_RO_HOST=localhost
+NOCVAULT_RO_PORT=5432
+NOCVAULT_RO_USER=nocvault_readonly
+NOCVAULT_RO_PASS=$NocReadOnlyPass
 "@ | Out-File -FilePath "$NVAppDir\.env" -Encoding UTF8 -NoNewline
 
 # Build
@@ -297,12 +364,30 @@ New-Item -ItemType Directory -Force -Path "$NVStandalone\.next" | Out-Null
 Copy-Item -Path "$NVAppDir\.next\static" -Destination "$NVStandalone\.next\static" -Recurse -Force
 Write-OK "NetVault static files copied"
 
+# The Next.js standalone server loads .env.local from its working directory at
+# runtime. OS/NSSM env wins for keys it sets, but CRON_SECRET and SERVER_IP are
+# only guaranteed here - the health-snapshot route reads process.env.CRON_SECRET.
+@"
+DATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault
+NEXTAUTH_SECRET=$SharedSecret
+NEXTAUTH_URL=http://${ServerIP}:3000
+NODE_ENV=production
+SSL_DISABLED=true
+SERVER_IP=$ServerIP
+CRON_SECRET=$CronSecret
+NOCVAULT_RO_HOST=localhost
+NOCVAULT_RO_PORT=5432
+NOCVAULT_RO_USER=nocvault_readonly
+NOCVAULT_RO_PASS=$NocReadOnlyPass
+"@ | Out-File -FilePath "$NVStandalone\.env.local" -Encoding UTF8 -NoNewline
+Write-OK "NetVault standalone .env.local written (incl. SERVER_IP, CRON_SECRET)"
+
 # Register NSSM service
 & $NssmExe stop NetVault confirm 2>$null
 & $NssmExe remove NetVault confirm 2>$null
 & $NssmExe install NetVault "C:\Program Files\nodejs\node.exe" "$NVStandalone\server.js"
 & $NssmExe set NetVault AppDirectory        $NVStandalone
-& $NssmExe set NetVault AppEnvironmentExtra "PORT=3000`nHOSTNAME=0.0.0.0`nNODE_ENV=production`nDATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault`nNEXTAUTH_SECRET=$SharedSecret`nNEXTAUTH_URL=http://${ServerIP}:3000`nSSL_DISABLED=true"
+& $NssmExe set NetVault AppEnvironmentExtra "PORT=3000`nHOSTNAME=0.0.0.0`nNODE_ENV=production`nDATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault`nNEXTAUTH_SECRET=$SharedSecret`nNEXTAUTH_URL=http://${ServerIP}:3000`nSSL_DISABLED=true`nSERVER_IP=$ServerIP`nCRON_SECRET=$CronSecret`nNOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$NocReadOnlyPass"
 & $NssmExe set NetVault DisplayName         "NetVault - Network Asset Management"
 & $NssmExe set NetVault Description         "NocVault Suite - Network Asset Management"
 & $NssmExe set NetVault Start               SERVICE_AUTO_START
@@ -318,6 +403,13 @@ Write-OK "NetVault service registered"
 New-NetFirewallRule -DisplayName "NocVault NetVault 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -ErrorAction SilentlyContinue | Out-Null
 Write-OK "Firewall rule added: port 3000"
 
+# Daily fleet health-snapshot job (feeds health_score_history trend).
+# Posts to NetVault with the shared CRON_SECRET as a Bearer token.
+$nvSnapAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
+$nvSnapTrigger = New-ScheduledTaskTrigger -Daily -At "00:00"
+Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $nvSnapAction -Trigger $nvSnapTrigger -RunLevel Highest -Force | Out-Null
+Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
+
 # ================================================================
 # STEP 9 — LogVault
 # ================================================================
@@ -329,6 +421,7 @@ if ($InstallLogVault) {
     & git clone $LVGitUrl $LVAppDir
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone LogVault" }
     New-Item -ItemType Directory -Force -Path "$LVAppDir\logs" | Out-Null
+    & git config --system --add safe.directory ($LVAppDir -replace '\\','/') 2>$null
     Write-OK "LogVault cloned"
 
     # Run schema
@@ -337,6 +430,7 @@ if ($InstallLogVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO logvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO logvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL ON SCHEMA public TO logvault_user;"
+    GrantNocRoRead "logvault"
     Write-OK "LogVault schema applied"
 
     # Create .env.local in root AND frontend
@@ -437,6 +531,7 @@ if ($InstallDDIVault) {
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone DDIVault" }
     New-Item -ItemType Directory -Force -Path "$DDIAppDir\logs" | Out-Null
     New-Item -ItemType Directory -Force -Path "$DDIAppDir\frontend\public" | Out-Null
+    & git config --system --add safe.directory ($DDIAppDir -replace '\\','/') 2>$null
     Write-OK "DDIVault cloned"
 
     # uuid-ossp extension
@@ -455,6 +550,7 @@ if ($InstallDDIVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT CONNECT ON DATABASE netvault TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT USAGE ON SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON sites, countries TO ddivault_user;"
+    GrantNocRoRead "ddivault"
     Write-OK "DDIVault schemas applied and cross-DB grants set"
 
     # Create .env.local in root AND frontend
@@ -544,6 +640,7 @@ if ($InstallSpanVault) {
     & git clone $SVGitUrl $SVAppDir
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone SpanVault" }
     New-Item -ItemType Directory -Force -Path "$SVAppDir\logs" | Out-Null
+    & git config --system --add safe.directory ($SVAppDir -replace '\\','/') 2>$null
     Write-OK "SpanVault cloned"
 
     # Run schema
@@ -552,6 +649,7 @@ if ($InstallSpanVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO spanvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO spanvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL ON SCHEMA public TO spanvault_user;"
+    GrantNocRoRead "spanvault"
     Write-OK "SpanVault schema applied"
 
     # Create .env.local in root AND frontend
@@ -636,6 +734,14 @@ Write-Step "Starting services"
 Start-Sleep -Seconds 5
 Write-OK "NetVault started"
 
+# Baseline health snapshot so the trend chart has a starting data point.
+try {
+    & curl.exe -s -X POST "http://localhost:3000/api/system/health-snapshot" -H "Authorization: Bearer $CronSecret" | Out-Null
+    Write-OK "Baseline health snapshot recorded"
+} catch {
+    Write-Warn "Baseline snapshot call failed (scheduler will take it at 00:00)"
+}
+
 if ($InstallLogVault) {
     & sc.exe start LogVault-Collector | Out-Null
     Start-Sleep -Seconds 3
@@ -688,6 +794,15 @@ foreach ($svc in $services) {
     }
 }
 
+# Confirm the health-snapshot scheduled task registered
+$snapTask = Get-ScheduledTask -TaskName "NetVault-HealthSnapshot" -ErrorAction SilentlyContinue
+if ($snapTask) {
+    Write-OK "Scheduled task NetVault-HealthSnapshot - Registered"
+} else {
+    Write-Warn "Scheduled task NetVault-HealthSnapshot - NOT registered"
+    $allOK = $false
+}
+
 $ports = @(3000)
 if ($InstallLogVault)  { $ports += 3004 }
 if ($InstallDDIVault)  { $ports += 3006 }
@@ -724,6 +839,16 @@ if ($InstallSpanVault) { Write-Host "  SpanVault    : http://${ServerIP}:3008" -
 Write-Host ""
 Write-Host "  Default login : admin@yourcompany.com / Admin1234!" -ForegroundColor Yellow
 Write-Host "  IMPORTANT: Change the default password immediately!" -ForegroundColor Yellow
+if ($Unattended -and $PgAdminPassword -eq $DefaultPgPassword) {
+    Write-Host ""
+    Write-Host "  PostgreSQL 'postgres' password (auto-set): $DefaultPgPassword" -ForegroundColor Yellow
+    Write-Host "  IMPORTANT: Record and change this database superuser password." -ForegroundColor Yellow
+}
+if ($Unattended -and $NocReadOnlyPass -eq $DefaultNocRoPassword) {
+    Write-Host ""
+    Write-Host "  nocvault_readonly DB password (auto-set): $DefaultNocRoPassword" -ForegroundColor Yellow
+    Write-Host "  IMPORTANT: Record and change this read-only role password." -ForegroundColor Yellow
+}
 Write-Host ""
 Write-Host "  Post-install checklist:" -ForegroundColor White
 Write-Host "  [1] Change default admin password in Settings" -ForegroundColor Gray
