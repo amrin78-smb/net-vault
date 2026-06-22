@@ -730,7 +730,10 @@ if ($InstallSpanVault) {
     Write-OK "SpanVault services registered"
 
     New-NetFirewallRule -DisplayName "NocVault SpanVault 3008" -Direction Inbound -Protocol TCP -LocalPort 3008 -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    Write-OK "Firewall rule added: port 3008"
+    # Port 3010 = remote distributed-polling agent WebSocket server (SV_WS_PORT, default 3010).
+    # Needed only for off-box polling agents; core monitoring/UI works without it.
+    New-NetFirewallRule -DisplayName "NocVault SpanVault 3010" -Direction Inbound -Protocol TCP -LocalPort 3010 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Write-OK "Firewall rules added: ports 3008, 3010"
 }
 
 # ================================================================
