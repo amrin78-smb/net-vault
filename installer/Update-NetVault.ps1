@@ -142,6 +142,13 @@ try {
             Set-EnvVar -Path "$AppDir\.env" -Key 'CRON_SECRET' -Value $CronSecret
             Write-OK "CRON_SECRET generated and added to .env"
         }
+        # NocVault Hub cross-DB read role (added for existing installs that predate the Hub).
+        # nocvault_readonly is SELECT-only across all suite DBs; the Hub reads via it.
+        Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_HOST' -Value 'localhost'
+        Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_PORT' -Value '5432'
+        Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_USER' -Value 'nocvault_readonly'
+        Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_PASS' -Value 'NVReadOnly@2026!'
+        Write-OK "NOCVAULT_RO_* ensured in .env"
     } else {
         Write-Warn ".env was not backed up - check credentials before starting service"
     }
@@ -179,7 +186,7 @@ try {
     $standaloneEnvPath = "$standaloneDir\.env.local"
     $rootEnvPath = "$AppDir\.env"
     if (Test-Path $rootEnvPath) {
-        foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP', 'CRON_SECRET')) {
+        foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP', 'CRON_SECRET', 'NOCVAULT_RO_HOST', 'NOCVAULT_RO_PORT', 'NOCVAULT_RO_USER', 'NOCVAULT_RO_PASS')) {
             $line = Get-Content $rootEnvPath | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
             if ($line) {
                 $val = $line.Substring($key.Length + 1)
@@ -189,6 +196,22 @@ try {
         }
     } else {
         Write-Warn "Root .env not found - standalone .env.local not updated"
+    }
+
+    # Ensure the NocVault Hub read-role env is also in the NSSM service config
+    # (idempotent — existing services predate it). Same vars as .env / standalone.
+    Write-Step "Ensuring NocVault Hub env in service config"
+    if (Test-Path $NssmExe) {
+        $curEnv = & $NssmExe get NetVault AppEnvironmentExtra 2>$null
+        $curStr = ($curEnv | Out-String).Trim()
+        if ($curStr -notmatch 'NOCVAULT_RO_USER=') {
+            $roLines = "NOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=NVReadOnly@2026!"
+            $newEnv = if ($curStr) { "$curStr`n$roLines" } else { $roLines }
+            & $NssmExe set NetVault AppEnvironmentExtra $newEnv | Out-Null
+            Write-OK "NOCVAULT_RO_* added to NetVault service env"
+        } else {
+            Write-OK "NOCVAULT_RO_* already present in service env"
+        }
     }
 
     Write-Step "Starting NetVault service"

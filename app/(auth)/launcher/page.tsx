@@ -30,6 +30,25 @@ type HubKpis = {
   openAlerts: { total: number | null }
 }
 type HubAlert = { severity: 'critical' | 'warning' | 'info'; title: string; detail: string; sources: string[] }
+// Unified suite search + Asset 360 (from /api/hub/search and /api/hub/asset360)
+type SearchResult = { ip: string | null; label: string; netvaultId: string | null; sources: string[] }
+type Asset360 = {
+  device: {
+    id: string; name: string; ip: string | null; lifecycle_status: string | null; device_status: string | null
+    model: string | null; serial_number: string | null; support_end_date: string | null
+    os_type: string | null; os_version: string | null; os_eol_date: string | null; site: string | null
+  } | null
+  monitoring: {
+    status: string; healthScore: number | null; grade: string | null; uptimePct: number | null
+    latencyAvg: number | null; openAlerts: number | null; alerts: { type: string; severity: string; since: string }[]
+  } | null
+  logs: {
+    riskScore: number | null; eventCount: number | null; anomalyCount: number | null; securityEvents24h: number | null
+    country: string | null; asnOrg: string | null; isKnownBad: boolean | null
+    recent: { time: string; severity: string; message: string }[]
+  } | null
+  dns: { records: { type: string; name: string; data: string }[]; ipam: { status: string; subnet: string | null } | null } | null
+}
 
 const NAVY = '#1a2744'
 const RED = '#C8102E'
@@ -159,6 +178,31 @@ function scoreColorVal(s: number | null | undefined): string {
   return s >= 80 ? '#16a34a' : s >= 60 ? '#d97706' : '#dc2626'
 }
 
+// ── Asset 360 drawer helpers ────────────────────────────────────────
+function r1(v: number | null | undefined): number | null {
+  return v === null || v === undefined ? null : Math.round(v * 10) / 10
+}
+function fmtDate(d: string | null | undefined): string | null {
+  if (!d) return null
+  try { return new Date(d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) } catch { return String(d) }
+}
+function DRow({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
+      <span style={{ fontSize: '12px', color: 'var(--text-muted)', flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: '12px', color: 'var(--text-primary)', fontWeight: 600, textAlign: 'right', fontFamily: mono ? 'var(--font-mono)' : 'inherit', wordBreak: 'break-word' }}>
+        {value === null || value === undefined || value === '' ? '—' : value}
+      </span>
+    </div>
+  )
+}
+function DHead({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '16px 0 6px' }}>{children}</div>
+}
+function DEmpty({ app }: { app: string }) {
+  return <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', padding: '12px 0' }}>No {app} data correlated for this asset.</div>
+}
+
 export default function LauncherPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -174,6 +218,16 @@ export default function LauncherPage() {
   const [clock, setClock] = useState('')
   const [hubKpis, setHubKpis] = useState<HubKpis | null>(null)
   const [hubAlerts, setHubAlerts] = useState<HubAlert[] | null>(null)
+  // Unified suite search + Asset 360 drawer
+  const [searchQ, setSearchQ] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [asset, setAsset] = useState<Asset360 | null>(null)
+  const [assetTab, setAssetTab] = useState<'overview' | 'monitoring' | 'logs' | 'dns'>('overview')
+  const [assetLoading, setAssetLoading] = useState(false)
+  const [assetOpen, setAssetOpen] = useState(false)
+  const [assetLabel, setAssetLabel] = useState('')
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(d => { if (d && !d.error) setSettings(d) }).catch(() => {})
@@ -230,6 +284,21 @@ export default function LauncherPage() {
     const id = setInterval(fmt, 60000)
     return () => clearInterval(id)
   }, [])
+
+  // Unified suite search — debounced; queries all four apps via /api/hub/search.
+  useEffect(() => {
+    const q = searchQ.trim()
+    if (q.length < 2) { setSearchResults([]); setSearchOpen(false); return }
+    setSearchLoading(true)
+    const id = setTimeout(() => {
+      fetch(`/api/hub/search?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(d => { setSearchResults(Array.isArray(d.results) ? d.results : []); setSearchOpen(true) })
+        .catch(() => setSearchResults([]))
+        .finally(() => setSearchLoading(false))
+    }, 250)
+    return () => clearTimeout(id)
+  }, [searchQ])
 
   if (status === 'loading') return null
   if (status === 'unauthenticated') { router.push('/login'); return null }
@@ -317,10 +386,27 @@ export default function LauncherPage() {
 
   const license = licenseInfo
 
+  // Open the Asset 360 drawer for a search hit; aggregates its cross-app story.
+  const openAsset = (r: SearchResult) => {
+    setAssetOpen(true); setAssetLoading(true); setAsset(null); setAssetTab('overview')
+    setAssetLabel(r.label); setSearchOpen(false)
+    const p = new URLSearchParams()
+    if (r.netvaultId) p.set('id', r.netvaultId)
+    if (r.ip) p.set('ip', r.ip)
+    fetch(`/api/hub/asset360?${p.toString()}`)
+      .then(res => res.json())
+      .then(d => setAsset(d))
+      .catch(() => setAsset({ device: null, monitoring: null, logs: null, dns: null }))
+      .finally(() => setAssetLoading(false))
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @keyframes nvShimmer { 0%,100% { opacity: 0.35 } 50% { opacity: 0.8 } }
+        @keyframes nvDrawerIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
+        .nv-drawer { animation: nvDrawerIn 0.22s ease-out }
+        .nv-search-input::placeholder { color: var(--text-muted) }
         @media (max-width: 1100px) { .nv-top-grid { grid-template-columns: 1fr !important } .nv-app-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-server-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-kpi-grid { grid-template-columns: repeat(3, 1fr) !important } }
         @media (max-width: 640px) { .nv-app-grid { grid-template-columns: 1fr !important } .nv-server-grid { grid-template-columns: 1fr !important } .nv-kpi-grid { grid-template-columns: repeat(2, 1fr) !important } }
       `}</style>
@@ -498,11 +584,56 @@ export default function LauncherPage() {
 
         {/* ===== NocVault Hub — Suite Intelligence (cross-app layer) ===== */}
         <div style={{ marginTop: '34px', borderTop: '2px solid var(--border)', paddingTop: '18px', marginBottom: '24px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>NocVault Hub — Suite Intelligence</h2>
-            <span style={{ background: primary, color: '#fff', fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.5px' }}>NEW</span>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap', marginBottom: '16px' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>NocVault Hub — Suite Intelligence</h2>
+                <span style={{ background: primary, color: '#fff', fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.5px' }}>NEW</span>
+              </div>
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>Cross-app insight no single app can see — correlated alerts and suite-wide KPIs across all four apps.</div>
+            </div>
+
+            {/* Unified suite search */}
+            <div style={{ position: 'relative', width: '340px', maxWidth: '100%', flexShrink: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ position: 'absolute', left: '11px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
+              <input
+                className="nv-search-input"
+                type="text"
+                value={searchQ}
+                onChange={e => setSearchQ(e.target.value)}
+                onFocus={() => { if (searchResults.length) setSearchOpen(true) }}
+                placeholder="Search any asset — IP, hostname or name…"
+                style={{ width: '100%', padding: '9px 12px 9px 34px', fontSize: '13px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }}
+              />
+              {searchOpen && (
+                <>
+                  <div onClick={() => setSearchOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: CARD_SHADOW, zIndex: 30, overflow: 'hidden', maxHeight: '360px', overflowY: 'auto' }}>
+                    {searchLoading ? (
+                      <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>Searching all four apps…</div>
+                    ) : searchResults.length === 0 ? (
+                      <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>No matching assets.</div>
+                    ) : (
+                      searchResults.map((r, i) => (
+                        <button key={i} onClick={() => openAsset(r)}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', width: '100%', textAlign: 'left', padding: '10px 12px', background: 'transparent', border: 'none', borderTop: i === 0 ? 'none' : '1px solid var(--border-light)', cursor: 'pointer' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-subtle)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</div>
+                            {r.ip && <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{r.ip}</div>}
+                          </div>
+                          <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                            {r.sources.map(s => <span key={s} title={s} style={{ width: '8px', height: '8px', borderRadius: '50%', background: SRC_COLOR[s] || '#888' }} />)}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
-          <div style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 16px' }}>Cross-app insight no single app can see — correlated alerts and suite-wide KPIs across all four apps.</div>
 
           {/* KPI strip */}
           <div className="nv-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px', marginBottom: '16px' }}>
@@ -624,6 +755,135 @@ export default function LauncherPage() {
           NocVault Intelligence Suite&nbsp;&nbsp;•&nbsp;&nbsp;All rights reserved © 2026
         </div>
       </div>
+
+      {/* ===== Asset 360 drawer (cross-app story for one asset) ===== */}
+      {assetOpen && (
+        <>
+          <div onClick={() => setAssetOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 100 }} />
+          <div className="nv-drawer" style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: '460px', maxWidth: '92vw', background: 'var(--bg-primary)', boxShadow: '-8px 0 40px rgba(0,0,0,0.3)', zIndex: 101, display: 'flex', flexDirection: 'column' }}>
+            {/* Header */}
+            <div style={{ background: navy, padding: '18px 22px', color: '#fff', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: '10px', letterSpacing: '1px', color: 'rgba(255,255,255,0.5)', fontWeight: 700 }}>ASSET 360</div>
+                <div style={{ fontSize: '18px', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{asset?.device?.name || assetLabel}</div>
+                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-mono)' }}>{asset?.device?.ip || ''}</div>
+              </div>
+              <button onClick={() => setAssetOpen(false)} aria-label="Close" style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '7px', color: '#fff', width: '30px', height: '30px', cursor: 'pointer', fontSize: '15px', flexShrink: 0, lineHeight: 1 }}>✕</button>
+            </div>
+            {/* Tabs */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+              {([['overview', 'Overview'], ['monitoring', 'Monitoring'], ['logs', 'Logs & Security'], ['dns', 'DNS & IPAM']] as const).map(([k, lab]) => (
+                <button key={k} onClick={() => setAssetTab(k)}
+                  style={{ flex: 1, padding: '11px 6px', fontSize: '11.5px', fontWeight: 600, border: 'none', background: 'transparent', cursor: 'pointer', color: assetTab === k ? primary : 'var(--text-muted)', borderBottom: assetTab === k ? `2px solid ${primary}` : '2px solid transparent' }}>{lab}</button>
+              ))}
+            </div>
+            {/* Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '6px 22px 22px' }}>
+              {assetLoading ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '16px 0' }}>Aggregating cross-app story…</div>
+              ) : !asset ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '13px', padding: '16px 0' }}>Could not load asset.</div>
+              ) : assetTab === 'overview' ? (
+                <>
+                  {asset.device ? (
+                    <>
+                      <DHead>Asset of record · NetVault</DHead>
+                      <DRow label="Name" value={asset.device.name} />
+                      <DRow label="IP address" value={asset.device.ip} mono />
+                      <DRow label="Site" value={asset.device.site} />
+                      <DRow label="Model" value={asset.device.model} />
+                      <DRow label="Serial" value={asset.device.serial_number} mono />
+                      <DRow label="Lifecycle" value={asset.device.lifecycle_status} />
+                      <DRow label="Status" value={asset.device.device_status} />
+                      <DRow label="OS" value={[asset.device.os_type, asset.device.os_version].filter(Boolean).join(' ') || null} />
+                      <DRow label="OS end-of-life" value={fmtDate(asset.device.os_eol_date)} />
+                      <DRow label="Support ends" value={fmtDate(asset.device.support_end_date)} />
+                    </>
+                  ) : (
+                    <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', padding: '12px 0' }}>Not in the NetVault CMDB — showing correlated signals matched by IP.</div>
+                  )}
+                  <DHead>Suite presence</DHead>
+                  <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                    {([['NetVault', !!asset.device], ['SpanVault', !!asset.monitoring], ['LogVault', !!asset.logs], ['DDIVault', !!asset.dns]] as const).map(([app, on]) => (
+                      <span key={app} style={{ fontSize: '11px', fontWeight: 600, padding: '4px 9px', borderRadius: '6px', color: on ? (SRC_COLOR[app] || 'var(--text-primary)') : 'var(--text-muted)', background: on ? `${SRC_COLOR[app] || '#888'}22` : 'var(--surface-subtle)', opacity: on ? 1 : 0.6 }}>
+                        {on ? '● ' : '○ '}{app}
+                      </span>
+                    ))}
+                  </div>
+                </>
+              ) : assetTab === 'monitoring' ? (
+                asset.monitoring ? (
+                  <>
+                    <DHead>Availability · SpanVault</DHead>
+                    <DRow label="Current status" value={<span style={{ color: asset.monitoring.status === 'up' ? '#16a34a' : asset.monitoring.status === 'down' ? '#dc2626' : 'var(--text-muted)', fontWeight: 700, textTransform: 'capitalize' }}>{asset.monitoring.status || '—'}</span>} />
+                    <DRow label="Health score" value={asset.monitoring.healthScore != null ? <span style={{ color: scoreColorVal(asset.monitoring.healthScore) }}>{asset.monitoring.healthScore}/100{asset.monitoring.grade ? ` (${asset.monitoring.grade})` : ''}</span> : null} />
+                    <DRow label="Uptime" value={asset.monitoring.uptimePct != null ? `${r1(asset.monitoring.uptimePct)}%` : null} />
+                    <DRow label="Avg latency" value={asset.monitoring.latencyAvg != null ? `${r1(asset.monitoring.latencyAvg)} ms` : null} />
+                    <DRow label="Open alerts" value={asset.monitoring.openAlerts} />
+                    {asset.monitoring.alerts.length > 0 && (
+                      <>
+                        <DHead>Open alerts</DHead>
+                        {asset.monitoring.alerts.map((a, i) => (
+                          <div key={i} style={{ display: 'flex', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
+                            <span style={{ width: '3px', borderRadius: '2px', background: SEV_BAR[a.severity] || 'var(--text-muted)', flexShrink: 0 }} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{a.type}</div>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{fmtDate(a.since)} · {a.severity}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </>
+                ) : <DEmpty app="SpanVault monitoring" />
+              ) : assetTab === 'logs' ? (
+                asset.logs ? (
+                  <>
+                    <DHead>Risk & activity · LogVault</DHead>
+                    <DRow label="Risk score" value={asset.logs.riskScore != null ? <span style={{ color: scoreColorVal(asset.logs.riskScore != null ? 100 - asset.logs.riskScore : null) }}>{asset.logs.riskScore}/100</span> : null} />
+                    <DRow label="Events tracked" value={asset.logs.eventCount} />
+                    <DRow label="Anomalies" value={asset.logs.anomalyCount} />
+                    <DRow label="Security events (24h)" value={asset.logs.securityEvents24h} />
+                    <DRow label="Country" value={asset.logs.country} />
+                    <DRow label="Network (ASN)" value={asset.logs.asnOrg} />
+                    <DRow label="Known-bad host" value={asset.logs.isKnownBad == null ? null : asset.logs.isKnownBad ? <span style={{ color: '#dc2626', fontWeight: 700 }}>Yes</span> : 'No'} />
+                    {asset.logs.recent.length > 0 && (
+                      <>
+                        <DHead>Recent log entries</DHead>
+                        {asset.logs.recent.map((e, i) => (
+                          <div key={i} style={{ padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
+                            <div style={{ fontSize: '11.5px', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', wordBreak: 'break-word' }}>{e.message}</div>
+                            <div style={{ fontSize: '10.5px', color: 'var(--text-muted)', marginTop: '2px' }}>{fmtDate(e.time)} · {e.severity}</div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </>
+                ) : <DEmpty app="LogVault" />
+              ) : (
+                asset.dns ? (
+                  <>
+                    {asset.dns.ipam && (
+                      <>
+                        <DHead>IPAM · DDIVault</DHead>
+                        <DRow label="Status" value={asset.dns.ipam.status} />
+                        <DRow label="Subnet" value={asset.dns.ipam.subnet} />
+                      </>
+                    )}
+                    <DHead>DNS records</DHead>
+                    {asset.dns.records.length > 0 ? asset.dns.records.map((rec, i) => (
+                      <div key={i} style={{ display: 'flex', gap: '10px', padding: '7px 0', borderBottom: '1px solid var(--border-light)', fontSize: '12px' }}>
+                        <span style={{ fontWeight: 700, color: primary, minWidth: '46px', flexShrink: 0 }}>{rec.type}</span>
+                        <span style={{ flex: 1, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', wordBreak: 'break-all' }}>{rec.name}</span>
+                      </div>
+                    )) : <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '6px 0' }}>No DNS records resolve to this address.</div>}
+                  </>
+                ) : <DEmpty app="DDIVault DNS/IPAM" />
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

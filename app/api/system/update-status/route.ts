@@ -70,6 +70,12 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.4.1': [
+    'New unified suite search on the launcher Hub — find any asset by IP, hostname or name across all four apps at once',
+    'New Asset 360 drawer: one slide-in view of a device’s full story — NetVault asset of record, SpanVault monitoring (status, health, uptime, alerts), LogVault risk & recent security events, and DDIVault DNS/IPAM',
+    'Search results tag which apps each asset appears in; the drawer shows suite presence at a glance',
+    'All cross-app reads stay read-only and degrade gracefully when a signal is absent for an asset',
+  ],
   '1.4.0': [
     'New "NocVault Hub — Suite Intelligence" section on the launcher: cross-app KPIs (fleet health, availability, log anomalies, IPAM utilization, open alerts) and correlated alerts spanning all four apps',
     'Correlated alerts surface what no single app can see — e.g. an end-of-life device that also has active monitoring alerts and security events',
