@@ -28,25 +28,25 @@ export default function CompliancePage() {
       })
   }, [])
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading compliance report...</div>
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading compliance report...</div>
   if (error) return (
     <div style={{ padding: '40px', textAlign: 'center' }}>
-      <div style={{ background: '#fee2e2', color: '#991b1b', padding: '16px 20px', borderRadius: '10px', display: 'inline-block', fontSize: 'var(--text-md)' }}>{error}</div>
+      <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '16px 20px', borderRadius: '10px', display: 'inline-block', fontSize: 'var(--text-md)' }}>{error}</div>
     </div>
   )
   if (!data) return null
 
   const { score, total, checks } = data
-  const scoreColor  = score >= 80 ? '#166534' : score >= 60 ? '#92400e' : '#991b1b'
-  const scoreBg     = score >= 80 ? '#dcfce7' : score >= 60 ? '#fef3c7' : '#fee2e2'
-  const scoreBorder = score >= 80 ? '#86efac' : score >= 60 ? '#fcd34d' : '#fca5a5'
-  const barColor    = score >= 80 ? '#22c55e' : score >= 60 ? '#f59e0b' : '#ef4444'
+  const scoreColor  = score >= 80 ? 'var(--tint-success-fg)' : score >= 60 ? 'var(--tint-warn-fg)' : 'var(--tint-danger-fg)'
+  const scoreBg     = score >= 80 ? 'var(--tint-success)' : score >= 60 ? 'var(--tint-warn)' : 'var(--tint-danger)'
+  const scoreBorder = score >= 80 ? 'var(--tint-success-fg)' : score >= 60 ? 'var(--tint-warn-fg)' : 'var(--tint-danger-fg)'
+  const barColor    = score >= 80 ? 'var(--green)' : score >= 60 ? 'var(--yellow)' : 'var(--red)'
 
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>Compliance Dashboard</h1>
-        <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af', margin: '2px 0 0' }}>
+        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Compliance Dashboard</h1>
+        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>
           Data quality and lifecycle compliance across {total.toLocaleString()} active devices
         </p>
       </div>
@@ -58,7 +58,7 @@ export default function CompliancePage() {
           <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: scoreColor, marginTop: '4px' }}>Compliance Score</div>
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ height: '12px', background: 'rgba(0,0,0,0.08)', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px' }}>
+          <div style={{ height: '12px', background: 'var(--surface-subtle)', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px' }}>
             <div style={{ width: `${score}%`, height: '100%', background: barColor, borderRadius: '6px', transition: 'width 0.6s ease' }} />
           </div>
           <div style={{ fontSize: 'var(--text-base)', color: scoreColor, opacity: 0.8 }}>
@@ -78,44 +78,44 @@ export default function CompliancePage() {
         {checks.map(check => {
           if (!check.available) {
             return (
-              <div key={check.key} style={{ background: '#f9fafb', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '18px 20px' }}>
+              <div key={check.key} style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '18px 20px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                  <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#6b7280', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>
-                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: '#9ca3af', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
+                  <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>
+                  <div style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: 'var(--text-muted)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                     Unavailable
                   </div>
                 </div>
-                <div style={{ height: '6px', background: '#e5e7eb', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }} />
-                <div style={{ fontSize: 'var(--text-sm)', color: '#9ca3af' }}>Data unavailable — schema update pending on this server</div>
+                <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }} />
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Data unavailable — schema update pending on this server</div>
               </div>
             )
           }
 
-          const c   = check.pct! >= 80 ? '#166534' : check.pct! >= 60 ? '#92400e' : '#991b1b'
-          const bg  = check.pct! >= 80 ? '#dcfce7' : check.pct! >= 60 ? '#fef3c7' : '#fee2e2'
-          const bar = check.pct! >= 80 ? '#22c55e' : check.pct! >= 60 ? '#f59e0b' : '#ef4444'
-          const borderColor = check.pct! >= 80 ? '#86efac' : check.pct! >= 60 ? '#fde68a' : '#fecaca'
+          const c   = check.pct! >= 80 ? 'var(--tint-success-fg)' : check.pct! >= 60 ? 'var(--tint-warn-fg)' : 'var(--tint-danger-fg)'
+          const bg  = check.pct! >= 80 ? 'var(--tint-success)' : check.pct! >= 60 ? 'var(--tint-warn)' : 'var(--tint-danger)'
+          const bar = check.pct! >= 80 ? 'var(--green)' : check.pct! >= 60 ? 'var(--yellow)' : 'var(--red)'
+          const borderColor = check.pct! >= 80 ? 'var(--tint-success-fg)' : check.pct! >= 60 ? 'var(--tint-warn-fg)' : 'var(--tint-danger-fg)'
           return (
-            <div key={check.key} style={{ background: 'white', borderRadius: '8px', border: `1px solid ${borderColor}`, padding: '18px 20px' }}>
+            <div key={check.key} style={{ background: 'var(--bg-card)', borderRadius: '8px', border: `1px solid ${borderColor}`, padding: '18px 20px' }}>
               {/* Label + percentage */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
-                <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#111827', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>
+                <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-primary)', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>
                 <div style={{ fontSize: 'var(--text-xl)', fontWeight: '800', color: c, flexShrink: 0 }}>{check.pct}%</div>
               </div>
 
               {/* Progress bar */}
-              <div style={{ height: '6px', background: '#f3f4f6', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }}>
+              <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }}>
                 <div style={{ width: `${check.pct}%`, height: '100%', background: bar, borderRadius: '3px', transition: 'width 0.5s ease' }} />
               </div>
 
               {/* Passing count + link */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: 'var(--text-sm)', color: '#374151' }}>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
                   <span style={{ fontWeight: '600', color: c }}>
                     {check.pass!.toLocaleString()}
                   </span>
-                  <span style={{ color: '#6b7280' }}> of {check.total.toLocaleString()} active devices passing</span>
+                  <span style={{ color: 'var(--text-secondary)' }}> of {check.total.toLocaleString()} active devices passing</span>
                   {check.fail! > 0 && (
                     <span style={{ marginLeft: '8px', background: bg, color: c, padding: '1px 8px', borderRadius: '20px', fontWeight: '600', fontSize: 'var(--text-xs)' }}>
                       {check.fail!.toLocaleString()} failing

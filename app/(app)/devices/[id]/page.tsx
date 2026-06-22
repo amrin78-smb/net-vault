@@ -96,8 +96,8 @@ function parseLogEntry(log: Log): { label: string; detail: string | null; dotCol
 function DeviceField({ label, value }: { label: string; value: any }) {
   return (
     <div style={{ marginBottom: '12px' }}>
-      <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
-      <div style={{ fontSize: 'var(--text-md)', color: value ? '#111827' : '#d1d5db', fontFamily: label === 'IP address' || label === 'Serial number' ? 'var(--font-mono)' : undefined }}>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
+      <div style={{ fontSize: 'var(--text-md)', color: value ? 'var(--text-primary)' : 'var(--text-muted)', fontFamily: label === 'IP address' || label === 'Serial number' ? 'var(--font-mono)' : undefined }}>
         {value || '—'}
       </div>
     </div>
@@ -106,8 +106,8 @@ function DeviceField({ label, value }: { label: string; value: any }) {
 
 function DeviceSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '20px 24px', marginBottom: '16px' }}>
-      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
+    <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '20px 24px', marginBottom: '16px' }}>
+      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>{children}</div>
     </div>
   )
@@ -139,8 +139,8 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
     })
   }, [params])
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
-  if (!device) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Device not found</div>
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
+  if (!device) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Device not found</div>
 
 
 
@@ -161,11 +161,11 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: '0 0 6px' }}>{device.name}</h1>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>{device.name}</h1>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <StatusBadge status={device.device_status} />
             <LifecycleBadge status={device.lifecycle_status} />
-            <span style={{ fontSize: 'var(--text-base)', color: '#9ca3af' }}>{device.device_type} · {device.brand} {device.model}</span>
+            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>{device.device_type} · {device.brand} {device.model}</span>
           </div>
         </div>
         {isAdmin && (
@@ -225,39 +225,39 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
           </DeviceSection>
 
           {/* Change history timeline */}
-          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '20px 24px' }}>
-            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>
-              Change history {logs.length > 0 && <span style={{ fontWeight: '400', color: '#9ca3af', textTransform: 'none', letterSpacing: 0 }}>({logs.length})</span>}
+          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '20px 24px' }}>
+            <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>
+              Change history {logs.length > 0 && <span style={{ fontWeight: '400', color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>({logs.length})</span>}
             </h2>
 
             {logs.length === 0 ? (
-              <div style={{ fontSize: 'var(--text-base)', color: '#9ca3af' }}>No changes recorded yet</div>
+              <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>No changes recorded yet</div>
             ) : (
               <div style={{ position: 'relative' }}>
                 {/* Timeline line */}
-                <div style={{ position: 'absolute', left: '7px', top: '8px', bottom: '8px', width: '1px', background: '#e5e7eb' }} />
+                <div style={{ position: 'absolute', left: '7px', top: '8px', bottom: '8px', width: '1px', background: 'var(--border)' }} />
 
                 {logs.map((log, i) => {
                   const { label, detail, dotColor } = parseLogEntry(log)
                   return (
                     <div key={i} style={{ display: 'flex', gap: '14px', paddingBottom: i < logs.length - 1 ? '14px' : 0, marginBottom: i < logs.length - 1 ? '14px' : 0, position: 'relative' }}>
                       {/* Dot */}
-                      <div style={{ width: '15px', height: '15px', borderRadius: '50%', flexShrink: 0, marginTop: '2px', background: dotColor, border: '2px solid white', boxShadow: `0 0 0 1px ${dotColor}`, zIndex: 1 }} />
+                      <div style={{ width: '15px', height: '15px', borderRadius: '50%', flexShrink: 0, marginTop: '2px', background: dotColor, border: '2px solid var(--bg-card)', boxShadow: `0 0 0 1px ${dotColor}`, zIndex: 1 }} />
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
-                          <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: '#111827' }}>{label}</div>
-                          <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', flexShrink: 0 }} title={formatDateTime(log.changed_at)}>
+                          <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-primary)' }}>{label}</div>
+                          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', flexShrink: 0 }} title={formatDateTime(log.changed_at)}>
                             {timeAgo(log.changed_at)}
                           </div>
                         </div>
-                        <div style={{ fontSize: 'var(--text-sm)', color: '#6b7280', marginTop: '1px' }}>
+                        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginTop: '1px' }}>
                           {log.changed_by_name || 'System'}
                         </div>
                         {detail && (
-                          <div style={{ marginTop: '6px', background: '#f9fafb', borderRadius: '6px', padding: '8px 10px', border: '1px solid #f3f4f6' }}>
+                          <div style={{ marginTop: '6px', background: 'var(--surface-subtle)', borderRadius: '6px', padding: '8px 10px', border: '1px solid var(--border-light)' }}>
                             {detail.split('\n').map((line, j) => (
-                              <div key={j} style={{ fontSize: 'var(--text-sm)', color: '#374151', fontFamily: 'var(--font-mono)', lineHeight: '1.6' }}>{line}</div>
+                              <div key={j} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', lineHeight: '1.6' }}>{line}</div>
                             ))}
                           </div>
                         )}

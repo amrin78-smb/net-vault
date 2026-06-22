@@ -11,8 +11,8 @@ const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS
 function CircuitField({ label, value }: { label: string; value: any }) {
   return (
     <div style={{ marginBottom: '14px' }}>
-      <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
-      <div style={{ fontSize: 'var(--text-md)', color: value && String(value) !== 'nan' && value !== '-' ? '#111827' : '#d1d5db', fontFamily: ['Circuit ID','Public subnet','Max speed','Guaranteed speed'].includes(label) ? 'var(--font-mono)' : undefined }}>
+      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
+      <div style={{ fontSize: 'var(--text-md)', color: value && String(value) !== 'nan' && value !== '-' ? 'var(--text-primary)' : 'var(--text-muted)', fontFamily: ['Circuit ID','Public subnet','Max speed','Guaranteed speed'].includes(label) ? 'var(--font-mono)' : undefined }}>
         {value && String(value) !== 'nan' && value !== '-' ? value : '—'}
       </div>
     </div>
@@ -22,7 +22,7 @@ function CircuitField({ label, value }: { label: string; value: any }) {
 function CircuitEditField({ label, field, form, setForm, type = 'text' }: { label: string; field: string; form: any; setForm: any; type?: string }) {
   return (
     <div style={{ marginBottom: '14px' }}>
-      <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>{label}</label>
+      <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>{label}</label>
       <input className="input" type={type} value={form[field] && form[field] !== 'nan' ? form[field] : ''} onChange={e => setForm((f: any) => ({ ...f, [field]: e.target.value }))} />
     </div>
   )
@@ -30,8 +30,8 @@ function CircuitEditField({ label, field, form, setForm, type = 'text' }: { labe
 
 function CircuitSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '18px 22px', marginBottom: '16px' }}>
-      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid #f3f4f6' }}>{title}</h2>
+    <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '18px 22px', marginBottom: '16px' }}>
+      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>{children}</div>
     </div>
   )
@@ -69,8 +69,8 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
     setSaving(false)
   }
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
-  if (!circuit) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Circuit not found</div>
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
+  if (!circuit) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Circuit not found</div>
 
   const formatSpeed = (speed: any) => {
     if (!speed || speed === 'nan') return '—'
@@ -103,15 +103,15 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: '0 0 6px' }}>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>
             {circuit.circuit_id && circuit.circuit_id !== 'nan' ? circuit.circuit_id : circuit.isp ? `${circuit.isp} — ${circuit.site || circuit.site_name_raw}` : 'Unnamed circuit'}
           </h1>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151' }}>{circuit.isp}</span>
-            <span style={{ color: '#d1d5db' }}>·</span>
-            <span style={{ fontSize: 'var(--text-base)', color: '#6b7280' }}>{circuit.site || circuit.site_name_raw}</span>
-            <span style={{ color: '#d1d5db' }}>·</span>
-            <span style={{ fontSize: 'var(--text-base)', color: '#6b7280' }}>{circuit.country}</span>
+            <span style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)' }}>{circuit.isp}</span>
+            <span style={{ color: 'var(--text-muted)' }}>·</span>
+            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>{circuit.site || circuit.site_name_raw}</span>
+            <span style={{ color: 'var(--text-muted)' }}>·</span>
+            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>{circuit.country}</span>
             {circuit.usage && (
               <span className="badge" style={{ background: circuit.usage?.toLowerCase() === 'main' ? '#e0f2fe' : '#f3f4f6', color: circuit.usage?.toLowerCase() === 'main' ? '#075985' : '#6b7280' }}>{circuit.usage}</span>
             )}
@@ -141,7 +141,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
               <CircuitEditField form={form} setForm={setForm} label="Circuit ID" field="circuit_id" />
               <CircuitEditField form={form} setForm={setForm} label="ISP" field="isp" />
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>USAGE</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>USAGE</label>
                 <select className="input select" value={form.usage || ''} onChange={e => setForm((f: Circuit) => ({ ...f, usage: e.target.value }))}>
                   <option value="">Select usage</option>
                   <option key="Primary Internet">Primary Internet</option>
@@ -157,7 +157,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
                 </select>
               </div>
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>PRODUCT</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>PRODUCT</label>
                 <select className="input select" value={form.product || ''} onChange={e => setForm((f: Circuit) => ({ ...f, product: e.target.value }))}>
                   <option value="">Select product</option>
                   <option key="Corporate Internet / DIA">Corporate Internet / DIA</option>
@@ -172,7 +172,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
                 </select>
               </div>
                             <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Technology</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Technology</label>
                 <select className="input select" value={form.technology || ''} onChange={e => setForm((f: Circuit) => ({ ...f, technology: e.target.value }))}>
                   <option value="">Select technology</option>
                 <option key='Fiber'>Fiber</option>
@@ -186,7 +186,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
                 </select>
               </div>
                             <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Circuit type</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Circuit type</label>
                 <select className="input select" value={form.circuit_type || ''} onChange={e => setForm((f: Circuit) => ({ ...f, circuit_type: e.target.value }))}>
                   <option value="">Select circuit type</option>
                 <option key='Dedicated'>Dedicated</option>
@@ -198,7 +198,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
                 </select>
               </div>
                             <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Interface</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Interface</label>
                 <select className="input select" value={form.interface || ''} onChange={e => setForm((f: Circuit) => ({ ...f, interface: e.target.value }))}>
                   <option value="">Select interface</option>
                 <option key='Ethernet (RJ45)'>Ethernet (RJ45)</option>
@@ -219,7 +219,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
             <CircuitSection title="Commercial">
               <CircuitEditField form={form} setForm={setForm} label="Public subnet" field="public_subnet" />
               <div style={{ marginBottom: '14px' }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Currency</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Currency</label>
                 <select className="input select" value={form.currency || 'THB'} onChange={e => setForm((f: Circuit) => ({ ...f, currency: e.target.value }))}>
                   {CURRENCIES.map(c => <option key={c}>{c}</option>)}
                 </select>
@@ -227,7 +227,7 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
               <CircuitEditField form={form} setForm={setForm} label="Cost/month" field="cost_month" type="number" />
               <CircuitEditField form={form} setForm={setForm} label="Contract term" field="contract_term" />
               <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Comment</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Comment</label>
                 <textarea className="input" rows={3} value={form.comment && form.comment !== 'nan' ? form.comment : ''} onChange={e => setForm((f: Circuit) => ({ ...f, comment: e.target.value }))} style={{ resize: 'vertical' }} />
               </div>
             </CircuitSection>

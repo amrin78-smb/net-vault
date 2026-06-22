@@ -12,7 +12,6 @@ const RED = '#C8102E'
 const GREEN = '#16a34a'
 const AMBER = '#f59e0b'
 const BLUE = '#0284c7'
-const BG = '#f4f6f9'
 const MUTED = '#6b7280'
 const CARD_SHADOW = '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)'
 
@@ -33,7 +32,7 @@ function UpdatedNotice() {
       style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
         marginBottom: 16, borderRadius: 8, fontSize: 'var(--text-base)', fontWeight: 600,
-        color: '#166534', background: 'rgba(22,163,74,0.10)',
+        color: 'var(--tint-success-fg)', background: 'var(--tint-success)',
         border: '1px solid rgba(22,163,74,0.30)',
       }}
     >
@@ -43,7 +42,7 @@ function UpdatedNotice() {
         onClick={() => setShow(false)}
         aria-label="Dismiss"
         style={{
-          background: 'none', border: 'none', cursor: 'pointer', color: '#166534',
+          background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-success-fg)',
           fontSize: 'var(--text-lg)', lineHeight: 1, padding: 0, opacity: 0.7,
         }}
       >
@@ -59,7 +58,7 @@ function Shimmer({ w = '100%', h = '14px', r = 6, light = false }: { w?: string 
     <span
       style={{
         display: 'inline-block', width: w, height: h, borderRadius: r,
-        background: light ? 'rgba(255,255,255,0.18)' : '#e5e7eb',
+        background: light ? 'rgba(255,255,255,0.18)' : 'var(--border)',
         animation: 'nvShimmer 1.4s ease-in-out infinite',
       }}
     />
@@ -168,22 +167,22 @@ function activityColor(action: string) {
 
 /* ------------------------------ card shell ------------------------- */
 const cardStyle: React.CSSProperties = {
-  background: 'white', borderRadius: 8, boxShadow: CARD_SHADOW,
-  border: '1px solid #eef1f5', padding: 20, boxSizing: 'border-box',
+  background: 'var(--bg-card)', borderRadius: 8, boxShadow: CARD_SHADOW,
+  border: '1px solid var(--border-light)', padding: 20, boxSizing: 'border-box',
 }
 const cardStyleCompact: React.CSSProperties = { ...cardStyle, padding: 16 }
-const cardTitle: React.CSSProperties = { fontSize: 'var(--text-md)', fontWeight: 700, color: '#111827', margin: 0 }
+const cardTitle: React.CSSProperties = { fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }
 const viewLink: React.CSSProperties = { fontSize: 'var(--text-sm)', color: RED, textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' }
 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload || !payload.length) return null
   return (
-    <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', fontSize: 'var(--text-sm)' }}>
-      {label != null && <div style={{ fontWeight: 700, color: '#111827', marginBottom: 4 }}>{label}</div>}
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', fontSize: 'var(--text-sm)' }}>
+      {label != null && <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{label}</div>}
       {payload.map((p: any, i: number) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, color: MUTED }}>
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
           <span style={{ width: 9, height: 9, borderRadius: 2, background: p.color || p.payload?.color, display: 'inline-block' }} />
-          <span>{p.name}: <b style={{ color: '#111827' }}>{Number(p.value).toLocaleString()}</b></span>
+          <span>{p.name}: <b style={{ color: 'var(--text-primary)' }}>{Number(p.value).toLocaleString()}</b></span>
         </div>
       ))}
     </div>
@@ -276,12 +275,12 @@ export default function DashboardPage() {
   }
 
   return (
-    <div style={{ padding: '24px 28px', background: BG, minHeight: '100%' }}>
+    <div style={{ padding: '24px 28px', background: 'var(--bg-primary)', minHeight: '100%' }}>
       <style>{`
         @keyframes nvShimmer { 0%,100% { opacity: 0.35 } 50% { opacity: 0.85 } }
-        .nv-ghost-btn:hover { background:#f9fafb !important; }
-        .nv-icon-btn:hover { background:#eef1f5 !important; }
-        .nv-row:hover { background:#f9fafb !important; }
+        .nv-ghost-btn:hover { background:var(--surface-subtle) !important; }
+        .nv-icon-btn:hover { background:var(--surface-subtle) !important; }
+        .nv-row:hover { background:var(--surface-subtle) !important; }
         .nv-spin { animation: nvSpin 0.8s linear infinite; }
         @keyframes nvSpin { to { transform: rotate(360deg) } }
         @media (max-width: 1100px) {
@@ -297,19 +296,19 @@ export default function DashboardPage() {
       {/* ============================ HEADER ========================= */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: '#111827', margin: 0 }}>Dashboard</h1>
-          <p style={{ fontSize: 'var(--text-base)', color: MUTED, margin: '4px 0 0' }}>Infrastructure overview</p>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Dashboard</h1>
+          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '4px 0 0' }}>Infrastructure overview</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <button
             className="nv-ghost-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', background: 'white', color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, fontSize: 'var(--text-base)', fontWeight: 600, cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 'var(--text-base)', fontWeight: 600, cursor: 'pointer' }}
           >
             {IconGrid(15, '#6b7280')} Custom View
           </button>
           <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
-            <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: '#111827' }}>{clock || '—'}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: MUTED }}>ICT · Asia/Bangkok</div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--text-primary)' }}>{clock || '—'}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ICT · Asia/Bangkok</div>
           </div>
         </div>
       </div>
@@ -393,7 +392,7 @@ export default function DashboardPage() {
               {loading ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><Shimmer w={150} h={150} r={75} /></div>
               ) : fleet.segments.length === 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 'var(--text-base)' }}>No data</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>No data</div>
               ) : (
                 <>
                   <ResponsiveContainer width="100%" height="100%">
@@ -405,8 +404,8 @@ export default function DashboardPage() {
                     </PieChart>
                   </ResponsiveContainer>
                   <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                    <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#111827' }}>{fleet.total.toLocaleString()}</span>
-                    <span style={{ fontSize: 'var(--text-xs)', color: MUTED }}>Total Devices</span>
+                    <span style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--text-primary)' }}>{fleet.total.toLocaleString()}</span>
+                    <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>Total Devices</span>
                   </div>
                 </>
               )}
@@ -416,14 +415,14 @@ export default function DashboardPage() {
               {fleet.segments.map((s, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 'var(--text-sm)' }}>
                   <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
-                  <span style={{ flex: 1, color: '#374151' }}>{s.label}</span>
-                  <span style={{ fontWeight: 700, color: '#111827' }}>{s.count.toLocaleString()}</span>
-                  <span style={{ color: MUTED, width: 42, textAlign: 'right' }}>{s.pct}%</span>
+                  <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{s.label}</span>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{s.count.toLocaleString()}</span>
+                  <span style={{ color: 'var(--text-muted)', width: 42, textAlign: 'right' }}>{s.pct}%</span>
                 </div>
               ))}
             </div>
           </div>
-          <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', marginTop: 10, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
+          <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 10, borderTop: '1px solid var(--border-light)', paddingTop: 10 }}>
             Last updated: {minutesAgo(fleet.last_updated)}
           </div>
         </div>
@@ -432,7 +431,7 @@ export default function DashboardPage() {
         <div style={cardStyleCompact}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={cardTitle}>Devices by Region</h2>
-            <div style={{ display: 'flex', gap: 12, fontSize: 'var(--text-xs)', color: MUTED }}>
+            <div style={{ display: 'flex', gap: 12, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY }} />Healthy</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: RED }} />EOL</span>
             </div>
@@ -471,29 +470,29 @@ export default function DashboardPage() {
             {loading ? (
               [0, 1, 2].map(i => <div key={i} style={{ padding: '6px 0' }}><Shimmer w="70%" h={14} /><div style={{ marginTop: 6 }}><Shimmer w="40%" h={11} /></div></div>)
             ) : topEol.length === 0 ? (
-              <div style={{ fontSize: 'var(--text-base)', color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No sites at risk</div>
+              <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', padding: '20px 0', textAlign: 'center' }}>No sites at risk</div>
             ) : topEol.slice(0, 3).map((s, i) => {
               const high = s.eol_pct >= 50
               return (
                 <Link key={i} href="/sites?filter=eol" style={{ textDecoration: 'none' }}>
-                  <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderRadius: 8, borderBottom: i < 2 ? '1px solid #f3f4f6' : 'none', cursor: 'pointer' }}>
+                  <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderRadius: 8, borderBottom: i < 2 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: MUTED, marginTop: 1 }}>{s.city} • {s.region}</div>
+                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{s.city} • {s.region}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, padding: '1px 4px', borderRadius: 5, color: high ? '#991b1b' : '#92400e', background: high ? '#fee2e2' : '#fef3c7' }}>
+                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, padding: '1px 4px', borderRadius: 5, color: high ? 'var(--tint-danger-fg)' : 'var(--tint-warn-fg)', background: high ? 'var(--tint-danger)' : 'var(--tint-warn)' }}>
                           {high ? 'HIGH' : 'MEDIUM'}
                         </span>
-                        <span style={{ fontSize: 'var(--text-xs)', color: '#991b1b', fontWeight: 600 }}>{s.eol_count} EOL Devices</span>
+                        <span style={{ fontSize: 'var(--text-xs)', color: 'var(--tint-danger-fg)', fontWeight: 600 }}>{s.eol_count} EOL Devices</span>
                       </div>
                     </div>
-                    <span style={{ color: '#9ca3af', display: 'flex' }}>{IconChevron(14, '#9ca3af')}</span>
+                    <span style={{ color: 'var(--text-muted)', display: 'flex' }}>{IconChevron(14, '#9ca3af')}</span>
                   </div>
                 </Link>
               )
             })}
           </div>
-          <div style={{ marginTop: 6, paddingTop: 8, borderTop: '1px solid #f3f4f6' }}>
+          <div style={{ marginTop: 6, paddingTop: 8, borderTop: '1px solid var(--border-light)' }}>
             <Link href="/sites?filter=eol" style={viewLink}>View all EOL sites →</Link>
           </div>
         </div>
@@ -504,14 +503,14 @@ export default function DashboardPage() {
         {statCards.map((s, i) => (
           <Link key={i} href={s.href} style={{ textDecoration: 'none' }}>
             <div className="nv-row" style={{ ...cardStyle, padding: 18, cursor: 'pointer', height: '100%' }}>
-              <span style={{ display: 'inline-flex', width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 9, background: '#f0f4f9', color: NAVY }}>
-                {s.icon(18, NAVY)}
+              <span style={{ display: 'inline-flex', width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 9, background: 'var(--surface-subtle)', color: 'var(--text-secondary)' }}>
+                {s.icon(18, 'currentColor')}
               </span>
               {loading ? <div style={{ margin: '10px 0 2px' }}><Shimmer w={60} h={26} /></div> : (
-                <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: '#111827', marginTop: 10 }}>{s.value.toLocaleString()}</div>
+                <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--text-primary)', marginTop: 10 }}>{s.value.toLocaleString()}</div>
               )}
-              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#374151', marginTop: 2 }}>{s.label}</div>
-              <div style={{ fontSize: 'var(--text-xs)', color: MUTED, marginTop: 1 }}>{s.sub}</div>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', marginTop: 2 }}>{s.label}</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{s.sub}</div>
             </div>
           </Link>
         ))}
@@ -532,7 +531,7 @@ export default function DashboardPage() {
                 {[80, 65, 55, 40, 30].map((w, i) => <Shimmer key={i} w={`${w}%`} h={16} />)}
               </div>
             ) : byType.length === 0 ? (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#9ca3af', fontSize: 'var(--text-base)' }}>No data</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>No data</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart layout="vertical" data={byType} margin={{ top: 0, right: 28, left: 0, bottom: 0 }}>
@@ -540,7 +539,7 @@ export default function DashboardPage() {
                   <YAxis type="category" dataKey="type" width={96} tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: MUTED }} />
                   <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(0,0,0,0.03)' }} />
                   <Bar dataKey="count" name="Devices" fill={NAVY} radius={[0, 4, 4, 0]} barSize={16}>
-                    <LabelList dataKey="count" position="right" style={{ fontSize: 11, fill: '#374151', fontWeight: 600 }} />
+                    <LabelList dataKey="count" position="right" style={{ fontSize: 11, fill: 'var(--text-secondary)', fontWeight: 600 }} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
@@ -558,16 +557,16 @@ export default function DashboardPage() {
             {loading ? (
               [0, 1, 2, 3, 4].map(i => <div key={i} style={{ padding: '9px 0' }}><Shimmer w="60%" h={13} /><div style={{ marginTop: 6 }}><Shimmer w="100%" h={6} r={3} /></div></div>)
             ) : topEol.length === 0 ? (
-              <div style={{ fontSize: 'var(--text-base)', color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No EOL sites</div>
+              <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', padding: '20px 0', textAlign: 'center' }}>No EOL sites</div>
             ) : topEol.slice(0, 5).map((s, i) => (
               <Link key={i} href="/sites?filter=eol" style={{ textDecoration: 'none', display: 'block' }}>
                 <div className="nv-row" style={{ padding: '10px 8px', margin: '0 -8px', borderRadius: 8, cursor: 'pointer' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</span>
-                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: '#991b1b', flexShrink: 0 }}>{s.eol_count}</span>
+                    <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</span>
+                    <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--tint-danger-fg)', flexShrink: 0 }}>{s.eol_count}</span>
                   </div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: MUTED, margin: '2px 0 5px' }}>{s.city} • {s.region}</div>
-                  <div style={{ height: 6, background: '#f3f4f6', borderRadius: 3, overflow: 'hidden' }}>
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '2px 0 5px' }}>{s.city} • {s.region}</div>
+                  <div style={{ height: 6, background: 'var(--surface-subtle)', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{ width: `${Math.min(100, s.eol_pct)}%`, height: '100%', background: RED, borderRadius: 3 }} />
                   </div>
                 </div>
@@ -586,19 +585,19 @@ export default function DashboardPage() {
             {loading ? (
               [0, 1, 2, 3, 4, 5].map(i => <div key={i} style={{ padding: '9px 0' }}><Shimmer w="80%" h={13} /><div style={{ marginTop: 5 }}><Shimmer w="50%" h={11} /></div></div>)
             ) : activity.length === 0 ? (
-              <div style={{ fontSize: 'var(--text-base)', color: '#9ca3af', padding: '20px 0', textAlign: 'center' }}>No recent activity</div>
+              <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', padding: '20px 0', textAlign: 'center' }}>No recent activity</div>
             ) : activity.slice(0, 6).map((a, i) => {
               const c = activityColor(a.action)
               return (
-                <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < Math.min(6, activity.length) - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < Math.min(6, activity.length) - 1 ? '1px solid var(--border-light)' : 'none' }}>
                   <span style={{ width: 9, height: 9, borderRadius: '50%', background: c, flexShrink: 0, marginTop: 5 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: '#111827', textTransform: 'capitalize' }}>{a.action}</div>
-                    <div style={{ fontSize: 'var(--text-xs)', color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{a.action}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {a.entity}{a.user ? ` · ${a.user}` : ''}
                     </div>
                   </div>
-                  <span style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', flexShrink: 0, whiteSpace: 'nowrap' }}>{a.time}</span>
+                  <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>{a.time}</span>
                 </div>
               )
             })}

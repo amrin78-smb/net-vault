@@ -91,8 +91,8 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
     setTogglingDecomm(false)
   }
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
-  if (!data) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Site not found</div>
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
+  if (!data) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Site not found</div>
 
   const { site, devices } = data
   const s = site as any
@@ -179,11 +179,11 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           {editingSite ? (
             <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Site name</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Site name</label>
                 <input className="input" style={{ width: '220px' }} value={siteForm.name} onChange={e => setSiteForm(f => ({ ...f, name: e.target.value }))} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: '#9ca3af', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Site code</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Site code</label>
                 <input className="input" style={{ width: '120px' }} value={siteForm.code} onChange={e => setSiteForm(f => ({ ...f, code: e.target.value }))} placeholder="e.g. CEVA" />
               </div>
               <button className="btn-primary" disabled={savingSite} onClick={async () => {
@@ -202,16 +202,16 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           ) : (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>{site.site}</h1>
+                <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{site.site}</h1>
                 {isAdmin && (
-                  <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: 'var(--text-sm)', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer', color: '#6b7280' }}>Edit</button>
+                  <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', cursor: 'pointer', color: 'var(--text-secondary)' }}>Edit</button>
                 )}
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: 'var(--text-base)', color: '#6b7280' }}>{site.country}</span>
-                <span style={{ color: '#d1d5db' }}>·</span>
-                <span style={{ fontSize: 'var(--text-base)', color: '#6b7280' }}>{site.region}</span>
-                {site.code && <span style={{ fontSize: 'var(--text-xs)', background: '#f3f4f6', color: '#6b7280', padding: '2px 8px', borderRadius: '20px' }}>{site.code}</span>}
+                <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{site.country}</span>
+                <span style={{ color: 'var(--text-muted)' }}>·</span>
+                <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{site.region}</span>
+                {site.code && <span style={{ fontSize: 'var(--text-xs)', background: 'var(--surface-subtle)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: '20px' }}>{site.code}</span>}
               </div>
             </div>
           )}
@@ -220,10 +220,10 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           <div style={{ display: 'flex', gap: '8px' }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               {site?.site_status === 'Decommed' && (
-                <span style={{ background: '#f3f4f6', color: '#6b7280', fontSize: 'var(--text-sm)', fontWeight: '600', padding: '4px 12px', borderRadius: '20px', border: '1px solid #d1d5db' }}>⚠ Decommed site</span>
+                <span style={{ background: 'var(--surface-subtle)', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: '600', padding: '4px 12px', borderRadius: '20px', border: '1px solid var(--border)' }}>⚠ Decommed site</span>
               )}
               {isAdmin && (
-                <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: 'var(--text-base)', padding: '6px 14px', borderRadius: '6px', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? '#166534' : '#991b1b', borderColor: site?.site_status === 'Decommed' ? '#bbf7d0' : '#fca5a5', background: site?.site_status === 'Decommed' ? '#dcfce7' : '#fee2e2' }}>
+                <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: 'var(--text-base)', padding: '6px 14px', borderRadius: '6px', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? 'var(--tint-success-fg)' : 'var(--tint-danger-fg)', borderColor: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)', background: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)' }}>
                   {togglingDecomm ? 'Updating...' : site?.site_status === 'Decommed' ? 'Reactivate site' : 'Decommission site'}
                 </button>
               )}
@@ -254,22 +254,22 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       {(s.address || s.city || s.coordinates || s.contact_name || s.site_type) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px', marginBottom: '20px' }}>
           {s.site_type && (
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '12px 16px' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Site type</div>
-              <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: '#111827' }}>{s.site_type}</div>
+            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '12px 16px' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Site type</div>
+              <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-primary)' }}>{s.site_type}</div>
             </div>
           )}
           {(s.city || s.address) && (
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '12px 16px' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Location</div>
-              <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: '#111827' }}>{s.city}</div>
-              {s.address && <div style={{ fontSize: 'var(--text-xs)', color: '#6b7280', marginTop: '2px', lineHeight: '1.4' }}>{s.address}</div>}
+            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '12px 16px' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Location</div>
+              <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-primary)' }}>{s.city}</div>
+              {s.address && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: '1.4' }}>{s.address}</div>}
             </div>
           )}
           {s.coordinates && (
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '12px 16px' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>GPS coordinates</div>
-              <div style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)', color: '#374151' }}>{s.coordinates}</div>
+            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '12px 16px' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>GPS coordinates</div>
+              <div style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{s.coordinates}</div>
               <a href={`https://www.google.com/maps?q=${s.coordinates}`} target="_blank" rel="noopener noreferrer"
                 style={{ fontSize: 'var(--text-xs)', color: 'var(--primary)', textDecoration: 'none', marginTop: '4px', display: 'inline-block' }}>
                 Open in Maps →
@@ -277,19 +277,19 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           )}
           {(s.contact_name || s.contact_email || s.phone) && (
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '12px 16px' }}>
-              <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Site contact</div>
-              {s.contact_name && <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: '#111827' }}>{s.contact_name}</div>}
-              {s.contact_email && <div style={{ fontSize: 'var(--text-xs)', color: '#6b7280', marginTop: '2px' }}>{s.contact_email}</div>}
-              {s.phone && <div style={{ fontSize: 'var(--text-xs)', color: '#6b7280', marginTop: '2px' }}>{s.phone}</div>}
+            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '12px 16px' }}>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Site contact</div>
+              {s.contact_name && <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-primary)' }}>{s.contact_name}</div>}
+              {s.contact_email && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginTop: '2px' }}>{s.contact_email}</div>}
+              {s.phone && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginTop: '2px' }}>{s.phone}</div>}
             </div>
           )}
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: '0', marginBottom: '16px', borderBottom: '2px solid #f3f4f6' }}>
+      <div style={{ display: 'flex', gap: '0', marginBottom: '16px', borderBottom: '2px solid var(--border-light)' }}>
         {(['devices', 'circuits'] as const).map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: 'var(--text-md)', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : '#6b7280', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
+          <button key={tab} onClick={() => setActiveTab(tab)} style={{ padding: '10px 20px', fontSize: 'var(--text-md)', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-secondary)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-2px', textTransform: 'capitalize' }}>
             {tab} {tab === 'devices' ? `(${total})` : `(${circuits.length})`}
           </button>
         ))}
@@ -297,20 +297,20 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
       {activeTab === 'devices' && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px' }}>
-          <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', padding: '16px 20px' }}>
-            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: '#374151', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>By device type</div>
+          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px 20px' }}>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>By device type</div>
             {byType.map(t => {
               const pct = Math.round(t.count / total * 100)
               return (
                 <div key={t.type} style={{ marginBottom: '12px', cursor: 'pointer' }} onClick={() => setTypeFilter(typeFilter === t.type ? '' : t.type)}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: 'var(--text-sm)', color: typeFilter === t.type ? 'var(--primary)' : '#374151', fontWeight: typeFilter === t.type ? '600' : '400' }}>{t.type}</span>
+                    <span style={{ fontSize: 'var(--text-sm)', color: typeFilter === t.type ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: typeFilter === t.type ? '600' : '400' }}>{t.type}</span>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <span style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: '#111827' }}>{t.count}</span>
-                      {t.eol > 0 && <span style={{ fontSize: 'var(--text-xs)', color: '#991b1b', background: '#fee2e2', padding: '0 5px', borderRadius: '10px' }}>{t.eol} EOL</span>}
+                      <span style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: 'var(--text-primary)' }}>{t.count}</span>
+                      {t.eol > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--tint-danger-fg)', background: 'var(--tint-danger)', padding: '0 5px', borderRadius: '10px' }}>{t.eol} EOL</span>}
                     </div>
                   </div>
-                  <div style={{ height: '6px', background: '#f3f4f6', borderRadius: '3px', overflow: 'hidden' }}>
+                  <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
                     <div style={{ width: `${pct}%`, height: '100%', borderRadius: '3px', background: typeFilter === t.type ? 'var(--primary)' : '#1a2744' }} />
                   </div>
                 </div>
@@ -349,23 +349,23 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                 {['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
               </select>
               {(typeFilter || statusFilter) && <button className="btn-secondary" style={{ fontSize: 'var(--text-base)' }} onClick={() => { setTypeFilter(''); setStatusFilter('') }}>Clear</button>}
-              <span style={{ fontSize: 'var(--text-base)', color: '#9ca3af', alignSelf: 'center', marginLeft: 'auto' }}>{filtered.length} devices</span>
+              <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 'auto' }}>{filtered.length} devices</span>
             </div>
-            <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table>
                   <thead><tr>{isAdmin && <th style={{ width: '40px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>}<th>Name</th><th>Type</th><th>Brand / Model</th><th>IP</th><th>Lifecycle</th><th>Status</th>{isAdmin && <th>Actions</th>}</tr></thead>
                   <tbody>
                     {filtered.map((d: any) => (
-                      <tr key={d.id} style={{ background: selected.has(d.id) ? '#fef9f9' : undefined }}>
+                      <tr key={d.id} style={{ background: selected.has(d.id) ? 'var(--surface-subtle)' : undefined }}>
                         {isAdmin && <td><input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleSelect(d.id)} /></td>}
-                        <td style={{ fontWeight: '500' }}><Link href={`/devices/${d.id}?from=site&siteId=${siteId}&siteName=${encodeURIComponent(site.site)}`} style={{ color: '#111827', textDecoration: 'none' }}>{d.name || '—'}</Link></td>
+                        <td style={{ fontWeight: '500' }}><Link href={`/devices/${d.id}?from=site&siteId=${siteId}&siteName=${encodeURIComponent(site.site)}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }}>{d.name || '—'}</Link></td>
                         <td>{d.device_type}</td>
                         <td>{d.brand} {d.model}</td>
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{d.ip_address || '—'}</td>
                         <td><LifecycleBadge status={d.lifecycle_status} /></td>
                         <td><StatusBadge status={d.device_status} /></td>
-                        {isAdmin && <td><Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>Edit</button></Link></td>}
+                        {isAdmin && <td><Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Edit</button></Link></td>}
                       </tr>
                     ))}
                   </tbody>
@@ -379,13 +379,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       {activeTab === 'circuits' && (
         <div>
           {circuits.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af', background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb' }}>No Circuits for this site</div>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)' }}>No Circuits for this site</div>
           ) : (
             <>
-              {[{ label: 'Main links', items: mainCircuits, color: '#075985' }, { label: 'Backup links', items: backupCircuits, color: '#6b7280' }, { label: 'Other', items: otherCircuits, color: '#92400e' }].filter(g => g.items.length > 0).map(group => (
+              {[{ label: 'Main links', items: mainCircuits, color: '#075985' }, { label: 'Backup links', items: backupCircuits, color: 'var(--text-secondary)' }, { label: 'Other', items: otherCircuits, color: '#92400e' }].filter(g => g.items.length > 0).map(group => (
                 <div key={group.label} style={{ marginBottom: '16px' }}>
                   <div style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: group.color, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>{group.label} — {group.items.length}</div>
-                  <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+                  <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
                     <table>
                       <thead><tr><th>ISP</th><th>Circuit ID</th><th>Product</th><th>Usage</th><th>Max speed</th><th>Public subnet</th><th>Cost/month</th><th></th></tr></thead>
                       <tbody>
@@ -394,12 +394,12 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                             <td style={{ fontWeight: '500' }}>{c.isp}</td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{c.circuit_id || '—'}</td>
                             <td style={{ fontSize: 'var(--text-sm)' }}>{c.product && c.product !== 'nan' ? c.product : '—'}</td>
-                            <td><span className="badge" style={{ background: '#e0f2fe', color: '#075985' }}>{c.usage || '—'}</span></td>
+                            <td><span className="badge" style={{ background: 'var(--tint-info)', color: 'var(--tint-info-fg)' }}>{c.usage || '—'}</span></td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{formatSpeed(c.max_speed)}</td>
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{c.public_subnet && c.public_subnet !== '-' && c.public_subnet !== 'nan' ? c.public_subnet : '—'}</td>
                             <td style={{ fontSize: 'var(--text-sm)' }}>{c.cost_month ? `${c.currency || 'THB'} ${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
                             
-                            <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }}>View</button></Link></td>
+                            <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link></td>
                           </tr>
                         ))}
                       </tbody>

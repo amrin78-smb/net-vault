@@ -527,7 +527,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {showUserMenu && (
               <div style={{
                 position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                background: 'white', border: '1px solid var(--border)',
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
                 borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                 minWidth: 220, overflow: 'hidden', zIndex: 999,
                 animation: 'fadeIn 0.15s ease',
@@ -564,7 +564,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <button
                     onClick={() => { setShowUserMenu(false); signOut({ callbackUrl: '/login' }) }}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: '#dc2626', fontSize: 'var(--text-base)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--tint-danger)')}
                     onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -590,35 +590,35 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         {/* License banner */}
         {licenseStatus === 'trial' && licenseDaysRemaining <= 5 && licenseDaysRemaining > 0 && (
-          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <div style={{ background: 'var(--tint-warn)', borderBottom: '1px solid var(--border)', padding: '10px 24px', fontSize: 'var(--text-base)', color: 'var(--tint-warn-fg)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span>Your trial expires in <strong>{licenseDaysRemaining} day{licenseDaysRemaining !== 1 ? 's' : ''}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#92400e', fontWeight: '600' }}>sales@nocvault.com</a> to purchase a license.</span>
+            <span>Your trial expires in <strong>{licenseDaysRemaining} day{licenseDaysRemaining !== 1 ? 's' : ''}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: 'var(--tint-warn-fg)', fontWeight: '600' }}>sales@nocvault.com</a> to purchase a license.</span>
           </div>
         )}
         {licenseStatus === 'grace' && (
-          <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <div style={{ background: 'var(--tint-warn)', borderBottom: '1px solid var(--border)', padding: '10px 24px', fontSize: 'var(--text-base)', color: 'var(--tint-warn-fg)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            <span>Your trial has expired. Enter a license key in <a href="/settings" style={{ color: '#c2410c', fontWeight: '600' }}>Settings → License</a> to continue.</span>
+            <span>Your trial has expired. Enter a license key in <a href="/settings" style={{ color: 'var(--tint-warn-fg)', fontWeight: '600' }}>Settings → License</a> to continue.</span>
           </div>
         )}
         {licenseStatus === 'expired' && (
-          <div style={{ background: '#fee2e2', borderBottom: '1px solid #fecaca', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+          <div style={{ background: 'var(--tint-danger)', borderBottom: '1px solid var(--border)', padding: '10px 24px', fontSize: 'var(--text-base)', color: 'var(--tint-danger-fg)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            <span><strong>NocVault license required.</strong> The system is in read-only mode. Enter a license key in <a href="/settings" style={{ color: '#991b1b', fontWeight: '600' }}>Settings → License</a> or contact <a href="mailto:sales@nocvault.com" style={{ color: '#991b1b', fontWeight: '600' }}>sales@nocvault.com</a>.</span>
+            <span><strong>NocVault license required.</strong> The system is in read-only mode. Enter a license key in <a href="/settings" style={{ color: 'var(--tint-danger-fg)', fontWeight: '600' }}>Settings → License</a> or contact <a href="mailto:sales@nocvault.com" style={{ color: 'var(--tint-danger-fg)', fontWeight: '600' }}>sales@nocvault.com</a>.</span>
           </div>
         )}
         {licenseStatus === 'active' && licenseExpiry && (() => {
           const days = Math.ceil((new Date(licenseExpiry).getTime() - Date.now()) / 86400000)
           if (days <= 30) return (
-            <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <div style={{ background: 'var(--tint-warn)', borderBottom: '1px solid var(--border)', padding: '10px 24px', fontSize: 'var(--text-base)', color: 'var(--tint-warn-fg)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span>Your license expires on <strong>{licenseExpiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#c2410c', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
+              <span>Your license expires on <strong>{licenseExpiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: 'var(--tint-warn-fg)', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
             </div>
           )
           if (days <= 90) return (
-            <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 24px', fontSize: 'var(--text-base)', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
+            <div style={{ background: 'var(--tint-warn)', borderBottom: '1px solid var(--border)', padding: '10px 24px', fontSize: 'var(--text-base)', color: 'var(--tint-warn-fg)', display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-              <span>Your license expires on <strong>{licenseExpiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#92400e', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
+              <span>Your license expires on <strong>{licenseExpiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: 'var(--tint-warn-fg)', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
             </div>
           )
           return null
@@ -635,11 +635,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* ── Change Password Modal ── */}
       {showPwModal && (
         <div className="modal-overlay">
-          <div style={{ background: 'white', borderRadius: 'var(--radius)', padding: '28px 32px', width: '100%', maxWidth: 400, boxShadow: 'var(--shadow-lg)' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '28px 32px', width: '100%', maxWidth: 400, boxShadow: 'var(--shadow-lg)' }}>
             <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Change password</h2>
             <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 20px' }}>Enter your current password and choose a new one.</p>
             {pwSuccess ? (
-              <div style={{ background: '#dcfce7', color: '#166534', padding: '12px 16px', borderRadius: 8, fontSize: 'var(--text-md)', textAlign: 'center' }}>
+              <div style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', padding: '12px 16px', borderRadius: 8, fontSize: 'var(--text-md)', textAlign: 'center' }}>
                 Password changed successfully!
               </div>
             ) : (
@@ -659,7 +659,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </div>
                 ))}
                 {pwError && (
-                  <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: 6, fontSize: 'var(--text-base)', marginBottom: 14 }}>{pwError}</div>
+                  <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 6, fontSize: 'var(--text-base)', marginBottom: 14 }}>{pwError}</div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-primary" onClick={changePassword} disabled={pwSaving} style={{ flex: 1 }}>

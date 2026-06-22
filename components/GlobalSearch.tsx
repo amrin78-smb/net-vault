@@ -122,7 +122,7 @@ export default function GlobalSearch() {
       {open && hasResults && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0,
-          background: 'white', borderRadius: 'var(--radius)',
+          background: 'var(--bg-card)', borderRadius: 'var(--radius)',
           border: '1px solid var(--border)',
           boxShadow: 'var(--shadow-lg)',
           zIndex: 999, overflow: 'hidden',
@@ -130,12 +130,12 @@ export default function GlobalSearch() {
         }}>
           {results.devices.length > 0 && (
             <>
-              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--surface-subtle)', borderBottom: '1px solid var(--border-light)' }}>
                 Devices
               </div>
               {results.devices.map(d => (
                 <div key={d.id} onMouseDown={() => navigate({ type: 'device', id: d.id })}
-                  style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('device', d.id) ? 'var(--bg-primary)' : 'white', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('device', d.id) ? 'var(--surface-subtle)' : 'var(--bg-card)', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 10 }}>
                   <div style={{ flex: 1, overflow: 'hidden' }}>
                     <div style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.name}</div>
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>
@@ -152,12 +152,12 @@ export default function GlobalSearch() {
 
           {results.sites.length > 0 && (
             <>
-              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--surface-subtle)', borderBottom: '1px solid var(--border-light)' }}>
                 Sites
               </div>
               {results.sites.map(s => (
                 <div key={s.id} onMouseDown={() => navigate({ type: 'site', id: s.id })}
-                  style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('site', s.id) ? 'var(--bg-primary)' : 'white', borderBottom: '1px solid var(--border-light)' }}>
+                  style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('site', s.id) ? 'var(--surface-subtle)' : 'var(--bg-card)', borderBottom: '1px solid var(--border-light)' }}>
                   <div style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-primary)' }}>{s.name}</div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{s.code} · {s.country} · {s.region}</div>
                 </div>
@@ -167,12 +167,12 @@ export default function GlobalSearch() {
 
           {results.circuits.length > 0 && (
             <>
-              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--bg-primary)', borderBottom: '1px solid var(--border-light)' }}>
+              <div style={{ padding: '7px 14px 5px', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', background: 'var(--surface-subtle)', borderBottom: '1px solid var(--border-light)' }}>
                 Circuits
               </div>
               {results.circuits.map(c => (
                 <div key={c.id} onMouseDown={() => navigate({ type: 'circuit', id: c.id })}
-                  style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('circuit', c.id) ? 'var(--bg-primary)' : 'white', borderBottom: '1px solid var(--border-light)' }}>
+                  style={{ padding: '9px 14px', cursor: 'pointer', background: isActive('circuit', c.id) ? 'var(--surface-subtle)' : 'var(--bg-card)', borderBottom: '1px solid var(--border-light)' }}>
                   <div style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-primary)' }}>{c.isp}{c.circuit_id ? ' · ' + c.circuit_id : ''}</div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{c.usage} · {c.site}</div>
                 </div>
@@ -180,7 +180,7 @@ export default function GlobalSearch() {
             </>
           )}
 
-          <div style={{ padding: '7px 14px', background: 'var(--bg-primary)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)' }}>
+          <div style={{ padding: '7px 14px', background: 'var(--surface-subtle)', fontSize: 'var(--text-xs)', color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)' }}>
             ↑↓ navigate · Enter to open · Esc to close
           </div>
         </div>
@@ -189,7 +189,7 @@ export default function GlobalSearch() {
       {open && !hasResults && q.length >= 2 && !loading && (
         <div style={{
           position: 'absolute', top: 'calc(100% + 8px)', left: 0, right: 0,
-          background: 'white', borderRadius: 'var(--radius)',
+          background: 'var(--bg-card)', borderRadius: 'var(--radius)',
           border: '1px solid var(--border)',
           padding: '20px 14px', textAlign: 'center',
           fontSize: 'var(--text-base)', color: 'var(--text-muted)', zIndex: 999,

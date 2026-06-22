@@ -36,8 +36,8 @@ export default function SitesPage() {
   const totalEol = filtered.reduce((s, r) => s + parseInt(r.eol), 0)
 
   function riskColor(eol: number, total: number, siteStatus?: string) {
-    if (siteStatus === 'Decommed') return { bg: '#e5e7eb', color: '#4b5563', label: 'Site decommed' }
-    if (total === 0) return { bg: '#f3f4f6', color: '#6b7280', label: 'Empty' }
+    if (siteStatus === 'Decommed') return { bg: 'var(--surface-subtle)', color: 'var(--text-secondary)', label: 'Site decommed' }
+    if (total === 0) return { bg: 'var(--surface-subtle)', color: 'var(--text-muted)', label: 'Empty' }
     const pct = eol / total
     if (pct >= 0.4) return { bg: '#fee2e2', color: '#991b1b', label: 'High' }
     if (pct >= 0.2) return { bg: '#fef3c7', color: '#92400e', label: 'Medium' }
@@ -57,8 +57,8 @@ export default function SitesPage() {
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>Sites</h1>
-          <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af', margin: '2px 0 0' }}>{filtered.length} sites · {totalDevices.toLocaleString()} devices · {totalEol.toLocaleString()} EOL</p>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Sites</h1>
+          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>{filtered.length} sites · {totalDevices.toLocaleString()} devices · {totalEol.toLocaleString()} EOL</p>
         </div>
       </div>
 
@@ -96,15 +96,15 @@ export default function SitesPage() {
       </div>
 
       {loading ? (
-        <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading sites...</div>
+        <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading sites...</div>
       ) : (
         Object.values(grouped).map(group => (
           <div key={`${group.region}-${group.country}`} style={{ marginBottom: '24px' }}>
             {/* Country header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
-              <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: '#111827' }}>{group.country}</div>
-              <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', background: '#f3f4f6', padding: '2px 8px', borderRadius: '20px' }}>{group.region}</div>
-              <div style={{ fontSize: 'var(--text-sm)', color: '#9ca3af' }}>{group.sites.length} site{group.sites.length > 1 ? 's' : ''}</div>
+              <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--text-primary)' }}>{group.country}</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', background: 'var(--surface-subtle)', padding: '2px 8px', borderRadius: '20px' }}>{group.region}</div>
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{group.sites.length} site{group.sites.length > 1 ? 's' : ''}</div>
             </div>
 
             {/* Site cards */}
@@ -115,12 +115,12 @@ export default function SitesPage() {
                 const eolPct = parseInt(site.total) > 0 ? Math.round(parseInt(site.eol) / parseInt(site.total) * 100) : 0
                 return (
                   <Link key={site.id} href={`/sites/${site.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ background: isDecommed ? '#f9fafb' : 'white', borderRadius: '8px', border: isDecommed ? '1px solid #d1d5db' : '1px solid #e5e7eb', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s', opacity: isDecommed ? 0.7 : 1 }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = isDecommed ? '#d1d5db' : '#C8102E')}
-                      onMouseLeave={e => (e.currentTarget.style.borderColor = isDecommed ? '#d1d5db' : '#e5e7eb')}>
+                    <div style={{ background: isDecommed ? 'var(--surface-subtle)' : 'var(--bg-card)', borderRadius: '8px', border: isDecommed ? '1px solid var(--border)' : '1px solid var(--border)', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s', opacity: isDecommed ? 0.7 : 1 }}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = isDecommed ? 'var(--border)' : '#C8102E')}
+                      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
-                          <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: '#111827' }}>{site.site}</div>
+                          <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--text-primary)' }}>{site.site}</div>
 
                         </div>
                         <span style={{ fontSize: 'var(--text-xs)', fontWeight: '500', padding: '3px 8px', borderRadius: '20px', background: risk.bg, color: risk.color }}>{isDecommed ? risk.label : `${risk.label} risk`}</span>
@@ -134,9 +134,9 @@ export default function SitesPage() {
                           { label: 'EOL', value: site.eol, color: '#991b1b' },
                           { label: 'Decommed', value: site.decommed, color: '#92400e' },
                         ].map(stat => (
-                          <div key={stat.label} style={{ textAlign: 'center', background: '#f9fafb', borderRadius: '6px', padding: '6px 4px' }}>
+                          <div key={stat.label} style={{ textAlign: 'center', background: 'var(--surface-subtle)', borderRadius: '6px', padding: '6px 4px' }}>
                             <div style={{ fontSize: 'var(--text-md)', fontWeight: '700', color: stat.color }}>{stat.value}</div>
-                            <div style={{ fontSize: 'var(--text-xs)', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{stat.label}</div>
+                            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{stat.label}</div>
                           </div>
                         ))}
                       </div>
@@ -145,16 +145,16 @@ export default function SitesPage() {
                       {parseInt(site.total) > 0 && (
                         <div>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                            <span style={{ fontSize: 'var(--text-xs)', color: '#9ca3af' }}>EOL exposure</span>
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>EOL exposure</span>
                             <span style={{ fontSize: 'var(--text-xs)', color: risk.color, fontWeight: '500' }}>{eolPct}%</span>
                           </div>
-                          <div style={{ height: '4px', background: '#f3f4f6', borderRadius: '2px', overflow: 'hidden' }}>
+                          <div style={{ height: '4px', background: 'var(--surface-subtle)', borderRadius: '2px', overflow: 'hidden' }}>
                             <div style={{ width: `${eolPct}%`, height: '100%', borderRadius: '2px', background: risk.color }} />
                           </div>
                         </div>
                       )}
 
-                      <div style={{ fontSize: 'var(--text-xs)', color: '#d1d5db', marginTop: '10px' }}>Updated {timeAgo(site.last_updated)}</div>
+                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: '10px' }}>Updated {timeAgo(site.last_updated)}</div>
                     </div>
                   </Link>
                 )

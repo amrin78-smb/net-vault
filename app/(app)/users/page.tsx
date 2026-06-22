@@ -52,8 +52,8 @@ export default function UsersPage() {
     <div style={{ padding: '24px 28px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
         <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: '#111827', margin: 0 }}>Users</h1>
-          <p style={{ fontSize: 'var(--text-base)', color: '#9ca3af', margin: '2px 0 0' }}>Manage who can access this system</p>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Users</h1>
+          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>Manage who can access this system</p>
         </div>
         <button className="btn-primary" onClick={openAdd}>+ Add user</button>
       </div>
@@ -63,7 +63,7 @@ export default function UsersPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
             {[{ label: 'Full name', field: 'name', type: 'text', placeholder: 'e.g. John Smith' }, { label: 'Email address', field: 'email', type: 'email', placeholder: 'john@company.com' }, { label: editUser ? 'New password (leave blank to keep)' : 'Password', field: 'password', type: 'password', placeholder: '••••••••' }].map(f => (
               <div key={f.field}>
-                <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: '#374151', marginBottom: '5px' }}>{f.label}</label>
+                <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>{f.label}</label>
                 <input className="input" type={f.type} placeholder={f.placeholder} value={form[f.field as keyof typeof form]} onChange={e => setForm(p => ({ ...p, [f.field]: e.target.value }))} />
               </div>
             ))}
@@ -75,27 +75,27 @@ export default function UsersPage() {
               </select>
             </div>
           </div>
-          {error && <div style={{ background: '#fee2e2', color: '#991b1b', padding: '10px 12px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{error}</div>}
+          {error && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{error}</div>}
           <div style={{ display: 'flex', gap: '8px' }}>
             <button className="btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : editUser ? 'Save changes' : 'Create user'}</button>
             <button className="btn-secondary" onClick={() => setShowForm(false)}>Cancel</button>
           </div>
         </div>
       )}
-      <div style={{ background: 'white', borderRadius: '8px', border: '1px solid #e5e7eb', overflow: 'hidden' }}>
-        {loading ? <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div> : (
+      <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+        {loading ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div> : (
           <table>
             <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Created</th><th>Actions</th></tr></thead>
             <tbody>
               {users.map(u => (
                 <tr key={u.id}>
-                  <td style={{ fontWeight: '500', color: '#111827' }}>{u.name}</td>
-                  <td style={{ color: '#6b7280' }}>{u.email}</td>
+                  <td style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{u.name}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{u.email}</td>
                   <td><RoleBadge role={u.role} /></td>
-                  <td style={{ color: '#9ca3af', fontSize: 'var(--text-sm)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                   <td>
                     <div style={{ display: 'flex', gap: '6px' }}>
-                      <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid #d1d5db', borderRadius: '6px', background: 'white', cursor: 'pointer' }} onClick={() => openEdit(u)}>Edit</button>
+                      <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => openEdit(u)}>Edit</button>
                       <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => deleteUser(u.id, u.name)}>Delete</button>
                     </div>
                   </td>

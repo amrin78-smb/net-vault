@@ -20,8 +20,8 @@ export default function EditDevicePage({ params }: { params: Promise<{ id: strin
     })
   }, [params])
 
-  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Loading...</div>
-  if (!device) return <div style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>Device not found</div>
+  if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
+  if (!device) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Device not found</div>
   return (
     <div style={{ padding: '24px 28px' }}>
       <Breadcrumb crumbs={
