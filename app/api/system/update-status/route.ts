@@ -70,6 +70,12 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.4.0': [
+    'New "NocVault Hub — Suite Intelligence" section on the launcher: cross-app KPIs (fleet health, availability, log anomalies, IPAM utilization, open alerts) and correlated alerts spanning all four apps',
+    'Correlated alerts surface what no single app can see — e.g. an end-of-life device that also has active monitoring alerts and security events',
+    'Server Status moved to the bottom of the launcher; the existing app cards and Suite Health Overview are unchanged',
+    'Reads cross-app data via a dedicated read-only role (populates once NOCVAULT_RO_* is configured; degrades gracefully otherwise)',
+  ],
   '1.2.0': [
     'Enterprise dashboard with health score and charts',
     'Animated login page redesign',

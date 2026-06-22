@@ -21,6 +21,15 @@ type ServerStats = {
   uptime_seconds: number
   disk_forecast_days: number | null
 }
+// NocVault Hub — cross-app suite intelligence (from /api/hub/*)
+type HubKpis = {
+  fleetHealth: { score: number | null; grade: string | null; delta7d: number | null }
+  availability: { pct: number | null; devices: number | null; alerts: number | null }
+  logAnomalies: { total: number | null; newToday: number | null }
+  ipamUtilization: { pct: number | null; subnetsOver85: number | null }
+  openAlerts: { total: number | null }
+}
+type HubAlert = { severity: 'critical' | 'warning' | 'info'; title: string; detail: string; sources: string[] }
 
 const NAVY = '#1a2744'
 const RED = '#C8102E'
@@ -140,6 +149,16 @@ function ValueSkeleton({ w = '120px', h = '16px' }: { w?: string; h?: string }) 
 
 const SS_LABEL: React.CSSProperties = { fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }
 
+const SEV_BAR: Record<string, string> = { critical: '#dc2626', warning: '#d97706', info: '#2563eb' }
+const SRC_COLOR: Record<string, string> = { NetVault: '#C8102E', LogVault: '#2563eb', DDIVault: '#d97706', SpanVault: '#16a34a' }
+function fmtKpi(v: number | null | undefined, suffix = ''): string {
+  return v === null || v === undefined ? '—' : `${v}${suffix}`
+}
+function scoreColorVal(s: number | null | undefined): string {
+  if (s === null || s === undefined) return 'var(--text-muted)'
+  return s >= 80 ? '#16a34a' : s >= 60 ? '#d97706' : '#dc2626'
+}
+
 export default function LauncherPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -153,6 +172,8 @@ export default function LauncherPage() {
   const [serverLoading, setServerLoading] = useState(true)
   const [serverError, setServerError] = useState(false)
   const [clock, setClock] = useState('')
+  const [hubKpis, setHubKpis] = useState<HubKpis | null>(null)
+  const [hubAlerts, setHubAlerts] = useState<HubAlert[] | null>(null)
 
   useEffect(() => {
     fetch('/api/settings').then(r => r.json()).then(d => { if (d && !d.error) setSettings(d) }).catch(() => {})
@@ -160,6 +181,8 @@ export default function LauncherPage() {
     fetch('/api/suite/health').then(r => r.json()).then(d => { if (Array.isArray(d)) setHealth(d) }).catch(() => setHealth([]))
     fetch('/api/netvault-stats').then(r => r.json()).then(d => { if (d && !d.error) setNetStats(d) }).catch(() => {}).finally(() => setStatsLoading(false))
     fetch('/api/suite/stats').then(r => r.json()).then(d => { if (d && !d.error) setSuiteStats(d) }).catch(() => {})
+    fetch('/api/hub/kpis').then(r => r.json()).then(d => { if (d && !d.error) setHubKpis(d) }).catch(() => {})
+    fetch('/api/hub/alerts').then(r => r.json()).then(d => { if (d && Array.isArray(d.alerts)) setHubAlerts(d.alerts) }).catch(() => setHubAlerts([]))
   }, [])
 
   // Server status — fetch on load, auto-refresh every 30s. Never crash the page.
@@ -298,8 +321,8 @@ export default function LauncherPage() {
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex', flexDirection: 'column' }}>
       <style>{`
         @keyframes nvShimmer { 0%,100% { opacity: 0.35 } 50% { opacity: 0.8 } }
-        @media (max-width: 1100px) { .nv-top-grid { grid-template-columns: 1fr !important } .nv-app-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-server-grid { grid-template-columns: repeat(2, 1fr) !important } }
-        @media (max-width: 640px) { .nv-app-grid { grid-template-columns: 1fr !important } .nv-server-grid { grid-template-columns: 1fr !important } }
+        @media (max-width: 1100px) { .nv-top-grid { grid-template-columns: 1fr !important } .nv-app-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-server-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-kpi-grid { grid-template-columns: repeat(3, 1fr) !important } }
+        @media (max-width: 640px) { .nv-app-grid { grid-template-columns: 1fr !important } .nv-server-grid { grid-template-columns: 1fr !important } .nv-kpi-grid { grid-template-columns: repeat(2, 1fr) !important } }
       `}</style>
 
       {/* Top bar */}
@@ -471,6 +494,57 @@ export default function LauncherPage() {
               </div>
             )
           })}
+        </div>
+
+        {/* ===== NocVault Hub — Suite Intelligence (cross-app layer) ===== */}
+        <div style={{ marginTop: '34px', borderTop: '2px solid var(--border)', paddingTop: '18px', marginBottom: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>NocVault Hub — Suite Intelligence</h2>
+            <span style={{ background: primary, color: '#fff', fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.5px' }}>NEW</span>
+          </div>
+          <div style={{ fontSize: '13px', color: 'var(--text-muted)', margin: '4px 0 16px' }}>Cross-app insight no single app can see — correlated alerts and suite-wide KPIs across all four apps.</div>
+
+          {/* KPI strip */}
+          <div className="nv-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px', marginBottom: '16px' }}>
+            {[
+              { lab: 'Fleet Health', val: hubKpis ? fmtKpi(hubKpis.fleetHealth.score) : '—', unit: hubKpis?.fleetHealth.score != null ? '/100' : '', sub: hubKpis?.fleetHealth.delta7d != null ? `${hubKpis.fleetHealth.delta7d >= 0 ? '▲ +' : '▼ '}${hubKpis.fleetHealth.delta7d} vs 7d` : (hubKpis?.fleetHealth.grade ? `grade ${hubKpis.fleetHealth.grade}` : ''), color: scoreColorVal(hubKpis?.fleetHealth.score) },
+              { lab: 'Availability', val: hubKpis ? fmtKpi(hubKpis.availability.pct, '%') : '—', unit: '', sub: hubKpis?.availability.devices != null ? `${hubKpis.availability.devices} devices · ${hubKpis.availability.alerts ?? 0} alerts` : '', color: '#16a34a' },
+              { lab: 'Log Anomalies', val: hubKpis ? fmtKpi(hubKpis.logAnomalies.total) : '—', unit: '', sub: hubKpis?.logAnomalies.newToday != null ? `${hubKpis.logAnomalies.newToday} new today` : '', color: 'var(--text-primary)' },
+              { lab: 'IPAM Utilization', val: hubKpis ? fmtKpi(hubKpis.ipamUtilization.pct, '%') : '—', unit: '', sub: hubKpis?.ipamUtilization.subnetsOver85 != null ? `${hubKpis.ipamUtilization.subnetsOver85} subnets >85%` : '', color: '#d97706' },
+              { lab: 'Open Alerts', val: hubKpis ? fmtKpi(hubKpis.openAlerts.total) : '—', unit: '', sub: 'across all apps', color: (hubKpis?.openAlerts.total ?? 0) > 0 ? '#dc2626' : 'var(--text-primary)' },
+            ].map((t, i) => (
+              <div key={i} style={{ background: 'var(--bg-card)', borderRadius: '12px', boxShadow: CARD_SHADOW, padding: '14px 16px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{t.lab}</div>
+                <div style={{ fontSize: '24px', fontWeight: 800, color: t.color, marginTop: '3px', lineHeight: 1 }}>{t.val}<span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>{t.unit}</span></div>
+                <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px', minHeight: '14px' }}>{t.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Correlated suite alerts */}
+          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', boxShadow: CARD_SHADOW, padding: '16px 20px' }}>
+            <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>Correlated suite alerts</div>
+            {hubAlerts == null ? (
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '8px 0' }}>Loading…</div>
+            ) : hubAlerts.length === 0 ? (
+              <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '8px 0' }}>No correlated alerts right now. Suite intelligence populates as cross-app signals appear.</div>
+            ) : (
+              hubAlerts.map((a, i) => (
+                <div key={i} style={{ display: 'flex', gap: '10px', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--border-light)' }}>
+                  <div style={{ width: '3px', borderRadius: '2px', background: SEV_BAR[a.severity] || 'var(--text-muted)', flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>{a.title}</div>
+                    <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>{a.detail}</div>
+                    <div style={{ display: 'flex', gap: '4px', marginTop: '5px', flexWrap: 'wrap' }}>
+                      {a.sources.map(s => (
+                        <span key={s} style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '5px', color: SRC_COLOR[s] || 'var(--text-muted)', background: `${SRC_COLOR[s] || '#888888'}22` }}>{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
 
         {/* Server Status */}

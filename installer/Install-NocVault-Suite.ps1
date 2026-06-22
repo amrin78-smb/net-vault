@@ -103,6 +103,11 @@ $SharedSecret = "bue3VdWszntJ24GMhfKg1QkPIEaZYC95"
 # Generated once here so .env, standalone .env.local, the NSSM service env and
 # the scheduled task all share the same value.
 $CronSecret   = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+# LOG_INTEGRITY_KEY keys LogVault's tamper-evident HMAC hash chain (prev_hash/entry_hash
+# on syslog_entries). Generated once so the collector's NSSM env and LogVault .env.local
+# share one value; if it is unset the chain is silently disabled, so fresh installs must
+# set it for the Phase 3 log-integrity feature to work.
+$LogIntegrityKey = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
 
 # ── Auto-detect server IP ─────────────────────────────────────────
 if (-not $ServerIP) {
@@ -345,6 +350,7 @@ NOCVAULT_RO_HOST=localhost
 NOCVAULT_RO_PORT=5432
 NOCVAULT_RO_USER=nocvault_readonly
 NOCVAULT_RO_PASS=$NocReadOnlyPass
+NEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000
 "@ | Out-File -FilePath "$NVAppDir\.env" -Encoding UTF8 -NoNewline
 
 # Build
@@ -379,6 +385,7 @@ NOCVAULT_RO_HOST=localhost
 NOCVAULT_RO_PORT=5432
 NOCVAULT_RO_USER=nocvault_readonly
 NOCVAULT_RO_PASS=$NocReadOnlyPass
+NEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000
 "@ | Out-File -FilePath "$NVStandalone\.env.local" -Encoding UTF8 -NoNewline
 Write-OK "NetVault standalone .env.local written (incl. SERVER_IP, CRON_SECRET)"
 
@@ -434,7 +441,7 @@ if ($InstallLogVault) {
     Write-OK "LogVault schema applied"
 
     # Create .env.local in root AND frontend
-    $lvEnv = "DB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nLV_APP_PORT=3004`nLV_APP_URL=http://${ServerIP}:3004`nSYSLOG_PORTS=514,1514`nRETENTION_DAYS=90`nLOG_LEVEL=info`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNETVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NETVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    $lvEnv = "DB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nLV_APP_PORT=3004`nLV_APP_URL=http://${ServerIP}:3004`nSYSLOG_PORTS=514,1514`nRETENTION_DAYS=90`nLOG_LEVEL=info`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nLOG_INTEGRITY_KEY=$LogIntegrityKey`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     $lvEnv | Out-File -FilePath "$LVAppDir\.env.local" -Encoding UTF8 -NoNewline
     $lvEnv | Out-File -FilePath "$LVAppDir\frontend\.env.local" -Encoding UTF8 -NoNewline
     Write-OK "LogVault .env.local created (root + frontend)"
@@ -460,7 +467,7 @@ if ($InstallLogVault) {
     & $NssmExe remove LogVault-Collector confirm 2>$null
     & $NssmExe install LogVault-Collector "C:\Program Files\nodejs\node.exe" "$LVAppDir\collector\collector.js"
     & $NssmExe set LogVault-Collector AppDirectory        $LVAppDir
-    & $NssmExe set LogVault-Collector AppEnvironmentExtra "NODE_ENV=production`nDB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nSYSLOG_PORTS=514,1514`nRETENTION_DAYS=90`nLOG_LEVEL=info"
+    & $NssmExe set LogVault-Collector AppEnvironmentExtra "NODE_ENV=production`nDB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nSYSLOG_PORTS=514,1514`nRETENTION_DAYS=90`nLOG_LEVEL=info`nLOG_INTEGRITY_KEY=$LogIntegrityKey`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set LogVault-Collector DependOnService     $PgSvcName
     & $NssmExe set LogVault-Collector DisplayName         "LogVault - Syslog Collector"
     & $NssmExe set LogVault-Collector Start               SERVICE_AUTO_START
@@ -495,7 +502,7 @@ if ($InstallLogVault) {
     & $NssmExe remove LogVault-App confirm 2>$null
     & $NssmExe install LogVault-App $LVNextCmd "start -p 3004"
     & $NssmExe set LogVault-App AppDirectory        $LVFrontendDir
-    & $NssmExe set LogVault-App AppEnvironmentExtra "NODE_ENV=production`nLV_APP_PORT=3004`nNEXTAUTH_URL=http://${ServerIP}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNETVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NETVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    & $NssmExe set LogVault-App AppEnvironmentExtra "NODE_ENV=production`nLV_APP_PORT=3004`nNEXTAUTH_URL=http://${ServerIP}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set LogVault-App DependOnService     $PgSvcName
     & $NssmExe set LogVault-App DisplayName         "LogVault - App"
     & $NssmExe set LogVault-App Start               SERVICE_AUTO_START
@@ -515,8 +522,9 @@ if ($InstallLogVault) {
     New-NetFirewallRule -DisplayName "NocVault Syslog TCP 1514" -Direction Inbound -Protocol TCP -LocalPort 1514 -Action Allow -ErrorAction SilentlyContinue | Out-Null
     Write-OK "Firewall rules added for LogVault"
 
-    schtasks /create /tn "LogVault Cleanup" /tr "node `"$LVAppDir\scripts\cleanup.js`"" /sc daily /st 02:00 /f 2>$null | Out-Null
-    Write-OK "LogVault cleanup task scheduled (daily 2AM)"
+    # NOTE: No external cleanup scheduled task. Retention/partition cleanup now runs
+    # IN-PROCESS inside LogVault-Collector (ensure 7 days of partitions ahead, drop aged
+    # daily partitions, auto-ack/purge old alerts) ~60s after startup then every 24h.
 }
 
 # ================================================================
@@ -554,7 +562,7 @@ if ($InstallDDIVault) {
     Write-OK "DDIVault schemas applied and cross-DB grants set"
 
     # Create .env.local in root AND frontend
-    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_APP_URL=http://${ServerIP}:3006`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     $DDIFrontendDir = "$DDIAppDir\frontend"
     $ddiEnv | Out-File -FilePath "$DDIAppDir\.env.local" -Encoding UTF8 -NoNewline
     $ddiEnv | Out-File -FilePath "$DDIFrontendDir\.env.local" -Encoding UTF8 -NoNewline
