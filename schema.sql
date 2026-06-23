@@ -164,6 +164,66 @@ CREATE TABLE IF NOT EXISTS health_score_history (
 CREATE INDEX IF NOT EXISTS idx_health_score_history_date
     ON health_score_history (calculated_at DESC);
 
+-- ── EOL Intelligence ─────────────────────────────────────────────
+-- Backs the "EOL Intelligence" admin feature. These mirror the runtime
+-- self-heal in lib/eolEnrich.ts (ensureEolSchema) so a fresh install and an
+-- existing install converge on the same shape.
+
+-- Curated EOL/EOS seed (migrated from the legacy hardcoded lib/eolSeed.ts
+-- array on first run; grows by curation via the admin UI).
+CREATE TABLE IF NOT EXISTS eol_seed (
+    id               SERIAL PRIMARY KEY,
+    vendor           TEXT NOT NULL,
+    model_raw        TEXT NOT NULL,
+    model_normalized TEXT NOT NULL,
+    aliases          TEXT[] DEFAULT '{}',
+    eol_date         DATE,
+    eos_date         DATE,
+    source_url       TEXT,
+    confidence       TEXT DEFAULT 'high',
+    added_by         TEXT DEFAULT 'system',
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_eol_seed_normalized ON eol_seed (model_normalized);
+
+-- Background enrichment job runs (one row per run; status + progress + summary).
+CREATE TABLE IF NOT EXISTS eol_enrichment_jobs (
+    id            SERIAL PRIMARY KEY,
+    status        TEXT DEFAULT 'pending',
+    started_at    TIMESTAMPTZ,
+    completed_at  TIMESTAMPTZ,
+    scanned       INT DEFAULT 0,
+    matched       INT DEFAULT 0,
+    written       INT DEFAULT 0,
+    discrepancies INT DEFAULT 0,
+    unmatched_top JSONB,
+    error         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_eol_jobs_status ON eol_enrichment_jobs (status);
+CREATE INDEX IF NOT EXISTS idx_eol_jobs_id_desc ON eol_enrichment_jobs (id DESC);
+
+-- Conflicts between a manually-set EOL/EOS date and the curated seed date.
+CREATE TABLE IF NOT EXISTS eol_discrepancies (
+    id              SERIAL PRIMARY KEY,
+    device_id       UUID,  -- FK to devices(id) enforced at runtime (lib/eolEnrich); not declared here because this file's legacy devices.id is SERIAL while production is UUID
+    device_name     TEXT,
+    model           TEXT,
+    manual_date     DATE,
+    seed_date       DATE,
+    difference_days INT,
+    seed_entry_id   INT REFERENCES eol_seed(id),
+    status          TEXT DEFAULT 'pending',
+    resolved_by     TEXT,
+    resolved_at     TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_eol_discrepancies_status ON eol_discrepancies (status);
+
+-- pg_trgm powers fuzzy (similarity) matching in the enrichment engine. If the
+-- DB role lacks CREATE EXTENSION the engine degrades to exact+alias matching.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
 -- ── App Settings ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS app_settings (
     key   TEXT PRIMARY KEY,
