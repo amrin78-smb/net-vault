@@ -161,35 +161,31 @@ async function migrateLegacySeed(): Promise<void> {
 
     // Idempotent without a unique constraint: skip if a row with the same
     // normalized key already exists (upsert-by-model_normalized semantics).
-    const existing = await query(
-      `SELECT id, eol_date, eos_date FROM eol_seed WHERE model_normalized = $1 LIMIT 1`,
-      [normalized]
-    )
-    if (existing.rows.length > 0) {
-      // UPSERT: fill confirmed dates onto a DATELESS placeholder (e.g. a stub
-      // added via the worklist UI), but NEVER overwrite a row that already
-      // carries a curated date.
-      const row = existing.rows[0]
-      const hasDates = row.eol_date !== null || row.eos_date !== null
-      if (!hasDates && (entry.os_eol_date || entry.support_end_date)) {
-        await query(
-          `UPDATE eol_seed
-             SET eol_date = $1, eos_date = $2,
-                 source_url = COALESCE($3, source_url),
-                 confidence = $4, updated_at = NOW()
-           WHERE id = $5`,
-          [entry.os_eol_date, entry.support_end_date, sourceUrl, confidence, row.id]
-        )
-      }
-      continue
+    // Fill confirmed dates onto ANY dateless row(s) whose normalized key matches
+    // this entry's key OR one of its aliases — covers UI-added placeholders AND
+    // accidental duplicates — but NEVER clobber a row that already has a date.
+    if (entry.os_eol_date || entry.support_end_date) {
+      await query(
+        `UPDATE eol_seed
+           SET eol_date = $1, eos_date = $2,
+               source_url = COALESCE($3, source_url),
+               confidence = $4, updated_at = NOW()
+         WHERE model_normalized = ANY($5::text[])
+           AND eol_date IS NULL AND eos_date IS NULL`,
+        [entry.os_eol_date, entry.support_end_date, sourceUrl, confidence, [normalized, ...aliases]]
+      )
     }
 
-    await query(
-      `INSERT INTO eol_seed
-         (vendor, model_raw, model_normalized, aliases, eol_date, eos_date, source_url, confidence, added_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'system')`,
-      [vendor, rawModel, normalized, aliases, entry.os_eol_date, entry.support_end_date, sourceUrl, confidence]
-    )
+    // Insert the canonical row only when NO row exists yet for this key.
+    const any = await query(`SELECT 1 FROM eol_seed WHERE model_normalized = $1 LIMIT 1`, [normalized])
+    if (any.rows.length === 0) {
+      await query(
+        `INSERT INTO eol_seed
+           (vendor, model_raw, model_normalized, aliases, eol_date, eos_date, source_url, confidence, added_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'system')`,
+        [vendor, rawModel, normalized, aliases, entry.os_eol_date, entry.support_end_date, sourceUrl, confidence]
+      )
+    }
   }
 }
 

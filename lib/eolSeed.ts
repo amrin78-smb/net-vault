@@ -135,6 +135,11 @@ export const EOL_SEED: EolSeedEntry[] = [
     support_end_date: '2022-04-30', os_eol_date: null, confidence: 'exact',
     note: 'HPE FlexNetwork 5130 EI switch series — End-of-Sale 2022-04-30 (HPE/Aruba EoS announcement, Nov 2021), replaced by 5140 EI. https://www.arubanetworks.com/assets/support/EOS_HPE-FlexNetwork-5510-HI-5130-EI-Switch-Series.pdf',
   },
+  {
+    key: 'HP A5120 EI', matches: ['HP A5120-48G EI', 'HP A5120-24G EI', 'HP A5120-24G-PoE+ EI'],
+    support_end_date: '2015-10-01', os_eol_date: null, confidence: 'exact',
+    note: 'HP A5120 EI switches — same hardware as HP 5120 EI (older A-series/H3C branding; HPE docs use both names). End-of-Sale 2015-10-01 (HPE 5120/5500 Switch Series EoS announcement); end-of-life. https://support.hpe.com/docs/display/public/hpe-networking-eos/docs/products/eos/HP%205120%20and%205500%20Switch%20Series%20EOS%20Announcement.pdf',
+  },
 
   // Allied Telesis (official end-of-sale list)
   {
