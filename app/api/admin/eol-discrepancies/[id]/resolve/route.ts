@@ -40,7 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const dRes = await query(
-      `SELECT id, device_id, seed_date, status FROM eol_discrepancies WHERE id = $1`,
+      `SELECT id, device_id, seed_date::text AS seed_date, status FROM eol_discrepancies WHERE id = $1`,
       [id]
     )
     if (dRes.rows.length === 0) {
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (disc.device_id) {
         await query(
           `UPDATE devices
-             SET support_end_date = $1, eol_source = 'seed', eol_confidence = 'high',
+             SET support_end_date = $1::date, eol_source = 'seed', eol_confidence = 'high',
                  eol_enriched_at = NOW()
            WHERE id = $2`,
           [disc.seed_date, disc.device_id]

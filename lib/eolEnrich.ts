@@ -101,13 +101,11 @@ async function doEnsureEolSchema(): Promise<EolInitResult> {
   `)
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_discrepancies_status ON eol_discrepancies (status)`)
 
-  // pg_trgm is optional — degrade gracefully if the role can't create it.
+  // pg_trgm is optional. We do NOT issue CREATE EXTENSION here — a privileged
+  // DDL does not belong on the request path (it's declared in schema.sql / the
+  // installer). Runtime only does a read-only existence check; fuzzy tiers
+  // degrade away (exact + alias still work) when the extension is absent.
   let fuzzyAvailable = false
-  try {
-    await query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`)
-  } catch {
-    // permissions — fall through to a read-only check below
-  }
   try {
     const ext = await query(`SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'`)
     fuzzyAvailable = ext.rows.length > 0
@@ -261,8 +259,11 @@ export type MatchResult = {
 
 /** Load all seed rows from the table. */
 export async function loadSeedRows(): Promise<SeedRow[]> {
+  // Cast DATE columns to text so the pg driver returns 'YYYY-MM-DD' strings, not
+  // local-midnight Date objects (which roll back a day under +07 → off-by-one).
   const res = await query(
-    `SELECT id, vendor, model_raw, model_normalized, aliases, eol_date, eos_date, source_url, confidence
+    `SELECT id, vendor, model_raw, model_normalized, aliases,
+            eol_date::text AS eol_date, eos_date::text AS eos_date, source_url, confidence
      FROM eol_seed`
   )
   return res.rows.map((r: any) => ({
@@ -391,8 +392,8 @@ export async function loadDevices(): Promise<DeviceRow[]> {
            b.name AS brand,
            d.model,
            d.lifecycle_status,
-           d.support_end_date,
-           d.os_eol_date,
+           d.support_end_date::text AS support_end_date,
+           d.os_eol_date::text AS os_eol_date,
            d.eol_source
     FROM devices d
     LEFT JOIN brands b ON b.id = d.brand_id
@@ -502,7 +503,9 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
       const seed = result.seed
 
       // ── Discrepancy path: manual EOL/EOS device whose manual date disagrees.
-      const isManualEol = dev.lifecycle_status === EOL_LIFECYCLE
+      // Only a genuinely MANUAL date can be a discrepancy — never flag a date this
+      // enrichment itself seed-wrote (eol_source='seed').
+      const isManualEol = dev.lifecycle_status === EOL_LIFECYCLE && dev.eol_source !== 'seed'
       const dateDisagrees =
         seed.eos_date !== null &&
         (dev.support_end_date === null || dev.support_end_date !== seed.eos_date)
@@ -513,7 +516,7 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
         const dup = await query(
           `SELECT 1 FROM eol_discrepancies
            WHERE device_id = $1 AND seed_entry_id = $2
-             AND status IN ('pending', 'ignored') LIMIT 1`,
+             AND status IN ('pending', 'ignored', 'resolved') LIMIT 1`,
           [dev.id, seed.id]
         )
         if (dup.rows.length === 0) {
@@ -536,6 +539,13 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
         // Do NOT overwrite the manual date when a discrepancy is recorded.
         continue
       }
+
+      // This matched device is NOT a (new) discrepancy — clear any stale pending
+      // discrepancy left from a prior false flag or a now-agreeing date.
+      await query(
+        `DELETE FROM eol_discrepancies WHERE device_id = $1 AND seed_entry_id = $2 AND status = 'pending'`,
+        [dev.id, seed.id]
+      )
 
       // ── Normal write path: only where the date is unset or seed-written.
       const sets: string[] = []
@@ -576,6 +586,7 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
     const unmatchedTop = Array.from(unmatched.entries())
       .map(([normalizedKey, v]) => ({
         normalizedKey,
+        model: Array.from(v.samples)[0] ?? normalizedKey,
         count: v.count,
         sampleModels: Array.from(v.samples),
         ...(v.note ? { note: v.note } : {}),

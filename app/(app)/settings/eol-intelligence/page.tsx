@@ -161,12 +161,12 @@ export default function EolIntelligencePage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const loadLatest = useCallback(async () => {
-    const data = await safeJson<LatestJob>('/api/system/enrich-eol/latest')
-    if (data === null) {
+    const data = await safeJson<{ ok: boolean; job: LatestJob }>('/api/system/enrich-eol/latest')
+    if (data === null || !data.ok) {
       setLatestUnavailable(true)
     } else {
       setLatestUnavailable(false)
-      setLatest(data)
+      setLatest(data.job ?? null)
     }
     setLatestLoaded(true)
   }, [])
@@ -241,21 +241,22 @@ export default function EolIntelligencePage() {
     setJobError(null)
     if (pollRef.current) clearInterval(pollRef.current)
     const tick = async () => {
-      const data = await safeJson<JobStatus>(`/api/system/enrich-eol/status?jobId=${jobId}`)
-      if (!data) return // transient; keep polling
-      setLiveStatus(data)
-      if (data.status === 'completed') {
+      const data = await safeJson<{ ok: boolean; job: JobStatus }>(`/api/system/enrich-eol/status?jobId=${jobId}`)
+      if (!data || !data.job) return // transient; keep polling
+      const job = data.job
+      setLiveStatus(job)
+      if (job.status === 'completed') {
         if (pollRef.current) clearInterval(pollRef.current)
         pollRef.current = null
         setRunning(false)
         showToast('EOL enrichment complete')
         void loadLatest()
         void loadDiscrepancies()
-      } else if (data.status === 'failed') {
+      } else if (job.status === 'failed') {
         if (pollRef.current) clearInterval(pollRef.current)
         pollRef.current = null
         setRunning(false)
-        setJobError(data.error || 'Enrichment failed')
+        setJobError(job.error || 'Enrichment failed')
       }
     }
     pollRef.current = setInterval(() => { void tick() }, 2000)
