@@ -1,4 +1,5 @@
 import { query } from '@/lib/db'
+import { computeCompliance } from '@/lib/compliance'
 
 /**
  * Shared infrastructure health-score calculation.
@@ -6,6 +7,11 @@ import { query } from '@/lib/db'
  * Used by BOTH /api/dashboard/overview (live read) and
  * /api/system/health-snapshot (daily persisted snapshot) so the score, grade
  * and metrics are computed identically in every place.
+ *
+ * The compliance input is the REAL Risk/Compliance score from lib/compliance
+ * (weighted pass-rate of policy checks whose fields are actually populated) —
+ * NOT the old completeness-polluted average that penalised structurally empty
+ * columns. This keeps the health grade a measure of real risk.
  */
 
 export type HealthResult = {
@@ -32,44 +38,6 @@ async function safeCount(sql: string): Promise<number> {
   } catch (err) {
     console.error('[healthScore] query failed:', err)
     return 0
-  }
-}
-
-// Reuse compliance logic inline; default to 100 (neutral) if anything fails.
-async function computeComplianceScore(activeBase: string): Promise<number> {
-  try {
-    const totalRes = await query(`SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase}`)
-    const total = parseInt(totalRes.rows[0]?.n ?? '0') || 0
-    if (total === 0) return 100
-
-    const checkSqls = [
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND (serial_number IS NULL OR serial_number = '')`,
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND (ip_address IS NULL OR ip_address::text = '')`,
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND (purchase_vendor IS NULL OR purchase_vendor = '')`,
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND (support_contract_number IS NULL OR support_contract_number = '')`,
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND support_end_date IS NULL`,
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND support_end_date IS NOT NULL AND support_end_date < CURRENT_DATE`,
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND lifecycle_status = 'EOL / EOS'`,
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND (site IS NULL OR site = '' OR site_id IS NULL)`,
-      `SELECT COUNT(*) AS n FROM v_devices_flat WHERE ${activeBase} AND (device_type IS NULL OR device_type = '')`,
-    ]
-
-    const pcts: number[] = []
-    for (const sql of checkSqls) {
-      try {
-        const res = await query(sql)
-        const fail = parseInt(res.rows[0]?.n ?? '0') || 0
-        pcts.push(Math.round(((total - fail) / total) * 100))
-      } catch {
-        // column may not exist — skip this check
-      }
-    }
-
-    if (pcts.length === 0) return 100
-    return Math.round(pcts.reduce((s, p) => s + p, 0) / pcts.length)
-  } catch (err) {
-    console.error('[healthScore] compliance failed, defaulting to 100:', err)
-    return 100
   }
 }
 
@@ -100,7 +68,8 @@ export async function computeHealthScore(opts: { siteIds?: number[] } = {}): Pro
   const sites_at_risk = await safeCount(
     `SELECT COUNT(DISTINCT site_id) AS n FROM v_devices_flat WHERE lifecycle_status = 'EOL / EOS' AND site_id IS NOT NULL ${siteFilter}`
   )
-  const compliance_score = await computeComplianceScore(activeBase)
+  // Real Risk/Compliance score (weighted, only checks whose fields are tracked).
+  const compliance_score = (await computeCompliance(activeBase)).score
 
   const eol_assets_pct = total_devices > 0 ? Math.round((eol_assets / total_devices) * 100) : 0
   const healthy_devices_pct = total_devices > 0 ? Math.round((healthy_devices / total_devices) * 100) : 0

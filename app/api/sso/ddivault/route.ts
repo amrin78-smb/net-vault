@@ -4,11 +4,9 @@ import jwt from 'jsonwebtoken'
 
 export async function GET(req: NextRequest) {
   console.log('[SSO DDIVault] Request received')
-  console.log('[SSO DDIVault] Cookie header:', req.headers.get('cookie')?.substring(0, 100))
-  
+
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
-  console.log('[SSO DDIVault] Token found:', !!token, token?.email)
-  
+
   if (!token) {
     console.log('[SSO DDIVault] No token - redirecting to login')
     return NextResponse.redirect(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login?callbackUrl=%2Fapi%2Fsso%2Fddivault`)

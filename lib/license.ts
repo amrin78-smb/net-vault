@@ -2,7 +2,9 @@ import { execSync } from 'child_process'
 import { createHash, createDecipheriv } from 'crypto'
 import os from 'os'
 
-const LICENSE_SECRET = 'NocVault-License-Secret-2026-X9K' // 32 chars
+// Read from env to allow rotation; fall back to the original literal so existing
+// keys keep validating on servers where the env var is unset.
+const LICENSE_SECRET = process.env.NETVAULT_LICENSE_SECRET || 'NocVault-License-Secret-2026-X9K' // 32 chars
 const TRIAL_DAYS = 30
 const GRACE_DAYS = 7
 

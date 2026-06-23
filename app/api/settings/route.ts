@@ -5,10 +5,22 @@ import { query } from '@/lib/db'
 
 const ADMIN_ALLOWED_KEYS = new Set(['idle_timeout_minutes'])
 
+// Sensitive keys that must never be exposed to non-admin callers
+const SENSITIVE_KEYS = new Set(['license_key'])
+
 export async function GET() {
+  const session = await getServerSession(authOptions)
+  const role = (session?.user as { role?: string } | undefined)?.role
+  const isAdmin = role === 'admin' || role === 'super_admin'
+
   const res = await query('SELECT key, value FROM app_settings')
   const settings: Record<string, string> = {}
-  res.rows.forEach(r => { settings[r.key] = r.value })
+  res.rows.forEach(r => {
+    // Redact sensitive keys (e.g. license_key) for non-admin callers so the
+    // login/launcher pages can still fetch public branding unauthenticated.
+    if (!isAdmin && SENSITIVE_KEYS.has(r.key)) return
+    settings[r.key] = r.value
+  })
   return NextResponse.json(settings)
 }
 

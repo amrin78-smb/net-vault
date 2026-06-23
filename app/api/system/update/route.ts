@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { execSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
@@ -17,6 +19,12 @@ function findGitRoot(start: string): string {
 }
 
 export async function POST() {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = session.user as { role: string }
+  const isAdmin = user.role === 'admin' || user.role === 'super_admin'
+  if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
   const serverId = getServerId()
   const result = await query(
     "SELECT key, value FROM app_settings WHERE key IN ('install_date','license_key')"
