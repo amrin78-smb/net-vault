@@ -268,6 +268,23 @@ try {
         Write-Warn "CRON_SECRET not found in .env - skipping scheduled task registration"
     }
 
+    Write-Step "Registering daily EOL enrichment task"
+    if ($CronSecret) {
+        $eolAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
+        $eolTrigger = New-ScheduledTaskTrigger -Daily -At "01:00"
+        Register-ScheduledTask -TaskName "NetVault-EnrichEol" -Action $eolAction -Trigger $eolTrigger -RunLevel Highest -Force | Out-Null
+        Write-OK "Scheduled task 'NetVault-EnrichEol' registered (daily 01:00)"
+        # Run once now so EOL dates populate immediately from the curated seed
+        Write-Step "Running EOL enrichment"
+        try {
+            Start-Sleep -Seconds 2
+            & curl.exe -s -X POST "http://localhost:3000/api/system/enrich-eol" -H "Authorization: Bearer $CronSecret" | Out-Null
+            Write-OK "EOL enrichment run complete"
+        } catch { Write-Warn "EOL enrichment call failed (will run by the scheduler tonight)" }
+    } else {
+        Write-Warn "CRON_SECRET not found in .env - skipping EOL enrichment task"
+    }
+
 } catch {
     Write-Host ""
     Write-Host "=== Update failed: $_ ===" -ForegroundColor Red
