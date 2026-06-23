@@ -140,9 +140,11 @@ async function doEnsureEolSchema(): Promise<EolInitResult> {
 }
 
 /**
- * Migrate the legacy hardcoded EOL_SEED entries into eol_seed.
- * Idempotent: upserts by model_normalized so re-runs never duplicate, and a
- * pre-populated table is left untouched aside from (re)asserting the seeds.
+ * Migrate the curated EOL_SEED entries into the eol_seed table.
+ * Idempotent UPSERT by model_normalized: inserts new entries, and FILLS confirmed
+ * dates onto a dateless existing row (e.g. a placeholder added via the worklist
+ * UI) — but NEVER overwrites a row that already carries a curated date. Re-runs
+ * never duplicate.
  */
 async function migrateLegacySeed(): Promise<void> {
   for (const entry of EOL_SEED) {
@@ -160,10 +162,27 @@ async function migrateLegacySeed(): Promise<void> {
     // Idempotent without a unique constraint: skip if a row with the same
     // normalized key already exists (upsert-by-model_normalized semantics).
     const existing = await query(
-      `SELECT 1 FROM eol_seed WHERE model_normalized = $1 LIMIT 1`,
+      `SELECT id, eol_date, eos_date FROM eol_seed WHERE model_normalized = $1 LIMIT 1`,
       [normalized]
     )
-    if (existing.rows.length > 0) continue
+    if (existing.rows.length > 0) {
+      // UPSERT: fill confirmed dates onto a DATELESS placeholder (e.g. a stub
+      // added via the worklist UI), but NEVER overwrite a row that already
+      // carries a curated date.
+      const row = existing.rows[0]
+      const hasDates = row.eol_date !== null || row.eos_date !== null
+      if (!hasDates && (entry.os_eol_date || entry.support_end_date)) {
+        await query(
+          `UPDATE eol_seed
+             SET eol_date = $1, eos_date = $2,
+                 source_url = COALESCE($3, source_url),
+                 confidence = $4, updated_at = NOW()
+           WHERE id = $5`,
+          [entry.os_eol_date, entry.support_end_date, sourceUrl, confidence, row.id]
+        )
+      }
+      continue
+    }
 
     await query(
       `INSERT INTO eol_seed
