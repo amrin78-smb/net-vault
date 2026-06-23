@@ -82,6 +82,26 @@ export const EOL_SEED: EolSeedEntry[] = [
     confidence: 'exact',
     note: 'Aruba 310-series AP — end-of-support 2026-12-30 (HPE Aruba EOS notice)',
   },
+  // ── Unconfirmed worklist (high-volume models, NO vendor date found) ──
+  // Researched against vendor sources 2026-06; NO confirmed EoS/EoSL date
+  // published, so deliberately NOT added to EOL_SEED (no guessing). Revisit
+  // when HPE Aruba / Grandstream publish an official notice.
+  //
+  // unconfirmed: 'Aruba 505' (500-series Wi-Fi 6 AP, ~355 units). HPE Aruba has
+  //   NOT published an EOS/EOSL notice for the 500 series (only 300/310-series
+  //   notices EOS-AP-2101/2102 exist; the 500-series notice URL 404s). Third
+  //   parties show only ESTIMATES, not vendor dates. Siblings 'Aruba 504'/'AP504'
+  //   are in the same boat. Source: https://www.it-server-room.com/en/hpe-aruba-networks-wireless-ap-eos-eol-schedule/
+  //   ("Aruba does not pre-announce EOS dates"; values are estimates).
+  // unconfirmed: 'GWN7660' (Grandstream Wi-Fi 6 AP, ~56 units). No EOL/EOS
+  //   announcement; Grandstream still lists it as an active product with recent
+  //   firmware. Source: https://www.grandstream.com/products/networking-solutions/indoor-wifi-access-points/product/gwn7660
+  // unconfirmed: 'Aruba 515' (510-series Wi-Fi 6 AP, ~54 units). No vendor EOS
+  //   notice; ServiceExpress lists EOL/EOSL as "Date Not Published".
+  //   Source: https://serviceexpress.com/eol-eosl-database/products/aruba-ap-515-network-connectivity/
+  // unconfirmed: 'Aruba 575' (570-series outdoor Wi-Fi 6 AP, ~54 units). No
+  //   vendor EOS notice published; only third-party estimates exist.
+  //   Source: https://www.it-server-room.com/en/hpe-aruba-networks-wireless-ap-eos-eol-schedule/
 ]
 
 /**

@@ -255,6 +255,9 @@ ALTER TABLE users    ADD COLUMN IF NOT EXISTS password_hash      TEXT;
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_type            TEXT;
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_version         TEXT;
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_eol_date        DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_source         TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_confidence     TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_enriched_at    TIMESTAMPTZ;
 
 -- Fix role constraint
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
