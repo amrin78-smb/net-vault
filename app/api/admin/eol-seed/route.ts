@@ -36,7 +36,8 @@ export async function GET(req: NextRequest) {
     const total = totalRes.rows[0].total as number
 
     const res = await query(
-      `SELECT id, vendor, model_raw, model_normalized, aliases, eol_date, eos_date,
+      `SELECT id, vendor, model_raw, model_normalized, aliases,
+              eol_date::text AS eol_date, eos_date::text AS eos_date,
               source_url, confidence, added_by, created_at, updated_at
        FROM eol_seed
        ORDER BY vendor, model_raw, id
