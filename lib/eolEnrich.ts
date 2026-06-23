@@ -192,13 +192,21 @@ async function migrateLegacySeed(): Promise<void> {
 /** Derive a vendor name from the legacy key/raw model. */
 function deriveVendor(key: string, rawModel: string): string {
   const k = key.toUpperCase()
+  if (k.startsWith('MERAKI')) return 'Meraki'
   if (k.startsWith('CISCO')) return 'Cisco'
   if (k.startsWith('ARUBA') || k.startsWith('HPE') || k.startsWith('HP')) return 'Aruba'
   if (k.startsWith('RUCKUS')) return 'Ruckus'
   if (k.startsWith('GRANDSTREAM') || /^GWN/i.test(rawModel)) return 'Grandstream'
-  if (k.startsWith('MERAKI')) return 'Meraki'
-  // Fall back to the first token of the key.
-  return key.split(/\s+/)[0] || 'Unknown'
+  if (k.startsWith('AT-') || k.startsWith('ALLIED')) return 'Allied Telesis'
+  if (k.startsWith('TPLINK') || k.startsWith('TP-LINK') || /^TP-?LINK/i.test(rawModel)) return 'TP-Link'
+  if (k.startsWith('NETGEAR')) return 'Netgear'
+  if (k.startsWith('HUAWEI')) return 'Huawei'
+  if (k.startsWith('FORCEPOINT')) return 'Forcepoint'
+  if (k.startsWith('PALO') || /^PA-/i.test(rawModel)) return 'Palo Alto'
+  // Unknown vendor: return a NEUTRAL label (never the model string) so
+  // normalizeForMatch can't strip the entire model when vendor === model
+  // (which produced an empty key and broke matching for AT-* / TP-Link entries).
+  return 'Unknown'
 }
 
 /** Map legacy confidence (exact|family|inferred) → new scheme (high|medium|low). */

@@ -206,6 +206,53 @@ export const EOL_SEED: EolSeedEntry[] = [
     note: 'Cisco Meraki MR52 — End-of-Support 2026-07-21 (Meraki official EOL page). https://documentation.meraki.com/Platform_Management/Product_Information/End-of-Life_Notices/Meraki_End-of-Life_(EOL)_Products_and_Dates',
   },
 
+  // ── Second sweep (researched 2026-06) — newly-added fleet models, vendor-confirmed ──
+  {
+    key: 'CISCO C2960X', matches: ['Cisco Catalyst 2960-X 48 GigE, 4 x 1G SFP'],
+    support_end_date: '2027-10-31', os_eol_date: null, confidence: 'exact',
+    note: 'Cisco Catalyst 2960-X series — Last Date of Support 2027-10-31 (Cisco EoL bulletin c51-744432; EoS 2022-10-31). https://www.cisco.com/c/en/us/products/collateral/switches/catalyst-2960-x-series-switches/eos-eol-notice-c51-744432.html',
+  },
+  {
+    key: 'CISCO C2960', matches: ['WS-C2960-24PC-L'],
+    support_end_date: '2019-10-31', os_eol_date: null, confidence: 'exact',
+    note: 'Cisco Catalyst 2960 (classic) — Last Date of Support 2019-10-31 (Cisco EoL bulletin c51-730121); end-of-life. https://www.cisco.com/c/en/us/products/collateral/switches/catalyst-2960-series-switches/eos-eol-notice-c51-730121.html',
+  },
+  {
+    key: 'CISCO AIRONET 3802I', matches: ['AIR-AP3802I-E-K9'],
+    support_end_date: '2027-10-31', os_eol_date: null, confidence: 'exact',
+    note: 'Cisco Aironet 3800 series (AIR-AP3802I) — Last Date of Support 2027-10-31 (Cisco EoL bulletin; EoS 2022-10-31). https://www.cisco.com/c/en/us/products/collateral/wireless/aironet-3800-series-access-points/aironet-3800-series-access-points-eol.html',
+  },
+  {
+    key: 'CISCO CBS350', matches: ['CBS350-48T-4G', 'Cisco CBS350 Managed 24-port GE, 4x1G SFP'],
+    support_end_date: '2029-10-31', os_eol_date: null, confidence: 'exact',
+    note: 'Cisco Business CBS350 series (select models) — Last Date of Support 2029-10-31 (Cisco EoL bulletin; EoS 2024-10-29). https://www.cisco.com/c/en/us/products/collateral/switches/business-350-series-managed-switches/business-cbs350-series-managed-switch-mod-eol.html',
+  },
+  {
+    key: 'MERAKI MR20', matches: ['Meraki MR20'],
+    support_end_date: '2028-06-13', os_eol_date: null, confidence: 'exact',
+    note: 'Cisco Meraki MR20 — End-of-Support 2028-06-13 (Meraki official EOL page). https://documentation.meraki.com/Platform_Management/Product_Information/End-of-Life_Notices/Meraki_End-of-Life_(EOL)_Products_and_Dates',
+  },
+  {
+    key: 'MERAKI MS120-24', matches: ['Meraki MS120-24', 'Cisco Meraki MS120-24'],
+    support_end_date: '2030-03-28', os_eol_date: null, confidence: 'exact',
+    note: 'Cisco Meraki MS120 family (incl. MS120-24) — End-of-Support 2030-03-28 (Meraki official EOL page). https://documentation.meraki.com/Platform_Management/Product_Information/End-of-Life_Notices/Meraki_End-of-Life_(EOL)_Products_and_Dates',
+  },
+  {
+    key: 'ARUBA 7205', matches: ['Aruba 7205 Controller'],
+    support_end_date: '2024-11-30', os_eol_date: null, confidence: 'exact',
+    note: 'Aruba 7205 Mobility Controller — End-of-Sale 2024-11-30 ("EOS Planning"; HPE Aruba warranty/EOS quick reference, Oct 2024). https://asp-documents.arubanetworks.com/portals/0/el/warranty-coverage-quick-reference.pdf',
+  },
+  {
+    key: 'TPLINK TL-SG1016', matches: ['TP-LINK 16-P TL-SG1016'],
+    support_end_date: '2024-12-03', os_eol_date: null, confidence: 'exact',
+    note: 'TP-Link TL-SG1016 16-port switch — latest HW version End-of-Sale 2024-12-03 (TP-Link US Business EOL list). https://static.tp-link.com/upload/manual/2025/202509/20250903/US%20EOL%20List%20Business.pdf',
+  },
+  {
+    key: 'TPLINK TL-SG1024', matches: ['TP-LINK 24-P TL-SG1024'],
+    support_end_date: '2024-09-21', os_eol_date: null, confidence: 'exact',
+    note: 'TP-Link TL-SG1024 24-port switch — latest HW version End-of-Sale 2024-09-21 (TP-Link US Business EOL list). https://static.tp-link.com/upload/manual/2025/202509/20250903/US%20EOL%20List%20Business.pdf',
+  },
+
   // ── Researched but UNCONFIRMED (no official vendor EOL date) — intentionally
   //    NOT seeded (no guessing). These are current Wi-Fi 6 / current-gen products:
   //    Aruba 504/505/515/575/615, Aruba 2930F (24G/48G PoE variants), Aruba CX
