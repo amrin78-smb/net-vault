@@ -18,6 +18,7 @@ type ComplianceData = {
   riskActiveCount: number
   notTrackedCount: number
   minPopPct: number
+  hasData?: boolean
 }
 
 export default function CompliancePage() {
@@ -50,6 +51,11 @@ export default function CompliancePage() {
 
   const { score, completenessScore, total, checks, riskActiveCount, notTrackedCount, minPopPct } = data
 
+  // No active devices, or no risk check cleared the population gate → there is
+  // genuinely nothing to assess. Show an explicit "no data" state instead of a
+  // misleading green 100%.
+  const noData = data.hasData === false
+
   // Risk score is "share of policy passing" — higher is better.
   const scoreColor  = score >= 80 ? 'var(--tint-success-fg)' : score >= 60 ? 'var(--tint-warn-fg)' : 'var(--tint-danger-fg)'
   const scoreBg     = score >= 80 ? 'var(--tint-success)' : score >= 60 ? 'var(--tint-warn)' : 'var(--tint-danger)'
@@ -75,6 +81,22 @@ export default function CompliancePage() {
       {/* Two score cards: Risk/Compliance + Data Completeness */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '16px', marginBottom: '28px' }}>
         {/* Risk / Compliance */}
+        {noData ? (
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+            <div style={{ textAlign: 'center', flexShrink: 0 }}>
+              <div style={{ fontSize: '34px', fontWeight: '800', color: 'var(--text-muted)', lineHeight: 1 }}>—</div>
+              <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', marginTop: '4px' }}>Risk / Compliance</div>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '4px' }}>No data to assess</div>
+              <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>
+                {total === 0
+                  ? 'There are no active devices to evaluate yet. Add devices to the inventory to begin compliance scoring.'
+                  : `No policy check has enough populated data to score yet (fields need coverage on at least ${minPopPct}% of the fleet). Checks reactivate automatically once the data exists.`}
+              </div>
+            </div>
+          </div>
+        ) : (
         <div style={{ background: scoreBg, border: `1px solid ${scoreBorder}`, borderRadius: '8px', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
           <div style={{ textAlign: 'center', flexShrink: 0 }}>
             <div style={{ fontSize: '52px', fontWeight: '800', color: scoreColor, lineHeight: 1 }}>{score}%</div>
@@ -95,6 +117,7 @@ export default function CompliancePage() {
             </div>
           </div>
         </div>
+        )}
 
         {/* Data Completeness */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>

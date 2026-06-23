@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
+import pool from '@/lib/db'
 import { ensureEolSchema } from '@/lib/eolEnrich'
 
 async function requireSuperAdmin() {
@@ -50,19 +51,30 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const resolvedBy = guard.user.id ? String(guard.user.id) : null
 
     if (action === 'accept_seed') {
-      if (disc.device_id) {
-        await query(
-          `UPDATE devices
-             SET support_end_date = $1::date, eol_source = 'seed', eol_confidence = 'high',
-                 eol_enriched_at = NOW()
-           WHERE id = $2`,
-          [disc.seed_date, disc.device_id]
+      // Device date UPDATE + discrepancy status UPDATE must land together.
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        if (disc.device_id) {
+          await client.query(
+            `UPDATE devices
+               SET support_end_date = $1::date, eol_source = 'seed', eol_confidence = 'high',
+                   eol_enriched_at = NOW()
+             WHERE id = $2`,
+            [disc.seed_date, disc.device_id]
+          )
+        }
+        await client.query(
+          `UPDATE eol_discrepancies SET status = 'resolved', resolved_by = $1, resolved_at = NOW() WHERE id = $2`,
+          [resolvedBy, id]
         )
+        await client.query('COMMIT')
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {})
+        throw e
+      } finally {
+        client.release()
       }
-      await query(
-        `UPDATE eol_discrepancies SET status = 'resolved', resolved_by = $1, resolved_at = NOW() WHERE id = $2`,
-        [resolvedBy, id]
-      )
       return NextResponse.json({ ok: true, status: 'resolved' })
     }
 

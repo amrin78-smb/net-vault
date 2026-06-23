@@ -152,6 +152,13 @@ export type ComplianceResult = {
   /** Number of risk checks parked in the "not yet tracked" bucket. */
   notTrackedCount: number
   minPopPct: number
+  /**
+   * False when there is nothing to assess: no active devices, or no risk check
+   * cleared the population gate. In that case `score`/`completenessScore` default
+   * to 100 only as a neutral placeholder — callers should render a "no data"
+   * state instead of a misleading green 100%.
+   */
+  hasData: boolean
 }
 
 async function safeCount(sql: string): Promise<number | null> {
@@ -231,5 +238,8 @@ export async function computeCompliance(activeBase: string): Promise<ComplianceR
     riskActiveCount: riskChecks.length,
     notTrackedCount,
     minPopPct: MIN_POP_PCT,
+    // Nothing to assess if there are no active devices or no risk check cleared
+    // the population gate — distinguishes a real 100% from an empty fleet.
+    hasData: riskChecks.length > 0 && total > 0,
   }
 }

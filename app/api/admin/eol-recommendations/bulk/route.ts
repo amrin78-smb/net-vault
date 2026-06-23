@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
+import pool from '@/lib/db'
 import { ensureEolSchema } from '@/lib/eolEnrich'
 
 async function requireSuperAdmin() {
@@ -62,33 +63,50 @@ export async function POST(req: NextRequest) {
     }>
 
     let count = 0
+    let failed = 0
 
     if (action === 'accept_all') {
+      // Each recommendation is its own transaction (device UPDATE + audit INSERT
+      // + status UPDATE land together or not at all). A failure on one item rolls
+      // back ONLY that item and is counted as a failure — the rest still apply,
+      // and we report an accurate success count instead of a blanket 500.
       for (const rec of recs) {
-        if (rec.device_id) {
-          await query(
-            `UPDATE devices SET lifecycle_status = $1 WHERE id = $2`,
-            [rec.recommended_status, rec.device_id]
-          )
-          if (guard.user.id) {
-            await query(
-              `INSERT INTO audit_log (device_id, changed_by, field_name, old_value, new_value)
-               VALUES ($1, $2, 'lifecycle_status', $3, $4)`,
-              [
-                rec.device_id,
-                parseInt(guard.user.id),
-                rec.current_status,
-                `${rec.recommended_status} — EOL Intelligence: ${rec.reason}`,
-              ]
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          if (rec.device_id) {
+            await client.query(
+              `UPDATE devices SET lifecycle_status = $1 WHERE id = $2`,
+              [rec.recommended_status, rec.device_id]
             )
+            if (guard.user.id) {
+              await client.query(
+                `INSERT INTO audit_log (device_id, changed_by, field_name, old_value, new_value)
+                 VALUES ($1, $2, 'lifecycle_status', $3, $4)`,
+                [
+                  rec.device_id,
+                  parseInt(guard.user.id),
+                  rec.current_status,
+                  `${rec.recommended_status} — EOL Intelligence: ${rec.reason}`,
+                ]
+              )
+            }
           }
+          await client.query(
+            `UPDATE eol_recommendations SET status = 'resolved', reviewed_by = $1, reviewed_at = NOW() WHERE id = $2`,
+            [reviewedBy, rec.id]
+          )
+          await client.query('COMMIT')
+          count++
+        } catch (e) {
+          await client.query('ROLLBACK').catch(() => {})
+          failed++
+          console.error('[admin/eol-recommendations/bulk] item failed', rec.id, e)
+        } finally {
+          client.release()
         }
-        await query(
-          `UPDATE eol_recommendations SET status = 'resolved', reviewed_by = $1, reviewed_at = NOW() WHERE id = $2`,
-          [reviewedBy, rec.id]
-        )
-        count++
       }
+      return NextResponse.json({ ok: true, count, ...(failed > 0 ? { failed } : {}) })
     } else {
       // ignore_all
       const upd = await query(

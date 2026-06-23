@@ -43,18 +43,48 @@ export async function POST(req: NextRequest) {
   try {
     const init = await ensureEolSchema()
 
-    // No overlap: if a run is already in flight, hand back its id.
+    // Reap zombie runs: if node restarted mid-run, a job row can be stuck at
+    // status='running' forever (nothing flips it to 'failed'). Treat a 'running'
+    // job whose started_at is older than 30 min as abandoned — mark it failed so
+    // it no longer blocks new runs (and so the partial unique index is free).
+    await query(
+      `UPDATE eol_enrichment_jobs
+         SET status = 'failed', completed_at = NOW(),
+             error = 'superseded: stale/abandoned run'
+       WHERE status = 'running'
+         AND (started_at IS NULL OR started_at <= NOW() - INTERVAL '30 minutes')`
+    )
+
+    // No overlap: if a FRESH run is already in flight (< 30 min), hand back its id.
     const running = await query(
-      `SELECT id FROM eol_enrichment_jobs WHERE status = 'running' ORDER BY id DESC LIMIT 1`
+      `SELECT id FROM eol_enrichment_jobs
+       WHERE status = 'running' AND started_at > NOW() - INTERVAL '30 minutes'
+       ORDER BY id DESC LIMIT 1`
     )
     if (running.rows.length > 0) {
       return NextResponse.json({ ok: true, jobId: running.rows[0].id, status: 'running', reused: true })
     }
 
-    const inserted = await query(
-      `INSERT INTO eol_enrichment_jobs (status, started_at) VALUES ('running', NOW()) RETURNING id`
-    )
-    const jobId = inserted.rows[0].id as number
+    let jobId: number
+    try {
+      const inserted = await query(
+        `INSERT INTO eol_enrichment_jobs (status, started_at) VALUES ('running', NOW()) RETURNING id`
+      )
+      jobId = inserted.rows[0].id as number
+    } catch (err: any) {
+      // Lost the check-then-insert race: a concurrent POST inserted the running
+      // job first and the partial unique index (eol_jobs_one_running) rejected
+      // ours. Hand back the existing running job instead of failing.
+      if (err && err.code === '23505') {
+        const existing = await query(
+          `SELECT id FROM eol_enrichment_jobs WHERE status = 'running' ORDER BY id DESC LIMIT 1`
+        )
+        if (existing.rows.length > 0) {
+          return NextResponse.json({ ok: true, jobId: existing.rows[0].id, status: 'running', reused: true })
+        }
+      }
+      throw err
+    }
 
     // Run in the background against the persistent node server.
     setImmediate(() => {

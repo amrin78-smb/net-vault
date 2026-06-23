@@ -82,11 +82,17 @@ async function doEnsureEolSchema(): Promise<EolInitResult> {
   `)
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_jobs_status ON eol_enrichment_jobs (status)`)
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_jobs_id_desc ON eol_enrichment_jobs (id DESC)`)
+  // At most ONE running job at a time. Guards against the check-then-insert race
+  // (two concurrent POSTs both passing the overlap SELECT) — the second INSERT
+  // raises 23505, which the POST handler catches and treats as a reuse.
+  await query(
+    `CREATE UNIQUE INDEX IF NOT EXISTS eol_jobs_one_running ON eol_enrichment_jobs (status) WHERE status = 'running'`
+  )
 
   await query(`
     CREATE TABLE IF NOT EXISTS eol_discrepancies (
       id              SERIAL PRIMARY KEY,
-      device_id       UUID REFERENCES devices(id),
+      device_id       UUID,
       device_name     TEXT,
       model           TEXT,
       manual_date     DATE,
@@ -104,7 +110,7 @@ async function doEnsureEolSchema(): Promise<EolInitResult> {
   await query(`
     CREATE TABLE IF NOT EXISTS eol_recommendations (
       id                 SERIAL PRIMARY KEY,
-      device_id          UUID REFERENCES devices(id),
+      device_id          UUID,
       device_name        TEXT,
       model              TEXT,
       current_status     TEXT,
@@ -159,20 +165,39 @@ async function migrateLegacySeed(): Promise<void> {
     const sourceUrl = extractUrl(entry.note)
     const confidence = mapLegacyConfidence(entry.confidence)
 
-    // Idempotent without a unique constraint: skip if a row with the same
-    // normalized key already exists (upsert-by-model_normalized semantics).
-    // Fill confirmed dates onto ANY dateless row(s) whose normalized key matches
-    // this entry's key OR one of its aliases — covers UI-added placeholders AND
-    // accidental duplicates — but NEVER clobber a row that already has a date.
+    // ── Repair pass (FIX): an earlier deriveVendor returned 'Unknown' for vendors
+    // it didn't recognize (e.g. D-Link, Ubiquiti), so the canonical row was
+    // persisted with a model_normalized that KEPT the brand token (e.g.
+    // 'dlinkdgs110024p') while the device side STRIPS it ('dgs110024p') — the
+    // keys diverged and matching never fired. Recompute the system row's
+    // model_normalized + aliases with the now-fixed deriveVendor. Scoped to
+    // added_by='system' so we never touch a curator's manually-keyed entry, and
+    // matched by raw model (model_raw) which deriveVendor's output does not
+    // depend on, so the OLD stored key is irrelevant to finding the row.
+    await query(
+      `UPDATE eol_seed
+         SET model_normalized = $1, aliases = $2, vendor = $3, updated_at = NOW()
+       WHERE added_by = 'system'
+         AND model_raw = $4
+         AND model_normalized <> $1`,
+      [normalized, aliases, vendor, rawModel]
+    )
+
+    // Fill confirmed dates onto a dateless row this entry owns — covers a
+    // UI/worklist-added placeholder for the same model that has no date yet.
+    // Scoped to system-owned rows matched by the EXACT canonical key (never
+    // ANY(aliases) on a non-unique column, which could splash one entry's dates
+    // onto an unrelated placeholder), and never overwrites confidence on a fill.
     if (entry.os_eol_date || entry.support_end_date) {
       await query(
         `UPDATE eol_seed
            SET eol_date = $1, eos_date = $2,
                source_url = COALESCE($3, source_url),
-               confidence = $4, updated_at = NOW()
-         WHERE model_normalized = ANY($5::text[])
+               updated_at = NOW()
+         WHERE added_by = 'system'
+           AND model_normalized = $4
            AND eol_date IS NULL AND eos_date IS NULL`,
-        [entry.os_eol_date, entry.support_end_date, sourceUrl, confidence, [normalized, ...aliases]]
+        [entry.os_eol_date, entry.support_end_date, sourceUrl, normalized]
       )
     }
 
@@ -203,6 +228,8 @@ function deriveVendor(key: string, rawModel: string): string {
   if (k.startsWith('HUAWEI')) return 'Huawei'
   if (k.startsWith('FORCEPOINT')) return 'Forcepoint'
   if (k.startsWith('PALO') || /^PA-/i.test(rawModel)) return 'Palo Alto'
+  if (k.startsWith('DLINK') || k.startsWith('D-LINK') || k.startsWith('D LINK')) return 'D-Link'
+  if (k.startsWith('UBIQUITI') || k.startsWith('UBNT') || k.startsWith('UNIFI')) return 'Ubiquiti'
   // Unknown vendor: return a NEUTRAL label (never the model string) so
   // normalizeForMatch can't strip the entire model when vendor === model
   // (which produced an empty key and broke matching for AT-* / TP-Link entries).
@@ -329,6 +356,22 @@ function toIso(d: any): string {
 }
 
 /**
+ * Of several seed rows that matched the same device key, pick the most useful:
+ * a row with a date beats a dateless placeholder, then higher confidence wins.
+ * Returns null for an empty list.
+ */
+function pickBestSeed(rows: SeedRow[]): SeedRow | null {
+  if (rows.length === 0) return null
+  const rank = (c: string) => (c === 'high' ? 3 : c === 'medium' ? 2 : 1)
+  const hasDate = (s: SeedRow) => s.eol_date !== null || s.eos_date !== null
+  return rows.reduce((best, s) => {
+    const bDated = hasDate(best), sDated = hasDate(s)
+    if (sDated !== bDated) return sDated ? s : best
+    return rank(s.confidence) > rank(best.confidence) ? s : best
+  })
+}
+
+/**
  * Match a single device model against the loaded seed rows.
  *
  * Tiers:
@@ -346,18 +389,18 @@ export function matchDevice(
 ): MatchResult {
   if (!deviceNormalized) return { seed: null }
 
-  // b. exact
-  for (const s of seeds) {
-    if (s.model_normalized && s.model_normalized === deviceNormalized) {
-      return { seed: s, via: 'exact', confidence: s.confidence, score: 1 }
-    }
-  }
-  // c. alias
-  for (const s of seeds) {
-    if (s.aliases.some((a) => a && a === deviceNormalized)) {
-      return { seed: s, via: 'alias', confidence: s.confidence, score: 1 }
-    }
-  }
+  // b. exact — when several seed rows share the same normalized key (e.g. a
+  // curated dated entry plus a dateless worklist placeholder, or a duplicate),
+  // PREFER the one that actually carries a date so the device gets enriched
+  // instead of silently matching the empty placeholder.
+  const exactMatches = seeds.filter((s) => s.model_normalized && s.model_normalized === deviceNormalized)
+  const exact = pickBestSeed(exactMatches)
+  if (exact) return { seed: exact, via: 'exact', confidence: exact.confidence, score: 1 }
+
+  // c. alias — same preference for dated rows on a tie.
+  const aliasMatches = seeds.filter((s) => s.aliases.some((a) => a && a === deviceNormalized))
+  const alias = pickBestSeed(aliasMatches)
+  if (alias) return { seed: alias, via: 'alias', confidence: alias.confidence, score: 1 }
 
   if (!fuzzyAvailable) return { seed: null }
 
@@ -645,13 +688,17 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
           if (recommended) {
             // Dedupe / cooldown: skip if a pending row exists, or an ignored row
             // was reviewed within the last 90 days (don't reappear for 90 days).
+            // Scoped to THIS recommended_status so a genuinely new opposite-
+            // direction recommendation (e.g. now 'should be EOL' after a prior
+            // ignored 'possibly incorrect') is not wrongly suppressed.
             const existing = await query(
               `SELECT 1 FROM eol_recommendations
                WHERE device_id = $1
+                 AND recommended_status = $2
                  AND (status = 'pending'
                       OR (status = 'ignored' AND reviewed_at > NOW() - INTERVAL '90 days'))
                LIMIT 1`,
-              [dev.id]
+              [dev.id, recommended]
             )
             if (existing.rows.length === 0) {
               await query(

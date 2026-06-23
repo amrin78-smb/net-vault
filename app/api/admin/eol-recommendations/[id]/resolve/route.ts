@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
+import pool from '@/lib/db'
 import { ensureEolSchema } from '@/lib/eolEnrich'
 
 async function requireSuperAdmin() {
@@ -50,28 +51,40 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const reviewedBy = guard.user.id ? String(guard.user.id) : null
 
     if (action === 'accept') {
-      if (rec.device_id) {
-        await query(
-          `UPDATE devices SET lifecycle_status = $1 WHERE id = $2`,
-          [rec.recommended_status, rec.device_id]
-        )
-        if (guard.user.id) {
-          await query(
-            `INSERT INTO audit_log (device_id, changed_by, field_name, old_value, new_value)
-             VALUES ($1, $2, 'lifecycle_status', $3, $4)`,
-            [
-              rec.device_id,
-              parseInt(guard.user.id),
-              rec.current_status,
-              `${rec.recommended_status} — EOL Intelligence: ${rec.reason}`,
-            ]
+      // Multi-write: device UPDATE + audit INSERT + recommendation status UPDATE
+      // must all land or none — run them in one transaction on a single client.
+      const client = await pool.connect()
+      try {
+        await client.query('BEGIN')
+        if (rec.device_id) {
+          await client.query(
+            `UPDATE devices SET lifecycle_status = $1 WHERE id = $2`,
+            [rec.recommended_status, rec.device_id]
           )
+          if (guard.user.id) {
+            await client.query(
+              `INSERT INTO audit_log (device_id, changed_by, field_name, old_value, new_value)
+               VALUES ($1, $2, 'lifecycle_status', $3, $4)`,
+              [
+                rec.device_id,
+                parseInt(guard.user.id),
+                rec.current_status,
+                `${rec.recommended_status} — EOL Intelligence: ${rec.reason}`,
+              ]
+            )
+          }
         }
+        await client.query(
+          `UPDATE eol_recommendations SET status = 'resolved', reviewed_by = $1, reviewed_at = NOW() WHERE id = $2`,
+          [reviewedBy, id]
+        )
+        await client.query('COMMIT')
+      } catch (e) {
+        await client.query('ROLLBACK').catch(() => {})
+        throw e
+      } finally {
+        client.release()
       }
-      await query(
-        `UPDATE eol_recommendations SET status = 'resolved', reviewed_by = $1, reviewed_at = NOW() WHERE id = $2`,
-        [reviewedBy, id]
-      )
       return NextResponse.json({ ok: true, status: 'resolved' })
     }
 

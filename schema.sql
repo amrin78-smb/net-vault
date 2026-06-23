@@ -202,6 +202,10 @@ CREATE TABLE IF NOT EXISTS eol_enrichment_jobs (
 );
 CREATE INDEX IF NOT EXISTS idx_eol_jobs_status ON eol_enrichment_jobs (status);
 CREATE INDEX IF NOT EXISTS idx_eol_jobs_id_desc ON eol_enrichment_jobs (id DESC);
+-- At most ONE running job at a time. Guards the check-then-insert race in the
+-- enrich-eol POST handler (a concurrent insert raises 23505, which the handler
+-- catches and treats as a reuse of the in-flight job).
+CREATE UNIQUE INDEX IF NOT EXISTS eol_jobs_one_running ON eol_enrichment_jobs (status) WHERE status = 'running';
 
 -- Conflicts between a manually-set EOL/EOS date and the curated seed date.
 CREATE TABLE IF NOT EXISTS eol_discrepancies (
