@@ -197,6 +197,7 @@ export default function EolIntelligencePage() {
   const [form, setForm] = useState<SeedForm>(EMPTY_FORM)
   const [savingSeed, setSavingSeed] = useState(false)
   const [seedFormError, setSeedFormError] = useState('')
+  const [brands, setBrands] = useState<string[]>([])
   const formRef = useRef<HTMLDivElement | null>(null)
 
   // live preview
@@ -260,6 +261,7 @@ export default function EolIntelligencePage() {
     void loadSeed(1)
     void loadDiscrepancies()
     void loadRecommendations()
+    void safeJson<{ brands?: string[] }>('/api/lookup').then(d => setBrands(Array.isArray(d?.brands) ? d.brands : []))
   }, [isSuperAdmin, loadLatest, loadSeed, loadDiscrepancies, loadRecommendations])
 
   // If a previous run is still in progress when the page loads, resume polling.
@@ -604,7 +606,11 @@ export default function EolIntelligencePage() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>Vendor <span style={{ color: 'var(--primary)' }}>*</span></label>
-                <input className="input" placeholder="e.g. Cisco" value={form.vendor} onChange={e => setForm(f => ({ ...f, vendor: e.target.value }))} />
+                <select className="input select" value={form.vendor} onChange={e => setForm(f => ({ ...f, vendor: e.target.value }))}>
+                  <option value="">Select vendor…</option>
+                  {brands.map(b => <option key={b} value={b}>{b}</option>)}
+                  {form.vendor && !brands.includes(form.vendor) && <option value={form.vendor}>{form.vendor}</option>}
+                </select>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>Model (raw) <span style={{ color: 'var(--primary)' }}>*</span></label>
