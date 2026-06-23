@@ -220,6 +220,28 @@ CREATE TABLE IF NOT EXISTS eol_discrepancies (
 );
 CREATE INDEX IF NOT EXISTS idx_eol_discrepancies_status ON eol_discrepancies (status);
 
+-- Status recommendations: high-confidence lifecycle_status corrections the
+-- enrichment engine derives from the curated seed (e.g. an active device whose
+-- vendor EOL date has passed, or an EOL device the vendor still supports).
+CREATE TABLE IF NOT EXISTS eol_recommendations (
+    id                 SERIAL PRIMARY KEY,
+    device_id          UUID,  -- FK to devices(id) enforced at runtime (lib/eolEnrich); not declared here because this file's legacy devices.id is SERIAL while production is UUID
+    device_name        TEXT,
+    model              TEXT,
+    current_status     TEXT,
+    recommended_status TEXT,
+    reason             TEXT,
+    seed_eol_date      DATE,
+    seed_eos_date      DATE,
+    seed_entry_id      INT REFERENCES eol_seed(id),
+    confidence         TEXT DEFAULT 'high',
+    status             TEXT DEFAULT 'pending',
+    reviewed_by        TEXT,
+    reviewed_at        TIMESTAMPTZ,
+    created_at         TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_eol_recommendations_status ON eol_recommendations (status);
+
 -- pg_trgm powers fuzzy (similarity) matching in the enrichment engine. If the
 -- DB role lacks CREATE EXTENSION the engine degrades to exact+alias matching.
 CREATE EXTENSION IF NOT EXISTS pg_trgm;

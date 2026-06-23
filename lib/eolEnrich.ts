@@ -101,6 +101,27 @@ async function doEnsureEolSchema(): Promise<EolInitResult> {
   `)
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_discrepancies_status ON eol_discrepancies (status)`)
 
+  await query(`
+    CREATE TABLE IF NOT EXISTS eol_recommendations (
+      id                 SERIAL PRIMARY KEY,
+      device_id          UUID REFERENCES devices(id),
+      device_name        TEXT,
+      model              TEXT,
+      current_status     TEXT,
+      recommended_status TEXT,
+      reason             TEXT,
+      seed_eol_date      DATE,
+      seed_eos_date      DATE,
+      seed_entry_id      INT REFERENCES eol_seed(id),
+      confidence         TEXT DEFAULT 'high',
+      status             TEXT DEFAULT 'pending',
+      reviewed_by        TEXT,
+      reviewed_at        TIMESTAMPTZ,
+      created_at         TIMESTAMPTZ DEFAULT NOW()
+    )
+  `)
+  await query(`CREATE INDEX IF NOT EXISTS idx_eol_recommendations_status ON eol_recommendations (status)`)
+
   // pg_trgm is optional. We do NOT issue CREATE EXTENSION here — a privileged
   // DDL does not belong on the request path (it's declared in schema.sql / the
   // installer). Runtime only does a read-only existence check; fuzzy tiers
@@ -457,6 +478,9 @@ export function diffDays(aIso: string | null, bIso: string | null): number {
 
 const EOL_LIFECYCLE = 'EOL / EOS'
 
+/** Lifecycle values that count as "active / supported" (the real value has a comma). */
+const ACTIVE_LIFECYCLE = new Set(['Active, Supported', 'Active', 'Supported', 'Active/Supported'])
+
 /**
  * Run the full enrichment pass for a job that has already been INSERTed with
  * status='running'. Designed to run in the background (setImmediate); it owns
@@ -476,9 +500,13 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
     const seeds = await loadSeedRows()
     const devices = await loadDevices()
 
+    // tz-safe "today" as an ISO 'YYYY-MM-DD' string (matches seed date strings).
+    const today = (await query(`SELECT CURRENT_DATE::text AS d`)).rows[0].d as string
+
     let matched = 0
     let written = 0
     let discrepancies = 0
+    let recommendations = 0
     const unmatched = new Map<string, { count: number; samples: Set<string>; note?: string }>()
 
     let processed = 0
@@ -572,6 +600,67 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
         written += 1
       }
 
+      // ── Status recommendations ──────────────────────────────────────
+      // Only for high-confidence exact/alias matches — NEVER fuzzy/medium.
+      if ((result.via === 'exact' || result.via === 'alias') && seed.confidence === 'high') {
+        const effectiveEol = seed.eol_date ?? seed.eos_date
+        if (effectiveEol) {
+          const delta = diffDays(today, effectiveEol) // effectiveEol - today
+          let recommended: string | null = null
+          let reason = ''
+
+          if (ACTIVE_LIFECYCLE.has(dev.lifecycle_status ?? '') && delta < 0) {
+            // CASE 1 — should be EOL: active device whose vendor EOL date has passed.
+            recommended = EOL_LIFECYCLE
+            reason = `Vendor confirmed EOL date ${effectiveEol} has passed`
+          } else if (dev.lifecycle_status === EOL_LIFECYCLE && delta > 90) {
+            // CASE 2 — possibly incorrect EOL: vendor still supports for > 90 days.
+            recommended = 'Active, Supported'
+            reason = `Vendor confirms support until ${effectiveEol} — ${delta} days remaining`
+          }
+
+          if (recommended) {
+            // Dedupe / cooldown: skip if a pending row exists, or an ignored row
+            // was reviewed within the last 90 days (don't reappear for 90 days).
+            const existing = await query(
+              `SELECT 1 FROM eol_recommendations
+               WHERE device_id = $1
+                 AND (status = 'pending'
+                      OR (status = 'ignored' AND reviewed_at > NOW() - INTERVAL '90 days'))
+               LIMIT 1`,
+              [dev.id]
+            )
+            if (existing.rows.length === 0) {
+              await query(
+                `INSERT INTO eol_recommendations
+                   (device_id, device_name, model, current_status, recommended_status,
+                    reason, seed_eol_date, seed_eos_date, seed_entry_id, confidence, status)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'high', 'pending')`,
+                [
+                  dev.id,
+                  dev.name,
+                  dev.model,
+                  dev.lifecycle_status,
+                  recommended,
+                  reason,
+                  seed.eol_date,
+                  seed.eos_date,
+                  seed.id,
+                ]
+              )
+              recommendations += 1
+            }
+          } else {
+            // AUTO-CLEAR: neither case applies (e.g. the status was already
+            // corrected) — drop any stale pending recommendation for this device.
+            await query(
+              `DELETE FROM eol_recommendations WHERE device_id = $1 AND status = 'pending'`,
+              [dev.id]
+            )
+          }
+        }
+      }
+
       // Periodically flush progress so the status route shows movement.
       if (processed % 50 === 0) {
         await query(
@@ -601,6 +690,10 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
              unmatched_top = $5
        WHERE id = $6`,
       [devices.length, matched, written, discrepancies, JSON.stringify(unmatchedTop), jobId]
+    )
+    console.log(
+      `[eolEnrich] job ${jobId} done: scanned=${devices.length} matched=${matched} ` +
+      `written=${written} discrepancies=${discrepancies} recommendations=${recommendations}`
     )
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

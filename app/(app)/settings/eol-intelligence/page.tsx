@@ -60,6 +60,20 @@ type Discrepancy = {
   created_at: string
 }
 
+type Rec = {
+  id: number
+  device_id: string
+  device_name: string | null
+  model: string | null
+  current_status: string | null
+  recommended_status: string
+  reason: string
+  effective_date: string | null
+  days: number
+  confidence: string
+  source_url: string | null
+}
+
 type SeedForm = {
   vendor: string
   model_raw: string
@@ -218,13 +232,35 @@ export default function EolIntelligencePage() {
     setDiscLoaded(true)
   }, [])
 
+  // ── status recommendations ──────────────────────────────────────────
+  const [shouldBeEol, setShouldBeEol] = useState<Rec[]>([])
+  const [possiblyIncorrect, setPossiblyIncorrect] = useState<Rec[]>([])
+  const [totalPending, setTotalPending] = useState(0)
+  const [recsLoaded, setRecsLoaded] = useState(false)
+  const [recsUnavailable, setRecsUnavailable] = useState(false)
+  const recsRef = useRef<HTMLDivElement | null>(null)
+
+  const loadRecommendations = useCallback(async () => {
+    const data = await safeJson<{ ok: boolean; should_be_eol: Rec[]; possibly_incorrect: Rec[]; total_pending: number }>('/api/admin/eol-recommendations')
+    if (data === null || !data.ok) {
+      setRecsUnavailable(true)
+    } else {
+      setRecsUnavailable(false)
+      setShouldBeEol(Array.isArray(data.should_be_eol) ? data.should_be_eol : [])
+      setPossiblyIncorrect(Array.isArray(data.possibly_incorrect) ? data.possibly_incorrect : [])
+      setTotalPending(typeof data.total_pending === 'number' ? data.total_pending : 0)
+    }
+    setRecsLoaded(true)
+  }, [])
+
   // ── initial load ────────────────────────────────────────────────────
   useEffect(() => {
     if (!isSuperAdmin) return
     void loadLatest()
     void loadSeed(1)
     void loadDiscrepancies()
-  }, [isSuperAdmin, loadLatest, loadSeed, loadDiscrepancies])
+    void loadRecommendations()
+  }, [isSuperAdmin, loadLatest, loadSeed, loadDiscrepancies, loadRecommendations])
 
   // If a previous run is still in progress when the page loads, resume polling.
   useEffect(() => {
@@ -399,6 +435,57 @@ export default function EolIntelligencePage() {
     openAdd({ model_raw: model })
   }
 
+  // ── status recommendation actions ───────────────────────────────────
+  async function resolveRecommendation(rec: Rec, action: 'accept' | 'ignore', type: 'should_be_eol' | 'possibly_incorrect') {
+    try {
+      const res = await fetch(`/api/admin/eol-recommendations/${rec.id}/resolve`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }),
+      })
+      if (res.ok) {
+        if (type === 'should_be_eol') setShouldBeEol(prev => prev.filter(r => r.id !== rec.id))
+        else setPossiblyIncorrect(prev => prev.filter(r => r.id !== rec.id))
+        setTotalPending(prev => Math.max(0, prev - 1))
+        showToast(action === 'ignore'
+          ? 'Recommendation ignored'
+          : type === 'should_be_eol' ? 'Device marked as EOL' : 'Device reverted to Active')
+      } else {
+        showToast('Failed to update recommendation', 'error')
+      }
+    } catch {
+      showToast('Failed to update recommendation', 'error')
+    }
+  }
+
+  async function bulkRecommendation(action: 'accept_all' | 'ignore_all', type: 'should_be_eol' | 'possibly_incorrect') {
+    const isEol = type === 'should_be_eol'
+    const ok = await confirm({
+      title: action === 'accept_all' ? (isEol ? 'Mark all as EOL' : 'Revert all to Active') : 'Ignore all',
+      message: action === 'accept_all'
+        ? (isEol
+          ? 'Mark all listed devices as EOL? This updates their status to match vendor data.'
+          : 'Revert all listed devices to Active? This updates their status to match vendor data.')
+        : 'Ignore all listed recommendations?',
+      confirmLabel: action === 'accept_all' ? (isEol ? 'Mark all as EOL' : 'Revert all') : 'Ignore all',
+      danger: isEol && action === 'accept_all',
+    })
+    if (!ok) return
+    try {
+      const res = await fetch('/api/admin/eol-recommendations/bulk', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, type }),
+      })
+      if (res.ok) {
+        const d = await res.json().catch(() => null)
+        const n = d?.count
+        showToast(typeof n === 'number' ? `Updated ${n} device${n === 1 ? '' : 's'}` : 'Recommendations updated')
+        void loadRecommendations()
+      } else {
+        showToast('Failed to apply bulk action', 'error')
+      }
+    } catch {
+      showToast('Failed to apply bulk action', 'error')
+    }
+  }
+
   // ── render gating ───────────────────────────────────────────────────
   if (sessionStatus === 'loading') {
     return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
@@ -472,6 +559,26 @@ export default function EolIntelligencePage() {
               <StatTile label="Matched" value={stats.matched.toLocaleString()} accent="var(--tint-success-fg)" />
               <StatTile label="Written" value={stats.written.toLocaleString()} accent="var(--primary)" />
               <StatTile label="Discrepancies" value={stats.discrepancies.toLocaleString()} accent={stats.discrepancies > 0 ? 'var(--tint-warn-fg)' : undefined} />
+              <button
+                type="button"
+                onClick={() => recsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                disabled={totalPending === 0}
+                title={totalPending > 0 ? 'View status recommendations' : undefined}
+                style={{
+                  textAlign: 'left',
+                  font: 'inherit',
+                  background: 'var(--surface-subtle)',
+                  border: '1px solid var(--border-light)',
+                  borderRadius: '8px',
+                  padding: '14px 16px',
+                  minWidth: '120px',
+                  flex: '1 1 120px',
+                  cursor: totalPending > 0 ? 'pointer' : 'default',
+                }}
+              >
+                <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: totalPending > 0 ? 'var(--tint-warn-fg)' : 'var(--text-muted)', lineHeight: 1.1 }}>{totalPending.toLocaleString()}</div>
+                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Recommendations</div>
+              </button>
             </div>
 
             {jobError && (
@@ -651,6 +758,99 @@ export default function EolIntelligencePage() {
           </div>
         )}
       </div>
+
+      {/* ── 3.5 STATUS RECOMMENDATIONS ─────────────────────────────── */}
+      {recsLoaded && !recsUnavailable && totalPending > 0 && (
+        <div ref={recsRef} style={cardStyle}>
+          <div style={{ ...sectionLabel }}>Status recommendations <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({totalPending})</span></div>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '-8px 0 14px' }}>Device status updates suggested by vendor EOL data. Verify against the source before accepting.</p>
+
+          {/* SUBSECTION A — Should be EOL */}
+          {shouldBeEol.length > 0 && (
+            <div style={{ marginBottom: possiblyIncorrect.length > 0 ? '24px' : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>⚠️ Devices Past EOL — Status Update Recommended</div>
+                <button className="btn-danger" style={{ padding: '6px 12px', fontSize: 'var(--text-sm)' }} onClick={() => void bulkRecommendation('accept_all', 'should_be_eol')}>Mark all as EOL</button>
+              </div>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>These devices are marked Active but vendor confirms EOL date has passed. Review and update status.</p>
+              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr><th>Device Name</th><th>Model</th><th>Current Status</th><th>EOL Date</th><th>Days Overdue</th><th>Confidence</th><th>Source</th><th>Action</th></tr></thead>
+                  <tbody>
+                    {shouldBeEol.map(r => (
+                      <tr key={r.id}>
+                        <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{r.device_name || '—'}</td>
+                        <td style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>{r.model || '—'}</td>
+                        <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{r.current_status || '—'}</td>
+                        <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(r.effective_date)}</td>
+                        <td>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: r.days > 365 ? 'var(--tint-danger-fg)' : 'var(--tint-warn-fg)' }}>
+                            {r.days.toLocaleString()} day{r.days === 1 ? '' : 's'}
+                          </span>
+                        </td>
+                        <td><ConfidenceBadge value={r.confidence} /></td>
+                        <td>
+                          {r.source_url
+                            ? <a href={r.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: 'var(--text-sm)' }}>Verify ↗</a>
+                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => void resolveRecommendation(r, 'accept', 'should_be_eol')}>Mark as EOL</button>
+                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => void resolveRecommendation(r, 'ignore', 'should_be_eol')}>Ignore</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SUBSECTION B — Possibly Incorrect EOL */}
+          {possiblyIncorrect.length > 0 && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
+                <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>ℹ️ Devices Marked EOL — Vendor Confirms Support</div>
+                <button className="btn-primary" style={{ padding: '6px 12px', fontSize: 'var(--text-sm)' }} onClick={() => void bulkRecommendation('accept_all', 'possibly_incorrect')}>Revert all to Active</button>
+              </div>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>These devices are marked EOL/EOS but vendor data shows they are still within support period.</p>
+              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr><th>Device Name</th><th>Model</th><th>Vendor Support Until</th><th>Days Remaining</th><th>Confidence</th><th>Source</th><th>Action</th></tr></thead>
+                  <tbody>
+                    {possiblyIncorrect.map(r => (
+                      <tr key={r.id}>
+                        <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{r.device_name || '—'}</td>
+                        <td style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>{r.model || '—'}</td>
+                        <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(r.effective_date)}</td>
+                        <td>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: r.days > 365 ? 'var(--tint-success-fg)' : 'var(--tint-warn-fg)' }}>
+                            {r.days.toLocaleString()} day{r.days === 1 ? '' : 's'}
+                          </span>
+                        </td>
+                        <td><ConfidenceBadge value={r.confidence} /></td>
+                        <td>
+                          {r.source_url
+                            ? <a href={r.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: 'var(--text-sm)' }}>Verify ↗</a>
+                            : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--tint-success)', color: 'var(--tint-success-fg)', cursor: 'pointer', fontWeight: 500 }} onClick={() => void resolveRecommendation(r, 'accept', 'possibly_incorrect')}>Revert to Active</button>
+                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => void resolveRecommendation(r, 'ignore', 'possibly_incorrect')}>Ignore</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── 4. DISCREPANCY REVIEW ──────────────────────────────────── */}
       <div style={cardStyle}>
