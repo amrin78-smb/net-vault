@@ -437,6 +437,20 @@ export default function EolIntelligencePage() {
     openAdd({ model_raw: model })
   }
 
+  async function bulkAddWorklist() {
+    const ok = await confirm({
+      title: 'Add all uncovered models to seed',
+      message: 'Add every device model with no EOL coverage to the seed as a dateless entry? This tracks the whole fleet and clears the worklist — but the EOL dates themselves still need research (many current-gen models have no published vendor date).',
+      confirmLabel: 'Add all',
+    })
+    if (!ok) return
+    const res = await safeJson<{ ok: boolean; added: number }>('/api/admin/eol-seed/add-all-unmatched', { method: 'POST' })
+    if (!res || !res.ok) { showToast('Bulk add failed — service unavailable.', 'error'); return }
+    showToast(`Added ${res.added} model(s) to the seed — running enrichment to refresh…`)
+    void loadSeed(1)
+    runEnrichment()
+  }
+
   // ── status recommendation actions ───────────────────────────────────
   async function resolveRecommendation(rec: Rec, action: 'accept' | 'ignore', type: 'should_be_eol' | 'possibly_incorrect') {
     try {
@@ -731,8 +745,13 @@ export default function EolIntelligencePage() {
 
       {/* ── 3. COVERAGE WORKLIST ───────────────────────────────────── */}
       <div style={cardStyle}>
-        <div style={{ ...sectionLabel }}>Coverage worklist {unmatched.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({unmatched.length})</span>}</div>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '-8px 0 14px' }}>Top device models with no EOL coverage. Add them to the seed dataset to expand enrichment.</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ ...sectionLabel, marginBottom: 0 }}>Coverage worklist {unmatched.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({unmatched.length})</span>}</div>
+          {unmatched.length > 0 && (
+            <button onClick={bulkAddWorklist} style={{ padding: '6px 12px', fontSize: 'var(--text-sm)', border: '1px solid var(--primary)', borderRadius: '6px', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>+ Add all to seed</button>
+          )}
+        </div>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 14px' }}>Device models with no EOL coverage. Add them to the seed dataset to expand enrichment.</p>
         {!latestLoaded ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
         ) : latestUnavailable ? (
