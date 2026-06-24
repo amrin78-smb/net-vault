@@ -70,6 +70,12 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.12.0': [
+    'EOL Intelligence: added vendor-confirmed end-of-support dates for SonicWall SonicPoint-Ne (2020-10-01), SonicWave 432e (2027-04-23) and NSA 3650 (2026-08-01), plus Cisco SG250-08HP / SG200-50 / SG95D-08 / SG350-52 / SG300-28PP / CBS350-24T-4G, Cisco Aironet 1242AG, and TP-Link EAP110-Outdoor — all from official vendor EoL bulletins',
+    'EOL Intelligence: the SonicWall AP entries also match the legacy mislabeled model strings ("Ne INT" / "432e INT"), so the ESIP access points are dated even before their model text is cleaned up',
+    'EOL Intelligence: enrichment now recognizes SonicWall as a vendor and matching is fully brand-independent — a device with a wrong or missing brand still matches the seed on its model, so inaccurate brand labels no longer block EOL dating',
+    'EOL Intelligence: a fresh full research sweep confirmed the remaining dateless models (Aruba Wi-Fi 6 APs, Grandstream GWN, Ruckus R550/R650/T350, Huawei AirEngine/S-series, Palo Alto PA-440/460, Cisco C9200L/C9300) are current-gen with no published vendor EoL — correctly left undated rather than guessed',
+  ],
   '1.11.0': [
     'Import: re-importing a device now updates it in place when its IP matches an existing device in the same site, even if the serial does not match — so you can correct or backfill devices that were first imported without serials (or with wrong/garbled ones) just by re-importing with the real names and serial numbers',
     'Import: the IP-based update only overwrites the fields actually present in your file, so a sparse re-import never wipes existing good data (a blank Lifecycle/Status column no longer resets known values), and Technical Debt is recomputed from the resulting values',

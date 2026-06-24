@@ -184,7 +184,7 @@ export const EOL_SEED: EolSeedEntry[] = [
     note: 'Cisco Aironet 2800 series (AIR-AP2802I) — Last Date of Support 2027-04-30 (Cisco EoL announcement, Nov 2022). https://www.cisco.com/c/en/us/products/collateral/wireless/aironet-2800-series-access-points/aironet-2800-series-access-points-eol.html',
   },
   {
-    key: 'CISCO SG300-28', matches: ['SG300-28'],
+    key: 'CISCO SG300-28', matches: ['SG300-28', 'SG300-28PP'],
     support_end_date: '2023-11-30', os_eol_date: null, confidence: 'exact',
     note: 'Cisco SG300-28 (300 Series Managed) — Last Date of Support 2023-11-30 (Cisco EoL bulletin c51-740542); end-of-life. https://www.cisco.com/c/en/us/products/collateral/switches/small-business-300-series-managed-switches/eos-eol-notice-c51-740542.html',
   },
@@ -223,7 +223,7 @@ export const EOL_SEED: EolSeedEntry[] = [
     note: 'Cisco Aironet 3800 series (AIR-AP3802I) — Last Date of Support 2027-10-31 (Cisco EoL bulletin; EoS 2022-10-31). https://www.cisco.com/c/en/us/products/collateral/wireless/aironet-3800-series-access-points/aironet-3800-series-access-points-eol.html',
   },
   {
-    key: 'CISCO CBS350', matches: ['CBS350-48T-4G', 'Cisco CBS350 Managed 24-port GE, 4x1G SFP'],
+    key: 'CISCO CBS350', matches: ['CBS350-48T-4G', 'CBS350-24T-4G', 'Cisco CBS350 Managed 24-port GE, 4x1G SFP'],
     support_end_date: '2029-10-31', os_eol_date: null, confidence: 'exact',
     note: 'Cisco Business CBS350 series (select models) — Last Date of Support 2029-10-31 (Cisco EoL bulletin; EoS 2024-10-29). https://www.cisco.com/c/en/us/products/collateral/switches/business-350-series-managed-switches/business-cbs350-series-managed-switch-mod-eol.html',
   },
@@ -260,7 +260,7 @@ export const EOL_SEED: EolSeedEntry[] = [
   { key: 'CISCO C3750X', matches: ['WS-C3750X'], support_end_date: '2028-09-30', os_eol_date: null, confidence: 'exact', note: 'Cisco Catalyst 3750-X — LDoS 2028-09-30 (Cisco EoL, 2023). https://www.cisco.com/c/en/us/products/collateral/switches/catalyst-3750-x-series-switches/catalyst-3750-x-series-switches-eol.html' },
   { key: 'CISCO ISR1941', matches: ['Cisco Router 1941', 'CISCO C1941'], support_end_date: '2023-09-30', os_eol_date: null, confidence: 'exact', note: 'Cisco ISR 1941 router — LDoS 2023-09-30 (Cisco EoL c51-740520); end-of-life. https://www.cisco.com/c/en/us/products/collateral/routers/1900-series-integrated-services-routers-isr/eos-eol-notice-c51-740520.html' },
   { key: 'CISCO C2960-24P', matches: ['Cisco Catalyst 2960 24p'], support_end_date: '2019-10-31', os_eol_date: null, confidence: 'exact', note: 'Cisco Catalyst 2960 (classic) 24-port — LDoS 2019-10-31 (Cisco EoL c51-730121); end-of-life. https://www.cisco.com/c/en/us/products/collateral/switches/catalyst-2960-series-switches/eos-eol-notice-c51-730121.html' },
-  { key: 'CISCO SG350-28', matches: ['SG350-28'], support_end_date: '2026-10-31', os_eol_date: null, confidence: 'exact', note: 'Cisco SG350-28 (350 Series) — LDoS 2026-10-31 (Cisco EoL c51-2442364). https://www.cisco.com/c/en/us/products/collateral/switches/350-series-managed-switches/eos-eol-notice-c51-2442364.html' },
+  { key: 'CISCO SG350-28', matches: ['SG350-28', 'SG350-52'], support_end_date: '2026-10-31', os_eol_date: null, confidence: 'exact', note: 'Cisco SG350-28 (350 Series) — LDoS 2026-10-31 (Cisco EoL c51-2442364). https://www.cisco.com/c/en/us/products/collateral/switches/350-series-managed-switches/eos-eol-notice-c51-2442364.html' },
   { key: 'CISCO SF302-08PP', matches: ['SF302-08PP 8-P'], support_end_date: '2023-10-31', os_eol_date: null, confidence: 'exact', note: 'Cisco SF302-08PP (300 Series) — LDoS 2023-10-31 (Cisco EoL c51-740542); end-of-life. https://www.cisco.com/c/en/us/products/collateral/switches/small-business-300-series-managed-switches/eos-eol-notice-c51-740542.html' },
   { key: 'CISCO C1000-8FP', matches: ['C1000-8FP-2G-L'], support_end_date: '2030-04-30', os_eol_date: null, confidence: 'exact', note: 'Cisco Catalyst 1000 (C1000-8FP-2G-L) — LDoS 2030-04-30 (Cisco EoL, 2024; EoS 2025-04-30). https://www.cisco.com/c/en/us/products/collateral/switches/catalyst-1000-series-switches/catalyst-1000-series-switches-eol.html' },
   // Cisco Aironet APs (Cisco EoL bulletins)
@@ -286,14 +286,28 @@ export const EOL_SEED: EolSeedEntry[] = [
   { key: 'DLINK DGS-1100-24P', matches: ['D-Link DGS-1100-24P'], support_end_date: '2026-02-28', os_eol_date: null, confidence: 'exact', note: 'D-Link DGS-1100-24P — end of technical support 2026-02-28 (D-Link official support page). https://support.dlink.com/ProductInfo.aspx?m=DGS-1100-24P' },
   { key: 'TPLINK EAP225', matches: ['TP-Link EAP225'], support_end_date: '2024-09-21', os_eol_date: null, confidence: 'exact', note: 'TP-Link EAP225 — latest HW version End-of-Sale 2024-09-21 (TP-Link Business EOL list V6.0). https://static.tp-link.com/upload/manual/2025/202509/20250910/EOL%20List_Business_V6.0.pdf' },
   { key: 'UBIQUITI UAP-PRO', matches: ['Ubiquiti UAP PRO'], support_end_date: '2021-03-01', os_eol_date: null, confidence: 'exact', note: 'Ubiquiti UniFi UAP-Pro — obsoletion/EOL 2021-03-01 (Ubiquiti official community announcement). https://community.ui.com/questions/Select-UniFi-Access-Point-AP-Models-Obsoletion-Date-March-1-2021/65487283-ce9d-49f4-85b9-b6aa54659ef7' },
+  // SonicWall wireless APs + firewall (SonicWall official Product Lifecycle tables).
+  // Aliases include the legacy mislabeled model strings ('Ne INT'/'432e INT') so the
+  // ESIP APs get dated even before the model-cleanup SQL is applied.
+  { key: 'SONICWALL SONICPOINT-NE', matches: ['SonicPoint-Ne', 'SonicPoint Ne', 'Ne INT'], support_end_date: '2020-10-01', os_eol_date: null, confidence: 'exact', note: 'SonicWall SonicPoint-Ne (802.11n AP) — End of Support 2020-10-01 (end-of-sale 2015-09-30); SonicWall Wireless Access Points hardware lifecycle table. https://www.sonicwall.com/support/product-lifecycle-tables/wireless-access-points/hardware' },
+  { key: 'SONICWALL SONICWAVE 432E', matches: ['SonicWave 432e', 'SonicWave-432e', '432e INT'], support_end_date: '2027-04-23', os_eol_date: null, confidence: 'exact', note: 'SonicWall SonicWave 432e (802.11ac Wave 2 AP) — End of Support 2027-04-23 (end-of-sale 2022-04-22); SonicWall Wireless Access Points hardware lifecycle table. https://www.sonicwall.com/support/product-lifecycle-tables/wireless-access-points/hardware' },
+  { key: 'SONICWALL NSA 3650', matches: ['NSA 3650'], support_end_date: '2026-08-01', os_eol_date: null, confidence: 'exact', note: 'SonicWall NSA 3650 (Gen6 firewall) — End of Support 2026-08-01 (last order 2022-04-15); SonicWall Last-Day-of-Support announcement. https://www.sonicwall.com/support/product-notification/sonicwall-last-order-day-of-support-announcement-tz-400-tz400w-tz600-tz-600p-nsa-3600-nsa-3650/kA1VN0000000R1u0AE' },
+  // Cisco Small Business switches + Aironet (Cisco EoL bulletins)
+  { key: 'CISCO SG250-08HP', matches: ['SG250-08HP'], support_end_date: '2026-10-31', os_eol_date: null, confidence: 'exact', note: 'Cisco SG250-08HP (250 Series) — LDoS 2026-10-31 (Cisco EoL c51-2440268; last order 2021-10-30). https://www.cisco.com/c/en/us/products/collateral/switches/250-series-smart-switches/eos-eol-notice-c51-2440268.html' },
+  { key: 'CISCO SG200-50', matches: ['SG200-50'], support_end_date: '2020-10-31', os_eol_date: null, confidence: 'family', note: 'Cisco SB 200 Series Smart Switches (SG200-50) — LDoS 2020-10-31 (Cisco EoL c51-740541; series-level). https://www.cisco.com/c/en/us/products/collateral/switches/small-business-smart-switches/eos-eol-notice-c51-740541.html' },
+  { key: 'CISCO SG95D-08', matches: ['SG95D-08'], support_end_date: '2026-10-31', os_eol_date: null, confidence: 'family', note: 'Cisco SG95/SG110 Unmanaged Select Models (SG95D-08) — series-level LDoS 2026-10-31 (Cisco EoL c51-2440269; last order 2021-10-30). https://www.cisco.com/c/en/us/products/collateral/switches/110-series-unmanaged-switches/eos-eol-notice-c51-2440269.html' },
+  { key: 'CISCO AIRONET 1242AG', matches: ['Cisco Aironet 1242AG', 'AIR-AP1242AG'], support_end_date: '2018-07-31', os_eol_date: null, confidence: 'exact', note: 'Cisco Aironet 1240AG/1242AG — LDoS 2018-07-31 (Cisco EoL c51-726425; EoS 2013). https://www.cisco.com/c/en/us/obsolete/wireless/cisco-aironet-1240-ag-access-point.html' },
+  // TP-Link (official Business EOL list V6.0)
+  { key: 'TPLINK EAP110-OUTDOOR', matches: ['TP-Link EAP110-Outdoor', 'TP-LINK EAP110-Outdoor'], support_end_date: '2024-09-21', os_eol_date: null, confidence: 'exact', note: 'TP-Link EAP110-Outdoor — latest HW version End-of-Sale 2024-09-21 (TP-Link Business EOL list V6.0). https://static.tp-link.com/upload/manual/2025/202509/20250910/EOL%20List_Business_V6.0.pdf' },
 
   // ── Researched but UNCONFIRMED (no official vendor EOL date) — intentionally
   //    NOT seeded (no guessing). These are current Wi-Fi 6 / current-gen products:
   //    Aruba 504/505/515/575/615, Aruba 2930F (24G/48G PoE variants), Aruba CX
-  //    6000/6100, Grandstream GWN766x, Ruckus R650/T350SE/T350C, Huawei AirEngine
-  //    6761/5761 + S5731, Cisco C9200L/C9300, Palo Alto PA-460, Forcepoint NGFW
-  //    120/120W/330, HPE 5140 EI, Cisco Aironet 1242AG (obsolete but exact dates
-  //    not machine-verifiable). Revisit when vendors publish notices.
+  //    6000/6100, Grandstream GWN766x, Ruckus R550/R650/T350SE/T350C (current
+  //    Wi-Fi 6), Huawei AirEngine 6761/5761 + S5731/S5735/S6730, Cisco
+  //    C9200L/C9300/Catalyst-1300, Palo Alto PA-440/PA-460, Forcepoint NGFW
+  //    120/120W/330/352, HPE 5140 EI, HP MSM430, TP-Link TL-WA120 (model could not
+  //    be verified). Revisit when vendors publish notices.
 ]
 
 /**

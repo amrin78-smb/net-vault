@@ -230,6 +230,7 @@ function deriveVendor(key: string, rawModel: string): string {
   if (k.startsWith('PALO') || /^PA-/i.test(rawModel)) return 'Palo Alto'
   if (k.startsWith('DLINK') || k.startsWith('D-LINK') || k.startsWith('D LINK')) return 'D-Link'
   if (k.startsWith('UBIQUITI') || k.startsWith('UBNT') || k.startsWith('UNIFI')) return 'Ubiquiti'
+  if (k.startsWith('SONICWALL') || k.startsWith('SONICPOINT') || k.startsWith('SONICWAVE') || /^(NSA|TZ)[\s-]|^SONIC/i.test(rawModel)) return 'SonicWall'
   // Unknown vendor: return a NEUTRAL label (never the model string) so
   // normalizeForMatch can't strip the entire model when vendor === model
   // (which produced an empty key and broke matching for AT-* / TP-Link entries).
@@ -270,7 +271,7 @@ export function normalizeForMatch(
   if (!s) return ''
 
   // Strip leading vendor words (also drops a redundant vendor baked into model).
-  const vendorWords = ['hpe aruba networking', 'aruba', 'hpe', 'hp', 'cisco', 'grandstream', 'ruckus', 'meraki']
+  const vendorWords = ['hpe aruba networking', 'aruba', 'hpe', 'hp', 'cisco', 'grandstream', 'ruckus', 'meraki', 'sonicwall']
   const v = (vendor ?? '').toLowerCase().trim()
   if (v) vendorWords.unshift(v)
   let changed = true
