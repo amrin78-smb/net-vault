@@ -141,9 +141,11 @@ export async function POST(req: NextRequest) {
 
       const serialRaw = getVal(rowData, 's/n') || getVal(rowData, 'serial') || null
       const lifecycleMap: Record<string,string> = { 'Active, Supported':'Active, Supported','EOL / EOS':'EOL / EOS' }
-      const lifecycle = lifecycleMap[getVal(rowData, 'lifecycle status')] || lifecycleMap[getVal(rowData, 'lifecycle')] || 'Unknown'
+      const lifecycleExplicit = lifecycleMap[getVal(rowData, 'lifecycle status')] || lifecycleMap[getVal(rowData, 'lifecycle')] || null
+      const lifecycle = lifecycleExplicit || 'Unknown'
       const statusMap: Record<string,string> = { 'Active':'Active','Decommed':'Decommed','Faulty, Replaced':'Faulty, Replaced','Spare':'Spare' }
-      const devStatus = statusMap[getVal(rowData, 'device status')] || statusMap[getVal(rowData, 'status')] || 'Active'
+      const statusExplicit = statusMap[getVal(rowData, 'device status')] || statusMap[getVal(rowData, 'status')] || null
+      const devStatus = statusExplicit || 'Active'
 
       // Check if device with same serial already exists — upsert if so
       const existingBySerial = serialRaw
@@ -178,11 +180,52 @@ export async function POST(req: NextRequest) {
         continue
       }
 
-      // New device — check for duplicate IP before inserting
+      // No serial match. If a device already exists at this IP in the SAME site,
+      // update it in place instead of skipping — this lets a re-import correct or
+      // enrich rows whose serial was blank/wrong (e.g. APs first imported without
+      // serials). Only fields the CSV actually provides are overwritten, so a
+      // sparse re-import never wipes existing good data (name, model, lifecycle…).
       if (validIp) {
+        const sameSite = await query(
+          `SELECT d.id, d.name, d.model, d.serial_number, d.brand_id, d.device_type_id,
+                  d.lifecycle_status, d.device_status, dt.name AS device_type_name
+             FROM devices d
+             LEFT JOIN device_types dt ON dt.id = d.device_type_id
+            WHERE d.ip_address = $1 AND d.site_id = $2`,
+          [validIp, siteId]
+        )
+        if (sameSite.rows[0]) {
+          const ex = sameSite.rows[0]
+          const effName = (getVal(rowData, 'name') || null) ?? ex.name
+          const effModel = (getVal(rowData, 'model') || null) ?? ex.model
+          const effSerial = serialRaw ?? ex.serial_number
+          const effBrandId = brandId ?? ex.brand_id
+          const effTypeId = deviceTypeId ?? ex.device_type_id
+          const effLifecycle = lifecycleExplicit ?? ex.lifecycle_status
+          const effStatus = statusExplicit ?? ex.device_status
+          const effTypeName = deviceType || ex.device_type_name || ''
+          if (!dryRun) {
+            await query(`
+              UPDATE devices SET
+                name=$1, brand_id=$2, model=$3, serial_number=$4,
+                device_type_id=$5, lifecycle_status=$6, device_status=$7,
+                technical_debt=$8, updated_by=$9
+              WHERE id=$10`,
+              [
+                effName, effBrandId, effModel, effSerial, effTypeId,
+                effLifecycle, effStatus,
+                calcTechnicalDebt(effLifecycle, effStatus, effTypeName),
+                parseInt(user.id), ex.id
+              ]
+            )
+          }
+          updated++
+          continue
+        }
+        // IP exists only in a different site — skip to avoid cross-site clobber.
         const dupIp = await query(`SELECT id FROM devices WHERE ip_address = $1`, [validIp])
         if (dupIp.rows[0]) {
-          skippedRows.push({ row: rowNum, name: deviceName, reason: `IP address "${validIp}" already exists in the database` })
+          skippedRows.push({ row: rowNum, name: deviceName, reason: `IP address "${validIp}" already exists in another site` })
           continue
         }
       }
