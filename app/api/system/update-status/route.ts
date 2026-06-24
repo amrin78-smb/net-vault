@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.12.1': [
+    'Site detail: the five summary KPI cards (Total devices, Active, EOL / EOS, Decommed, Circuits) now use theme tokens instead of hardcoded pastel colors, so they render correctly in dark mode instead of staying light-on-dark',
+    'Site detail: replaced the tall "By device type" sidebar — which stretched to the full height of the device table and left a large empty box — with a compact full-width strip of clickable type cards (count, share %, EOL badge, mini bar) above a now full-width device table',
+    'Site detail: cleaned up remaining hardcoded colors on the page (device-type bar fill, bulk-action bar, circuit group labels) so they adapt to the active theme',
+  ],
   '1.12.0': [
     'EOL Intelligence: added vendor-confirmed end-of-support dates for SonicWall SonicPoint-Ne (2020-10-01), SonicWave 432e (2027-04-23) and NSA 3650 (2026-08-01), plus Cisco SG250-08HP / SG200-50 / SG95D-08 / SG350-52 / SG300-28PP / CBS350-24T-4G, Cisco Aironet 1242AG, and TP-Link EAP110-Outdoor — all from official vendor EoL bulletins',
     'EOL Intelligence: the SonicWall AP entries also match the legacy mislabeled model strings ("Ne INT" / "432e INT"), so the ESIP access points are dated even before their model text is cleaned up',

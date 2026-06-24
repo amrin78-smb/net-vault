@@ -236,13 +236,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'Total devices', value: total, color: '#1a2744', bg: '#f0f4f8', border: '#c7d8e8', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
-          { label: 'Active', value: active, color: '#166534', bg: '#dcfce7', border: '#86efac', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
-          { label: 'EOL / EOS', value: eol, color: '#991b1b', bg: '#fee2e2', border: '#fca5a5', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
-          { label: 'Decommed', value: decommed, color: '#92400e', bg: '#fef3c7', border: '#fcd34d', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> },
-          { label: 'Circuits', value: circuits.length, color: '#075985', bg: '#e0f2fe', border: '#7dd3fc', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg> },
+          { label: 'Total devices', value: total, color: 'var(--text-primary)', bg: 'var(--surface-subtle)', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
+          { label: 'Active', value: active, color: 'var(--tint-success-fg)', bg: 'var(--tint-success)', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
+          { label: 'EOL / EOS', value: eol, color: 'var(--tint-danger-fg)', bg: 'var(--tint-danger)', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+          { label: 'Decommed', value: decommed, color: 'var(--tint-warn-fg)', bg: 'var(--tint-warn)', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> },
+          { label: 'Circuits', value: circuits.length, color: 'var(--tint-info-fg)', bg: 'var(--tint-info)', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg> },
         ].map(s => (
-          <div key={s.label} style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
+          <div key={s.label} style={{ background: s.bg, borderRadius: '8px', border: '1px solid var(--border)', padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: s.color }}>{s.value}</div>
@@ -296,30 +296,35 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       {activeTab === 'devices' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '16px' }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '16px 20px' }}>
-            <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '14px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>By device type</div>
-            {byType.map(t => {
-              const pct = Math.round(t.count / total * 100)
-              return (
-                <div key={t.type} style={{ marginBottom: '12px', cursor: 'pointer' }} onClick={() => setTypeFilter(typeFilter === t.type ? '' : t.type)}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <span style={{ fontSize: 'var(--text-sm)', color: typeFilter === t.type ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: typeFilter === t.type ? '600' : '400' }}>{t.type}</span>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                      <span style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: 'var(--text-primary)' }}>{t.count}</span>
-                      {t.eol > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--tint-danger-fg)', background: 'var(--tint-danger)', padding: '0 5px', borderRadius: '10px' }}>{t.eol} EOL</span>}
+        <div>
+          {byType.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px', marginBottom: '16px' }}>
+              {byType.map(t => {
+                const pct = total > 0 ? Math.round(t.count / total * 100) : 0
+                const isActive = typeFilter === t.type
+                return (
+                  <div key={t.type} onClick={() => setTypeFilter(isActive ? '' : t.type)}
+                    title={`${t.count} ${t.type}${t.eol > 0 ? ` · ${t.eol} EOL` : ''} — click to filter`}
+                    style={{ background: 'var(--bg-card)', borderRadius: '8px', border: `1px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`, padding: '12px 14px', cursor: 'pointer', transition: 'border-color 0.12s' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: 'var(--text-sm)', color: isActive ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: isActive ? '600' : '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.type}</span>
+                      {t.eol > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--tint-danger-fg)', background: 'var(--tint-danger)', padding: '0 6px', borderRadius: '10px', whiteSpace: 'nowrap' }}>{t.eol} EOL</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '8px' }}>
+                      <span style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)' }}>{t.count}</span>
+                      <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{pct}%</span>
+                    </div>
+                    <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', borderRadius: '3px', background: isActive ? 'var(--primary)' : 'var(--text-muted)' }} />
                     </div>
                   </div>
-                  <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', borderRadius: '3px', background: typeFilter === t.type ? 'var(--primary)' : '#1a2744' }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
           <div>
             {isAdmin && selected.size > 0 && (
-              <div style={{ background: '#1a2744', borderRadius: '8px', padding: '10px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ background: 'var(--navy)', borderRadius: '8px', padding: '10px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: 'var(--text-base)', color: 'white', fontWeight: '500' }}>{selected.size} device{selected.size > 1 ? 's' : ''} selected</span>
                 <select value={bulkField} onChange={e => { setBulkField(e.target.value); setBulkValue('') }} style={{ padding: '5px 10px', borderRadius: '6px', fontSize: 'var(--text-sm)', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
                   <option value="device_status">Device status</option>
@@ -382,7 +387,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)' }}>No Circuits for this site</div>
           ) : (
             <>
-              {[{ label: 'Main links', items: mainCircuits, color: '#075985' }, { label: 'Backup links', items: backupCircuits, color: 'var(--text-secondary)' }, { label: 'Other', items: otherCircuits, color: '#92400e' }].filter(g => g.items.length > 0).map(group => (
+              {[{ label: 'Main links', items: mainCircuits, color: 'var(--tint-info-fg)' }, { label: 'Backup links', items: backupCircuits, color: 'var(--text-secondary)' }, { label: 'Other', items: otherCircuits, color: 'var(--tint-warn-fg)' }].filter(g => g.items.length > 0).map(group => (
                 <div key={group.label} style={{ marginBottom: '16px' }}>
                   <div style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: group.color, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>{group.label} — {group.items.length}</div>
                   <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
