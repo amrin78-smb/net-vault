@@ -81,6 +81,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   await query(
     `INSERT INTO audit_log (device_id, changed_by, field_name, old_value, new_value) VALUES ($1,$2,'deleted',$3,NULL)`,
     [id, parseInt(user.id), JSON.stringify(old.rows[0])])
+  try {
+    await query('DELETE FROM eol_recommendations WHERE device_id = $1', [id])
+    await query('DELETE FROM eol_discrepancies WHERE device_id = $1', [id])
+  } catch { /* eol tables may not exist yet on some installs; device delete must still succeed */ }
   await query('DELETE FROM devices WHERE id = $1', [id])
   return NextResponse.json({ success: true })
 }
