@@ -27,6 +27,7 @@ type FeedModel = {
   confidence: 'high' | 'medium' | 'low' | string
   source: string | null
   note: string | null
+  lifecycle?: string | null
 }
 type Feed = {
   schema_version: number
@@ -122,6 +123,7 @@ export async function syncFromFeed(): Promise<FeedSyncResult> {
       .map((a) => normalizeForMatch(vendor, String(a)))
       .filter((a) => a && a !== normalized)
     const conf = ['high', 'medium', 'low'].includes(m.confidence as string) ? m.confidence : 'medium'
+    const lifecycle = m.lifecycle === 'eol' ? 'eol' : null
     // eol_seed.eol_date = software/OS EOL; eol_seed.eos_date = hardware support-end.
     const eolDate = m.os_eol_date || null
     const eosDate = m.support_end_date || null
@@ -129,18 +131,18 @@ export async function syncFromFeed(): Promise<FeedSyncResult> {
     const upd = await query(
       `UPDATE eol_seed
           SET eol_date = $2, eos_date = $3, confidence = $4, source_url = $5,
-              aliases = $6, updated_at = NOW()
+              aliases = $6, lifecycle = $7, updated_at = NOW()
         WHERE model_normalized = $1`,
-      [normalized, eolDate, eosDate, conf, m.source || null, aliasNorms]
+      [normalized, eolDate, eosDate, conf, m.source || null, aliasNorms, lifecycle]
     )
     if ((upd.rowCount ?? 0) > 0) {
       updated++
     } else {
       await query(
         `INSERT INTO eol_seed
-           (vendor, model_raw, model_normalized, aliases, eol_date, eos_date, source_url, confidence, added_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'feed')`,
-        [vendor, raw, normalized, aliasNorms, eolDate, eosDate, m.source || null, conf]
+           (vendor, model_raw, model_normalized, aliases, eol_date, eos_date, source_url, confidence, lifecycle, added_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'feed')`,
+        [vendor, raw, normalized, aliasNorms, eolDate, eosDate, m.source || null, conf, lifecycle]
       )
       inserted++
     }

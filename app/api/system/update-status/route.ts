@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.15.0': [
+    'EOL Intelligence: the EOL feed can now carry a "lifecycle: EOL" flag for models a vendor has confirmed retired/obsolete but for which no concrete End-of-Support date is published — so these are tracked as EOL without inventing a date',
+    'EOL Intelligence: when a device matches such a flagged model, enrichment raises a normal (human-gated) "should be EOL" status recommendation reasoned "vendor-confirmed end-of-life (no published EOL date)" — review and accept it like any other',
+    'EOL Intelligence: latest feed adds 34 newly-dated legacy models and 39 confirmed-retired-no-date models from the full EOL audit (sync from the feed, then run enrichment to apply)',
+  ],
   '1.14.1': [
     'EOL Intelligence: fixed a matcher bug where a dateless "Add all to seed" placeholder could shadow a dated curated entry — a device whose model exactly matched the placeholder stayed undated even though the real EOL date existed on an entry carrying that model as an alias. The exact and alias tiers are now considered together and the dated entry always wins (re-run enrichment to pick up ~24+ previously-shadowed devices, e.g. WS-C2960X, A5120 EI, SG350-52, Catalyst 3850, Cisco 2504)',
   ],

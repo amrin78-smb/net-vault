@@ -65,6 +65,7 @@ async function doEnsureEolSchema(): Promise<EolInitResult> {
     )
   `)
   await query(`CREATE INDEX IF NOT EXISTS idx_eol_seed_normalized ON eol_seed (model_normalized)`)
+  await query(`ALTER TABLE eol_seed ADD COLUMN IF NOT EXISTS lifecycle TEXT`)
 
   await query(`
     CREATE TABLE IF NOT EXISTS eol_enrichment_jobs (
@@ -328,6 +329,7 @@ export type SeedRow = {
   eos_date: string | null
   source_url: string | null
   confidence: string
+  lifecycle: string | null
 }
 
 export type MatchResult = {
@@ -350,7 +352,7 @@ export async function loadSeedRows(): Promise<SeedRow[]> {
   // local-midnight Date objects (which roll back a day under +07 → off-by-one).
   const res = await query(
     `SELECT id, vendor, model_raw, model_normalized, aliases,
-            eol_date::text AS eol_date, eos_date::text AS eos_date, source_url, confidence
+            eol_date::text AS eol_date, eos_date::text AS eos_date, source_url, confidence, lifecycle
      FROM eol_seed`
   )
   return res.rows.map((r: any) => ({
@@ -363,6 +365,7 @@ export async function loadSeedRows(): Promise<SeedRow[]> {
     eos_date: r.eos_date ? toIso(r.eos_date) : null,
     source_url: r.source_url,
     confidence: r.confidence || 'high',
+    lifecycle: r.lifecycle ?? null,
   }))
 }
 
@@ -536,6 +539,7 @@ export async function previewMatch(
     eos_date: null,
     source_url: null,
     confidence: 'high',
+    lifecycle: null,
   }
   const devices = await loadDevices()
   const sample: Array<{ id: string; name: string | null; model: string | null }> = []
@@ -687,10 +691,11 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
       // Only for high-confidence exact/alias matches — NEVER fuzzy/medium.
       if ((result.via === 'exact' || result.via === 'alias') && seed.confidence === 'high') {
         const effectiveEol = seed.eol_date ?? seed.eos_date
+        let recommended: string | null = null
+        let reason = ''
+
         if (effectiveEol) {
           const delta = diffDays(today, effectiveEol) // effectiveEol - today
-          let recommended: string | null = null
-          let reason = ''
 
           if (ACTIVE_LIFECYCLE.has(dev.lifecycle_status ?? '') && delta < 0) {
             // CASE 1 — should be EOL: active device whose vendor EOL date has passed.
@@ -701,50 +706,53 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
             recommended = 'Active, Supported'
             reason = `Vendor confirms support until ${effectiveEol} — ${delta} days remaining`
           }
+        } else if (seed.lifecycle === 'eol' && ACTIVE_LIFECYCLE.has(dev.lifecycle_status ?? '')) {
+          recommended = EOL_LIFECYCLE
+          reason = 'Vendor-confirmed end-of-life (no published EOL date)'
+        }
 
-          if (recommended) {
-            // Dedupe / cooldown: skip if a pending row exists, or an ignored row
-            // was reviewed within the last 90 days (don't reappear for 90 days).
-            // Scoped to THIS recommended_status so a genuinely new opposite-
-            // direction recommendation (e.g. now 'should be EOL' after a prior
-            // ignored 'possibly incorrect') is not wrongly suppressed.
-            const existing = await query(
-              `SELECT 1 FROM eol_recommendations
-               WHERE device_id = $1
-                 AND recommended_status = $2
-                 AND (status = 'pending'
-                      OR (status = 'ignored' AND reviewed_at > NOW() - INTERVAL '90 days'))
-               LIMIT 1`,
-              [dev.id, recommended]
-            )
-            if (existing.rows.length === 0) {
-              await query(
-                `INSERT INTO eol_recommendations
-                   (device_id, device_name, model, current_status, recommended_status,
-                    reason, seed_eol_date, seed_eos_date, seed_entry_id, confidence, status)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'high', 'pending')`,
-                [
-                  dev.id,
-                  dev.name,
-                  dev.model,
-                  dev.lifecycle_status,
-                  recommended,
-                  reason,
-                  seed.eol_date,
-                  seed.eos_date,
-                  seed.id,
-                ]
-              )
-              recommendations += 1
-            }
-          } else {
-            // AUTO-CLEAR: neither case applies (e.g. the status was already
-            // corrected) — drop any stale pending recommendation for this device.
+        if (recommended) {
+          // Dedupe / cooldown: skip if a pending row exists, or an ignored row
+          // was reviewed within the last 90 days (don't reappear for 90 days).
+          // Scoped to THIS recommended_status so a genuinely new opposite-
+          // direction recommendation (e.g. now 'should be EOL' after a prior
+          // ignored 'possibly incorrect') is not wrongly suppressed.
+          const existing = await query(
+            `SELECT 1 FROM eol_recommendations
+             WHERE device_id = $1
+               AND recommended_status = $2
+               AND (status = 'pending'
+                    OR (status = 'ignored' AND reviewed_at > NOW() - INTERVAL '90 days'))
+             LIMIT 1`,
+            [dev.id, recommended]
+          )
+          if (existing.rows.length === 0) {
             await query(
-              `DELETE FROM eol_recommendations WHERE device_id = $1 AND status = 'pending'`,
-              [dev.id]
+              `INSERT INTO eol_recommendations
+                 (device_id, device_name, model, current_status, recommended_status,
+                  reason, seed_eol_date, seed_eos_date, seed_entry_id, confidence, status)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'high', 'pending')`,
+              [
+                dev.id,
+                dev.name,
+                dev.model,
+                dev.lifecycle_status,
+                recommended,
+                reason,
+                seed.eol_date,
+                seed.eos_date,
+                seed.id,
+              ]
             )
+            recommendations += 1
           }
+        } else {
+          // AUTO-CLEAR: neither case applies (e.g. the status was already
+          // corrected) — drop any stale pending recommendation for this device.
+          await query(
+            `DELETE FROM eol_recommendations WHERE device_id = $1 AND status = 'pending'`,
+            [dev.id]
+          )
         }
       }
 
