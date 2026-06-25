@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.16.0': [
+    'EOL Intelligence: the bundled offline EOL baseline now ships 949 vendor-confirmed models (910 with dates, 40 confirmed-retired) — up from ~32 — regenerated from the central NocVault EOL feed. A fresh or air-gapped install now starts with near-full EOL coverage even before the first "Sync from EOL feed"',
+    'EOL Intelligence: the bundled seed now carries each model\'s vendor and lifecycle flag, so the offline baseline matches devices using the exact same keys as the online feed — including vendors the old derivation missed (Brocade, Asus, Linksys, TOTOLINK, and others)',
+    'EOL Intelligence: added scripts/gen-eol-seed.cjs to regenerate the bundled seed from the central feed, keeping the offline floor and the live feed in step',
+  ],
   '1.15.2': [
     'Updater: the update script now polls the health endpoint after restart instead of waiting a fixed delay, so it continues as soon as the app is actually serving (typically a few seconds sooner)',
     'Updater: removed the synchronous baseline health-snapshot and full EOL-enrichment run that fired during every update — both still run on their daily scheduled tasks, and EOL enrichment can be triggered on demand via the "Run enrichment now" button on the EOL Intelligence page. This shortens the update and avoids loading the freshly-restarted server with a ~2,500-device scan mid-deploy',

@@ -156,7 +156,12 @@ async function doEnsureEolSchema(): Promise<EolInitResult> {
 async function migrateLegacySeed(): Promise<void> {
   for (const entry of EOL_SEED) {
     const rawModel = entry.matches[0] ?? entry.key
-    const vendor = deriveVendor(entry.key, rawModel)
+    // Prefer the entry's explicit vendor (the regenerated bundled seed carries it,
+    // matching the central feed) so the offline floor keys identically to
+    // syncFromFeed. Fall back to deriveVendor for any legacy/hand-added entry that
+    // predates the vendor field. This also fixes vendors deriveVendor never knew
+    // (Brocade, Asus, Linksys, …), which it would have keyed as 'Unknown'.
+    const vendor = entry.vendor || deriveVendor(entry.key, rawModel)
     const normalized = normalizeForMatch(vendor, rawModel)
     // Other matches[] become aliases (normalized for matching).
     const aliases = entry.matches
@@ -202,14 +207,27 @@ async function migrateLegacySeed(): Promise<void> {
       )
     }
 
+    // Fill a lifecycle flag onto a dateless system row this entry owns (mirrors the
+    // date-fill above) — covers lifecycle="eol" models with no published date.
+    if (entry.lifecycle) {
+      await query(
+        `UPDATE eol_seed
+           SET lifecycle = $1, updated_at = NOW()
+         WHERE added_by = 'system'
+           AND model_normalized = $2
+           AND lifecycle IS NULL`,
+        [entry.lifecycle, normalized]
+      )
+    }
+
     // Insert the canonical row only when NO row exists yet for this key.
     const any = await query(`SELECT 1 FROM eol_seed WHERE model_normalized = $1 LIMIT 1`, [normalized])
     if (any.rows.length === 0) {
       await query(
         `INSERT INTO eol_seed
-           (vendor, model_raw, model_normalized, aliases, eol_date, eos_date, source_url, confidence, added_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'system')`,
-        [vendor, rawModel, normalized, aliases, entry.os_eol_date, entry.support_end_date, sourceUrl, confidence]
+           (vendor, model_raw, model_normalized, aliases, eol_date, eos_date, source_url, confidence, lifecycle, added_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'system')`,
+        [vendor, rawModel, normalized, aliases, entry.os_eol_date, entry.support_end_date, sourceUrl, confidence, entry.lifecycle ?? null]
       )
     }
   }
