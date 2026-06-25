@@ -170,6 +170,7 @@ export default function EolIntelligencePage() {
   const [latestLoaded, setLatestLoaded] = useState(false)
   const [latestUnavailable, setLatestUnavailable] = useState(false)
   const [running, setRunning] = useState(false)
+  const [syncing, setSyncing] = useState(false)
   const [liveStatus, setLiveStatus] = useState<JobStatus | null>(null)
   const [jobError, setJobError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -310,6 +311,24 @@ export default function EolIntelligencePage() {
       return
     }
     startPolling(res.jobId)
+  }
+
+  // Pull the central signed EOL feed into the local seed catalog (verifies the
+  // Ed25519 signature server-side; writes only eol_seed, never devices).
+  async function syncFeed() {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/admin/eol-seed/sync', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.error) { showToast(data.error || 'Feed sync failed', 'error'); return }
+      showToast(`Synced feed ${data.feed_version}: ${data.inserted} new, ${data.updated} updated (${data.row_count} models, signature verified)`)
+      void loadSeed(1)
+      void loadLatest()
+    } catch {
+      showToast('Feed sync failed — service unavailable.', 'error')
+    } finally {
+      setSyncing(false)
+    }
   }
 
   // ── seed form actions ───────────────────────────────────────────────
@@ -548,9 +567,19 @@ export default function EolIntelligencePage() {
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
           <div style={{ ...sectionLabel, marginBottom: 0 }}>Enrichment status</div>
-          <button className="btn-primary" onClick={() => void runEnrichment()} disabled={running} style={{ padding: '8px 16px' }}>
-            {running ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</span> Running…</> : 'Run enrichment now'}
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => void syncFeed()}
+              disabled={syncing || running}
+              title="Pull the latest signed central EOL feed into the local seed catalog (signature-verified; updates the catalog only, not devices)"
+              style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: syncing ? 'wait' : 'pointer', fontWeight: 600, fontSize: 'var(--text-base)' }}
+            >
+              {syncing ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</span> Syncing…</> : 'Sync from EOL feed'}
+            </button>
+            <button className="btn-primary" onClick={() => void runEnrichment()} disabled={running} style={{ padding: '8px 16px' }}>
+              {running ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</span> Running…</> : 'Run enrichment now'}
+            </button>
+          </div>
         </div>
 
         {!latestLoaded ? (
