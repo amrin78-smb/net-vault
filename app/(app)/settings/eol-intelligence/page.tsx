@@ -69,7 +69,7 @@ type Rec = {
   recommended_status: string
   reason: string
   effective_date: string | null
-  days: number
+  days: number | null
   confidence: string
   source_url: string | null
 }
@@ -838,9 +838,13 @@ export default function EolIntelligencePage() {
                         <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{r.current_status || '—'}</td>
                         <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(r.effective_date)}</td>
                         <td>
-                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: r.days > 365 ? 'var(--tint-danger-fg)' : 'var(--tint-warn-fg)' }}>
-                            {r.days.toLocaleString()} day{r.days === 1 ? '' : 's'}
-                          </span>
+                          {r.days != null ? (
+                            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: r.days > 365 ? 'var(--tint-danger-fg)' : 'var(--tint-warn-fg)' }}>
+                              {r.days.toLocaleString()} day{r.days === 1 ? '' : 's'}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>no date</span>
+                          )}
                         </td>
                         <td><ConfidenceBadge value={r.confidence} /></td>
                         <td>
@@ -880,9 +884,13 @@ export default function EolIntelligencePage() {
                         <td style={{ color: 'var(--text-secondary)', fontSize: 'var(--text-sm)' }}>{r.model || '—'}</td>
                         <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(r.effective_date)}</td>
                         <td>
-                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: r.days > 365 ? 'var(--tint-success-fg)' : 'var(--tint-warn-fg)' }}>
-                            {r.days.toLocaleString()} day{r.days === 1 ? '' : 's'}
-                          </span>
+                          {r.days != null ? (
+                            <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: r.days > 365 ? 'var(--tint-success-fg)' : 'var(--tint-warn-fg)' }}>
+                              {r.days.toLocaleString()} day{r.days === 1 ? '' : 's'}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>no date</span>
+                          )}
                         </td>
                         <td><ConfidenceBadge value={r.confidence} /></td>
                         <td>
