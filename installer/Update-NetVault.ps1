@@ -241,12 +241,27 @@ try {
     }
     $null = & sc.exe start NetVault 2>&1
     if ($LASTEXITCODE -ne 0) { throw "sc.exe start NetVault failed (exit $LASTEXITCODE)" }
-    Start-Sleep -Seconds 5
-    $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
-    if ($svc -and $svc.Status -eq 'Running') {
-        Write-OK "NetVault service is running"
+    # Poll /api/health instead of a fixed sleep: the app is usually serving within
+    # 2-3s, so this returns as soon as it's actually up rather than always waiting 5s.
+    # Falls back to the previous behaviour (warn + proceed) if it doesn't answer in
+    # ~30s — same non-fatal outcome as before, never blocks the update.
+    $healthy = $false
+    for ($i = 0; $i -lt 30; $i++) {
+        try {
+            $resp = Invoke-WebRequest -Uri "http://localhost:3000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            if ($resp.StatusCode -eq 200) { $healthy = $true; break }
+        } catch {}
+        Start-Sleep -Seconds 1
+    }
+    if ($healthy) {
+        Write-OK "NetVault service is running (health check passed)"
     } else {
-        Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
+        $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
+        if ($svc -and $svc.Status -eq 'Running') {
+            Write-OK "NetVault service is running"
+        } else {
+            Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
+        }
     }
 
     Write-Step "Registering daily health-snapshot task"
@@ -257,13 +272,8 @@ try {
         $trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
         Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
         Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
-        # Immediate baseline snapshot so the trend has a starting point
-        Write-Step "Taking baseline health snapshot"
-        try {
-            Start-Sleep -Seconds 3
-            & curl.exe -s -X POST "http://localhost:3000/api/system/health-snapshot" -H "Authorization: Bearer $CronSecret" | Out-Null
-            Write-OK "Baseline health snapshot recorded"
-        } catch { Write-Warn "Baseline snapshot call failed (will be taken by the scheduler tonight)" }
+        # No immediate baseline snapshot here - the daily scheduled task above takes
+        # it tonight. Skipping it keeps the update from blocking on a post-deploy curl.
     } else {
         Write-Warn "CRON_SECRET not found in .env - skipping scheduled task registration"
     }
@@ -274,13 +284,10 @@ try {
         $eolTrigger = New-ScheduledTaskTrigger -Daily -At "01:00"
         Register-ScheduledTask -TaskName "NetVault-EnrichEol" -Action $eolAction -Trigger $eolTrigger -RunLevel Highest -Force | Out-Null
         Write-OK "Scheduled task 'NetVault-EnrichEol' registered (daily 01:00)"
-        # Run once now so EOL dates populate immediately from the curated seed
-        Write-Step "Running EOL enrichment"
-        try {
-            Start-Sleep -Seconds 2
-            & curl.exe -s -X POST "http://localhost:3000/api/system/enrich-eol" -H "Authorization: Bearer $CronSecret" | Out-Null
-            Write-OK "EOL enrichment run complete"
-        } catch { Write-Warn "EOL enrichment call failed (will run by the scheduler tonight)" }
+        # No immediate enrichment run here - the daily scheduled task above runs it
+        # tonight, and the EOL Intelligence page has a manual "Run enrichment now"
+        # button for on-demand use. Skipping it shortens the update and avoids loading
+        # the freshly-started server with a full ~2,500-device scan mid-deploy.
     } else {
         Write-Warn "CRON_SECRET not found in .env - skipping EOL enrichment task"
     }
