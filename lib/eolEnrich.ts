@@ -271,7 +271,11 @@ export function normalizeForMatch(
   if (!s) return ''
 
   // Strip leading vendor words (also drops a redundant vendor baked into model).
-  const vendorWords = ['hpe aruba networking', 'aruba', 'hpe', 'hp', 'cisco', 'grandstream', 'ruckus', 'meraki', 'sonicwall']
+  const vendorWords = [
+    'hpe aruba networking', 'aruba', 'hpe', 'hp', 'cisco', 'grandstream',
+    'ruckus', 'meraki', 'sonicwall', 'palo alto', 'paloalto', 'netgear',
+    'tp-link', 'tplink', 'fortinet', 'juniper', 'forcepoint', 'dell',
+  ]
   const v = (vendor ?? '').toLowerCase().trim()
   if (v) vendorWords.unshift(v)
   let changed = true
@@ -286,8 +290,19 @@ export function normalizeForMatch(
     }
   }
 
-  // Strip trailing region/series suffixes (repeat to catch chains like -e-k9? no:
-  // those are model-defining, leave them — only strip the documented suffixes).
+  // Strip product-LINE "noise" words anywhere — marketing/line words that appear
+  // inconsistently between an inventory and a curated seed (e.g. "Catalyst",
+  // "NGFW"); the model number identifies the device. This list EXCLUDES
+  // model-DEFINING lines (SonicWave, AirEngine, Aironet, etc.), which are kept.
+  const noiseWords = ['catalyst', 'flexnetwork', 'procurve', 'powerconnect', 'ngfw', 'series', 'appliance']
+  for (const w of noiseWords) {
+    s = s.replace(new RegExp('(^|[^a-z0-9])' + w + '([^a-z0-9]|$)', 'g'), '$1 $2')
+  }
+  // Strip common Cisco product-ID prefixes so a PID matches the friendly name
+  // (WS-C3750X / AIR-AP1242 -> 3750X / 1242).
+  s = s.replace(/\b(ws-c|air-cap|air-ap|air-)/g, '')
+
+  // Strip trailing region/series suffixes.
   let suffixChanged = true
   while (suffixChanged) {
     suffixChanged = false

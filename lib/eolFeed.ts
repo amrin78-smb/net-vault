@@ -46,6 +46,37 @@ export type FeedSyncResult = {
   verified: true
 }
 
+// Re-derive model_normalized + aliases for every eol_seed row using the CURRENT
+// normalizer, then collapse rows that now share a normalized key (the enhanced
+// normalizer can merge previously-distinct spellings). Idempotent + self-healing.
+// Touches ONLY eol_seed (+ repoints eol_discrepancies FK refs before deleting).
+async function recomputeSeedKeys(): Promise<void> {
+  const { rows } = await query(`SELECT id, vendor, model_raw, aliases FROM eol_seed`)
+  for (const r of rows as Array<{ id: number; vendor: string; model_raw: string; aliases: string[] }>) {
+    const norm = normalizeForMatch(r.vendor, r.model_raw)
+    const aliasNorms = (r.aliases || [])
+      .map((a) => normalizeForMatch(r.vendor, String(a)))
+      .filter((a) => a && a !== norm)
+    await query(`UPDATE eol_seed SET model_normalized = $2, aliases = $3 WHERE id = $1`, [r.id, norm, aliasNorms])
+  }
+  const dups = await query(
+    `SELECT model_normalized, array_agg(id ORDER BY
+         (eol_date IS NOT NULL OR eos_date IS NOT NULL) DESC,
+         CASE confidence WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC, id) AS ids
+       FROM eol_seed WHERE model_normalized <> ''
+      GROUP BY model_normalized HAVING count(*) > 1`
+  )
+  for (const d of dups.rows as Array<{ model_normalized: string; ids: number[] }>) {
+    const keep = d.ids[0]
+    const drop = d.ids.slice(1)
+    const ar = await query(`SELECT aliases FROM eol_seed WHERE id = ANY($1)`, [d.ids])
+    const merged = [...new Set((ar.rows as Array<{ aliases: string[] }>).flatMap((x) => x.aliases || []))].filter((a) => a && a !== d.model_normalized)
+    await query(`UPDATE eol_seed SET aliases = $2 WHERE id = $1`, [keep, merged])
+    await query(`UPDATE eol_discrepancies SET seed_entry_id = $1 WHERE seed_entry_id = ANY($2)`, [keep, drop]).catch(() => {})
+    await query(`DELETE FROM eol_seed WHERE id = ANY($1)`, [drop])
+  }
+}
+
 export async function syncFromFeed(): Promise<FeedSyncResult> {
   const base = (process.env.NOCVAULT_EOL_FEED_URL || DEFAULT_FEED_URL).replace(/\/+$/, '')
   const licenseKey = process.env.NOCVAULT_EOL_LICENSE_KEY || 'netvault'
@@ -72,6 +103,8 @@ export async function syncFromFeed(): Promise<FeedSyncResult> {
   if (!Array.isArray(feed.models)) throw new Error('Feed has no models')
 
   await ensureEolSchema()
+  // self-heal: recompute stale keys (normalizer may have changed) before upserting
+  await recomputeSeedKeys()
 
   let inserted = 0
   let updated = 0

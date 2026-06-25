@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.14.0': [
+    'EOL Intelligence: the model matcher is now flexible to product-line naming differences — an inventory "Cisco 3750x" now matches a seed "Catalyst 3750-X", and "Palo Alto NGFW PA-440" matches "PA-440". It strips curated product-line noise words (Catalyst, NGFW, FlexNetwork, ProCurve, Series, …) and common Cisco PID prefixes (WS-C, AIR-AP), while preserving model-defining lines (SonicWave, AirEngine)',
+    'EOL Intelligence: "Sync from EOL feed" now self-heals — it recomputes the seed keys with the current normalizer and collapses any duplicate models before applying the feed, so matching stays consistent after a matcher upgrade',
+    'EOL Intelligence: re-run enrichment after syncing to pick up the wider matches — more devices will now match the curated EOL dates despite messy inventory model spellings',
+  ],
   '1.13.0': [
     'EOL Intelligence: new "Sync from EOL feed" button pulls the centralized NocVault EOL feed (800+ vendor-confirmed models) into the local seed catalog — no more waiting for an app update to get new EOL dates',
     'EOL Intelligence: the feed is cryptographically verified (Ed25519 signature + sha256) before anything is written, so a tampered or corrupt feed is rejected',
