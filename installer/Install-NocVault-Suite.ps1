@@ -310,7 +310,7 @@ if ($InstallSpanVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE spanvault TO spanvault_user;" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT CONNECT ON DATABASE netvault TO spanvault_user;" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT USAGE ON SCHEMA public TO spanvault_user;" 2>$null
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON devices, sites, countries, regions, brands, device_types, vendors TO spanvault_user;" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON devices, sites, countries, regions, brands, device_types, vendors, users, user_sites TO spanvault_user;" 2>$null
     Write-OK "SpanVault database ready"
 }
 
@@ -417,6 +417,21 @@ $nvSnapTrigger = New-ScheduledTaskTrigger -Daily -At "00:00"
 Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $nvSnapAction -Trigger $nvSnapTrigger -RunLevel Highest -Force | Out-Null
 Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
 
+# Daily EOL/EOS enrichment (matches devices against eol_seed, writes EOL/EOS dates;
+# status-change recommendations stay human-gated). Mirrors Update-NetVault.ps1.
+$nvEolAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
+$nvEolTrigger = New-ScheduledTaskTrigger -Daily -At "01:00"
+Register-ScheduledTask -TaskName "NetVault-EnrichEol" -Action $nvEolAction -Trigger $nvEolTrigger -RunLevel Highest -Force | Out-Null
+Write-OK "Scheduled task 'NetVault-EnrichEol' registered (daily 01:00)"
+
+# Weekly EOL feed sync (pulls the central signed seed into eol_seed; runs just ahead
+# of Sunday's 01:00 enrichment so it applies the fresh seed; soft-skips when the
+# feed is unreachable so offline/air-gapped installs keep the bundled seed floor).
+$nvSyncAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
+$nvSyncTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "00:15"
+Register-ScheduledTask -TaskName "NetVault-SyncEol" -Action $nvSyncAction -Trigger $nvSyncTrigger -RunLevel Highest -Force | Out-Null
+Write-OK "Scheduled task 'NetVault-SyncEol' registered (weekly Sun 00:15)"
+
 # ================================================================
 # STEP 9 — LogVault
 # ================================================================
@@ -437,11 +452,17 @@ if ($InstallLogVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO logvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO logvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL ON SCHEMA public TO logvault_user;"
+    # Re-assert the append-only tamper model: the blanket GRANT ALL above re-granted the
+    # UPDATE/DELETE that schema.sql deliberately REVOKEs on the hash-chained tables.
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "REVOKE UPDATE, DELETE ON syslog_entries FROM logvault_user;"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "REVOKE UPDATE, DELETE ON audit_log FROM logvault_user;"
     GrantNocRoRead "logvault"
     Write-OK "LogVault schema applied"
 
     # Create .env.local in root AND frontend
-    $lvEnv = "DB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nLV_APP_PORT=3004`nLV_APP_URL=http://${ServerIP}:3004`nSYSLOG_PORTS=514,1514`nRETENTION_DAYS=90`nLOG_LEVEL=info`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nLOG_INTEGRITY_KEY=$LogIntegrityKey`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    # POSTGRES_PASSWORD lets the app's own Update-LogVault.ps1 re-apply schema.sql as
+    # the postgres superuser on later updates; without it that step silently skips.
+    $lvEnv = "DB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nLV_APP_PORT=3004`nLV_APP_URL=http://${ServerIP}:3004`nSYSLOG_PORTS=514,1514`nRETENTION_DAYS=90`nLOG_LEVEL=info`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nLOG_INTEGRITY_KEY=$LogIntegrityKey`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $lvEnv | Out-File -FilePath "$LVAppDir\.env.local" -Encoding UTF8 -NoNewline
     $lvEnv | Out-File -FilePath "$LVAppDir\frontend\.env.local" -Encoding UTF8 -NoNewline
     Write-OK "LogVault .env.local created (root + frontend)"
@@ -562,7 +583,7 @@ if ($InstallDDIVault) {
     Write-OK "DDIVault schemas applied and cross-DB grants set"
 
     # Create .env.local in root AND frontend
-    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_APP_URL=http://${ServerIP}:3006`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     $DDIFrontendDir = "$DDIAppDir\frontend"
     $ddiEnv | Out-File -FilePath "$DDIAppDir\.env.local" -Encoding UTF8 -NoNewline
     $ddiEnv | Out-File -FilePath "$DDIFrontendDir\.env.local" -Encoding UTF8 -NoNewline
@@ -588,7 +609,7 @@ if ($InstallDDIVault) {
     & $NssmExe remove DDIVault-API confirm 2>$null
     & $NssmExe install DDIVault-API "C:\Program Files\nodejs\node.exe" "$DDIAppDir\api\server.js"
     & $NssmExe set DDIVault-API AppDirectory        $DDIAppDir
-    & $NssmExe set DDIVault-API AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    & $NssmExe set DDIVault-API AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_URL=http://${ServerIP}:3006`nDDI_APP_PORT=3006`nSERVER_IP=$ServerIP`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set DDIVault-API DependOnService     $PgSvcName
     & $NssmExe set DDIVault-API DisplayName         "DDIVault - API"
     & $NssmExe set DDIVault-API Start               SERVICE_AUTO_START
@@ -661,7 +682,7 @@ if ($InstallSpanVault) {
     Write-OK "SpanVault schema applied"
 
     # Create .env.local in root AND frontend
-    $svEnv = "SV_APP_PORT=3008`nSV_API_PORT=3009`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass"
+    $svEnv = "SV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`nSV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass"
     $SVFrontendDir = "$SVAppDir\frontend"
     $svEnv | Out-File -FilePath "$SVAppDir\.env.local" -Encoding UTF8 -NoNewline
     $svEnv | Out-File -FilePath "$SVFrontendDir\.env.local" -Encoding UTF8 -NoNewline
@@ -805,13 +826,15 @@ foreach ($svc in $services) {
     }
 }
 
-# Confirm the health-snapshot scheduled task registered
-$snapTask = Get-ScheduledTask -TaskName "NetVault-HealthSnapshot" -ErrorAction SilentlyContinue
-if ($snapTask) {
-    Write-OK "Scheduled task NetVault-HealthSnapshot - Registered"
-} else {
-    Write-Warn "Scheduled task NetVault-HealthSnapshot - NOT registered"
-    $allOK = $false
+# Confirm the NetVault scheduled tasks registered (health snapshot + EOL enrich/sync)
+foreach ($taskName in @("NetVault-HealthSnapshot","NetVault-EnrichEol","NetVault-SyncEol")) {
+    $t = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if ($t) {
+        Write-OK "Scheduled task $taskName - Registered"
+    } else {
+        Write-Warn "Scheduled task $taskName - NOT registered"
+        $allOK = $false
+    }
 }
 
 $ports = @(3000)

@@ -2,6 +2,21 @@
 
 ---
 
+## Installer parity (IMPORTANT — read before any deploy-affecting change)
+
+NetVault ships the shared **suite installer** `installer/Install-NocVault-Suite.ps1`
+(fresh install of the whole NocVault suite, all 4 apps) alongside the per-app updater
+`installer/Update-NetVault.ps1` (upgrades). Any change — even a small one — that affects
+how the app is provisioned MUST be reflected in BOTH, in the same change, or fresh
+installs silently break. This includes: a new/renamed env var the app reads, a new
+scheduled task, a new or changed schema file (or required DB extension/grant), a new
+NSSM service or changed entrypoint/port, a new firewall port, a new cross-DB grant, or a
+new build step. The suite installer also provisions LogVault/DDIVault/SpanVault — so a
+change in any of those apps must be mirrored here too. If you can't update the installer
+in the same change, flag it explicitly so it isn't missed.
+
+---
+
 ## Versioning Policy
 
 This app follows semantic versioning. Baseline: 1.2.0 (Jun 2026)

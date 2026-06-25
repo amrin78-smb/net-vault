@@ -71,7 +71,7 @@ $Services = @(
     "SpanVault-API", "SpanVault-App", "SpanVault-Collector"
 )
 
-$Tasks = @("NetVault-HealthSnapshot", "LogVault Cleanup")
+$Tasks = @("NetVault-HealthSnapshot", "NetVault-EnrichEol", "NetVault-SyncEol")
 
 $FirewallRules = @(
     "NocVault NetVault 3000",
@@ -79,7 +79,8 @@ $FirewallRules = @(
     "NocVault Syslog UDP 514", "NocVault Syslog TCP 514",
     "NocVault Syslog UDP 1514", "NocVault Syslog TCP 1514",
     "NocVault DDIVault 3006",
-    "NocVault SpanVault 3008"
+    "NocVault SpanVault 3008",
+    "NocVault SpanVault 3010"
 )
 
 # Databases (and their owning roles). Order matters: drop DBs before roles so
