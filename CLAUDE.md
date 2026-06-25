@@ -163,3 +163,37 @@ outside, so verify via the frontend port:
 - Deploys are **manual** — Amrin runs the app's updater script; Claude never
   deploys. Always verify **after** the deploy: confirm `/api/health` shows the new
   version, then confirm data via the read-only DB, then eyeball the UI.
+
+---
+
+## EOL Intelligence — central feed consumer (Phase 2, shipped 1.14.0)
+
+NetVault's EOL dates come from a local **`eol_seed`** catalog → background **enrichment**
+matches device models against it and writes `support_end_date`/`os_eol_date`/`eol_source`
+onto `devices` (status-change recommendations are **never** auto-applied — human-gated).
+
+The seed catalog is fed two ways:
+1. **Bundled baseline** — `lib/eolSeed.ts` (`EOL_SEED`), migrated into `eol_seed` by
+   `migrateLegacySeed` in `lib/eolEnrich.ts`. This is the **offline floor**: a fresh /
+   air-gapped install works with NO internet. (Currently ~67 families — smaller than the
+   central feed; see KIV in [[nocvault-eol-central-feed]] about refreshing it at build time.)
+2. **Central signed feed** (live updates) — the **"Sync from EOL feed"** button on the
+   EOL Intelligence page → `POST /api/admin/eol-seed/sync` (super_admin) → `lib/eolFeed.ts`
+   `syncFromFeed()`. It fetches `${NOCVAULT_EOL_FEED_URL || 'https://nocvault-eol.netlify.app'}/api/v1/feed`
+   (header `x-license-key` = `NOCVAULT_EOL_LICENSE_KEY || 'netvault'`), **verifies the
+   Ed25519 signature + sha256** against the bundled public key, then upserts the feed
+   models into `eol_seed` (`added_by='feed'`). **Writes ONLY `eol_seed` — never `devices`;
+   enrichment stays a separate step.** Revert a sync with
+   `DELETE FROM eol_seed WHERE added_by='feed'`. The feed builder/grower lives in the
+   separate **nocvault-eol** repo (its CLAUDE.md documents the grow-the-list loop).
+
+**Matching (`normalizeForMatch` in `lib/eolEnrich.ts`)** is flexible to product-line naming:
+strips curated noise words (Catalyst, NGFW, FlexNetwork, ProCurve, …) + Cisco PID prefixes
+(WS-C, AIR-AP), preserves model-defining lines (SonicWave, AirEngine). **This function is a
+CONTRACT — it must stay byte-identical to `nocvault-eol/lib/match-normalize.ts`; any change
+updates BOTH repos in lockstep** (currently `NORMALIZER_VERSION = 3`). `syncFromFeed`
+self-heals via `recomputeSeedKeys()`: re-derives every `eol_seed` row's normalized key +
+aliases with the current normalizer and collapses merged duplicates before applying the feed.
+
+Bundled feed **public key** (Ed25519 spki DER b64) in `lib/eolFeed.ts`:
+`MCowBQYDK2VwAyEAI+nk9JoWunzPTASALa5PLWwcLe9NNWRrZ72tMY8ZU2k=`.
