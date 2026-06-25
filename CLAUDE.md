@@ -186,6 +186,13 @@ The seed catalog is fed two ways:
    enrichment stays a separate step.** Revert a sync with
    `DELETE FROM eol_seed WHERE added_by='feed'`. The feed builder/grower lives in the
    separate **nocvault-eol** repo (its CLAUDE.md documents the grow-the-list loop).
+   **Auto-sync (1.17.0):** the same `syncFromFeed()` also runs **weekly** via the
+   `NetVault-SyncEol` scheduled task (Sun 00:15) → `POST /api/system/sync-eol` (Bearer
+   `CRON_SECRET`, or a super_admin session), scheduled just ahead of the daily 01:00
+   `NetVault-EnrichEol` so Sunday's enrichment applies the fresh seed. The endpoint
+   soft-skips (200 `{ok:false,skipped:true}`) when the feed is unreachable, so
+   offline/air-gapped installs no-op and keep the bundled floor. Both scheduled tasks are
+   registered by `installer/Update-NetVault.ps1`.
 
 **Matching (`normalizeForMatch` in `lib/eolEnrich.ts`)** is flexible to product-line naming:
 strips curated noise words (Catalyst, NGFW, FlexNetwork, ProCurve, …) + Cisco PID prefixes

@@ -292,6 +292,20 @@ try {
         Write-Warn "CRON_SECRET not found in .env - skipping EOL enrichment task"
     }
 
+    Write-Step "Registering weekly EOL feed-sync task"
+    if ($CronSecret) {
+        $syncAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
+        # Weekly, Sunday 00:15 - just ahead of the daily 01:00 enrichment, so Sunday's
+        # enrichment applies the freshly-pulled seed. The endpoint writes ONLY eol_seed
+        # (verifies the feed signature first); offline/air-gapped installs no-op safely
+        # (it returns a soft skip and the bundled seed floor remains in place).
+        $syncTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "00:15"
+        Register-ScheduledTask -TaskName "NetVault-SyncEol" -Action $syncAction -Trigger $syncTrigger -RunLevel Highest -Force | Out-Null
+        Write-OK "Scheduled task 'NetVault-SyncEol' registered (weekly Sun 00:15)"
+    } else {
+        Write-Warn "CRON_SECRET not found in .env - skipping EOL feed-sync task"
+    }
+
 } catch {
     Write-Host ""
     Write-Host "=== Update failed: $_ ===" -ForegroundColor Red

@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.17.0': [
+    'EOL Intelligence: the EOL feed now syncs automatically every week (Sunday) — new vendor end-of-life dates published centrally now reach this install on their own, with no need to click "Sync from EOL feed." The weekly sync runs just ahead of the nightly enrichment, so refreshed dates are applied to devices that same night',
+    'EOL Intelligence: the weekly sync verifies the feed signature before writing and only touches the seed catalog (never device records); offline/air-gapped installs simply skip it and keep using the bundled baseline',
+    'The manual "Sync from EOL feed" and "Run enrichment now" buttons remain for on-demand use',
+  ],
   '1.16.0': [
     'EOL Intelligence: the bundled offline EOL baseline now ships 949 vendor-confirmed models (910 with dates, 40 confirmed-retired) — up from ~32 — regenerated from the central NocVault EOL feed. A fresh or air-gapped install now starts with near-full EOL coverage even before the first "Sync from EOL feed"',
     'EOL Intelligence: the bundled seed now carries each model\'s vendor and lifecycle flag, so the offline baseline matches devices using the exact same keys as the online feed — including vendors the old derivation missed (Brocade, Asus, Linksys, TOTOLINK, and others)',
