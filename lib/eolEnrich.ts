@@ -405,18 +405,19 @@ export function matchDevice(
 ): MatchResult {
   if (!deviceNormalized) return { seed: null }
 
-  // b. exact — when several seed rows share the same normalized key (e.g. a
-  // curated dated entry plus a dateless worklist placeholder, or a duplicate),
-  // PREFER the one that actually carries a date so the device gets enriched
-  // instead of silently matching the empty placeholder.
+  // b/c. exact (model_normalized) + alias — consider BOTH tiers TOGETHER and prefer
+  // a DATED seed. Otherwise a dateless "Add all to seed" placeholder whose
+  // model_normalized equals the device key would shadow (via the exact tier) a dated
+  // curated entry that carries the same model only as an alias — leaving the device
+  // undated even though a date exists. pickBestSeed ranks dated > undated, then
+  // confidence, so the real dated entry wins regardless of which tier it came from.
   const exactMatches = seeds.filter((s) => s.model_normalized && s.model_normalized === deviceNormalized)
-  const exact = pickBestSeed(exactMatches)
-  if (exact) return { seed: exact, via: 'exact', confidence: exact.confidence, score: 1 }
-
-  // c. alias — same preference for dated rows on a tie.
   const aliasMatches = seeds.filter((s) => s.aliases.some((a) => a && a === deviceNormalized))
-  const alias = pickBestSeed(aliasMatches)
-  if (alias) return { seed: alias, via: 'alias', confidence: alias.confidence, score: 1 }
+  const direct = pickBestSeed([...exactMatches, ...aliasMatches])
+  if (direct) {
+    const via = exactMatches.includes(direct) ? 'exact' : 'alias'
+    return { seed: direct, via, confidence: direct.confidence, score: 1 }
+  }
 
   if (!fuzzyAvailable) return { seed: null }
 

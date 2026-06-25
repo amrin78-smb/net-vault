@@ -70,6 +70,9 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.14.1': [
+    'EOL Intelligence: fixed a matcher bug where a dateless "Add all to seed" placeholder could shadow a dated curated entry — a device whose model exactly matched the placeholder stayed undated even though the real EOL date existed on an entry carrying that model as an alias. The exact and alias tiers are now considered together and the dated entry always wins (re-run enrichment to pick up ~24+ previously-shadowed devices, e.g. WS-C2960X, A5120 EI, SG350-52, Catalyst 3850, Cisco 2504)',
+  ],
   '1.14.0': [
     'EOL Intelligence: the model matcher is now flexible to product-line naming differences — an inventory "Cisco 3750x" now matches a seed "Catalyst 3750-X", and "Palo Alto NGFW PA-440" matches "PA-440". It strips curated product-line noise words (Catalyst, NGFW, FlexNetwork, ProCurve, Series, …) and common Cisco PID prefixes (WS-C, AIR-AP), while preserving model-defining lines (SonicWave, AirEngine)',
     'EOL Intelligence: "Sync from EOL feed" now self-heals — it recomputes the seed keys with the current normalizer and collapses any duplicate models before applying the feed, so matching stays consistent after a matcher upgrade',
