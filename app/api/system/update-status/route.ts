@@ -70,6 +70,9 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.19.6': [
+    'Fresh-install fix: the devices table now defines support_vendor_id inline, so the v_devices_flat view (which joins the support vendor) builds successfully on a clean database. Previously the column was only added by a later ALTER, so on a fresh install the view — and its GRANT — failed, breaking device lists, dashboard, search, export, compliance and health scoring until patched',
+  ],
   '1.19.5': [
     'Security: the two EOL enrichment status endpoints (latest job + job status) now require the EOL license module, closing an unlicensed-read gap that let an authenticated user on a lapsed install read stale enrichment-job data (device model names)',
   ],

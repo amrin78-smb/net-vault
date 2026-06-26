@@ -76,6 +76,7 @@ CREATE TABLE IF NOT EXISTS devices (
     purchase_date      DATE,
     purchase_vendor_id INTEGER REFERENCES vendors(id),
     ma_vendor_id       INTEGER REFERENCES vendors(id),
+    support_vendor_id  INTEGER REFERENCES vendors(id),
     created_by         INTEGER,
     updated_by         INTEGER,
     created_at         TIMESTAMPTZ DEFAULT NOW(),
