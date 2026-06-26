@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { ensureEolSchema } from '@/lib/eolEnrich'
+import { requireEol } from '@/lib/entitlements'
 
 /**
  * GET /api/system/enrich-eol/status?jobId=
@@ -14,6 +15,9 @@ import { ensureEolSchema } from '@/lib/eolEnrich'
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const gate = await requireEol()
+  if (gate) return gate
 
   const jobId = new URL(req.url).searchParams.get('jobId')
   if (!jobId) return NextResponse.json({ error: 'jobId is required' }, { status: 400 })

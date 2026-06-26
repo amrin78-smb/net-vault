@@ -70,6 +70,9 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.19.5': [
+    'Security: the two EOL enrichment status endpoints (latest job + job status) now require the EOL license module, closing an unlicensed-read gap that let an authenticated user on a lapsed install read stale enrichment-job data (device model names)',
+  ],
   '1.19.4': [
     'Dark mode: swept the remaining hardcoded light colors on the Sites page — the per-site risk badges (High/Medium/Low) and the per-site Total/Active/EOL/Decommed stat numbers now use the adaptive theme tokens, so they stay readable in dark mode. The site-card hover border also uses the brand token now',
   ],
