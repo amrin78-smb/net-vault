@@ -563,10 +563,11 @@ if ($InstallDDIVault) {
     & git config --system --add safe.directory ($DDIAppDir -replace '\\','/') 2>$null
     Write-OK "DDIVault cloned"
 
-    # uuid-ossp extension
+    # uuid-ossp extension is created by schema.sql below (line 9, correctly quoted).
+    # Do NOT add a separate `psql -c 'CREATE EXTENSION ... "uuid-ossp"'` here:
+    # PowerShell 5.1 strips the inner double-quotes when invoking the native exe,
+    # so psql receives the hyphenated name unquoted and errors with a syntax error.
     $env:PGPASSWORD = $PgAdminPassword
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
-    Write-OK "uuid-ossp extension created"
 
     # Run 4 schemas in order
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema.sql"
