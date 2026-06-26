@@ -70,6 +70,13 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.17.1': [
+    'EOL Intelligence: hardened the feed sync. The whole sync now runs in a single database transaction, so a crash mid-sync can no longer leave the seed catalog half-updated (it rolls back instead)',
+    'EOL Intelligence: fixed a latent bug where collapsing duplicate seed entries during a sync could fail with a foreign-key error (and abort every subsequent sync) when a device recommendation referenced the merged-away entry — the sync now repoints those references correctly',
+    'EOL Intelligence: the feed download now has a 15-second timeout, so an unreachable or slow feed host no longer hangs the weekly sync; it is treated the same as offline',
+    'EOL Intelligence: after a manual "Sync from EOL feed", the confirmation now reminds you to run enrichment to apply the updated catalog to devices',
+    'EOL Intelligence: added a guard so a model that normalizes to an empty key can never be written to the seed catalog',
+  ],
   '1.17.0': [
     'EOL Intelligence: the EOL feed now syncs automatically every week (Sunday) — new vendor end-of-life dates published centrally now reach this install on their own, with no need to click "Sync from EOL feed." The weekly sync runs just ahead of the nightly enrichment, so refreshed dates are applied to devices that same night',
     'EOL Intelligence: the weekly sync verifies the feed signature before writing and only touches the seed catalog (never device records); offline/air-gapped installs simply skip it and keep using the bundled baseline',

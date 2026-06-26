@@ -163,6 +163,11 @@ async function migrateLegacySeed(): Promise<void> {
     // (Brocade, Asus, Linksys, …), which it would have keyed as 'Unknown'.
     const vendor = entry.vendor || deriveVendor(entry.key, rawModel)
     const normalized = normalizeForMatch(vendor, rawModel)
+    // Skip a model that collapses to an empty key (all vendor/noise words) — an
+    // empty model_normalized never matches a device (matchDevice guards readers)
+    // but would collide with any other empty-key row in the dedup pre-check and
+    // splash dates across unrelated placeholders. The feed upsert skips it too.
+    if (!normalized) continue
     // Other matches[] become aliases (normalized for matching).
     const aliases = entry.matches
       .slice(1)

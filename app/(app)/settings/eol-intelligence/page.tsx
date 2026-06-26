@@ -321,7 +321,10 @@ export default function EolIntelligencePage() {
       const res = await fetch('/api/admin/eol-seed/sync', { method: 'POST' })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || data.error) { showToast(data.error || 'Feed sync failed', 'error'); return }
-      showToast(`Synced feed ${data.feed_version}: ${data.inserted} new, ${data.updated} updated (${data.row_count} models, signature verified)`)
+      // Sync updates the seed catalog only — device EOL dates don't change until
+      // enrichment runs. Hint the user to run it (we intentionally don't auto-run,
+      // matching the decoupled scheduled tasks).
+      showToast(`Synced feed ${data.feed_version}: ${data.inserted} new, ${data.updated} updated (${data.row_count} models, signature verified). Run enrichment to apply it to devices.`)
       void loadSeed(1)
       void loadLatest()
     } catch {
