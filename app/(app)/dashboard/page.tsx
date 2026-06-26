@@ -495,14 +495,16 @@ export default function DashboardPage() {
       <div className="nv-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16, marginBottom: 20 }}>
         {statCards.map((s, i) => (
           <Link key={i} href={s.href} style={{ textDecoration: 'none' }}>
-            <div className="nv-row" style={{ ...cardStyle, padding: 18, cursor: 'pointer', height: '100%' }}>
-              <span style={{ display: 'inline-flex', width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 9, background: 'var(--surface-subtle)', color: 'var(--text-secondary)' }}>
-                {s.icon(18, 'currentColor')}
-              </span>
-              {loading ? <div style={{ margin: '10px 0 2px' }}><Shimmer w={60} h={26} /></div> : (
-                <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--text-primary)', marginTop: 10 }}>{s.value.toLocaleString()}</div>
-              )}
-              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', marginTop: 2 }}>{s.label}</div>
+            <div className="nv-row" style={{ ...cardStyle, padding: 14, cursor: 'pointer', height: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ display: 'inline-flex', width: 36, height: 36, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 9, background: 'var(--surface-subtle)', color: 'var(--text-secondary)' }}>
+                  {s.icon(18, 'currentColor')}
+                </span>
+                {loading ? <Shimmer w={60} h={26} /> : (
+                  <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>{s.value.toLocaleString()}</div>
+                )}
+              </div>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', marginTop: 8 }}>{s.label}</div>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{s.sub}</div>
             </div>
           </Link>

@@ -70,6 +70,10 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.19.3': [
+    'Dashboard: the KPI cards (Total Devices, Total Sites, WAN Circuits, Main Links, ISP Providers) are now more compact — the icon sits inline on the same row as the number instead of stacked above it, reducing card height',
+    'Dark mode: fixed the top KPI cards on the Sites page (Total Sites / Total Devices / EOL Devices) and the Devices page (Total / Active / EOL-EOS / Decommed) that kept light backgrounds in dark mode — they now use the adaptive theme tokens and flip correctly',
+  ],
   '1.19.2': [
     'Dashboard: removed the non-functional "Custom View" button — dashboard customization is not available yet, so the placeholder control has been taken out',
   ],
