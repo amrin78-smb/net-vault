@@ -133,7 +133,6 @@ const IconCircuit = (s?: number, c?: string) => ico(<><path d="M6 2v6a6 6 0 0 0 
 const IconLink = (s?: number, c?: string) => ico(<><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" /></>, s, c)
 const IconGlobe = (s?: number, c?: string) => ico(<><circle cx="12" cy="12" r="10" /><path d="M2 12h20M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20" /></>, s, c)
 const IconChevron = (s?: number, c?: string) => ico(<polyline points="9 18 15 12 9 6" />, s, c)
-const IconGrid = (s?: number, c?: string) => ico(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>, s, c)
 
 /* --------------------------- small helpers ------------------------- */
 function minutesAgo(iso: string) {
@@ -300,12 +299,6 @@ export default function DashboardPage() {
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '4px 0 0' }}>Infrastructure overview</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            className="nv-ghost-btn"
-            style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 14px', background: 'var(--bg-card)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 'var(--text-base)', fontWeight: 600, cursor: 'pointer' }}
-          >
-            {IconGrid(15, '#6b7280')} Custom View
-          </button>
           <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
             <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--text-primary)' }}>{clock || '—'}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ICT · Asia/Bangkok</div>
