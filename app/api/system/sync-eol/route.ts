@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { requireEol } from '@/lib/entitlements'
 import { syncFromFeed } from '@/lib/eolFeed'
 
 /**
@@ -41,6 +42,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }
+
+  // EOL Intelligence is a licensed add-on — block the sync (incl. the weekly
+  // scheduled task) when the install isn't entitled. Leaves all data untouched.
+  const gate = await requireEol()
+  if (gate) return gate
 
   try {
     const result = await syncFromFeed()

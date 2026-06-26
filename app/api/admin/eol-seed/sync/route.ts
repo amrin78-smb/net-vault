@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { syncFromFeed } from '@/lib/eolFeed'
+import { requireEol } from '@/lib/entitlements'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,6 +22,8 @@ async function requireSuperAdmin() {
 export async function POST() {
   const guard = await requireSuperAdmin()
   if (guard.error) return guard.error
+  const gate = await requireEol()
+  if (gate) return gate
 
   try {
     const result = await syncFromFeed()

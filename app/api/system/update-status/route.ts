@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.18.0': [
+    'EOL Intelligence is now a licensed add-on module. On installs whose license does not include the "eol" module, the EOL Intelligence page is locked (shows an upsell with your Server ID), the feed sync and enrichment no longer run (the scheduled tasks no-op), and all EOL admin/system endpoints return 403',
+    'Gating is access-control only — NO data is changed or deleted. Your seed catalog, the EOL dates already on devices, and recommendations are all left intact. Activating a license that includes the "eol" module immediately restores full access with all data in place',
+    'This establishes reusable per-module license enforcement (the "eol" module is the first); the License page already lists your entitled modules',
+  ],
   '1.17.1': [
     'EOL Intelligence: hardened the feed sync. The whole sync now runs in a single database transaction, so a crash mid-sync can no longer leave the seed catalog half-updated (it rolls back instead)',
     'EOL Intelligence: fixed a latent bug where collapsing duplicate seed entries during a sync could fail with a foreign-key error (and abort every subsequent sync) when a device recommendation referenced the merged-away entry — the sync now repoints those references correctly',

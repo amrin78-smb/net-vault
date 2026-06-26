@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
+import { requireEol } from '@/lib/entitlements'
 import { query } from '@/lib/db'
 import { ensureEolSchema, runEnrichment } from '@/lib/eolEnrich'
 
@@ -39,6 +40,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }
+
+  // EOL Intelligence is a licensed add-on — block enrichment (incl. the daily
+  // scheduled task) when the install isn't entitled. Leaves all data untouched.
+  const gate = await requireEol()
+  if (gate) return gate
 
   try {
     const init = await ensureEolSchema()

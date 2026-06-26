@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { ensureEolSchema } from '@/lib/eolEnrich'
+import { requireEol } from '@/lib/entitlements'
 
 async function requireSuperAdmin() {
   const session = await getServerSession(authOptions)
@@ -24,6 +25,8 @@ async function requireSuperAdmin() {
 export async function GET() {
   const guard = await requireSuperAdmin()
   if (guard.error) return guard.error
+  const gate = await requireEol()
+  if (gate) return gate
 
   try {
     await ensureEolSchema()

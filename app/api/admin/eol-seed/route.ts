@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { ensureEolSchema, normalizeForMatch, previewMatch } from '@/lib/eolEnrich'
+import { requireEol } from '@/lib/entitlements'
 
 // Inline super_admin guard (no central requireRole — mirrors DELETE /api/users/[id]).
 async function requireSuperAdmin() {
@@ -24,6 +25,8 @@ async function requireSuperAdmin() {
 export async function GET(req: NextRequest) {
   const guard = await requireSuperAdmin()
   if (guard.error) return guard.error
+  const gate = await requireEol()
+  if (gate) return gate
 
   try {
     await ensureEolSchema()
@@ -61,6 +64,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const guard = await requireSuperAdmin()
   if (guard.error) return guard.error
+  const gate = await requireEol()
+  if (gate) return gate
 
   try {
     await ensureEolSchema()

@@ -161,6 +161,21 @@ export default function EolIntelligencePage() {
   const user = session?.user as { role?: string } | undefined
   const isSuperAdmin = user?.role === 'super_admin'
 
+  // ── EOL add-on entitlement (licensed 'eol' module) ──────────────────
+  // null = checking; false = not licensed → locked upsell; true = enabled.
+  const [entitled, setEntitled] = useState<boolean | null>(null)
+  const [licServerId, setLicServerId] = useState<string>('')
+  useEffect(() => {
+    if (!isSuperAdmin) { setEntitled(false); return }
+    fetch('/api/license')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        setLicServerId(d?.serverId ?? '')
+        setEntitled(d?.status === 'active' && Array.isArray(d?.modules) && d.modules.includes('eol'))
+      })
+      .catch(() => setEntitled(false))
+  }, [isSuperAdmin])
+
   // ── access gating (mirror settings page: redirect non-admins) ───────
   // We additionally show an inline access-restricted message for any
   // authenticated non-super_admin who reaches the page directly.
@@ -538,6 +553,29 @@ export default function EolIntelligencePage() {
             EOL Intelligence is available to super administrators only.
           </p>
           <button className="btn-secondary" onClick={() => router.push('/settings')}>Back to Settings</button>
+        </div>
+      </div>
+    )
+  }
+
+  // EOL Intelligence is a paid add-on, gated on the 'eol' license module.
+  if (entitled === null) {
+    return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>
+  }
+  if (!entitled) {
+    return (
+      <div style={{ padding: '24px 28px' }}>
+        <div style={{ ...cardStyle, maxWidth: '560px', textAlign: 'center', padding: '40px 24px' }}>
+          <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>EOL Intelligence is a licensed add-on</div>
+          <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
+            This feature isn&apos;t enabled on this install. Contact your NocVault representative to license the
+            EOL Intelligence module, then activate the new key under Settings &rarr; License.
+          </p>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 20px' }}>
+            Server ID: <code style={{ fontFamily: 'var(--font-mono)' }}>{licServerId || '—'}</code>
+          </p>
+          <button className="btn-secondary" onClick={() => router.push('/settings/license')}>Go to License</button>
         </div>
       </div>
     )
