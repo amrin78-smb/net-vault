@@ -419,12 +419,38 @@ export default function SettingsPage() {
     setActivatingLicense(false)
   }
 
-  function copyServerId() {
-    if (!licenseInfo?.serverId) return
-    navigator.clipboard.writeText(licenseInfo.serverId).then(() => {
+  async function copyServerId() {
+    const id = licenseInfo?.serverId
+    if (!id) return
+    // navigator.clipboard is undefined in an insecure context (HTTP over an IP,
+    // which is how this is served) — guard on it and fall back to execCommand,
+    // otherwise the copy silently throws and nothing happens.
+    let ok = false
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(id)
+        ok = true
+      } else {
+        const ta = document.createElement('textarea')
+        ta.value = id
+        ta.style.position = 'fixed'
+        ta.style.opacity = '0'
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        ok = document.execCommand('copy')
+        document.body.removeChild(ta)
+      }
+    } catch {
+      ok = false
+    }
+    if (ok) {
       setCopiedServerId(true)
       setTimeout(() => setCopiedServerId(false), 2000)
-    })
+      showToast('Server ID copied')
+    } else {
+      showToast('Could not copy — select the Server ID and copy manually', 'error')
+    }
   }
 
   if (loadingSettings) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div>

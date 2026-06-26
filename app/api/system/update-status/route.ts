@@ -70,6 +70,9 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.19.1': [
+    'Settings → License: fixed the "Copy" button next to Your Server ID, which did nothing when the app is served over HTTP (the browser clipboard API is unavailable in that context). It now falls back to a reliable copy and shows a "Server ID copied" confirmation toast',
+  ],
   '1.19.0': [
     'Launcher tiles are now license-aware: any suite app (LogVault, DDIVault, SpanVault) whose module is not included in your active license key is greyed out and blurred, with its "Open" button replaced by a non-clickable "Not licensed" state and a "contact sales@nocvault.com" prompt',
     'Gating is lenient and never locks you out by mistake — a tile is only marked unlicensed when there is an active license that explicitly lists modules and omits that app. Trial, grace, expired, empty-module, or unreachable-license states leave every tile open as before',
