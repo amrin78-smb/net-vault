@@ -39,9 +39,9 @@ export default function SitesPage() {
     if (siteStatus === 'Decommed') return { bg: 'var(--surface-subtle)', color: 'var(--text-secondary)', label: 'Site decommed' }
     if (total === 0) return { bg: 'var(--surface-subtle)', color: 'var(--text-muted)', label: 'Empty' }
     const pct = eol / total
-    if (pct >= 0.4) return { bg: '#fee2e2', color: '#991b1b', label: 'High' }
-    if (pct >= 0.2) return { bg: '#fef3c7', color: '#92400e', label: 'Medium' }
-    return { bg: '#dcfce7', color: '#166534', label: 'Low' }
+    if (pct >= 0.4) return { bg: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', label: 'High' }
+    if (pct >= 0.2) return { bg: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', label: 'Medium' }
+    return { bg: 'var(--tint-success)', color: 'var(--tint-success-fg)', label: 'Low' }
   }
 
   function timeAgo(d: string) {
@@ -116,7 +116,7 @@ export default function SitesPage() {
                 return (
                   <Link key={site.id} href={`/sites/${site.id}`} style={{ textDecoration: 'none' }}>
                     <div style={{ background: isDecommed ? 'var(--surface-subtle)' : 'var(--bg-card)', borderRadius: '8px', border: isDecommed ? '1px solid var(--border)' : '1px solid var(--border)', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s', opacity: isDecommed ? 0.7 : 1 }}
-                      onMouseEnter={e => (e.currentTarget.style.borderColor = isDecommed ? 'var(--border)' : '#C8102E')}
+                      onMouseEnter={e => (e.currentTarget.style.borderColor = isDecommed ? 'var(--border)' : 'var(--primary)')}
                       onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                         <div>
@@ -129,10 +129,10 @@ export default function SitesPage() {
                       {/* Device count row */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px', marginBottom: '12px' }}>
                         {[
-                          { label: 'Total', value: site.total, color: '#1a2744' },
-                          { label: 'Active', value: site.active, color: '#166534' },
-                          { label: 'EOL', value: site.eol, color: '#991b1b' },
-                          { label: 'Decommed', value: site.decommed, color: '#92400e' },
+                          { label: 'Total', value: site.total, color: 'var(--text-primary)' },
+                          { label: 'Active', value: site.active, color: 'var(--tint-success-fg)' },
+                          { label: 'EOL', value: site.eol, color: 'var(--tint-danger-fg)' },
+                          { label: 'Decommed', value: site.decommed, color: 'var(--tint-warn-fg)' },
                         ].map(stat => (
                           <div key={stat.label} style={{ textAlign: 'center', background: 'var(--surface-subtle)', borderRadius: '6px', padding: '6px 4px' }}>
                             <div style={{ fontSize: 'var(--text-md)', fontWeight: '700', color: stat.color }}>{stat.value}</div>
