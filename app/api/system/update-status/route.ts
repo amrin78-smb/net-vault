@@ -70,6 +70,10 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.19.8': [
+    'Launcher performance: the suite health/stats tiles now fail fast and cache. The per-app cross-probe timeout was cut from 5s to 1.5s and results are cached in-memory for ~20s, so a single slow or offline sibling app no longer stalls the launcher for up to 5 seconds',
+    'Launcher performance: the license server-ID is now memoized, so GET /api/license no longer spawns a synchronous Windows registry query (execSync) on every call — removing a small per-request event-loop stall',
+  ],
   '1.19.7': [
     'Security: upgraded Next.js 16.2.1 → 16.2.9 (the patched release), closing high-severity advisories reachable over HTTP — SSRF via WebSocket upgrades, middleware/proxy bypass via dynamic route params, and App-Router XSS — plus the bundled postcss stringify XSS. No functional or UI changes',
   ],

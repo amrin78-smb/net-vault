@@ -21,12 +21,19 @@ function getMachineGuid(): string {
   }
 }
 
+// The server ID is constant for the life of the process (hostname + MachineGuid
+// never change at runtime), so memoize it to avoid the synchronous execSync
+// registry query blocking the event loop on every /api/license request.
+let _serverId: string | null = null
+
 export function getServerId(): string {
+  if (_serverId !== null) return _serverId
   const machineGuid = getMachineGuid()
   const hostname = os.hostname()
   const raw = `${hostname}-${machineGuid}`
   const hash = createHash('sha256').update(raw).digest('hex').substring(0, 32)
-  return `NCV-${hash}`
+  _serverId = `NCV-${hash}`
+  return _serverId
 }
 
 export interface LicensePayload {
