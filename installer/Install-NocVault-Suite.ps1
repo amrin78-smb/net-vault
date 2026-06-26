@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    NocVault Suite Installer v1.1
+    NocVault Suite Installer v1.2
 .DESCRIPTION
     Installs NetVault, LogVault, DDIVault and SpanVault on a Windows Server.
     NetVault is mandatory. LogVault, DDIVault and SpanVault are optional.
@@ -62,7 +62,7 @@ function GrantNocRoRead($db) {
 Clear-Host
 Write-Host ""
 Write-Host "  +============================================+" -ForegroundColor White
-Write-Host "  |   NocVault Suite Installer v1.1           |" -ForegroundColor White
+Write-Host "  |   NocVault Suite Installer v1.2           |" -ForegroundColor White
 Write-Host "  |   Network Intelligence Suite              |" -ForegroundColor White
 Write-Host "  +============================================+" -ForegroundColor White
 Write-Host ""

@@ -1,6 +1,6 @@
 ===============================================================
   NocVault Network Intelligence Suite
-  On-Premises Installation Guide  (Suite Installer v1.1)
+  On-Premises Installation Guide  (Suite Installer v1.2)
 ===============================================================
 
 CONTENTS
@@ -354,6 +354,6 @@ Installation failed partway through:
     - A screenshot of the issue
 
 ===============================================================
-  NocVault Network Intelligence Suite - Installer v1.1
+  NocVault Network Intelligence Suite - Installer v1.2
   (c) 2026 NocVault. All rights reserved.
 ===============================================================
