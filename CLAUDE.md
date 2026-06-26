@@ -17,6 +17,35 @@ in the same change, flag it explicitly so it isn't missed.
 
 ---
 
+## Performance notes (already investigated — don't re-litigate)
+
+**The NetVault updater is slow, and that is INHERENT — there is no safe knob to speed it
+up.** Investigated 2026-06-26. `Update-NetVault.ps1` rebuilds the whole app — a Next.js 16
+(Turbopack, `output: 'standalone'`) build of ~82 endpoints (~20 pages + ~62 API routes)
+with full TypeScript type-checking, static-page generation, and standalone dependency
+tracing. The other suite apps build only a small Next frontend (4–16 pages) and their roots
+are no-build Express, which is why they finish far faster. The updater script itself is
+already well-tuned: incremental `npm install` (does NOT wipe `node_modules`), the Next build
+cache is preserved across runs (`git clean -fd` has no `-x`, so `.next/cache` survives), a
+health-poll instead of long fixed sleeps.
+- **ESLint-during-build is NOT a lever:** Next.js 16 **removed** the `eslint` key from
+  `next.config.ts` (`eslint` is "no longer supported"; the key fails the build). Next 16
+  already does not run ESLint during `next build`, so there is nothing to disable. Do not
+  re-add `eslint: { ignoreDuringBuilds: true }` — it breaks the build.
+- **Do NOT disable the TypeScript check** (`typescript.ignoreBuildErrors`) to save time —
+  the `next build` type-check is the deploy safety gate; the time it costs buys correctness.
+- Net: if asked again to "speed up the slow updater," the answer is the build is the cost of
+  shipping the largest app in the suite; no safe change remains.
+
+**Launcher load speed (fixed in 1.19.8).** The launcher's slowness was mainly the suite
+cross-app probes (`app/api/suite/health` + `app/api/suite/stats`), not the license check —
+they fan out to sibling apps and a slow/offline sibling could stall the tiles. They now use
+a 1.5s per-app timeout + ~20s in-memory cache. The license check was a secondary cost
+(`getServerId()` ran a synchronous `execSync` reg-query every call) and is now memoized in
+`lib/license.ts`. The license-aware launcher tiles add no network cost (client-side only).
+
+---
+
 ## Versioning Policy
 
 This app follows semantic versioning. Baseline: 1.2.0 (Jun 2026)
