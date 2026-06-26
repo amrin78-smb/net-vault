@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import ThemeToggle from '@/components/ThemeToggle'
 
-type LicenseInfo = { status: string; daysRemaining: number; expiry: string | null }
+type LicenseInfo = { status: string; daysRemaining: number; expiry: string | null; modules?: string[] }
 type HealthStatus = 'Healthy' | 'Warning' | 'Unavailable'
 type SuiteHealth = { app: string; status: HealthStatus }
 type NetvaultStats = { devices_total: number; sites_total: number; eol_total: number }
@@ -333,6 +333,7 @@ export default function LauncherPage() {
 
   type AppCard = {
     name: string
+    slug: 'netvault' | 'logvault' | 'ddivault' | 'spanvault'
     subtitle: string
     description: string
     href: string
@@ -341,9 +342,21 @@ export default function LauncherPage() {
     metrics: { icon: string; value: string; label: string }[]
   }
 
+  // LENIENT module entitlement: a suite app is treated as licensed UNLESS there
+  // is an ACTIVE key that explicitly lists modules and omits this app's slug.
+  // Trial / grace / expired / unreachable / empty-modules → all tiles licensed.
+  // The NetVault host tile is ALWAYS licensed (never greyed).
+  const isLicensed = (slug: AppCard['slug']): boolean =>
+    slug === 'netvault'
+      ? true
+      : !(licenseInfo?.status === 'active'
+          && Array.isArray(licenseInfo.modules)
+          && licenseInfo.modules.length > 0
+          && !licenseInfo.modules.includes(slug))
+
   const cards: AppCard[] = [
     {
-      name: 'NetVault', subtitle: 'Network Asset Management',
+      name: 'NetVault', slug: 'netvault', subtitle: 'Network Asset Management',
       description: 'Devices, sites, circuits and EOL/EOS tracking.',
       href: '/dashboard', color: primary, logo: '/netvault-logo.svg',
       metrics: [
@@ -353,7 +366,7 @@ export default function LauncherPage() {
       ],
     },
     {
-      name: 'LogVault', subtitle: 'Syslog & Log Analysis',
+      name: 'LogVault', slug: 'logvault', subtitle: 'Syslog & Log Analysis',
       description: 'Real-time syslog collection, analysis and alerting.',
       href: '/api/sso/logvault', color: '#2563eb', logo: '/logvault-logo.svg',
       metrics: [
@@ -363,7 +376,7 @@ export default function LauncherPage() {
       ],
     },
     {
-      name: 'DDIVault', subtitle: 'DNS, DHCP & IPAM Solution',
+      name: 'DDIVault', slug: 'ddivault', subtitle: 'DNS, DHCP & IPAM Solution',
       description: 'Centralised DNS, DHCP and IP address management.',
       href: '/api/sso/ddivault', color: '#d97706', logo: '/ddivault-logo.svg',
       metrics: [
@@ -373,7 +386,7 @@ export default function LauncherPage() {
       ],
     },
     {
-      name: 'SpanVault', subtitle: 'Network Monitoring',
+      name: 'SpanVault', slug: 'spanvault', subtitle: 'Network Monitoring',
       description: 'Device monitoring, availability and performance alerting.',
       href: spanvaultUrl, color: '#16a34a', logo: '/spanvault-logo.svg',
       metrics: [
@@ -517,17 +530,24 @@ export default function LauncherPage() {
 
             {/* Right: app pills */}
             <div style={{ display: 'flex', alignItems: 'stretch', flex: 1 }}>
-              {['NetVault', 'LogVault', 'DDIVault', 'SpanVault'].map((app, i) => {
+              {(['NetVault', 'LogVault', 'DDIVault', 'SpanVault'] as const).map((app, i) => {
                 const st = healthFor(app)
+                const pillLicensed = isLicensed(app.toLowerCase() as AppCard['slug'])
                 return (
-                  <div key={app} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '6px', padding: '0 24px', borderLeft: i === 0 ? 'none' : '1px solid var(--border-light)' }}>
+                  <div key={app} style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '6px', padding: '0 24px', borderLeft: i === 0 ? 'none' : '1px solid var(--border-light)', opacity: pillLicensed ? 1 : 0.5, filter: pillLicensed ? 'none' : 'grayscale(1)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <AppIcon name={app} />
                       <span style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>{app}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-                      <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
-                      <span style={{ fontSize: '12px', color: HEALTH_COLORS[st] }}>{st}</span>
+                      {pillLicensed ? (
+                        <>
+                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
+                          <span style={{ fontSize: '12px', color: HEALTH_COLORS[st] }}>{st}</span>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Not licensed</span>
+                      )}
                     </div>
                   </div>
                 )
@@ -542,9 +562,11 @@ export default function LauncherPage() {
         <div className="nv-app-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '18px', marginBottom: '24px' }}>
           {cards.map(card => {
             const st = healthFor(card.name)
+            const licensed = isLicensed(card.slug)
             const netvaultEmpty = card.name === 'NetVault' && !statsLoading && netStats != null && netStats.devices_total === 0 && netStats.sites_total === 0 && netStats.eol_total === 0
             return (
-              <div key={card.name} style={{ background: NAVY, borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '18px', display: 'flex', flexDirection: 'column', color: 'white' }}>
+              <div key={card.name} style={{ background: NAVY, borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '18px', display: 'flex', flexDirection: 'column', color: 'white', position: 'relative' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', flex: 1, opacity: licensed ? 1 : 0.5, filter: licensed ? 'none' : 'grayscale(1)', transition: 'opacity 0.2s, filter 0.2s' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <img src={card.logo} alt={card.name} style={{ height: '30px', width: 'auto', objectFit: 'contain' }} />
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: HEALTH_COLORS[st], background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '10px' }}>
@@ -553,7 +575,7 @@ export default function LauncherPage() {
                 </div>
                 <div style={{ fontSize: '12px', fontWeight: 600, color: card.color, marginBottom: '4px' }}>{card.subtitle}</div>
                 <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.45, marginBottom: '14px', minHeight: '34px' }}>{card.description}</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', marginBottom: '16px', flex: 1 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', marginBottom: '16px', flex: 1, filter: licensed ? 'none' : 'blur(2px)' }}>
                   {netvaultEmpty ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '6px', flex: 1, padding: '8px 0' }}>
                       <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.color }}>
@@ -573,10 +595,23 @@ export default function LauncherPage() {
                     ))
                   )}
                 </div>
-                <a href={card.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: card.color, color: 'white', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: '8px', textDecoration: 'none' }}>
-                  Open {card.name}
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-                </a>
+                </div>
+                {licensed ? (
+                  <a href={card.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: card.color, color: 'white', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: '8px', textDecoration: 'none' }}>
+                    Open {card.name}
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                  </a>
+                ) : (
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.12)', cursor: 'not-allowed' }}>
+                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
+                      Not licensed
+                    </div>
+                    <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', textAlign: 'center', marginTop: '7px', lineHeight: 1.4 }}>
+                      Not licensed — contact <a href="mailto:sales@nocvault.com" style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>sales@nocvault.com</a>
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
