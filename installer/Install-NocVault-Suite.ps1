@@ -585,10 +585,40 @@ if ($InstallDDIVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT USAGE ON SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON sites, countries TO ddivault_user;"
     GrantNocRoRead "ddivault"
+
+    # Reassign ownership of all app objects from postgres to ddivault_user. The schema
+    # is applied as the postgres superuser, but the updater (and future migrations)
+    # re-apply it AS ddivault_user, which requires ownership. Idempotent.
+    $ddiReassign = @'
+DO $$
+DECLARE r RECORD;
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'ddivault_user') THEN
+    FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP
+      EXECUTE format('ALTER TABLE public.%I OWNER TO ddivault_user', r.tablename);
+    END LOOP;
+    FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname='public' LOOP
+      EXECUTE format('ALTER SEQUENCE public.%I OWNER TO ddivault_user', r.sequencename);
+    END LOOP;
+    FOR r IN SELECT viewname FROM pg_views WHERE schemaname='public' LOOP
+      EXECUTE format('ALTER VIEW public.%I OWNER TO ddivault_user', r.viewname);
+    END LOOP;
+    FOR r IN SELECT p.proname AS nm, pg_get_function_identity_arguments(p.oid) AS args
+             FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+             WHERE n.nspname='public'
+               AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid=p.oid AND d.deptype='e') LOOP
+      EXECUTE format('ALTER FUNCTION public.%I(%s) OWNER TO ddivault_user', r.nm, r.args);
+    END LOOP;
+    GRANT CREATE ON SCHEMA public TO ddivault_user;
+  END IF;
+END
+$$;
+'@
+    $ddiReassign | & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f -
     Write-OK "DDIVault schemas applied and cross-DB grants set"
 
     # Create .env.local in root AND frontend
-    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $DDIFrontendDir = "$DDIAppDir\frontend"
     $ddiEnv | Out-File -FilePath "$DDIAppDir\.env.local" -Encoding UTF8 -NoNewline
     $ddiEnv | Out-File -FilePath "$DDIFrontendDir\.env.local" -Encoding UTF8 -NoNewline
@@ -684,10 +714,40 @@ if ($InstallSpanVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO spanvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL ON SCHEMA public TO spanvault_user;"
     GrantNocRoRead "spanvault"
+
+    # Reassign ownership of all app objects from postgres to spanvault_user. The schema
+    # is applied as the postgres superuser, but the updater (and the API at boot)
+    # re-apply it AS spanvault_user, which requires ownership. Idempotent.
+    $svReassign = @'
+DO $$
+DECLARE r RECORD;
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'spanvault_user') THEN
+    FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP
+      EXECUTE format('ALTER TABLE public.%I OWNER TO spanvault_user', r.tablename);
+    END LOOP;
+    FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname='public' LOOP
+      EXECUTE format('ALTER SEQUENCE public.%I OWNER TO spanvault_user', r.sequencename);
+    END LOOP;
+    FOR r IN SELECT viewname FROM pg_views WHERE schemaname='public' LOOP
+      EXECUTE format('ALTER VIEW public.%I OWNER TO spanvault_user', r.viewname);
+    END LOOP;
+    FOR r IN SELECT p.proname AS nm, pg_get_function_identity_arguments(p.oid) AS args
+             FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+             WHERE n.nspname='public'
+               AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid=p.oid AND d.deptype='e') LOOP
+      EXECUTE format('ALTER FUNCTION public.%I(%s) OWNER TO spanvault_user', r.nm, r.args);
+    END LOOP;
+    GRANT CREATE ON SCHEMA public TO spanvault_user;
+  END IF;
+END
+$$;
+'@
+    $svReassign | & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -f -
     Write-OK "SpanVault schema applied"
 
     # Create .env.local in root AND frontend
-    $svEnv = "SV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`nSV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass"
+    $svEnv = "SV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`nSV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $SVFrontendDir = "$SVAppDir\frontend"
     $svEnv | Out-File -FilePath "$SVAppDir\.env.local" -Encoding UTF8 -NoNewline
     $svEnv | Out-File -FilePath "$SVFrontendDir\.env.local" -Encoding UTF8 -NoNewline
