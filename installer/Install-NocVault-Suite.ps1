@@ -338,6 +338,9 @@ GrantNocRoRead "netvault"
 Write-OK "NetVault schema applied"
 
 # Create .env
+# POSTGRES_PASSWORD lets the app's own Update-NetVault.ps1 re-apply schema.sql as
+# the postgres superuser on later updates (new views, eol_* column-type fixes,
+# ownership self-heal); without it that step soft-skips. Mirrors LogVault's .env.local.
 @"
 DATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault
 NEXTAUTH_SECRET=$SharedSecret
@@ -351,6 +354,7 @@ NOCVAULT_RO_PORT=5432
 NOCVAULT_RO_USER=nocvault_readonly
 NOCVAULT_RO_PASS=$NocReadOnlyPass
 NEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000
+POSTGRES_PASSWORD=$PgAdminPassword
 "@ | Out-File -FilePath "$NVAppDir\.env" -Encoding UTF8 -NoNewline
 
 # Build

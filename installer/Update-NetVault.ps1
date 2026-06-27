@@ -160,6 +160,41 @@ try {
         Write-Warn ".env was not backed up - check credentials before starting service"
     }
 
+    # Re-apply schema.sql as the postgres superuser so existing installs pick up
+    # schema changes that ship in code: new views (e.g. v_devices_flat), eol_*
+    # device_id column-type fixes + their guarded retype migration, and the final
+    # ownership/grant self-heal block. schema.sql is written to be idempotent, so
+    # re-running it on every update is safe. Needs the postgres password, which the
+    # suite installer provisions into .env as POSTGRES_PASSWORD; installs that
+    # predate that key soft-skip with a warning (set POSTGRES_PASSWORD in .env to
+    # enable). Non-fatal: never blocks an update.
+    Write-Step "Re-applying database schema (idempotent)"
+    $PgBin       = "C:\Program Files\PostgreSQL\16\bin"
+    $PsqlExe     = "$PgBin\psql.exe"
+    $SchemaPath  = "$AppDir\schema.sql"
+    $pgLine      = Get-Content "$AppDir\.env" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^POSTGRES_PASSWORD=' } | Select-Object -First 1
+    $PgAdminPassword = if ($pgLine) { $pgLine.Substring('POSTGRES_PASSWORD='.Length) } else { '' }
+    if (-not (Test-Path $PsqlExe)) {
+        Write-Warn "psql not found at $PsqlExe - skipping schema re-apply"
+    } elseif (-not (Test-Path $SchemaPath)) {
+        Write-Warn "schema.sql not found at $SchemaPath - skipping schema re-apply"
+    } elseif (-not $PgAdminPassword) {
+        Write-Warn "POSTGRES_PASSWORD not in .env - skipping schema re-apply (add it to .env to enable on this pre-existing install)"
+    } else {
+        $env:PGPASSWORD = $PgAdminPassword
+        Write-Host "    Running: psql -U postgres -d netvault -f schema.sql" -ForegroundColor Gray
+        $ErrorActionPreference = 'Continue'
+        & $PsqlExe -U postgres -h localhost -p 5432 -d netvault -f $SchemaPath 2>&1 | Tee-Object -FilePath "$InstallDir\logs\schema-apply.log" | Out-Null
+        $schemaExit = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+        $env:PGPASSWORD = $null
+        if ($schemaExit -eq 0) {
+            Write-OK "schema.sql re-applied as postgres superuser"
+        } else {
+            Write-Warn "schema.sql re-apply exited $schemaExit - check $InstallDir\logs\schema-apply.log"
+        }
+    }
+
     Write-Step "Rebuilding NetVault"
     Write-Host "    Running: npm install" -ForegroundColor Gray
     $null = & npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"

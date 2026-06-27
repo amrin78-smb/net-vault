@@ -211,7 +211,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS eol_jobs_one_running ON eol_enrichment_jobs (s
 -- Conflicts between a manually-set EOL/EOS date and the curated seed date.
 CREATE TABLE IF NOT EXISTS eol_discrepancies (
     id              SERIAL PRIMARY KEY,
-    device_id       UUID,  -- FK to devices(id) enforced at runtime (lib/eolEnrich); not declared here because this file's legacy devices.id is SERIAL while production is UUID
+    device_id       INTEGER,  -- FK to devices(id) enforced at runtime (lib/eolEnrich); INTEGER to match this schema's SERIAL devices.id
     device_name     TEXT,
     model           TEXT,
     manual_date     DATE,
@@ -230,7 +230,7 @@ CREATE INDEX IF NOT EXISTS idx_eol_discrepancies_status ON eol_discrepancies (st
 -- vendor EOL date has passed, or an EOL device the vendor still supports).
 CREATE TABLE IF NOT EXISTS eol_recommendations (
     id                 SERIAL PRIMARY KEY,
-    device_id          UUID,  -- FK to devices(id) enforced at runtime (lib/eolEnrich); not declared here because this file's legacy devices.id is SERIAL while production is UUID
+    device_id          INTEGER,  -- FK to devices(id) enforced at runtime (lib/eolEnrich); INTEGER to match this schema's SERIAL devices.id
     device_name        TEXT,
     model              TEXT,
     current_status     TEXT,
@@ -268,7 +268,59 @@ INSERT INTO app_settings (key, value) VALUES ('install_date',   NOW()::date::tex
 INSERT INTO app_settings (key, value) VALUES ('license_key',    '')                                  ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('license_status', 'trial')                             ON CONFLICT (key) DO NOTHING;
 
+-- ── Safe migrations for existing installs ────────────────────────
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_vendor_id      INTEGER REFERENCES vendors(id);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS ma_vendor_id            INTEGER REFERENCES vendors(id);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_date           DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_contract_number TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_start_date      DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_end_date        DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_vendor_id       INTEGER REFERENCES vendors(id);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_cost            NUMERIC(12,2);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_currency        TEXT DEFAULT 'THB';
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS cost               NUMERIC(12,2);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS mgmt_protocol      TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS mgmt_url           TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS location_detail    TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS risk_score         INTEGER;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS technical_debt     NUMERIC(12,2);
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS remark             TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS created_at         TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE sites    ADD COLUMN IF NOT EXISTS site_status        TEXT NOT NULL DEFAULT 'Active';
+ALTER TABLE circuits ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS password_hash      TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_type            TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_version         TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_eol_date        DATE;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_source         TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_confidence     TEXT;
+ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_enriched_at    TIMESTAMPTZ;
+
+-- Retype eol_* device_id from UUID -> INTEGER on existing SERIAL installs (empty/unused there).
+-- Guarded so it ONLY runs when this DB's devices.id is integer (never touches a true UUID-variant DB).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='devices' AND column_name='id' AND data_type IN ('integer','bigint')) THEN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eol_discrepancies' AND column_name='device_id' AND data_type='uuid') THEN
+      ALTER TABLE eol_discrepancies   ALTER COLUMN device_id TYPE INTEGER USING NULL::integer;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='eol_recommendations' AND column_name='device_id' AND data_type='uuid') THEN
+      ALTER TABLE eol_recommendations ALTER COLUMN device_id TYPE INTEGER USING NULL::integer;
+    END IF;
+  END IF;
+END
+$$;
+
+-- Fix role constraint
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check
+    CHECK (role IN ('admin', 'super_admin', 'site_admin', 'viewer'));
+
 -- ── v_devices_flat View ──────────────────────────────────────────
+-- Created AFTER the safe-migration ALTERs above so every column it selects
+-- (mgmt_*, location_detail, risk_score, technical_debt, remark, cost,
+-- support_*, os_*) exists on a fresh DB before the view is defined.
 CREATE OR REPLACE VIEW v_devices_flat AS
 SELECT
     d.id,
@@ -317,47 +369,28 @@ LEFT JOIN vendors      pv ON pv.id = d.purchase_vendor_id
 LEFT JOIN vendors      mv ON mv.id = d.ma_vendor_id
 LEFT JOIN vendors      sv ON sv.id = d.support_vendor_id;
 
--- ── Safe migrations for existing installs ────────────────────────
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_vendor_id      INTEGER REFERENCES vendors(id);
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS ma_vendor_id            INTEGER REFERENCES vendors(id);
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_date           DATE;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_contract_number TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_start_date      DATE;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_end_date        DATE;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_vendor_id       INTEGER REFERENCES vendors(id);
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_cost            NUMERIC(12,2);
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS support_currency        TEXT DEFAULT 'THB';
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS cost               NUMERIC(12,2);
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS mgmt_protocol      TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS mgmt_url           TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS location_detail    TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS risk_score         INTEGER;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS technical_debt     NUMERIC(12,2);
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS remark             TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS created_at         TIMESTAMPTZ DEFAULT NOW();
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMPTZ DEFAULT NOW();
-ALTER TABLE sites    ADD COLUMN IF NOT EXISTS site_status        TEXT NOT NULL DEFAULT 'Active';
-ALTER TABLE circuits ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMPTZ DEFAULT NOW();
-ALTER TABLE users    ADD COLUMN IF NOT EXISTS password_hash      TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_type            TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_version         TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_eol_date        DATE;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_source         TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_confidence     TEXT;
-ALTER TABLE devices  ADD COLUMN IF NOT EXISTS eol_enriched_at    TIMESTAMPTZ;
-
--- Fix role constraint
-ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
-ALTER TABLE users ADD CONSTRAINT users_role_check
-    CHECK (role IN ('admin', 'super_admin', 'site_admin', 'viewer'));
-
 -- ── Permissions ──────────────────────────────────────────────────
+-- Runs AFTER the view block so the view is reassigned to netvault too.
+-- The installer applies this file as the postgres superuser, so without
+-- this every object would be owned by postgres and the app's runtime DDL
+-- ("must be owner of table devices") would fail.
 DO $$
+DECLARE r RECORD;
 BEGIN
     IF EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'netvault') THEN
         GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO netvault;
         GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO netvault;
         GRANT SELECT ON v_devices_flat TO netvault;
+        FOR r IN SELECT tablename    FROM pg_tables    WHERE schemaname='public' LOOP
+            EXECUTE format('ALTER TABLE public.%I OWNER TO netvault', r.tablename);
+        END LOOP;
+        FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname='public' LOOP
+            EXECUTE format('ALTER SEQUENCE public.%I OWNER TO netvault', r.sequencename);
+        END LOOP;
+        FOR r IN SELECT viewname     FROM pg_views     WHERE schemaname='public' LOOP
+            EXECUTE format('ALTER VIEW public.%I OWNER TO netvault', r.viewname);
+        END LOOP;
+        GRANT CREATE ON SCHEMA public TO netvault;
     END IF;
 END
 $$;
