@@ -15,6 +15,14 @@ new build step. The suite installer also provisions LogVault/DDIVault/SpanVault 
 change in any of those apps must be mirrored here too. If you can't update the installer
 in the same change, flag it explicitly so it isn't missed.
 
+**Post-install test script (keep in sync too):** the suite ships a fresh-install smoke
+tester at `installer/Test-NocVault-Suite.ps1` (it verifies services, ports, health/versions,
+schema, the 3 collectors end-to-end, the tamper model and cross-DB grants). If you build a
+feature that a fresh install should be verified for — a new NSSM service or port, a new DB
+table/column/seed/extension/grant, a new collector data path, a new scheduled task, or a new
+health/endpoint contract — update BOTH the installer AND this test script in the same change,
+so fresh installs stay verifiable.
+
 ---
 
 ## Performance notes (already investigated — don't re-litigate)
