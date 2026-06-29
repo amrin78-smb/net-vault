@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    NocVault Suite Installer v1.4
+    NocVault Suite Installer v1.3
 .DESCRIPTION
     Installs NetVault, LogVault, DDIVault and SpanVault on a Windows Server.
     NetVault is mandatory. LogVault, DDIVault and SpanVault are optional.
@@ -62,7 +62,7 @@ function GrantNocRoRead($db) {
 Clear-Host
 Write-Host ""
 Write-Host "  +============================================+" -ForegroundColor White
-Write-Host "  |   NocVault Suite Installer v1.4           |" -ForegroundColor White
+Write-Host "  |   NocVault Suite Installer v1.3           |" -ForegroundColor White
 Write-Host "  |   Network Intelligence Suite              |" -ForegroundColor White
 Write-Host "  +============================================+" -ForegroundColor White
 Write-Host ""
@@ -185,32 +185,6 @@ if (-not $Unattended) {
 }
 
 # ================================================================
-# STEP 0 — Stop any existing NocVault services (re-run safety)
-# ================================================================
-# On a re-run over a LIVE install, the running services hold file locks
-# (node.exe on .next\standalone / node_modules, nssm.exe on the service exe),
-# which makes the Remove-Item + git clone below fail. Stop them first. Uses
-# sc.exe (always present, PATH-independent). No-op on a fresh machine.
-Write-Step "Stopping any existing NocVault services"
-$existingSvcs = @("NetVault",
-                  "LogVault-App","LogVault-API","LogVault-Collector",
-                  "DDIVault-App","DDIVault-API","DDIVault-Collector",
-                  "SpanVault-App","SpanVault-API","SpanVault-Collector")
-$stoppedAny = $false
-foreach ($s in $existingSvcs) {
-    if (Get-Service -Name $s -ErrorAction SilentlyContinue) {
-        & sc.exe stop $s | Out-Null
-        $stoppedAny = $true
-    }
-}
-if ($stoppedAny) {
-    Start-Sleep -Seconds 6   # let node.exe / nssm.exe release file locks
-    Write-OK "Existing services stopped (re-run detected)"
-} else {
-    Write-OK "No existing services to stop (fresh install)"
-}
-
-# ================================================================
 # STEP 1 — Directories
 # ================================================================
 Write-Step "Creating directories"
@@ -295,14 +269,8 @@ if (Test-Path "$PgBin\psql.exe") {
 # STEP 6 — NSSM
 # ================================================================
 Write-Step "Installing NSSM"
-if (Test-Path $NssmExe) {
-    # Already extracted (re-run). Don't re-expand - nssm.exe may be locked by a
-    # service that is mid-stop, and it's the same bundled version anyway.
-    Write-OK "NSSM already present"
-} else {
-    Expand-Archive -Path $NssmZip -DestinationPath $NssmDir -Force
-    Write-OK "NSSM ready"
-}
+Expand-Archive -Path $NssmZip -DestinationPath $NssmDir -Force
+Write-OK "NSSM ready"
 
 # ================================================================
 # STEP 7 — Databases
