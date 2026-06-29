@@ -70,6 +70,9 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.19.11': [
+    'Provisioning fix: the nocvault_readonly Hub role is now granted SELECT in the schema self-heal (incl. ALTER DEFAULT PRIVILEGES for future netvault-created tables), so cross-app Hub reads cover runtime-created tables (e.g. the EOL Intelligence tables) on both fresh installs and upgrades',
+  ],
   '1.19.10': [
     'Suite installer fix: a fresh install now reassigns ownership of all DDIVault and SpanVault tables, sequences, views and functions to their app roles (ddivault_user / spanvault_user) right after applying each schema as postgres — so each app\'s self-migration (and SpanVault\'s API at boot) no longer fails silently with "must be owner" and the schema stays in sync',
     'Suite installer fix: the installer now writes POSTGRES_PASSWORD into the DDIVault and SpanVault .env files, so their updaters can self-heal existing installs by reassigning object ownership on the next upgrade',

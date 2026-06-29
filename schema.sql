@@ -394,3 +394,22 @@ BEGIN
     END IF;
 END
 $$;
+
+-- ── Hub cross-DB read role ───────────────────────────────────────
+-- The Hub reads across all suite DBs via the shared `nocvault_readonly`
+-- role. The installer grants it SELECT once, but the app creates tables
+-- at RUNTIME as the netvault role (e.g. eolEnrich's eol_seed,
+-- eol_enrichment_jobs, eol_discrepancies, eol_recommendations) which that
+-- one-time grant never covers — and the updater re-applies this file but
+-- not the installer's grant. Re-granting here makes both installer and
+-- updater converge, and ALTER DEFAULT PRIVILEGES auto-covers future
+-- netvault-created tables. No-op on a standalone netvault (no role).
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nocvault_readonly') THEN
+        GRANT USAGE ON SCHEMA public TO nocvault_readonly;
+        GRANT SELECT ON ALL TABLES IN SCHEMA public TO nocvault_readonly;
+        ALTER DEFAULT PRIVILEGES FOR ROLE netvault IN SCHEMA public GRANT SELECT ON TABLES TO nocvault_readonly;
+    END IF;
+END
+$$;
