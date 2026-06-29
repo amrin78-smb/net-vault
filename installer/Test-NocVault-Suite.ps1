@@ -148,6 +148,23 @@ foreach ($s in $services) {
     else { Bad ("$s : " + $svc.Status) }
 }
 
+# LogVault-API must carry SERVER_IP in its service env, or LogVault's in-app update
+# (its API requires SERVER_IP) silently fails on fresh installs. Read it back via nssm.
+$nssm = $null
+foreach ($n in @("$InstallDir\NetVault\nssm\nssm-2.24\win64\nssm.exe",
+                 "C:\Apps\NetVault\nssm\nssm-2.24\win64\nssm.exe",
+                 "$InstallDir\nssm\nssm-2.24\win64\nssm.exe")) {
+    if (Test-Path $n) { $nssm = $n; break }
+}
+if (-not $nssm) { $c = Get-Command nssm -ErrorAction SilentlyContinue; if ($c) { $nssm = $c.Source } }
+if (-not $nssm) {
+    Wn "nssm.exe not found - cannot verify LogVault-API SERVER_IP env (skipped)"
+} else {
+    $lvApiEnv = (& $nssm get LogVault-API AppEnvironmentExtra 2>$null | Out-String)
+    if ($lvApiEnv -match "SERVER_IP") { Ok "LogVault-API service env contains SERVER_IP (in-app update can resolve server IP)" }
+    else { Bad "LogVault-API service env MISSING SERVER_IP - LogVault in-app update will fail" }
+}
+
 # ---------------------------------------------------------------
 Section "3. Ports Listening"
 $tcpPorts = @{
