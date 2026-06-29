@@ -151,10 +151,17 @@ try {
         }
         # NocVault Hub cross-DB read role (added for existing installs that predate the Hub).
         # nocvault_readonly is SELECT-only across all suite DBs; the Hub reads via it.
+        # PRESERVE the existing RO password from the restored .env - it was set by the
+        # suite installer (prompted, default NocV@ult_RO#2026) and must match the actual
+        # DB role. Never clobber it with a literal. Only fall back to the installer's
+        # default on a legacy box where the key is genuinely absent/empty.
+        $roPassLine = Get-Content "$AppDir\.env" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^NOCVAULT_RO_PASS=' } | Select-Object -First 1
+        $RoPass = if ($roPassLine) { $roPassLine.Substring('NOCVAULT_RO_PASS='.Length) } else { '' }
+        if (-not $RoPass) { $RoPass = 'NocV@ult_RO#2026' }
         Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_HOST' -Value 'localhost'
         Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_PORT' -Value '5432'
         Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_USER' -Value 'nocvault_readonly'
-        Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_PASS' -Value 'NVReadOnly@2026!'
+        Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_PASS' -Value $RoPass
         Write-OK "NOCVAULT_RO_* ensured in .env"
     } else {
         Write-Warn ".env was not backed up - check credentials before starting service"
@@ -254,7 +261,11 @@ try {
         $curEnv = & $NssmExe get NetVault AppEnvironmentExtra 2>$null
         $curStr = ($curEnv | Out-String).Trim()
         if ($curStr -notmatch 'NOCVAULT_RO_USER=') {
-            $roLines = "NOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=NVReadOnly@2026!"
+            # Preserve the RO password that's in .env (set above from the restored .env /
+            # the installer default) - never seed the service with a hardcoded literal.
+            $roPassLine = Get-Content "$AppDir\.env" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^NOCVAULT_RO_PASS=' } | Select-Object -First 1
+            $RoPass = if ($roPassLine) { $roPassLine.Substring('NOCVAULT_RO_PASS='.Length) } else { 'NocV@ult_RO#2026' }
+            $roLines = "NOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$RoPass"
             $newEnv = if ($curStr) { "$curStr`n$roLines" } else { $roLines }
             & $NssmExe set NetVault AppEnvironmentExtra $newEnv | Out-Null
             Write-OK "NOCVAULT_RO_* added to NetVault service env"

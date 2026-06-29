@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    NocVault Suite Installer v1.3
+    NocVault Suite Installer v1.4
 .DESCRIPTION
     Installs NetVault, LogVault, DDIVault and SpanVault on a Windows Server.
     NetVault is mandatory. LogVault, DDIVault and SpanVault are optional.
@@ -62,7 +62,7 @@ function GrantNocRoRead($db) {
 Clear-Host
 Write-Host ""
 Write-Host "  +============================================+" -ForegroundColor White
-Write-Host "  |   NocVault Suite Installer v1.3           |" -ForegroundColor White
+Write-Host "  |   NocVault Suite Installer v1.4           |" -ForegroundColor White
 Write-Host "  |   Network Intelligence Suite              |" -ForegroundColor White
 Write-Host "  +============================================+" -ForegroundColor White
 Write-Host ""
@@ -308,9 +308,6 @@ if ($InstallSpanVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER spanvault_user WITH PASSWORD '$SVDbPass';" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE spanvault OWNER spanvault_user;" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE spanvault TO spanvault_user;" 2>$null
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT CONNECT ON DATABASE netvault TO spanvault_user;" 2>$null
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT USAGE ON SCHEMA public TO spanvault_user;" 2>$null
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON devices, sites, countries, regions, brands, device_types, vendors, users, user_sites TO spanvault_user;" 2>$null
     Write-OK "SpanVault database ready"
 }
 
@@ -509,7 +506,7 @@ if ($InstallLogVault) {
     & $NssmExe remove LogVault-API confirm 2>$null
     & $NssmExe install LogVault-API "C:\Program Files\nodejs\node.exe" "$LVAppDir\api\server.js"
     & $NssmExe set LogVault-API AppDirectory        $LVAppDir
-    & $NssmExe set LogVault-API AppEnvironmentExtra "NODE_ENV=production`nDB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nLV_APP_URL=http://${ServerIP}:3004`nRETENTION_DAYS=90`nLOG_LEVEL=info`nSERVER_IP=$ServerIP"
+    & $NssmExe set LogVault-API AppEnvironmentExtra "NODE_ENV=production`nDB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nLV_APP_URL=http://${ServerIP}:3004`nRETENTION_DAYS=90`nLOG_LEVEL=info`nSERVER_IP=$ServerIP`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set LogVault-API DependOnService     $PgSvcName
     & $NssmExe set LogVault-API DisplayName         "LogVault - API"
     & $NssmExe set LogVault-API Start               SERVICE_AUTO_START
@@ -677,7 +674,7 @@ $$;
     & $NssmExe remove DDIVault-Collector confirm 2>$null
     & $NssmExe install DDIVault-Collector "C:\Program Files\nodejs\node.exe" "$DDIAppDir\collector\collector.js"
     & $NssmExe set DDIVault-Collector AppDirectory        $DDIAppDir
-    & $NssmExe set DDIVault-Collector AppEnvironmentExtra "NODE_ENV=production`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nNEXTAUTH_SECRET=$SharedSecret`nPS_AUTH_MODE=kerberos`nPS_TIMEOUT_MS=30000"
+    & $NssmExe set DDIVault-Collector AppEnvironmentExtra "NODE_ENV=production`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nNEXTAUTH_SECRET=$SharedSecret`nPS_AUTH_MODE=kerberos`nPS_TIMEOUT_MS=30000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set DDIVault-Collector DependOnService     $PgSvcName
     & $NssmExe set DDIVault-Collector DisplayName         "DDIVault - Collector"
     & $NssmExe set DDIVault-Collector Start               SERVICE_AUTO_START
@@ -715,6 +712,13 @@ if ($InstallSpanVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL ON SCHEMA public TO spanvault_user;"
     GrantNocRoRead "spanvault"
 
+    # Cross-DB grant: SpanVault reads NetVault for SSO + device sync. Done HERE (not in
+    # STEP 7) because netvault's tables don't exist until STEP 8 applies its schema; a
+    # premature multi-table GRANT would error out entirely. No 2>$null so a real failure surfaces.
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT CONNECT ON DATABASE netvault TO spanvault_user;"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT USAGE ON SCHEMA public TO spanvault_user;"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON devices, sites, countries, regions, brands, device_types, vendors, users, user_sites TO spanvault_user;"
+
     # Reassign ownership of all app objects from postgres to spanvault_user. The schema
     # is applied as the postgres superuser, but the updater (and the API at boot)
     # re-apply it AS spanvault_user, which requires ownership. Idempotent.
@@ -747,7 +751,7 @@ $$;
     Write-OK "SpanVault schema applied"
 
     # Create .env.local in root AND frontend
-    $svEnv = "SV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`nSV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
+    $svEnv = "NODE_ENV=production`nSV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`nSV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $SVFrontendDir = "$SVAppDir\frontend"
     $svEnv | Out-File -FilePath "$SVAppDir\.env.local" -Encoding UTF8 -NoNewline
     $svEnv | Out-File -FilePath "$SVFrontendDir\.env.local" -Encoding UTF8 -NoNewline

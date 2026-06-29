@@ -327,9 +327,15 @@ else {
     else { Bad ("Tamper model BROKEN: UPDATE=" + $upd + " DELETE=" + $del + " (expected f/f)") }
 
     Write-Host "  --- Cross-DB grants ---" -ForegroundColor DarkGray
-    $xg = Pg "netvault" "SELECT count(DISTINCT grantee) FROM information_schema.role_table_grants WHERE table_name='sites' AND privilege_type='SELECT' AND grantee IN ('ddivault_user','spanvault_user','netvault');"
-    if ($script:PgExit -eq 0 -and [int]$xg -ge 2) { Ok ("Cross-DB SELECT on netvault.sites granted to " + $xg + " role(s)") }
-    else { Wn ("Cross-DB grants on netvault.sites: found " + $xg + " (expected >=2)") }
+    $svSites = Pg "netvault" "SELECT has_table_privilege('spanvault_user','sites','SELECT');"
+    if ($script:PgExit -eq 0 -and $svSites -eq "t") { Ok "spanvault_user has SELECT on netvault.sites" }
+    else { Bad ("spanvault_user missing SELECT on netvault.sites (got '" + $svSites + "')") }
+    $svUsers = Pg "netvault" "SELECT has_table_privilege('spanvault_user','users','SELECT');"
+    if ($script:PgExit -eq 0 -and $svUsers -eq "t") { Ok "spanvault_user has SELECT on netvault.users (SpanVault SSO)" }
+    else { Bad ("spanvault_user missing SELECT on netvault.users (got '" + $svUsers + "') -- SpanVault SSO broken") }
+    $ddSites = Pg "netvault" "SELECT has_table_privilege('ddivault_user','sites','SELECT');"
+    if ($script:PgExit -eq 0 -and $ddSites -eq "t") { Ok "ddivault_user has SELECT on netvault.sites" }
+    else { Bad ("ddivault_user missing SELECT on netvault.sites (got '" + $ddSites + "')") }
 
     # nocvault_readonly can actually connect + SELECT?
     Write-Host "  --- nocvault_readonly (Hub cross-DB role) ---" -ForegroundColor DarkGray

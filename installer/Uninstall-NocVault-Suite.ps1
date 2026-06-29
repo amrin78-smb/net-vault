@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    NocVault Suite Uninstaller v1.3
+    NocVault Suite Uninstaller v1.4
 .DESCRIPTION
     Cleanly removes NetVault, LogVault, DDIVault and SpanVault from a Windows
     Server: stops and deletes all NSSM services, removes scheduled tasks and
@@ -46,7 +46,7 @@ function Write-Info($msg) { Write-Host "    [--] $msg" -ForegroundColor Gray }
 Clear-Host
 Write-Host ""
 Write-Host "  +============================================+" -ForegroundColor White
-Write-Host "  |   NocVault Suite Uninstaller v1.3          |" -ForegroundColor White
+Write-Host "  |   NocVault Suite Uninstaller v1.4          |" -ForegroundColor White
 Write-Host "  |   Removes NetVault / LogVault / DDIVault / |" -ForegroundColor White
 Write-Host "  |   SpanVault                                |" -ForegroundColor White
 Write-Host "  +============================================+" -ForegroundColor White
