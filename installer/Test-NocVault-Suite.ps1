@@ -289,11 +289,13 @@ else {
     $ddt = Pg "ddivault" "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('ddi_servers','dhcp_scopes','dns_zones','ipam_subnets');"
     if ($ddt -eq "4") { Ok "DDIVault core tables present" } else { Bad ("DDIVault core tables: expected 4, found " + $ddt) }
 
-    Write-Host "  --- SpanVault (map_shapes ordering fix) ---" -ForegroundColor DarkGray
+    Write-Host "  --- SpanVault (map shapes + connection waypoints) ---" -ForegroundColor DarkGray
     $ms = Pg "spanvault" "SELECT to_regclass('public.map_shapes') IS NOT NULL;"
     if ($ms -eq "t") { Ok "map_shapes table exists" } else { Bad ("map_shapes MISSING (got '" + $ms + "')") }
     $mc = Pg "spanvault" "SELECT count(*) FROM information_schema.columns WHERE table_name='map_shapes' AND column_name IN ('locked','group_id');"
     if ($mc -eq "2") { Ok "map_shapes has locked + group_id columns" } else { Bad ("map_shapes locked/group_id: expected 2, found " + $mc) }
+    $wp = Pg "spanvault" "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='map_connections' AND column_name='waypoints');"
+    if ($wp -eq "t") { Ok "map_connections.waypoints column exists (adjustable elbow lines)" } else { Bad ("map_connections.waypoints missing (got '" + $wp + "')") }
     $svt = Pg "spanvault" "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('monitored_devices','alerts','sv_maps','wireless_controllers');"
     if ($svt -eq "4") { Ok "SpanVault core tables present" } else { Bad ("SpanVault core tables: expected 4, found " + $svt) }
 
