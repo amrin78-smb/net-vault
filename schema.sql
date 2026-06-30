@@ -381,13 +381,17 @@ BEGIN
         GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO netvault;
         GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO netvault;
         GRANT SELECT ON v_devices_flat TO netvault;
-        FOR r IN SELECT tablename    FROM pg_tables    WHERE schemaname='public' LOOP
+        -- Only reassign objects not already owned by netvault. This skips
+        -- already-correct objects on a re-apply and, crucially, never tries to
+        -- reassign a foreign (non-app / non-extension) object that may land in
+        -- public — which would otherwise abort the whole schema re-apply.
+        FOR r IN SELECT tablename    FROM pg_tables    WHERE schemaname='public' AND tableowner    <> 'netvault' LOOP
             EXECUTE format('ALTER TABLE public.%I OWNER TO netvault', r.tablename);
         END LOOP;
-        FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname='public' LOOP
+        FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname='public' AND sequenceowner <> 'netvault' LOOP
             EXECUTE format('ALTER SEQUENCE public.%I OWNER TO netvault', r.sequencename);
         END LOOP;
-        FOR r IN SELECT viewname     FROM pg_views     WHERE schemaname='public' LOOP
+        FOR r IN SELECT viewname     FROM pg_views     WHERE schemaname='public' AND viewowner     <> 'netvault' LOOP
             EXECUTE format('ALTER VIEW public.%I OWNER TO netvault', r.viewname);
         END LOOP;
         GRANT CREATE ON SCHEMA public TO netvault;

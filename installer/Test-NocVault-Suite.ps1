@@ -1,6 +1,6 @@
 <#
 ================================================================
-  NocVault Suite - Post-Install Smoke Test  (v2.0)
+  NocVault Suite - Post-Install Smoke Test  (v2.1)
   Run this ON THE SERVER/LAPTOP where the suite was installed.
 
   WHAT IT CHECKS
@@ -83,7 +83,7 @@ function Pg($db, $sql) {
 }
 
 # ===============================================================
-Section "NocVault Suite Smoke Test (v2.0)"
+Section "NocVault Suite Smoke Test (v2.1)"
 Inf ("Run time : " + (Get-Date))
 Inf ("Host     : " + $env:COMPUTERNAME)
 Inf ("InstallDir: " + $InstallDir)
@@ -289,10 +289,13 @@ else {
     if ($rc -eq "5") { Ok "All 5 roles exist (incl. nocvault_readonly)" } else { Bad ("Expected 5 roles, found " + $rc) }
 
     Write-Host "  --- NetVault (support_vendor_id / v_devices_flat fix) ---" -ForegroundColor DarkGray
-    $col = Pg "netvault" "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='devices' AND column_name='support_vendor_id');"
-    if ($col -eq "t") { Ok "devices.support_vendor_id column exists" } else { Bad ("devices.support_vendor_id missing (got '" + $col + "')") }
-    $vw = Pg "netvault" "SELECT to_regclass('public.v_devices_flat') IS NOT NULL;"
-    if ($vw -eq "t") { Ok "v_devices_flat view exists" } else { Bad ("v_devices_flat view MISSING (got '" + $vw + "')") }
+    # ROLE-SCOPED: assert the app role (netvault) can actually SELECT the object,
+    # not merely that it exists in the catalog (a superuser-visible existence check
+    # FALSE-PASSES when the app role can't read it).
+    $col = Pg "netvault" "SELECT has_column_privilege('netvault','devices','support_vendor_id','SELECT');"
+    if ($col -eq "t") { Ok "netvault role can SELECT devices.support_vendor_id" } else { Bad ("netvault role cannot SELECT devices.support_vendor_id (got '" + $col + "')") }
+    $vw = Pg "netvault" "SELECT has_table_privilege('netvault','v_devices_flat','SELECT');"
+    if ($vw -eq "t") { Ok "netvault role can SELECT v_devices_flat view" } else { Bad ("netvault role cannot SELECT v_devices_flat (got '" + $vw + "')") }
     $vsel = Pg "netvault" "SELECT count(*) FROM v_devices_flat;"
     if ($script:PgExit -eq 0) { Ok ("v_devices_flat queryable (" + $vsel + " rows)") } else { Bad ("SELECT from v_devices_flat FAILED: " + $vsel) }
     $usr = Pg "netvault" "SELECT count(*) FROM users;"
@@ -303,22 +306,34 @@ else {
     Write-Host "  --- DDIVault (uuid-ossp fix) ---" -ForegroundColor DarkGray
     $ext = Pg "ddivault" "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='uuid-ossp');"
     if ($ext -eq "t") { Ok "uuid-ossp extension installed" } else { Bad ("uuid-ossp MISSING (got '" + $ext + "')") }
-    $ddt = Pg "ddivault" "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('ddi_servers','dhcp_scopes','dns_zones','ipam_subnets');"
-    if ($ddt -eq "4") { Ok "DDIVault core tables present" } else { Bad ("DDIVault core tables: expected 4, found " + $ddt) }
+    # ROLE-SCOPED: the ddivault_user app role must be able to SELECT each core table.
+    $ddOk = $true; $ddBad = @()
+    foreach ($t in @('ddi_servers','dhcp_scopes','dns_zones','ipam_subnets')) {
+        $p = Pg "ddivault" "SELECT has_table_privilege('ddivault_user','$t','SELECT');"
+        if ($p -ne "t") { $ddOk = $false; $ddBad += ($t + "=" + $p) }
+    }
+    if ($ddOk) { Ok "ddivault_user can SELECT all DDIVault core tables" } else { Bad ("ddivault_user cannot SELECT DDIVault core tables: " + ($ddBad -join ', ')) }
 
     Write-Host "  --- SpanVault (map shapes + connection waypoints) ---" -ForegroundColor DarkGray
-    $ms = Pg "spanvault" "SELECT to_regclass('public.map_shapes') IS NOT NULL;"
-    if ($ms -eq "t") { Ok "map_shapes table exists" } else { Bad ("map_shapes MISSING (got '" + $ms + "')") }
-    $mc = Pg "spanvault" "SELECT count(*) FROM information_schema.columns WHERE table_name='map_shapes' AND column_name IN ('locked','group_id');"
-    if ($mc -eq "2") { Ok "map_shapes has locked + group_id columns" } else { Bad ("map_shapes locked/group_id: expected 2, found " + $mc) }
-    $wp = Pg "spanvault" "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_name='map_connections' AND column_name='waypoints');"
-    if ($wp -eq "t") { Ok "map_connections.waypoints column exists (adjustable elbow lines)" } else { Bad ("map_connections.waypoints missing (got '" + $wp + "')") }
-    $svt = Pg "spanvault" "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('monitored_devices','alerts','sv_maps','wireless_controllers');"
-    if ($svt -eq "4") { Ok "SpanVault core tables present" } else { Bad ("SpanVault core tables: expected 4, found " + $svt) }
+    # ROLE-SCOPED: assert the spanvault_user app role can SELECT each object/column.
+    $ms = Pg "spanvault" "SELECT has_table_privilege('spanvault_user','map_shapes','SELECT');"
+    if ($ms -eq "t") { Ok "spanvault_user can SELECT map_shapes" } else { Bad ("spanvault_user cannot SELECT map_shapes (got '" + $ms + "')") }
+    $mcL = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','map_shapes','locked','SELECT');"
+    $mcG = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','map_shapes','group_id','SELECT');"
+    if ($mcL -eq "t" -and $mcG -eq "t") { Ok "spanvault_user can SELECT map_shapes.locked + group_id" } else { Bad ("spanvault_user cannot SELECT map_shapes locked/group_id (locked=" + $mcL + " group_id=" + $mcG + ")") }
+    $wp = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','map_connections','waypoints','SELECT');"
+    if ($wp -eq "t") { Ok "spanvault_user can SELECT map_connections.waypoints (adjustable elbow lines)" } else { Bad ("spanvault_user cannot SELECT map_connections.waypoints (got '" + $wp + "')") }
+    $svOk = $true; $svBad = @()
+    foreach ($t in @('monitored_devices','alerts','sv_maps','wireless_controllers')) {
+        $p = Pg "spanvault" "SELECT has_table_privilege('spanvault_user','$t','SELECT');"
+        if ($p -ne "t") { $svOk = $false; $svBad += ($t + "=" + $p) }
+    }
+    if ($svOk) { Ok "spanvault_user can SELECT all SpanVault core tables" } else { Bad ("spanvault_user cannot SELECT SpanVault core tables: " + ($svBad -join ', ')) }
 
     Write-Host "  --- LogVault (append-only tamper model) ---" -ForegroundColor DarkGray
-    $se = Pg "logvault" "SELECT to_regclass('public.syslog_entries') IS NOT NULL;"
-    if ($se -eq "t") { Ok "syslog_entries table exists" } else { Bad ("syslog_entries MISSING (got '" + $se + "')") }
+    # ROLE-SCOPED: the logvault_user app role must be able to SELECT syslog_entries.
+    $se = Pg "logvault" "SELECT has_table_privilege('logvault_user','syslog_entries','SELECT');"
+    if ($se -eq "t") { Ok "logvault_user can SELECT syslog_entries" } else { Bad ("logvault_user cannot SELECT syslog_entries (got '" + $se + "')") }
     $ins = Pg "logvault" "SELECT has_table_privilege('logvault_user','syslog_entries','INSERT');"
     $upd = Pg "logvault" "SELECT has_table_privilege('logvault_user','syslog_entries','UPDATE');"
     $del = Pg "logvault" "SELECT has_table_privilege('logvault_user','syslog_entries','DELETE');"
@@ -337,12 +352,21 @@ else {
     if ($script:PgExit -eq 0 -and $ddSites -eq "t") { Ok "ddivault_user has SELECT on netvault.sites" }
     else { Bad ("ddivault_user missing SELECT on netvault.sites (got '" + $ddSites + "')") }
 
-    # nocvault_readonly can actually connect + SELECT?
+    # nocvault_readonly can actually SELECT in ALL FOUR DBs? The installer grants RO
+    # SELECT on every suite DB, so a missing grant is a hard FAIL (not a warning) and
+    # is checked on a representative table in each DB (not just netvault.devices).
     Write-Host "  --- nocvault_readonly (Hub cross-DB role) ---" -ForegroundColor DarkGray
-    $roSel = Pg "netvault" "SELECT has_table_privilege('nocvault_readonly','devices','SELECT');"
-    if ($roSel -eq "t") { Ok "nocvault_readonly has SELECT on netvault.devices" }
-    elseif ($roSel -eq "f") { Wn "nocvault_readonly exists but lacks SELECT on devices (Hub cross-DB reads may be limited)" }
-    else { Wn ("nocvault_readonly privilege check inconclusive (" + $roSel + ")") }
+    $roTargets = @(
+        @{ Db="netvault";  Tbl="devices" },
+        @{ Db="logvault";  Tbl="syslog_entries" },
+        @{ Db="ddivault";  Tbl="ddi_servers" },
+        @{ Db="spanvault"; Tbl="monitored_devices" }
+    )
+    foreach ($ro in $roTargets) {
+        $roSel = Pg $ro.Db "SELECT has_table_privilege('nocvault_readonly','$($ro.Tbl)','SELECT');"
+        if ($roSel -eq "t") { Ok ("nocvault_readonly has SELECT on " + $ro.Db + "." + $ro.Tbl) }
+        else { Bad ("nocvault_readonly missing SELECT on " + $ro.Db + "." + $ro.Tbl + " (got '" + $roSel + "') -- Hub cross-DB reads broken") }
+    }
 }
 
 # ---------------------------------------------------------------
@@ -386,8 +410,14 @@ if ($sent -and $script:DbReady) {
 # ---- 10b. SpanVault: ping/SNMP poll heartbeat ----
 Write-Host "  --- SpanVault collector (poll heartbeat) ---" -ForegroundColor DarkGray
 if ($script:DbReady) {
+    # Count active devices. Guard the query exit + non-empty result BEFORE the [int]
+    # cast (mirrors the v_devices_flat check above): a query error returns an error
+    # string that [int] would silently coerce to 0 and mislabel as "idle by design".
+    # monitored_devices.active is the correct column name (verified against the schema).
     $dev = Pg "spanvault" "SELECT count(*) FROM monitored_devices WHERE COALESCE(active,true)=true;"
-    if ([int]$dev -eq 0) {
+    if (-not ($script:PgExit -eq 0 -and $dev -match '^\d+$')) {
+        Bad ("SpanVault: count of active monitored_devices FAILED: " + $dev)
+    } elseif ([int]$dev -eq 0) {
         Inf "No active monitored_devices - SpanVault collector idle by design on a fresh install (add a device to test polling)"
     } else {
         $recent = Pg "spanvault" "SELECT count(*) FROM ping_results WHERE ts > NOW() - INTERVAL '5 minutes';"
@@ -405,8 +435,12 @@ if ($script:DbReady) {
 # ---- 10c. DDIVault: poll heartbeat / liveness ----
 Write-Host "  --- DDIVault collector (poll heartbeat) ---" -ForegroundColor DarkGray
 if ($script:DbReady) {
+    # Guard the query exit + non-empty result BEFORE the [int] cast so a broken/
+    # unreadable ddi_servers table reports FAIL instead of false "idle by design".
     $srv = Pg "ddivault" "SELECT count(*) FROM ddi_servers;"
-    if ([int]$srv -eq 0) {
+    if (-not ($script:PgExit -eq 0 -and $srv -match '^\d+$')) {
+        Bad ("DDIVault: count of ddi_servers FAILED: " + $srv)
+    } elseif ([int]$srv -eq 0) {
         Inf "No ddi_servers configured - DDIVault collector idle by design (add a WinRM DHCP/DNS server to test polling)"
     } else {
         $rh = Pg "ddivault" "SELECT count(*) FROM server_health_history WHERE recorded_at > NOW() - INTERVAL '15 minutes';"

@@ -1,7 +1,7 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    NocVault Suite Installer v1.4
+    NocVault Suite Installer v1.5
 .DESCRIPTION
     Installs NetVault, LogVault, DDIVault and SpanVault on a Windows Server.
     NetVault is mandatory. LogVault, DDIVault and SpanVault are optional.
@@ -52,17 +52,28 @@ function Write-Info($msg) { Write-Host "    [--] $msg" -ForegroundColor Gray }
 # AFTER that DB's schema is applied so existing AND future tables are covered. Feeds
 # the NocVault Hub's cross-app reads (unified search / asset 360 / suite alerting).
 function GrantNocRoRead($db) {
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c "GRANT CONNECT ON DATABASE $db TO nocvault_readonly;" 2>$null
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c "GRANT USAGE ON SCHEMA public TO nocvault_readonly;" 2>$null
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c "GRANT SELECT ON ALL TABLES IN SCHEMA public TO nocvault_readonly;" 2>$null
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO nocvault_readonly;" 2>$null
+    # Run the RO grants WITHOUT swallowing stderr (mirrors the per-app table
+    # grants below) so a real failure surfaces instead of silently shipping a
+    # degraded Hub install. Check $LASTEXITCODE per statement and warn on failure.
+    $roGrants = @(
+        "GRANT CONNECT ON DATABASE $db TO nocvault_readonly;",
+        "GRANT USAGE ON SCHEMA public TO nocvault_readonly;",
+        "GRANT SELECT ON ALL TABLES IN SCHEMA public TO nocvault_readonly;",
+        "ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO nocvault_readonly;"
+    )
+    foreach ($g in $roGrants) {
+        & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d $db -c $g
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "nocvault_readonly grant on '$db' FAILED (exit $LASTEXITCODE): $g - Hub cross-DB reads may be degraded."
+        }
+    }
 }
 
 # ── Banner ────────────────────────────────────────────────────────
 Clear-Host
 Write-Host ""
 Write-Host "  +============================================+" -ForegroundColor White
-Write-Host "  |   NocVault Suite Installer v1.4           |" -ForegroundColor White
+Write-Host "  |   NocVault Suite Installer v1.5           |" -ForegroundColor White
 Write-Host "  |   Network Intelligence Suite              |" -ForegroundColor White
 Write-Host "  +============================================+" -ForegroundColor White
 Write-Host ""

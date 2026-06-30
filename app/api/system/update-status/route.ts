@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.19.12': [
+    'Schema hardening: the public-object owner-reassignment loops in schema.sql now skip objects already owned by the netvault role, so a foreign (non-app) object landing in public can no longer abort the whole schema re-apply on upgrade',
+    'Installer fix: the suite installer no longer swallows nocvault_readonly grant errors — a failed Hub read-only grant now surfaces a warning instead of silently shipping a degraded cross-DB install',
+    'Smoke tester hardening: existence checks are now role-scoped privilege checks (the app role can actually SELECT the object), the nocvault_readonly grant is a hard FAIL across all four DBs, and collector-heartbeat queries no longer mislabel a query error as "idle by design"',
+  ],
   '1.19.11': [
     'Provisioning fix: the nocvault_readonly Hub role is now granted SELECT in the schema self-heal (incl. ALTER DEFAULT PRIVILEGES for future netvault-created tables), so cross-app Hub reads cover runtime-created tables (e.g. the EOL Intelligence tables) on both fresh installs and upgrades',
   ],
