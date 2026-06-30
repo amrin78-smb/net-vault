@@ -1,6 +1,6 @@
 <#
 ================================================================
-  NocVault Suite - Post-Install Smoke Test  (v2.1)
+  NocVault Suite - Post-Install Smoke Test  (v2.2)
   Run this ON THE SERVER/LAPTOP where the suite was installed.
 
   WHAT IT CHECKS
@@ -83,7 +83,7 @@ function Pg($db, $sql) {
 }
 
 # ===============================================================
-Section "NocVault Suite Smoke Test (v2.1)"
+Section "NocVault Suite Smoke Test (v2.2)"
 Inf ("Run time : " + (Get-Date))
 Inf ("Host     : " + $env:COMPUTERNAME)
 Inf ("InstallDir: " + $InstallDir)
@@ -148,22 +148,24 @@ foreach ($s in $services) {
     else { Bad ("$s : " + $svc.Status) }
 }
 
-# LogVault-API must carry SERVER_IP in its service env, or LogVault's in-app update
-# (its API requires SERVER_IP) silently fails on fresh installs. Read it back via nssm.
+# LogVault's in-app update needs the API to resolve a server IP. The LogVault-API
+# PROCESS env = NSSM AppEnvironmentExtra UNION the root .env.local it loads via
+# dotenv (override:false), so SERVER_IP from EITHER source reaches the process.
+# Check both (NSSM env OR .env.local); only fail if neither has it.
 $nssm = $null
 foreach ($n in @("$InstallDir\NetVault\nssm\nssm-2.24\win64\nssm.exe",
                  "C:\Apps\NetVault\nssm\nssm-2.24\win64\nssm.exe",
                  "$InstallDir\nssm\nssm-2.24\win64\nssm.exe")) {
     if (Test-Path $n) { $nssm = $n; break }
 }
-if (-not $nssm) { $c = Get-Command nssm -ErrorAction SilentlyContinue; if ($c) { $nssm = $c.Source } }
-if (-not $nssm) {
-    Wn "nssm.exe not found - cannot verify LogVault-API SERVER_IP env (skipped)"
-} else {
-    $lvApiEnv = (& $nssm get LogVault-API AppEnvironmentExtra 2>$null | Out-String)
-    if ($lvApiEnv -match "SERVER_IP") { Ok "LogVault-API service env contains SERVER_IP (in-app update can resolve server IP)" }
-    else { Bad "LogVault-API service env MISSING SERVER_IP - LogVault in-app update will fail" }
-}
+$lvApiEnv = ""
+if ($nssm) { $lvApiEnv = (& $nssm get LogVault-API AppEnvironmentExtra 2>$null | Out-String) }
+$lvEnvFile   = Join-Path $InstallDir "LogVault\app\.env.local"
+$lvFileHasIp = (Test-Path $lvEnvFile) -and (Select-String -Path $lvEnvFile -Pattern 'SERVER_IP=' -SimpleMatch -Quiet)
+if ($lvApiEnv -match "SERVER_IP") { Ok "LogVault-API resolves SERVER_IP from NSSM service env (in-app update OK)" }
+elseif ($lvFileHasIp)             { Ok "LogVault-API resolves SERVER_IP from .env.local via dotenv (in-app update OK)" }
+elseif (-not $nssm -and -not (Test-Path $lvEnvFile)) { Wn "Cannot verify LogVault-API SERVER_IP (nssm + .env.local both unreadable)" }
+else { Bad "LogVault-API has no SERVER_IP in NSSM env or .env.local - LogVault in-app update may fail" }
 
 # ---------------------------------------------------------------
 Section "3. Ports Listening"
