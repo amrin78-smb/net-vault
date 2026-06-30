@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   let p = 1
 
   if (search) {
-    conditions.push(`(name ILIKE $${p} OR ip_address::text ILIKE $${p} OR model ILIKE $${p} OR serial_number ILIKE $${p})`)
+    conditions.push(`(name ILIKE $${p} OR ip_address::text ILIKE $${p} OR brand ILIKE $${p} OR model ILIKE $${p} OR serial_number ILIKE $${p})`)
     params.push(`%${search}%`); p++
   }
   if (region)    { conditions.push(`region = $${p}`);           params.push(region);    p++ }

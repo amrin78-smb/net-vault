@@ -70,6 +70,10 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.19.13': [
+    'Device search now matches the brand/vendor name — searching a vendor like "Allied Telesis" now returns every device of that brand, not only the ones whose model string happens to contain the word. Previously the brand column was not searched, so devices with a clean model name were missed (e.g. an "Allied Telesis" search returned 16 of 33 devices)',
+    'The same brand-aware search now applies consistently to the device list, the top-bar global search, and CSV export, so counts and exports agree',
+  ],
   '1.19.12': [
     'Schema hardening: the public-object owner-reassignment loops in schema.sql now skip objects already owned by the netvault role, so a foreign (non-app) object landing in public can no longer abort the whole schema re-apply on upgrade',
     'Installer fix: the suite installer no longer swallows nocvault_readonly grant errors — a failed Hub read-only grant now surfaces a warning instead of silently shipping a degraded cross-DB install',

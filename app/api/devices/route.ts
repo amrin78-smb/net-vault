@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ devices: [], total: 0 })
   }
 
-  if (search) { conditions.push(`(name ILIKE $${p} OR ip_address::text ILIKE $${p} OR model ILIKE $${p} OR serial_number ILIKE $${p})`); params.push(`%${search}%`); p++ }
+  if (search) { conditions.push(`(name ILIKE $${p} OR ip_address::text ILIKE $${p} OR brand ILIKE $${p} OR model ILIKE $${p} OR serial_number ILIKE $${p})`); params.push(`%${search}%`); p++ }
   if (model) { conditions.push(`(REGEXP_REPLACE(LOWER(model), '[^a-z0-9]', '', 'g') LIKE $${p} OR LOWER(brand) LIKE $${p})`); params.push(`%${model.toLowerCase().replace(/[^a-z0-9]/gi, '')}%`); p++ }
   if (region) { conditions.push(`region = $${p}`); params.push(region); p++ }
   if (site) { conditions.push(`site = $${p}`); params.push(site); p++ }

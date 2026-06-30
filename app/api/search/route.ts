@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     query(`
       SELECT id, name, device_type, ip_address, site, device_status
       FROM v_devices_flat
-      WHERE (name ILIKE $1 OR ip_address::text ILIKE $1 OR model ILIKE $1 OR serial_number ILIKE $1) ${siteFilter}
+      WHERE (name ILIKE $1 OR ip_address::text ILIKE $1 OR brand ILIKE $1 OR model ILIKE $1 OR serial_number ILIKE $1) ${siteFilter}
       ORDER BY CASE WHEN name ILIKE $2 THEN 0 ELSE 1 END, name
       LIMIT 5
     `, [`%${q}%`, `${q}%`]),
