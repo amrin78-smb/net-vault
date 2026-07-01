@@ -70,6 +70,10 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.20.3': [
+    'EOL matching hardening: the synthetic Aruba AP bare-number aliases (e.g. "AP-615" → "615") added in 1.20.2 now only match devices whose brand is genuinely Aruba, so a plain HP/HPE device can never accidentally cross-match an Aruba access point by number',
+    'Kept the HP/HPE/Aruba shared vendor bucket for real curated matches — verified against live inventory that all ~150 HP MSM wireless devices keep their existing seed matches and the +518 Aruba AP matches are fully preserved (zero-regression, defensive)',
+  ],
   '1.20.2': [
     'EOL matching: Aruba access points recorded in inventory as "Aruba 505" now match the seed catalog\'s official "AP-505" entries and pick up their EOL/EOS dates. Previously the two names normalized differently and never matched, leaving ~500 Aruba APs dateless despite the data existing in the seed',
     'Adds the bare AP model number as an alias on Aruba "AP-###" seed entries, and scopes alias matches to the same vendor so an ambiguous number can only match within that brand (exact model matches are unchanged)',

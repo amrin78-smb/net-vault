@@ -348,6 +348,9 @@ export type SeedRow = {
   model_raw: string
   model_normalized: string
   aliases: string[]
+  /** Synthetic Aruba AP bare-number aliases ('AP-615' → '615'), kept apart from
+   *  curated `aliases` so matchDevice can scope them strictly to Aruba brands. */
+  apAliases?: string[]
   eol_date: string | null
   eos_date: string | null
   source_url: string | null
@@ -381,14 +384,16 @@ export async function loadSeedRows(): Promise<SeedRow[]> {
   return res.rows.map((r: any) => {
     const baseAliases = Array.isArray(r.aliases) ? r.aliases : []
     // Expand Aruba AP names ('AP-505' → also alias '505') so 'Aruba 505' devices match.
-    const extra = apModelAliases(r.vendor, r.model_raw)
-    const aliases = extra.length ? Array.from(new Set([...baseAliases, ...extra])) : baseAliases
+    // Kept SEPARATE from curated aliases: a bare number is ambiguous, so matchDevice
+    // scopes it strictly to Aruba-branded devices (never a plain HP/HPE one).
+    const apAliases = apModelAliases(r.vendor, r.model_raw)
     return {
       id: r.id,
       vendor: r.vendor,
       model_raw: r.model_raw,
       model_normalized: r.model_normalized,
-      aliases,
+      aliases: baseAliases,
+      apAliases,
       eol_date: r.eol_date ? toIso(r.eol_date) : null,
       eos_date: r.eos_date ? toIso(r.eos_date) : null,
       source_url: r.source_url,
@@ -436,9 +441,11 @@ export function canonVendor(name: string | null | undefined): string {
 
 // Aruba names its access points 'AP-505' / 'AP505', but inventories frequently record
 // them as 'Aruba 505' — which normalizeForMatch reduces to the bare number '505' (the
-// brand word is stripped). Give each Aruba-family AP seed row that bare number as an
-// extra alias, so those devices match the existing dated 'AP-###' entry. Safe because
-// alias matches are vendor-scoped (canonVendor) — '505' can only match Aruba devices.
+// brand word is stripped). Give each Aruba-family AP seed row that bare number as a
+// synthetic alias, so those devices match the existing dated 'AP-###' entry. Safe
+// because matchDevice matches these bare numbers ONLY for a genuinely Aruba-branded
+// device (brand contains 'aruba') — never a plain HP/HPE device, which canonVendor
+// otherwise folds into the Aruba bucket for curated matches.
 export function apModelAliases(vendor: string, modelRaw: string): string[] {
   if (canonVendor(vendor) !== 'aruba') return []
   const m = /^ap-?(\d{3}[a-z]*)$/i.exec((modelRaw ?? '').trim())
@@ -475,11 +482,21 @@ export function matchDevice(
   // undated even though a date exists. pickBestSeed ranks dated > undated, then
   // confidence, so the real dated entry wins regardless of which tier it came from.
   const dCanon = canonVendor(deviceVendor)
+  const deviceIsAruba = /aruba/.test((deviceVendor ?? '').toLowerCase())
   const exactMatches = seeds.filter((s) => s.model_normalized && s.model_normalized === deviceNormalized)
   const aliasMatches = seeds.filter((s) => {
-    if (!s.aliases.some((a) => a && a === deviceNormalized)) return false
-    // Vendor-scope alias hits (skip only when the device vendor is unknown).
-    return !dCanon || canonVendor(s.vendor) === dCanon
+    // Curated aliases: vendor-scoped by canonical vendor (HP/HPE/Aruba share one
+    // bucket); skip scoping only when the device vendor is unknown (old behaviour).
+    if (s.aliases.some((a) => a && a === deviceNormalized)) {
+      return !dCanon || canonVendor(s.vendor) === dCanon
+    }
+    // Synthetic Aruba AP bare-number aliases ('615') are ambiguous → match ONLY a
+    // genuinely Aruba-branded device, so a plain HP/HPE device can't splash onto an
+    // AP number. Unknown vendor keeps the old permissive behaviour.
+    if ((s.apAliases ?? []).some((a) => a && a === deviceNormalized)) {
+      return !dCanon || deviceIsAruba
+    }
+    return false
   })
   const direct = pickBestSeed([...exactMatches, ...aliasMatches])
   if (direct) {
@@ -492,7 +509,10 @@ export function matchDevice(
   // d/e. fuzzy — find best trigram similarity across normalized + aliases.
   let best: { seed: SeedRow; score: number } | null = null
   for (const s of seeds) {
-    const candidates = [s.model_normalized, ...s.aliases].filter(Boolean)
+    // Include synthetic AP aliases in fuzzy only for Aruba/unknown-brand devices,
+    // matching the alias-tier scoping above (prior behaviour, no HP/HPE splash).
+    const aliasCands = (deviceIsAruba || !dCanon) ? [...s.aliases, ...(s.apAliases ?? [])] : s.aliases
+    const candidates = [s.model_normalized, ...aliasCands].filter(Boolean)
     for (const cand of candidates) {
       const score = trigramSimilarity(cand, deviceNormalized)
       if (!best || score > best.score) best = { seed: s, score }
