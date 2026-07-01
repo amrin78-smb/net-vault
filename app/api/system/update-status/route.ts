@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.20.2': [
+    'EOL matching: Aruba access points recorded in inventory as "Aruba 505" now match the seed catalog\'s official "AP-505" entries and pick up their EOL/EOS dates. Previously the two names normalized differently and never matched, leaving ~500 Aruba APs dateless despite the data existing in the seed',
+    'Adds the bare AP model number as an alias on Aruba "AP-###" seed entries, and scopes alias matches to the same vendor so an ambiguous number can only match within that brand (exact model matches are unchanged)',
+    'Validated against live inventory: +518 devices gain dates, 0 existing matches lost. Run enrichment to apply — no seed sync needed',
+  ],
   '1.20.1': [
     'EOL matching accuracy: removed the "Add all uncovered models to seed" action, which added device models as dateless placeholder entries. Those placeholders carried no dates, so they could not enrich anything — but a device would still "match" one and be counted as matched while no date was written, making enrichment look ~99% matched when real dated coverage was much lower',
     'Added a "Remove N dateless" button on Seed Management (super admin) to purge those dateless placeholder entries in one click (feed-sourced entries are never touched). After purging, re-run enrichment so the matched count reflects real coverage',

@@ -378,18 +378,24 @@ export async function loadSeedRows(): Promise<SeedRow[]> {
             eol_date::text AS eol_date, eos_date::text AS eos_date, source_url, confidence, lifecycle
      FROM eol_seed`
   )
-  return res.rows.map((r: any) => ({
-    id: r.id,
-    vendor: r.vendor,
-    model_raw: r.model_raw,
-    model_normalized: r.model_normalized,
-    aliases: Array.isArray(r.aliases) ? r.aliases : [],
-    eol_date: r.eol_date ? toIso(r.eol_date) : null,
-    eos_date: r.eos_date ? toIso(r.eos_date) : null,
-    source_url: r.source_url,
-    confidence: r.confidence || 'high',
-    lifecycle: r.lifecycle ?? null,
-  }))
+  return res.rows.map((r: any) => {
+    const baseAliases = Array.isArray(r.aliases) ? r.aliases : []
+    // Expand Aruba AP names ('AP-505' → also alias '505') so 'Aruba 505' devices match.
+    const extra = apModelAliases(r.vendor, r.model_raw)
+    const aliases = extra.length ? Array.from(new Set([...baseAliases, ...extra])) : baseAliases
+    return {
+      id: r.id,
+      vendor: r.vendor,
+      model_raw: r.model_raw,
+      model_normalized: r.model_normalized,
+      aliases,
+      eol_date: r.eol_date ? toIso(r.eol_date) : null,
+      eos_date: r.eos_date ? toIso(r.eos_date) : null,
+      source_url: r.source_url,
+      confidence: r.confidence || 'high',
+      lifecycle: r.lifecycle ?? null,
+    }
+  })
 }
 
 function toIso(d: any): string {
@@ -413,21 +419,52 @@ function pickBestSeed(rows: SeedRow[]): SeedRow | null {
   })
 }
 
+// ── Vendor canonicalization + Aruba AP alias expansion ───────────────────────
+// Exact model_normalized matching is vendor-agnostic, which is correct for specific
+// keys (e.g. 'c9300'). But the bare-number aliases below ('505') are ambiguous across
+// vendors, so ALIAS matches are scoped to a canonical vendor. HPE acquired Aruba, so
+// the Aruba WLAN/switch portfolio ships under several vendor labels that must group
+// into one bucket (a device branded 'Aruba' must still match a seed row filed under
+// 'HPE Aruba').
+const ARUBA_VENDOR_KEYS = new Set(['aruba', 'hpe', 'hp', 'hpearuba', 'hpearubanetworking', 'arubanetworks'])
+export function canonVendor(name: string | null | undefined): string {
+  const s = (name ?? '').toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (!s) return ''
+  if (ARUBA_VENDOR_KEYS.has(s) || s.includes('aruba')) return 'aruba'
+  return s
+}
+
+// Aruba names its access points 'AP-505' / 'AP505', but inventories frequently record
+// them as 'Aruba 505' — which normalizeForMatch reduces to the bare number '505' (the
+// brand word is stripped). Give each Aruba-family AP seed row that bare number as an
+// extra alias, so those devices match the existing dated 'AP-###' entry. Safe because
+// alias matches are vendor-scoped (canonVendor) — '505' can only match Aruba devices.
+export function apModelAliases(vendor: string, modelRaw: string): string[] {
+  if (canonVendor(vendor) !== 'aruba') return []
+  const m = /^ap-?(\d{3}[a-z]*)$/i.exec((modelRaw ?? '').trim())
+  return m ? [m[1].toLowerCase()] : []
+}
+
 /**
  * Match a single device model against the loaded seed rows.
  *
  * Tiers:
  *   b. exact vs model_normalized → write (seed confidence)
- *   c. match vs any alias        → write (seed confidence)
- *   d. fuzzy similarity > 0.7    → write (medium)        [fuzzy only]
+ *   c. match vs any alias        → write (seed confidence) [vendor-scoped]
+ *   d. fuzzy similarity > 0.7    → write (medium)          [fuzzy only]
  *   e. fuzzy 0.5–0.7             → DO NOT write; surface as possible match
  *
  * `fuzzyAvailable=false` skips tiers (d)/(e) entirely (exact+alias only).
+ * `deviceVendor` (the device's brand) scopes ALIAS matches to the same canonical
+ * vendor, so an ambiguous bare-number alias can't splash across vendors. Exact
+ * matches stay vendor-agnostic. When the device vendor is unknown, alias scoping is
+ * skipped (old behaviour) so nothing that matched before stops matching.
  */
 export function matchDevice(
   deviceNormalized: string,
   seeds: SeedRow[],
-  fuzzyAvailable: boolean
+  fuzzyAvailable: boolean,
+  deviceVendor?: string | null
 ): MatchResult {
   if (!deviceNormalized) return { seed: null }
 
@@ -437,8 +474,13 @@ export function matchDevice(
   // curated entry that carries the same model only as an alias — leaving the device
   // undated even though a date exists. pickBestSeed ranks dated > undated, then
   // confidence, so the real dated entry wins regardless of which tier it came from.
+  const dCanon = canonVendor(deviceVendor)
   const exactMatches = seeds.filter((s) => s.model_normalized && s.model_normalized === deviceNormalized)
-  const aliasMatches = seeds.filter((s) => s.aliases.some((a) => a && a === deviceNormalized))
+  const aliasMatches = seeds.filter((s) => {
+    if (!s.aliases.some((a) => a && a === deviceNormalized)) return false
+    // Vendor-scope alias hits (skip only when the device vendor is unknown).
+    return !dCanon || canonVendor(s.vendor) === dCanon
+  })
   const direct = pickBestSeed([...exactMatches, ...aliasMatches])
   if (direct) {
     const via = exactMatches.includes(direct) ? 'exact' : 'alias'
@@ -569,7 +611,7 @@ export async function previewMatch(
   let count = 0
   for (const d of devices) {
     const dn = normalizeForMatch(d.brand, d.model)
-    const m = matchDevice(dn, [pseudoSeed], init.fuzzyAvailable)
+    const m = matchDevice(dn, [pseudoSeed], init.fuzzyAvailable, d.brand)
     if (m.seed) {
       count++
       if (sample.length < 10) sample.push({ id: d.id, name: d.name, model: d.model })
@@ -623,7 +665,7 @@ export async function runEnrichment(jobId: number, fuzzyAvailable: boolean): Pro
     for (const dev of devices) {
       processed++
       const dn = normalizeForMatch(dev.brand, dev.model)
-      const result = matchDevice(dn, seeds, fuzzyAvailable)
+      const result = matchDevice(dn, seeds, fuzzyAvailable, dev.brand)
 
       if (!result.seed) {
         const key = dn || '(empty)'
