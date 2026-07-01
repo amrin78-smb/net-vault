@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.20.1': [
+    'EOL matching accuracy: removed the "Add all uncovered models to seed" action, which added device models as dateless placeholder entries. Those placeholders carried no dates, so they could not enrich anything — but a device would still "match" one and be counted as matched while no date was written, making enrichment look ~99% matched when real dated coverage was much lower',
+    'Added a "Remove N dateless" button on Seed Management (super admin) to purge those dateless placeholder entries in one click (feed-sourced entries are never touched). After purging, re-run enrichment so the matched count reflects real coverage',
+    'Coverage worklist now guides you to research and add real EOL/EOS dates for uncovered models, instead of bulk-adding empty placeholders',
+  ],
   '1.20.0': [
     'EOL Intelligence: the Seed Management catalog (now 6,600+ entries) is grouped into collapsible vendor sections instead of one endless flat list — expand a vendor to see its models, each vendor row shows its entry count and how many are dated vs dateless, and a search box finds any model across all vendors',
     'New EOL Coverage panel: an at-a-glance donut of how many inventory devices have EOL dates vs none, a ranked "dateless devices by brand" list, and a seed-catalog-by-vendor breakdown',

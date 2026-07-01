@@ -583,18 +583,18 @@ export default function EolIntelligencePage() {
     openAdd({ model_raw: model })
   }
 
-  async function bulkAddWorklist() {
+  async function purgeDateless() {
     const ok = await confirm({
-      title: 'Add all uncovered models to seed',
-      message: 'Add every device model with no EOL coverage to the seed as a dateless entry? This tracks the whole fleet and clears the worklist — but the EOL dates themselves still need research (many current-gen models have no published vendor date).',
-      confirmLabel: 'Add all',
+      title: 'Remove dateless placeholder entries',
+      message: `Remove the ${datelessSeedCount.toLocaleString()} seed entr${datelessSeedCount === 1 ? 'y' : 'ies'} that have no EOL and no EOS date? These carry no data, so they can't enrich any device — but they DO create false "matches" (a device matches the placeholder and counts as matched while no date is written), which hides the real coverage gap. Feed-sourced entries are never touched. Re-run enrichment afterwards so the numbers reflect reality.`,
+      confirmLabel: 'Remove entries',
+      danger: true,
     })
     if (!ok) return
-    const res = await safeJson<{ ok: boolean; added: number }>('/api/admin/eol-seed/add-all-unmatched', { method: 'POST' })
-    if (!res || !res.ok) { showToast('Bulk add failed — service unavailable.', 'error'); return }
-    showToast(`Added ${res.added} model(s) to the seed — running enrichment to refresh…`)
+    const res = await safeJson<{ ok: boolean; deleted: number }>('/api/admin/eol-seed/purge-dateless', { method: 'POST' })
+    if (!res || !res.ok) { showToast('Purge failed — service unavailable.', 'error'); return }
+    showToast(`Removed ${res.deleted.toLocaleString()} dateless placeholder entr${res.deleted === 1 ? 'y' : 'ies'}. Re-run enrichment to refresh matching.`)
     refreshSeedViews()
-    runEnrichment()
   }
 
   // ── status recommendation actions ───────────────────────────────────
@@ -696,6 +696,7 @@ export default function EolIntelligencePage() {
     : { scanned: latest?.scanned ?? 0, matched: latest?.matched ?? 0, written: latest?.written ?? 0, discrepancies: latest?.discrepancies ?? 0 }
 
   const unmatched = latest?.unmatched_top || []
+  const datelessSeedCount = seedGroups.reduce((sum, g) => sum + (g.dateless || 0), 0)
 
   // Shared seed-row table — used by both an expanded vendor group and the flat
   // search result. Columns + Edit/Delete match the original markup.
@@ -966,7 +967,12 @@ export default function EolIntelligencePage() {
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
           <div style={{ ...sectionLabel, marginBottom: 0 }}>Seed management {seedTotal > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({seedTotal})</span>}</div>
-          <button className="btn-primary" onClick={() => openAdd()} style={{ padding: '8px 16px' }}>+ Add entry</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {datelessSeedCount > 0 && (
+              <button onClick={purgeDateless} title="Remove seed entries that have no EOL/EOS date — they can't enrich devices and create false matches" style={{ padding: '8px 14px', fontSize: 'var(--text-sm)', fontWeight: 600, border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Remove {datelessSeedCount.toLocaleString()} dateless</button>
+            )}
+            <button className="btn-primary" onClick={() => openAdd()} style={{ padding: '8px 16px' }}>+ Add entry</button>
+          </div>
         </div>
 
         {/* add / edit form */}
@@ -1129,11 +1135,8 @@ export default function EolIntelligencePage() {
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ ...sectionLabel, marginBottom: 0 }}>Coverage worklist {unmatched.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({unmatched.length})</span>}</div>
-          {unmatched.length > 0 && (
-            <button onClick={bulkAddWorklist} style={{ padding: '6px 12px', fontSize: 'var(--text-sm)', border: '1px solid var(--primary)', borderRadius: '6px', background: 'var(--primary)', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>+ Add all to seed</button>
-          )}
         </div>
-        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 14px' }}>Device models with no EOL coverage. Add them to the seed dataset to expand enrichment.</p>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 14px' }}>Device models with no EOL coverage. Research their real EOL/EOS dates and add each as a dated seed entry (dateless placeholders no longer help — they only create false matches).</p>
         {!latestLoaded ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
         ) : latestUnavailable ? (
