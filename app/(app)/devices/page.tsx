@@ -38,6 +38,8 @@ export default function DevicesPage() {
   const [status, setStatus] = useState('')
   const [lifecycle, setLifecycle] = useState('')
   const [supportExpiry, setSupportExpiry] = useState('')
+  const [brand, setBrand] = useState('')
+  const [eol, setEol] = useState('')
   const [lookups, setLookups] = useState<{ regions: string[]; sites: {site:string;id:number;region:string}[]; deviceTypes: string[] }>({ regions: [], sites: [], deviceTypes: [] })
   const [stats, setStats] = useState({ total: 0, active: 0, eol: 0, decommed: 0 })
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -68,6 +70,8 @@ export default function DevicesPage() {
     setStatus(searchParams.get('status') || '')
     setLifecycle(searchParams.get('lifecycle') || '')
     setSupportExpiry(searchParams.get('support_expiry') || '')
+    setBrand(searchParams.get('brand') || '')
+    setEol(searchParams.get('eol') || '')
     setPage(1)
   }, [searchParams])
 
@@ -95,6 +99,8 @@ export default function DevicesPage() {
     const lc = searchParams.get('lifecycle') || ''
     const md = searchParams.get('model') || ''
     const se = searchParams.get('support_expiry') || ''
+    const br = searchParams.get('brand') || ''
+    const el = searchParams.get('eol') || ''
     const params = new URLSearchParams({ page: String(page), limit: String(limit) })
     if (s)  params.set('search', s)
     if (r)  params.set('region', r)
@@ -104,6 +110,8 @@ export default function DevicesPage() {
     if (lc) params.set('lifecycle', lc)
     if (md) params.set('model', md)
     if (se) params.set('support_expiry', se)
+    if (br) params.set('brand', br)
+    if (el) params.set('eol', el)
     const res = await fetch(`/api/devices?${params}`)
     const data = await res.json()
     setDevices(data.devices || [])
@@ -115,7 +123,7 @@ export default function DevicesPage() {
 
   function pushFilters(overrides: Record<string, string> = {}) {
     const params = new URLSearchParams()
-    const current = { search, region, site, type, status, lifecycle, model, support_expiry: supportExpiry, ...overrides }
+    const current = { search, region, site, type, status, lifecycle, model, support_expiry: supportExpiry, brand, eol, ...overrides }
     if (current.search)          params.set('search', current.search)
     if (current.region)          params.set('region', current.region)
     if (current.site)            params.set('site', current.site)
@@ -124,6 +132,8 @@ export default function DevicesPage() {
     if (current.lifecycle)       params.set('lifecycle', current.lifecycle)
     if (current.model)           params.set('model', current.model)
     if (current.support_expiry)  params.set('support_expiry', current.support_expiry)
+    if (current.brand)           params.set('brand', current.brand)
+    if (current.eol)             params.set('eol', current.eol)
     router.push(`/devices${params.toString() ? '?' + params.toString() : ''}`)
   }
 
@@ -247,7 +257,7 @@ export default function DevicesPage() {
   async function confirmImport() { await runImport(false) }
 
   const totalPages = Math.ceil(total / limit)
-  const hasFilters = !!(search || region || site || type || status || lifecycle || model || supportExpiry)
+  const hasFilters = !!(search || region || site || type || status || lifecycle || model || supportExpiry || brand || eol)
 
   // For site admins, filter lookups to only show their assigned sites
   const availableSites = isSiteAdmin && sessionUser?.siteIds?.length
@@ -553,7 +563,7 @@ export default function DevicesPage() {
           onClick={() => setShowFilterPanel(f => !f)}
           style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || hasFilters ? '#1a2744' : 'var(--bg-card)', color: showFilterPanel || hasFilters ? 'white' : 'var(--text-secondary)', border: '1px solid ' + (showFilterPanel || hasFilters ? '#1a2744' : 'var(--border)'), borderRadius: '6px', cursor: 'pointer', fontSize: 'var(--text-base)', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
-          Filters {hasFilters && `(${[region,site,type,status,lifecycle,model,supportExpiry].filter(Boolean).length})`}
+          Filters {hasFilters && `(${[region,site,type,status,lifecycle,model,supportExpiry,brand,eol].filter(Boolean).length})`}
         </button>
         {hasFilters && (
           <button onClick={() => router.push('/devices')} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap' as const }}>
@@ -611,11 +621,16 @@ export default function DevicesPage() {
           </div>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Support End</div>
-            <select className="select" style={{ width: '100%' }} value={supportExpiry} onChange={e => pushFilters({ support_expiry: e.target.value })}>
+            <select className="select" style={{ width: '100%' }} value={eol === 'none' ? 'none' : supportExpiry} onChange={e => {
+              const v = e.target.value
+              if (v === 'none') pushFilters({ support_expiry: '', eol: 'none' })
+              else pushFilters({ support_expiry: v, eol: '' })
+            }}>
               <option value="">All</option>
               <option value="expired">Expired</option>
               <option value="expiring">Expiring (90d)</option>
               <option value="active">Active</option>
+              <option value="none">No EOL date</option>
             </select>
           </div>
         </div>
@@ -631,6 +646,8 @@ export default function DevicesPage() {
           {lifecycle && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Lifecycle: {lifecycle}<button onClick={() => pushFilters({ lifecycle: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {model && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Model: {model}<button onClick={() => { setModel(''); pushFilters({ model: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {supportExpiry && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: supportExpiry === 'expired' ? '#fee2e2' : supportExpiry === 'expiring' ? '#fff7ed' : '#dcfce7', color: supportExpiry === 'expired' ? '#991b1b' : supportExpiry === 'expiring' ? '#92400e' : '#166534', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Support: {supportExpiry}<button onClick={() => { setSupportExpiry(''); pushFilters({ support_expiry: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {brand && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Brand: {brand}<button onClick={() => { setBrand(''); pushFilters({ brand: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {eol === 'none' && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>No EOL date<button onClick={() => { setEol(''); pushFilters({ eol: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
           {search && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Search: {search}<button onClick={() => pushFilters({ search: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
         </div>
       )}

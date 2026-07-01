@@ -3,6 +3,8 @@ import { useToast, useConfirm } from '@/app/providers'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { PieChart, Pie, Cell } from 'recharts'
 
 // ── API contract types ──────────────────────────────────────────────
 type LatestJob = {
@@ -42,6 +44,30 @@ type SeedEntry = {
   added_by: string | null
   created_at: string
   updated_at: string
+}
+
+// SEED MANAGEMENT — vendor accordion grouping (GET /api/admin/eol-seed?groupBy=vendor)
+type SeedGroup = {
+  vendor: string
+  count: number
+  dated: number
+  dateless: number
+  earliest_eol: string | null
+  latest_eos: string | null
+}
+// A loaded page of seed rows (vendor accordion expansion OR flat search result)
+type SeedPage = {
+  entries: SeedEntry[]
+  total: number
+  page: number
+  loading: boolean
+  unavailable?: boolean
+}
+// EOL COVERAGE panel (GET /api/admin/eol-coverage)
+type Coverage = {
+  inventory: { total: number; dated: number; dateless: number }
+  datelessByBrand: { brand: string; count: number }[]
+  seedByVendor: { vendor: string; count: number; dateless: number }[]
 }
 
 type PreviewSampleDevice = { id: number; name: string; model: string }
@@ -85,7 +111,7 @@ type SeedForm = {
 }
 
 const EMPTY_FORM: SeedForm = { vendor: '', model_raw: '', aliases: '', eol_date: '', eos_date: '', source_url: '', confidence: 'medium' }
-const PAGE_SIZE = 25
+const PAGE_SIZE = 50
 
 // ── helpers ──────────────────────────────────────────────────────────
 function fmtDateTime(d?: string | null): string {
@@ -201,12 +227,16 @@ export default function EolIntelligencePage() {
     setLatestLoaded(true)
   }, [])
 
-  // ── seed management ─────────────────────────────────────────────────
-  const [seedEntries, setSeedEntries] = useState<SeedEntry[]>([])
+  // ── seed management (vendor accordion + search) ─────────────────────
+  const [seedGroups, setSeedGroups] = useState<SeedGroup[]>([])
   const [seedTotal, setSeedTotal] = useState(0)
-  const [seedPage, setSeedPage] = useState(1)
   const [seedLoaded, setSeedLoaded] = useState(false)
   const [seedUnavailable, setSeedUnavailable] = useState(false)
+  const [expandedVendor, setExpandedVendor] = useState<string | null>(null)
+  const [vendorPages, setVendorPages] = useState<Record<string, SeedPage>>({})
+  // search (debounced) → flat result table instead of the accordion
+  const [seedSearch, setSeedSearch] = useState('')
+  const [searchResult, setSearchResult] = useState<SeedPage | null>(null)
 
   const [showForm, setShowForm] = useState(false)
   const [editId, setEditId] = useState<number | null>(null)
@@ -221,16 +251,86 @@ export default function EolIntelligencePage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const loadSeed = useCallback(async (page: number) => {
-    const data = await safeJson<{ entries: SeedEntry[]; total: number; page: number }>(`/api/admin/eol-seed?page=${page}`)
+  // Default view: collapsed vendor accordion from the grouped endpoint.
+  const loadGroups = useCallback(async () => {
+    const data = await safeJson<{ groups: SeedGroup[]; total: number }>('/api/admin/eol-seed?groupBy=vendor')
     if (data === null) {
       setSeedUnavailable(true)
     } else {
       setSeedUnavailable(false)
-      setSeedEntries(Array.isArray(data.entries) ? data.entries : [])
+      setSeedGroups(Array.isArray(data.groups) ? data.groups : [])
       setSeedTotal(data.total || 0)
     }
     setSeedLoaded(true)
+  }, [])
+
+  // Lazy per-vendor page (cached in vendorPages; supports Prev/Next within a group).
+  const loadVendorPage = useCallback(async (vendor: string, page: number) => {
+    setVendorPages(prev => ({
+      ...prev,
+      [vendor]: { entries: prev[vendor]?.entries ?? [], total: prev[vendor]?.total ?? 0, page, loading: true },
+    }))
+    const data = await safeJson<{ entries: SeedEntry[]; total: number; page: number; pageSize: number }>(
+      `/api/admin/eol-seed?vendor=${encodeURIComponent(vendor)}&page=${page}&pageSize=${PAGE_SIZE}`
+    )
+    setVendorPages(prev => ({
+      ...prev,
+      [vendor]: {
+        entries: data && Array.isArray(data.entries) ? data.entries : [],
+        total: data?.total ?? 0,
+        page,
+        loading: false,
+        unavailable: data === null,
+      },
+    }))
+  }, [])
+
+  // Flat search result (debounced query).
+  const loadSearch = useCallback(async (q: string, page: number) => {
+    setSearchResult(prev => ({ entries: prev?.entries ?? [], total: prev?.total ?? 0, page, loading: true }))
+    const data = await safeJson<{ entries: SeedEntry[]; total: number; page: number; pageSize: number }>(
+      `/api/admin/eol-seed?search=${encodeURIComponent(q)}&page=${page}&pageSize=${PAGE_SIZE}`
+    )
+    setSearchResult({
+      entries: data && Array.isArray(data.entries) ? data.entries : [],
+      total: data?.total ?? 0,
+      page,
+      loading: false,
+      unavailable: data === null,
+    })
+  }, [])
+
+  function toggleVendor(vendor: string) {
+    if (expandedVendor === vendor) { setExpandedVendor(null); return }
+    setExpandedVendor(vendor)
+    if (!vendorPages[vendor]) void loadVendorPage(vendor, 1)
+  }
+
+  // Refresh whichever seed views are currently visible after add/edit/delete/sync.
+  const refreshSeedViews = useCallback(() => {
+    void loadGroups()
+    void loadCoverage()
+    if (expandedVendor) void loadVendorPage(expandedVendor, vendorPages[expandedVendor]?.page ?? 1)
+    const q = seedSearch.trim()
+    if (q) void loadSearch(q, searchResult?.page ?? 1)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedVendor, vendorPages, seedSearch, searchResult, loadGroups, loadVendorPage, loadSearch])
+
+  // ── EOL coverage panel ──────────────────────────────────────────────
+  const [coverage, setCoverage] = useState<Coverage | null>(null)
+  const [coverageLoaded, setCoverageLoaded] = useState(false)
+  const [coverageUnavailable, setCoverageUnavailable] = useState(false)
+  const [showAllDateless, setShowAllDateless] = useState(false)
+
+  const loadCoverage = useCallback(async () => {
+    const data = await safeJson<Coverage>('/api/admin/eol-coverage')
+    if (data === null) {
+      setCoverageUnavailable(true)
+    } else {
+      setCoverageUnavailable(false)
+      setCoverage(data)
+    }
+    setCoverageLoaded(true)
   }, [])
 
   // ── discrepancies ───────────────────────────────────────────────────
@@ -274,11 +374,20 @@ export default function EolIntelligencePage() {
   useEffect(() => {
     if (!isSuperAdmin) return
     void loadLatest()
-    void loadSeed(1)
+    void loadGroups()
+    void loadCoverage()
     void loadDiscrepancies()
     void loadRecommendations()
     void safeJson<{ brands?: string[] }>('/api/lookup').then(d => setBrands(Array.isArray(d?.brands) ? d.brands : []))
-  }, [isSuperAdmin, loadLatest, loadSeed, loadDiscrepancies, loadRecommendations])
+  }, [isSuperAdmin, loadLatest, loadGroups, loadCoverage, loadDiscrepancies, loadRecommendations])
+
+  // Debounced seed search → flat result table; clearing returns to the accordion.
+  useEffect(() => {
+    const q = seedSearch.trim()
+    if (!q) { setSearchResult(null); return }
+    const t = setTimeout(() => { void loadSearch(q, 1) }, 300)
+    return () => clearTimeout(t)
+  }, [seedSearch, loadSearch])
 
   // If a previous run is still in progress when the page loads, resume polling.
   useEffect(() => {
@@ -340,7 +449,7 @@ export default function EolIntelligencePage() {
       // enrichment runs. Hint the user to run it (we intentionally don't auto-run,
       // matching the decoupled scheduled tasks).
       showToast(`Synced feed ${data.feed_version}: ${data.inserted} new, ${data.updated} updated (${data.row_count} models, signature verified). Run enrichment to apply it to devices.`)
-      void loadSeed(1)
+      refreshSeedViews()
       void loadLatest()
     } catch {
       showToast('Feed sync failed — service unavailable.', 'error')
@@ -433,7 +542,7 @@ export default function EolIntelligencePage() {
         showToast(typeof n === 'number' ? `Seed entry added — matches ${n} device${n === 1 ? '' : 's'}` : 'Seed entry added')
       }
       closeForm()
-      void loadSeed(seedPage)
+      refreshSeedViews()
     } catch {
       setSeedFormError('Failed to save — service unavailable.')
     } finally {
@@ -446,7 +555,7 @@ export default function EolIntelligencePage() {
     if (!ok) return
     try {
       const res = await fetch(`/api/admin/eol-seed/${e.id}`, { method: 'DELETE' })
-      if (res.ok) { showToast('Seed entry deleted'); void loadSeed(seedPage) }
+      if (res.ok) { showToast('Seed entry deleted'); refreshSeedViews() }
       else showToast('Failed to delete entry', 'error')
     } catch {
       showToast('Failed to delete entry', 'error')
@@ -484,7 +593,7 @@ export default function EolIntelligencePage() {
     const res = await safeJson<{ ok: boolean; added: number }>('/api/admin/eol-seed/add-all-unmatched', { method: 'POST' })
     if (!res || !res.ok) { showToast('Bulk add failed — service unavailable.', 'error'); return }
     showToast(`Added ${res.added} model(s) to the seed — running enrichment to refresh…`)
-    void loadSeed(1)
+    refreshSeedViews()
     runEnrichment()
   }
 
@@ -586,8 +695,58 @@ export default function EolIntelligencePage() {
     ? { scanned: liveStatus.scanned, matched: liveStatus.matched, written: liveStatus.written, discrepancies: liveStatus.discrepancies }
     : { scanned: latest?.scanned ?? 0, matched: latest?.matched ?? 0, written: latest?.written ?? 0, discrepancies: latest?.discrepancies ?? 0 }
 
-  const totalPages = Math.max(1, Math.ceil(seedTotal / PAGE_SIZE))
   const unmatched = latest?.unmatched_top || []
+
+  // Shared seed-row table — used by both an expanded vendor group and the flat
+  // search result. Columns + Edit/Delete match the original markup.
+  const renderSeedTable = (entries: SeedEntry[]) => (
+    <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead>
+          <tr>
+            <th>Vendor</th><th>Model</th><th>Normalized</th><th>Aliases</th><th>EOL</th><th>EOS</th><th>Confidence</th><th>Source</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map(e => (
+            <tr key={e.id}>
+              <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{e.vendor}</td>
+              <td style={{ color: 'var(--text-secondary)' }}>{e.model_raw}</td>
+              <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{e.model_normalized || '—'}</td>
+              <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', maxWidth: '160px' }}>{(e.aliases && e.aliases.length) ? e.aliases.join(', ') : '—'}</td>
+              <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(e.eol_date)}</td>
+              <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(e.eos_date)}</td>
+              <td><ConfidenceBadge value={e.confidence} /></td>
+              <td>
+                {e.source_url
+                  ? <a href={e.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: 'var(--text-sm)' }}>Source ↗</a>
+                  : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+              </td>
+              <td>
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => openEdit(e)}>Edit</button>
+                  <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => void deleteSeed(e)}>Delete</button>
+                </div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+
+  // Prev/Next pager shared by vendor groups + search (pageSize = PAGE_SIZE = 50).
+  const renderPager = (page: number, total: number, onPage: (p: number) => void) => {
+    const pages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+    if (pages <= 1) return null
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+        <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Page {page} of {pages}</span>
+        <button className="btn-secondary" style={{ padding: '6px 12px' }} disabled={page <= 1} onClick={() => onPage(page - 1)}>Prev</button>
+        <button className="btn-secondary" style={{ padding: '6px 12px' }} disabled={page >= pages} onClick={() => onPage(page + 1)}>Next</button>
+      </div>
+    )
+  }
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -676,6 +835,133 @@ export default function EolIntelligencePage() {
         )}
       </div>
 
+      {/* ── 1.5 EOL COVERAGE ───────────────────────────────────────── */}
+      <div style={cardStyle}>
+        <div style={{ ...sectionLabel, marginBottom: '4px' }}>EOL coverage</div>
+        <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 16px' }}>How much of the live inventory carries an EOL date, where the gaps are, and how the seed catalog lines up against them.</p>
+        {!coverageLoaded ? (
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
+        ) : (coverageUnavailable || !coverage) ? (
+          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>EOL coverage is currently unavailable.</div>
+        ) : (() => {
+          const inv = coverage.inventory
+          const pct = inv.total > 0 ? Math.round((inv.dated / inv.total) * 100) : 0
+          const maxDateless = Math.max(1, ...coverage.datelessByBrand.map(d => d.count))
+          const maxSeed = Math.max(1, ...coverage.seedByVendor.map(s => s.count))
+          const seedMap = new Map<string, number>()
+          coverage.seedByVendor.forEach(s => seedMap.set((s.vendor || '').toLowerCase().trim(), s.count))
+          const datelessRows = showAllDateless ? coverage.datelessByBrand : coverage.datelessByBrand.slice(0, 10)
+          const subCard: React.CSSProperties = { background: 'var(--surface-subtle)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '16px', flex: '1 1 280px', minWidth: '260px' }
+          const subTitle: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px' }
+          const isNoBrand = (b: string) => !b || b === '(no brand)'
+          return (
+            <>
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                {/* a. Inventory coverage — donut */}
+                <div style={subCard}>
+                  <div style={subTitle}>Inventory coverage</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ position: 'relative', width: '120px', height: '120px', flex: '0 0 auto' }}>
+                      <PieChart width={120} height={120}>
+                        <Pie
+                          data={[{ name: 'Dated', value: inv.dated }, { name: 'Dateless', value: inv.dateless }]}
+                          dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={56}
+                          startAngle={90} endAngle={-270} stroke="none" isAnimationActive={false}
+                        >
+                          <Cell fill="var(--primary)" />
+                          <Cell fill="var(--border-light)" />
+                        </Pie>
+                      </PieChart>
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                        <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{pct}%</div>
+                        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>covered</div>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                      <div><span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '2px', background: 'var(--primary)', marginRight: '6px' }} />{inv.dated.toLocaleString()} dated</div>
+                      <div><span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '2px', background: 'var(--border-light)', marginRight: '6px' }} />{inv.dateless.toLocaleString()} dateless</div>
+                      <div style={{ color: 'var(--text-muted)', marginTop: '4px' }}>{inv.total.toLocaleString()} devices total</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* b. Dateless inventory by brand — ranked links + gap badges */}
+                <div style={subCard}>
+                  <div style={subTitle}>Dateless inventory by brand</div>
+                  {coverage.datelessByBrand.length === 0 ? (
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No dateless devices. 🎉</div>
+                  ) : (
+                    <>
+                      {datelessRows.map(d => {
+                        const seedCount = seedMap.get((d.brand || '').toLowerCase().trim()) || 0
+                        const gap = seedCount === 0
+                          ? { label: 'coverage gap', bg: 'var(--tint-warn)', fg: 'var(--tint-warn-fg)' }
+                          : seedCount < d.count
+                            ? { label: 'coverage gap', bg: 'var(--tint-warn)', fg: 'var(--tint-warn-fg)' }
+                            : { label: 'matching gap', bg: 'var(--tint-info)', fg: 'var(--tint-info-fg)' }
+                        const noBrand = isNoBrand(d.brand)
+                        const rowInner = (
+                          <>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                              <span style={{ flex: '1 1 auto', fontSize: 'var(--text-sm)', fontWeight: 500, color: noBrand ? 'var(--text-muted)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.brand || '(no brand)'}</span>
+                              {!noBrand && <span style={{ display: 'inline-block', background: gap.bg, color: gap.fg, padding: '1px 8px', borderRadius: '999px', fontSize: 'var(--text-xs)', fontWeight: 600, flex: '0 0 auto' }}>{gap.label}</span>}
+                              <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', flex: '0 0 auto' }}>{d.count.toLocaleString()}</span>
+                            </div>
+                            <div style={{ height: '6px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.max(3, (d.count / maxDateless) * 100)}%`, background: 'var(--primary)', borderRadius: '999px' }} />
+                            </div>
+                          </>
+                        )
+                        return noBrand ? (
+                          <div key={d.brand || '__none'} style={{ marginBottom: '10px' }}>{rowInner}</div>
+                        ) : (
+                          <Link key={d.brand} href={`/devices?brand=${encodeURIComponent(d.brand)}&eol=none`} style={{ display: 'block', marginBottom: '10px', textDecoration: 'none' }}>{rowInner}</Link>
+                        )
+                      })}
+                      {coverage.datelessByBrand.length > 10 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllDateless(v => !v)}
+                          style={{ background: 'none', border: 'none', padding: '2px 0', cursor: 'pointer', color: 'var(--primary)', fontSize: 'var(--text-sm)', fontWeight: 600 }}
+                        >
+                          {showAllDateless ? 'Show top 10' : `Show all ${coverage.datelessByBrand.length}`}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                {/* c. Seed catalog by vendor — ranked */}
+                <div style={subCard}>
+                  <div style={subTitle}>Seed catalog by vendor</div>
+                  {coverage.seedByVendor.length === 0 ? (
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>The seed catalog is empty.</div>
+                  ) : (
+                    coverage.seedByVendor.slice(0, 10).map(s => (
+                      <div key={s.vendor} style={{ marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                          <span style={{ flex: '1 1 auto', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.vendor}</span>
+                          <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', flex: '0 0 auto' }}>{s.count.toLocaleString()}</span>
+                        </div>
+                        <div style={{ height: '6px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${Math.max(3, (s.count / maxSeed) * 100)}%`, background: 'var(--primary)', borderRadius: '999px' }} />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* gap legend */}
+              <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginTop: '14px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                <span><span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '2px', background: 'var(--tint-warn-fg)', marginRight: '6px' }} /><strong style={{ color: 'var(--text-secondary)' }}>Coverage gap</strong> — research &amp; add seed for this brand.</span>
+                <span><span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '2px', background: 'var(--tint-info-fg)', marginRight: '6px' }} /><strong style={{ color: 'var(--text-secondary)' }}>Matching gap</strong> — seed exists, but the normalizer isn&apos;t matching it.</span>
+              </div>
+            </>
+          )
+        })()}
+      </div>
+
       {/* ── 2. SEED MANAGEMENT ─────────────────────────────────────── */}
       <div style={cardStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '16px' }}>
@@ -758,58 +1044,84 @@ export default function EolIntelligencePage() {
           </div>
         )}
 
-        {/* seed table */}
+        {/* search box — non-empty query switches to a flat result table */}
+        <div style={{ marginBottom: '14px' }}>
+          <input
+            className="input"
+            placeholder="Search all seed entries by vendor, model, or alias…"
+            value={seedSearch}
+            onChange={e => setSeedSearch(e.target.value)}
+            style={{ maxWidth: '440px' }}
+          />
+        </div>
+
         {!seedLoaded ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
         ) : seedUnavailable ? (
           <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>
             Seed dataset is currently unavailable.
           </div>
-        ) : seedEntries.length === 0 ? (
+        ) : seedSearch.trim() ? (
+          /* ── FLAT SEARCH RESULTS ── */
+          (!searchResult || searchResult.loading) ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Searching…</div>
+          ) : searchResult.unavailable ? (
+            <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>Search is currently unavailable.</div>
+          ) : searchResult.entries.length === 0 ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No seed entries match &ldquo;{seedSearch.trim()}&rdquo;.</div>
+          ) : (
+            <>
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '10px' }}>
+                {searchResult.total.toLocaleString()} result{searchResult.total === 1 ? '' : 's'} for &ldquo;{seedSearch.trim()}&rdquo;
+              </div>
+              {renderSeedTable(searchResult.entries)}
+              {renderPager(searchResult.page, searchResult.total, p => void loadSearch(seedSearch.trim(), p))}
+            </>
+          )
+        ) : seedGroups.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No seed entries yet. Add one to start enriching device lifecycle data.</div>
         ) : (
-          <>
-            <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th>Vendor</th><th>Model</th><th>Normalized</th><th>Aliases</th><th>EOL</th><th>EOS</th><th>Confidence</th><th>Source</th><th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {seedEntries.map(e => (
-                    <tr key={e.id}>
-                      <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{e.vendor}</td>
-                      <td style={{ color: 'var(--text-secondary)' }}>{e.model_raw}</td>
-                      <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{e.model_normalized || '—'}</td>
-                      <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', maxWidth: '160px' }}>{(e.aliases && e.aliases.length) ? e.aliases.join(', ') : '—'}</td>
-                      <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(e.eol_date)}</td>
-                      <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(e.eos_date)}</td>
-                      <td><ConfidenceBadge value={e.confidence} /></td>
-                      <td>
-                        {e.source_url
-                          ? <a href={e.source_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', textDecoration: 'none', fontSize: 'var(--text-sm)' }}>Source ↗</a>
-                          : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => openEdit(e)}>Edit</button>
-                          <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => void deleteSeed(e)}>Delete</button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {totalPages > 1 && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Page {seedPage} of {totalPages}</span>
-                <button className="btn-secondary" style={{ padding: '6px 12px' }} disabled={seedPage <= 1} onClick={() => { const p = seedPage - 1; setSeedPage(p); void loadSeed(p) }}>Prev</button>
-                <button className="btn-secondary" style={{ padding: '6px 12px' }} disabled={seedPage >= totalPages} onClick={() => { const p = seedPage + 1; setSeedPage(p); void loadSeed(p) }}>Next</button>
-              </div>
-            )}
-          </>
+          /* ── VENDOR ACCORDION ── */
+          <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+            {seedGroups.map((g, i) => {
+              const open = expandedVendor === g.vendor
+              const vp = vendorPages[g.vendor]
+              return (
+                <div key={g.vendor} style={{ borderBottom: i < seedGroups.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleVendor(g.vendor)}
+                    style={{
+                      width: '100%', display: 'flex', alignItems: 'center', gap: '12px', textAlign: 'left',
+                      padding: '12px 14px', border: 'none', cursor: 'pointer', font: 'inherit',
+                      background: open ? 'var(--surface-subtle)' : 'transparent',
+                    }}
+                  >
+                    <span style={{ display: 'inline-block', width: '10px', color: 'var(--text-muted)', fontSize: 'var(--text-sm)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▸</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 'var(--text-md)', flex: '0 0 auto' }}>{g.vendor}</span>
+                    <span style={{ display: 'inline-block', background: 'var(--surface-subtle)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', padding: '1px 9px', borderRadius: '999px', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{g.count.toLocaleString()}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{g.dated.toLocaleString()} dated · {g.dateless.toLocaleString()} dateless</span>
+                  </button>
+                  {open && (
+                    <div style={{ padding: '0 14px 14px' }}>
+                      {(!vp || vp.loading) ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>Loading…</div>
+                      ) : vp.unavailable ? (
+                        <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>Entries are currently unavailable.</div>
+                      ) : vp.entries.length === 0 ? (
+                        <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No entries for this vendor.</div>
+                      ) : (
+                        <>
+                          {renderSeedTable(vp.entries)}
+                          {renderPager(vp.page, vp.total, p => void loadVendorPage(g.vendor, p))}
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
 

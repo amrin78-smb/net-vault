@@ -70,6 +70,13 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.20.0': [
+    'EOL Intelligence: the Seed Management catalog (now 6,600+ entries) is grouped into collapsible vendor sections instead of one endless flat list — expand a vendor to see its models, each vendor row shows its entry count and how many are dated vs dateless, and a search box finds any model across all vendors',
+    'New EOL Coverage panel: an at-a-glance donut of how many inventory devices have EOL dates vs none, a ranked "dateless devices by brand" list, and a seed-catalog-by-vendor breakdown',
+    'Each "dateless by brand" row links straight to the device list filtered to that brand with no EOL date, so you can act on the gap; the device list gains a "No EOL date" filter and honours ?brand= and ?eol=none deep links',
+    'Gap classification flags whether a brand is a "coverage gap" (seed is missing those models — research and add) or a "matching gap" (seed exists but device models are not matching it), so you know whether to add data or fix matching',
+    'Fixed a paging bug in the seed list that showed only half of each page',
+  ],
   '1.19.13': [
     'Device search now matches the brand/vendor name — searching a vendor like "Allied Telesis" now returns every device of that brand, not only the ones whose model string happens to contain the word. Previously the brand column was not searched, so devices with a clean model name were missed (e.g. an "Allied Telesis" search returned 16 of 33 devices)',
     'The same brand-aware search now applies consistently to the device list, the top-bar global search, and CSV export, so counts and exports agree',

@@ -18,6 +18,8 @@ export async function GET(req: NextRequest) {
   const lifecycle = searchParams.get('lifecycle') || ''
   const model = searchParams.get('model') || ''
   const supportExpiry = searchParams.get('support_expiry') || ''
+  const brand = searchParams.get('brand') || ''
+  const eol = searchParams.get('eol') || ''
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '50')
   const offset = (page - 1) * limit
@@ -44,6 +46,8 @@ export async function GET(req: NextRequest) {
   if (supportExpiry === 'expired')  conditions.push(`support_end_date IS NOT NULL AND support_end_date < CURRENT_DATE`)
   if (supportExpiry === 'expiring') conditions.push(`support_end_date IS NOT NULL AND support_end_date >= CURRENT_DATE AND support_end_date <= CURRENT_DATE + INTERVAL '90 days'`)
   if (supportExpiry === 'active')   conditions.push(`support_end_date IS NOT NULL AND support_end_date > CURRENT_DATE + INTERVAL '90 days'`)
+  if (brand) { conditions.push(`brand ILIKE $${p}`); params.push(brand); p++ }
+  if (eol === 'none') conditions.push(`(support_end_date IS NULL AND os_eol_date IS NULL)`)
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
   const [devRes, countRes] = await Promise.all([
