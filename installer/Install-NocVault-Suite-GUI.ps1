@@ -52,6 +52,11 @@ $PoshExe = Join-Path $PSHOME 'powershell.exe'
 if (-not (Test-Path $PoshExe)) { $PoshExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' }
 function Q([string]$s) { "'" + ($s -replace "'","''") + "'" }   # PS single-quote + escape apostrophes
 function Start-EngineWorker([string]$innerCmd) {
+    # persistent log on the Desktop (fallback TEMP) so it can be shared for support
+    $logDir = [Environment]::GetFolderPath('Desktop')
+    if (-not $logDir -or -not (Test-Path $logDir)) { $logDir = $env:TEMP }
+    $script:logFile = Join-Path $logDir ($script:logName + '.log')
+    try { Set-Content -LiteralPath $script:logFile -Value ("NocVault Suite - $($script:logName)`r`n$(Get-Date)`r`n" + ('=' * 60)) -Encoding UTF8 } catch { $script:logFile = $null }
     $script:wrapper = Join-Path $env:TEMP ('nocvault_' + [guid]::NewGuid().ToString('N') + '.ps1')
     Set-Content -LiteralPath $script:wrapper -Value ($innerCmd + "`r`nexit `$LASTEXITCODE`r`n") -Encoding UTF8
     $script:outFile = [System.IO.Path]::GetTempFileName()
@@ -180,6 +185,8 @@ $script:timer   = $null
 $script:outFile = $null
 $script:errFile = $null
 $script:wrapper = $null
+$script:logFile = $null
+$script:logName = 'NocVault-Suite-Setup'
 $script:seen    = 0
 $script:step    = 0
 $script:total   = 14
@@ -187,6 +194,7 @@ $script:total   = 14
 function Append-Log($text, $color) {
     $el.TxtLog.AppendText($text + "`r`n")
     $el.TxtLog.ScrollToEnd()
+    if ($script:logFile) { try { Add-Content -LiteralPath $script:logFile -Value $text -Encoding UTF8 } catch {} }
 }
 
 function Finish($ok, $msg) {
@@ -200,6 +208,10 @@ function Finish($ok, $msg) {
     $el.BtnCancel.Content = 'Close'
     $el.BtnCancel.IsEnabled = $true
     try { $win.TaskbarItemInfo.ProgressState = if ($ok) { 'Normal' } else { 'Error' } } catch {}
+    if ($script:logFile) {
+        $el.TxtLog.AppendText("`r`nFull log saved to: $($script:logFile)`r`n"); $el.TxtLog.ScrollToEnd()
+        if (-not $ok) { try { Start-Process notepad.exe $script:logFile } catch {} }
+    }
 }
 
 # ---------- Install click ----------

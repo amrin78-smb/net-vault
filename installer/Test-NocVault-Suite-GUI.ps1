@@ -46,6 +46,10 @@ $PoshExe = Join-Path $PSHOME 'powershell.exe'
 if (-not (Test-Path $PoshExe)) { $PoshExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' }
 function Q([string]$s) { "'" + ($s -replace "'","''") + "'" }
 function Start-EngineWorker([string]$innerCmd) {
+    $logDir = [Environment]::GetFolderPath('Desktop')
+    if (-not $logDir -or -not (Test-Path $logDir)) { $logDir = $env:TEMP }
+    $script:logFile = Join-Path $logDir ($script:logName + '.log')
+    try { Set-Content -LiteralPath $script:logFile -Value ("NocVault Suite - $($script:logName)`r`n$(Get-Date)`r`n" + ('=' * 60)) -Encoding UTF8 } catch { $script:logFile = $null }
     $script:wrapper = Join-Path $env:TEMP ('nocvault_' + [guid]::NewGuid().ToString('N') + '.ps1')
     Set-Content -LiteralPath $script:wrapper -Value ($innerCmd + "`r`nexit `$LASTEXITCODE`r`n") -Encoding UTF8
     $script:outFile = [System.IO.Path]::GetTempFileName()
@@ -142,10 +146,14 @@ $togglePw = { $el.PwPanel.IsEnabled = -not $el.ChkSkipDb.IsChecked }
 $el.ChkSkipDb.Add_Checked($togglePw); $el.ChkSkipDb.Add_Unchecked($togglePw)
 
 $script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null
+$script:logFile=$null; $script:logName='NocVault-Suite-Test'
 $script:seen=0; $script:step=0; $script:total=12
 $script:pass=0; $script:warn=0; $script:fail=0; $script:prevBar=$false
 
-function Append-Log($t) { $el.TxtLog.AppendText($t + "`r`n"); $el.TxtLog.ScrollToEnd() }
+function Append-Log($t) {
+    $el.TxtLog.AppendText($t + "`r`n"); $el.TxtLog.ScrollToEnd()
+    if ($script:logFile) { try { Add-Content -LiteralPath $script:logFile -Value $t -Encoding UTF8 } catch {} }
+}
 
 $el.BtnRun.Add_Click({
     if (-not (Test-Path $TestPs1)) {
@@ -215,6 +223,10 @@ $el.BtnRun.Add_Click({
             $el.LblStatus.Text = "PASS $($script:pass)  WARN $($script:warn)  FAIL $($script:fail)"
             $el.LblStatus.Foreground = if ($ok) { '#15803D' } else { '#B91C1C' }
             $el.BtnRun.IsEnabled=$false; $el.BtnCancel.Content='Close'
+            if ($script:logFile) {
+                $el.TxtLog.AppendText("`r`nFull log saved to: $($script:logFile)`r`n"); $el.TxtLog.ScrollToEnd()
+                if (-not $ok) { try { Start-Process notepad.exe $script:logFile } catch {} }
+            }
         }
     })
     $script:timer.Start()
