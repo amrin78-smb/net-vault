@@ -1,10 +1,11 @@
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import './globals.css'
 import Providers from './providers'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
 
-const inter = Inter({ subsets: ['latin'] })
+// Inter is loaded via the @import in globals.css (with a system-ui fallback), NOT via
+// next/font/google — that fetched from fonts.googleapis.com at BUILD time and broke the
+// build on any machine/network that can't reach Google Fonts (offline / restricted LAN).
 
 export const metadata: Metadata = {
   title: 'NetVault — Network Intelligence Platform',
@@ -18,7 +19,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Apply saved dark/light theme before first paint to avoid a flash. */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
-      <body className={inter.className}>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

@@ -70,6 +70,9 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.20.4': [
+    'Build no longer depends on Google Fonts: Inter was loaded via next/font/google, which fetched from fonts.googleapis.com at BUILD time and failed the whole build on any machine/network that can\'t reach Google Fonts (offline or restricted LAN) — this broke fresh installs. Inter now loads via the existing CSS @import in globals.css (with a system-ui fallback), so the build is network-independent',
+  ],
   '1.20.3': [
     'EOL matching hardening: the synthetic Aruba AP bare-number aliases (e.g. "AP-615" → "615") added in 1.20.2 now only match devices whose brand is genuinely Aruba, so a plain HP/HPE device can never accidentally cross-match an Aruba access point by number',
     'Kept the HP/HPE/Aruba shared vendor bucket for real curated matches — verified against live inventory that all ~150 HP MSM wireless devices keep their existing seed matches and the +518 Aruba AP matches are fully preserved (zero-regression, defensive)',
