@@ -40,6 +40,20 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
 $UninstallPs1  = Join-Path $ScriptDir 'Uninstall-NocVault-Suite.ps1'
 
+# ---------- launch helpers: drive the engine via the REAL powershell.exe + a wrapper .ps1
+$PoshExe = Join-Path $PSHOME 'powershell.exe'
+if (-not (Test-Path $PoshExe)) { $PoshExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' }
+function Q([string]$s) { "'" + ($s -replace "'","''") + "'" }
+function Start-EngineWorker([string]$innerCmd) {
+    $script:wrapper = Join-Path $env:TEMP ('nocvault_' + [guid]::NewGuid().ToString('N') + '.ps1')
+    Set-Content -LiteralPath $script:wrapper -Value ($innerCmd + "`r`nexit `$LASTEXITCODE`r`n") -Encoding UTF8
+    $script:outFile = [System.IO.Path]::GetTempFileName()
+    $script:errFile = [System.IO.Path]::GetTempFileName()
+    return (Start-Process -FilePath $PoshExe -PassThru -WindowStyle Hidden `
+        -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$script:wrapper`"") `
+        -RedirectStandardOutput $script:outFile -RedirectStandardError $script:errFile)
+}
+
 [xml]$xaml = @"
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -121,7 +135,7 @@ $el.ChkConfirm.Add_Unchecked({ $el.BtnRemove.IsEnabled = $false })
 $togglePw = { $el.PwPanel.IsEnabled = -not $el.ChkKeepDb.IsChecked }
 $el.ChkKeepDb.Add_Checked($togglePw); $el.ChkKeepDb.Add_Unchecked($togglePw)
 
-$script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null
+$script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null
 $script:seen=0; $script:step=0; $script:total=6
 
 function Append-Log($t) { $el.TxtLog.AppendText($t + "`r`n"); $el.TxtLog.ScrollToEnd() }
@@ -156,20 +170,17 @@ $el.BtnRemove.Add_Click({
     if ($keepDb)      { $script:total-- }   # no DROP databases step
     if (-not $removeDeps) { $script:total-- } # no remove-dependencies step
 
-    $a = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$UninstallPs1`"",
-           '-Force','-InstallDir',"`"$installDir`"")
-    if ($keepDb)     { $a += '-KeepDatabases' } else { $a += @('-PgAdminPassword',"`"$pgPass`"") }
-    if ($removeDeps) { $a += '-RemoveDependencies' }
+    $cmd = "& $(Q $UninstallPs1) -Force -InstallDir $(Q $installDir)"
+    if ($keepDb)     { $cmd += ' -KeepDatabases' } else { $cmd += " -PgAdminPassword $(Q $pgPass)" }
+    if ($removeDeps) { $cmd += ' -RemoveDependencies' }
 
     $el.ConfigPanel.Visibility='Collapsed'; $el.ProgressPanel.Visibility='Visible'
     $el.BtnRemove.IsEnabled=$false; $el.LblStatus.Text='Removing...'
     try { $win.TaskbarItemInfo.ProgressState = 'Normal' } catch {}
-    $script:outFile=[System.IO.Path]::GetTempFileName(); $script:errFile=[System.IO.Path]::GetTempFileName()
     $script:seen=0; $script:step=0
 
     try {
-        $script:proc = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList $a `
-            -WindowStyle Hidden -PassThru -RedirectStandardOutput $script:outFile -RedirectStandardError $script:errFile
+        $script:proc = Start-EngineWorker $cmd
     } catch { Finish $false "Could not start uninstaller: $($_.Exception.Message)"; return }
 
     $script:timer = New-Object System.Windows.Threading.DispatcherTimer
@@ -191,7 +202,7 @@ $el.BtnRemove.Add_Click({
         }
         if ($script:proc.HasExited) {
             try { $e = Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue; if ($e) { foreach ($x in $e){ Append-Log "[stderr] $x" } } } catch {}
-            Remove-Item $script:outFile,$script:errFile -ErrorAction SilentlyContinue
+            Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
             if ($script:proc.ExitCode -eq 0) { Finish $true 'NocVault Suite removed.' }
             else { Finish $false "Uninstaller exited with code $($script:proc.ExitCode). See log above." }
         }

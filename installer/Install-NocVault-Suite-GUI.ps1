@@ -44,6 +44,23 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
 # ---------- locate the real installer next to this file ----------
 $InstallerPs1 = Join-Path $ScriptDir 'Install-NocVault-Suite.ps1'
 
+# ---------- launch helpers -------------------------------------------------
+# Always drive the engine with the REAL powershell.exe (NOT our own image, which
+# is the .exe when compiled). Bools/switches/passwords are baked into a tiny
+# wrapper .ps1 and run with -File, so nothing has to bind through the command line.
+$PoshExe = Join-Path $PSHOME 'powershell.exe'
+if (-not (Test-Path $PoshExe)) { $PoshExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' }
+function Q([string]$s) { "'" + ($s -replace "'","''") + "'" }   # PS single-quote + escape apostrophes
+function Start-EngineWorker([string]$innerCmd) {
+    $script:wrapper = Join-Path $env:TEMP ('nocvault_' + [guid]::NewGuid().ToString('N') + '.ps1')
+    Set-Content -LiteralPath $script:wrapper -Value ($innerCmd + "`r`nexit `$LASTEXITCODE`r`n") -Encoding UTF8
+    $script:outFile = [System.IO.Path]::GetTempFileName()
+    $script:errFile = [System.IO.Path]::GetTempFileName()
+    return (Start-Process -FilePath $PoshExe -PassThru -WindowStyle Hidden `
+        -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$script:wrapper`"") `
+        -RedirectStandardOutput $script:outFile -RedirectStandardError $script:errFile)
+}
+
 # ---------- auto-detect a server IP (same rule as the smoke tester) ----------
 $DetectedIP = try {
     (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
@@ -162,6 +179,7 @@ $script:proc    = $null
 $script:timer   = $null
 $script:outFile = $null
 $script:errFile = $null
+$script:wrapper = $null
 $script:seen    = 0
 $script:step    = 0
 $script:total   = 14
@@ -209,17 +227,12 @@ $el.BtnInstall.Add_Click({
     if (-not $el.ChkDdi.IsChecked)  { $script:total-- }
     if (-not $el.ChkSpan.IsChecked) { $script:total-- }
 
-    # build argument list for the real installer
-    $a = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$InstallerPs1`"",
-           '-Unattended',
-           '-InstallDir',"`"$installDir`"",
-           '-ServerIP',"`"$serverIP`"",
-           '-InstallLogVault',  ("`${0}" -f ([bool]$el.ChkLog.IsChecked)),
-           '-InstallDDIVault',  ("`${0}" -f ([bool]$el.ChkDdi.IsChecked)),
-           '-InstallSpanVault', ("`${0}" -f ([bool]$el.ChkSpan.IsChecked)))
-    if (-not $useDefault) {
-        $a += @('-PgAdminPassword',"`"$pgPass`"", '-NocReadOnlyPass',"`"$roPass`"")
-    }
+    # build the installer command: bools as real $true/$false, strings single-quoted
+    $cmd  = "& $(Q $InstallerPs1) -Unattended -InstallDir $(Q $installDir) -ServerIP $(Q $serverIP)"
+    $cmd += ' -InstallLogVault:'  + $(if ($el.ChkLog.IsChecked)  { '$true' } else { '$false' })
+    $cmd += ' -InstallDDIVault:'  + $(if ($el.ChkDdi.IsChecked)  { '$true' } else { '$false' })
+    $cmd += ' -InstallSpanVault:' + $(if ($el.ChkSpan.IsChecked) { '$true' } else { '$false' })
+    if (-not $useDefault) { $cmd += " -PgAdminPassword $(Q $pgPass) -NocReadOnlyPass $(Q $roPass)" }
 
     # swap panels
     $el.ConfigPanel.Visibility = 'Collapsed'
@@ -227,15 +240,10 @@ $el.BtnInstall.Add_Click({
     $el.BtnInstall.IsEnabled = $false
     $el.LblStatus.Text = 'Installing...'
     try { $win.TaskbarItemInfo.ProgressState = 'Normal' } catch {}
-
-    $script:outFile = [System.IO.Path]::GetTempFileName()
-    $script:errFile = [System.IO.Path]::GetTempFileName()
     $script:seen = 0; $script:step = 0
 
     try {
-        $script:proc = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList $a `
-            -WindowStyle Hidden -PassThru `
-            -RedirectStandardOutput $script:outFile -RedirectStandardError $script:errFile
+        $script:proc = Start-EngineWorker $cmd
     } catch {
         Finish $false "Could not start installer: $($_.Exception.Message)"
         return
@@ -269,7 +277,7 @@ $el.BtnInstall.Add_Click({
                 $errTxt = Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue
                 if ($errTxt) { foreach ($e in $errTxt) { Append-Log "[stderr] $e" } }
             } catch {}
-            Remove-Item $script:outFile,$script:errFile -ErrorAction SilentlyContinue
+            Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
             if ($script:proc.ExitCode -eq 0) {
                 Finish $true  "Suite installed. Open http://$($el.TxtServerIP.Text.Trim()):3000"
             } else {

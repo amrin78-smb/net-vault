@@ -41,6 +41,20 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
 $TestPs1   = Join-Path $ScriptDir 'Test-NocVault-Suite.ps1'
 
+# ---------- launch helpers: drive the engine via the REAL powershell.exe + a wrapper .ps1
+$PoshExe = Join-Path $PSHOME 'powershell.exe'
+if (-not (Test-Path $PoshExe)) { $PoshExe = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe' }
+function Q([string]$s) { "'" + ($s -replace "'","''") + "'" }
+function Start-EngineWorker([string]$innerCmd) {
+    $script:wrapper = Join-Path $env:TEMP ('nocvault_' + [guid]::NewGuid().ToString('N') + '.ps1')
+    Set-Content -LiteralPath $script:wrapper -Value ($innerCmd + "`r`nexit `$LASTEXITCODE`r`n") -Encoding UTF8
+    $script:outFile = [System.IO.Path]::GetTempFileName()
+    $script:errFile = [System.IO.Path]::GetTempFileName()
+    return (Start-Process -FilePath $PoshExe -PassThru -WindowStyle Hidden `
+        -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$script:wrapper`"") `
+        -RedirectStandardOutput $script:outFile -RedirectStandardError $script:errFile)
+}
+
 $DetectedIP = try {
     (Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
         Where-Object { $_.IPAddress -notlike '127.*' -and $_.IPAddress -notlike '169.254.*' -and $_.PrefixOrigin -ne 'WellKnown' } |
@@ -127,7 +141,7 @@ $el.Bar.Add_ValueChanged({ try { $win.TaskbarItemInfo.ProgressValue = ([double]$
 $togglePw = { $el.PwPanel.IsEnabled = -not $el.ChkSkipDb.IsChecked }
 $el.ChkSkipDb.Add_Checked($togglePw); $el.ChkSkipDb.Add_Unchecked($togglePw)
 
-$script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null
+$script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null
 $script:seen=0; $script:step=0; $script:total=12
 $script:pass=0; $script:warn=0; $script:fail=0; $script:prevBar=$false
 
@@ -149,20 +163,17 @@ $el.BtnRun.Add_Click({
         return
     }
 
-    $a = @('-NoProfile','-ExecutionPolicy','Bypass','-File',"`"$TestPs1`"",
-           '-ServerIP',"`"$serverIP`"", '-InstallDir',"`"$installDir`"")
-    if ($skipDb) { $a += '-SkipDb' } else { $a += @('-PgPassword',"`"$pgPass`"") }
-    if ($el.ChkLogin.IsChecked) { $a += '-TestLogin' }
+    $cmd = "& $(Q $TestPs1) -ServerIP $(Q $serverIP) -InstallDir $(Q $installDir)"
+    if ($skipDb) { $cmd += ' -SkipDb' } else { $cmd += " -PgPassword $(Q $pgPass)" }
+    if ($el.ChkLogin.IsChecked) { $cmd += ' -TestLogin' }
 
     $el.ConfigPanel.Visibility='Collapsed'; $el.ProgressPanel.Visibility='Visible'
     $el.BtnRun.IsEnabled=$false; $el.LblStatus.Text='Running...'
     try { $win.TaskbarItemInfo.ProgressState = 'Normal' } catch {}
-    $script:outFile=[System.IO.Path]::GetTempFileName(); $script:errFile=[System.IO.Path]::GetTempFileName()
     $script:seen=0; $script:step=0; $script:pass=0; $script:warn=0; $script:fail=0; $script:prevBar=$false
 
     try {
-        $script:proc = Start-Process -FilePath (Get-Process -Id $PID).Path -ArgumentList $a `
-            -WindowStyle Hidden -PassThru -RedirectStandardOutput $script:outFile -RedirectStandardError $script:errFile
+        $script:proc = Start-EngineWorker $cmd
     } catch {
         $el.LblStep.Text='Failed to start'; $el.LblStatus.Text="Could not start tester: $($_.Exception.Message)"
         $el.LblStatus.Foreground='#B91C1C'; $el.BtnCancel.Content='Close'; return
@@ -194,7 +205,7 @@ $el.BtnRun.Add_Click({
         }
         if ($script:proc.HasExited) {
             try { $e = Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue; if ($e){ foreach ($x in $e){ Append-Log "[stderr] $x" } } } catch {}
-            Remove-Item $script:outFile,$script:errFile -ErrorAction SilentlyContinue
+            Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
             $script:timer.Stop()
             $el.Bar.Value=100
             $ok = ($script:fail -eq 0)
