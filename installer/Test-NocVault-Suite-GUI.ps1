@@ -53,7 +53,9 @@ function Start-EngineWorker([string]$innerCmd) {
     $script:wrapper = Join-Path $env:TEMP ('nocvault_' + [guid]::NewGuid().ToString('N') + '.ps1')
     # Success = COMPLETION, not $LASTEXITCODE (the engine ends without a clean 'exit 0').
     # The tester decides pass/fail from its own [ FAIL ] tally, not this exit code.
-    $body = "`$ErrorActionPreference='Continue'`r`ntry {`r`n" + $innerCmd + "`r`n  exit 0`r`n} catch {`r`n  Write-Host ('FATAL: ' + `$_.Exception.Message)`r`n  exit 1`r`n}`r`n"
+    $script:statusFile = [System.IO.Path]::GetTempFileName()
+    $sf = $script:statusFile.Replace("'","''")
+    $body = "`$ErrorActionPreference='Continue'`r`ntry {`r`n" + $innerCmd + "`r`n  Set-Content -LiteralPath '$sf' -Value 'OK' -Encoding ASCII`r`n} catch {`r`n  Write-Host ('FATAL: ' + `$_.Exception.Message)`r`n  try { Set-Content -LiteralPath '$sf' -Value 'FAIL' -Encoding ASCII } catch {}`r`n}`r`n"
     Set-Content -LiteralPath $script:wrapper -Value $body -Encoding UTF8
     $script:outFile = [System.IO.Path]::GetTempFileName()
     $script:errFile = [System.IO.Path]::GetTempFileName()
@@ -148,7 +150,7 @@ $el.Bar.Add_ValueChanged({ try { $win.TaskbarItemInfo.ProgressValue = ([double]$
 $togglePw = { $el.PwPanel.IsEnabled = -not $el.ChkSkipDb.IsChecked }
 $el.ChkSkipDb.Add_Checked($togglePw); $el.ChkSkipDb.Add_Unchecked($togglePw)
 
-$script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null
+$script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null; $script:statusFile=$null
 $script:logFile=$null; $script:logName='NocVault-Suite-Test'
 $script:seen=0; $script:step=0; $script:total=12
 $script:pass=0; $script:warn=0; $script:fail=0; $script:prevBar=$false
@@ -222,7 +224,7 @@ $el.BtnRun.Add_Click({
                     Append-Log "  ($($errLines.Count) diagnostic/stderr lines hidden - full detail in the saved log)"
                 }
             } catch {}
-            Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
+            Remove-Item $script:outFile,$script:errFile,$script:wrapper,$script:statusFile -ErrorAction SilentlyContinue
             $script:timer.Stop()
             $el.Bar.Value=100
             $ok = ($script:fail -eq 0)

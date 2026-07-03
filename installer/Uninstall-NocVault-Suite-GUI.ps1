@@ -52,7 +52,11 @@ function Start-EngineWorker([string]$innerCmd) {
     $script:wrapper = Join-Path $env:TEMP ('nocvault_' + [guid]::NewGuid().ToString('N') + '.ps1')
     # Success = COMPLETION, not $LASTEXITCODE (the engine ends without a clean 'exit 0'
     # and native tools leave a non-zero code even on success). A real failure throws.
-    $body = "`$ErrorActionPreference='Continue'`r`ntry {`r`n" + $innerCmd + "`r`n  exit 0`r`n} catch {`r`n  Write-Host ('FATAL: ' + `$_.Exception.Message)`r`n  exit 1`r`n}`r`n"
+    $script:statusFile = [System.IO.Path]::GetTempFileName()
+    # Signal success via a STATUS FILE, not the exit code (Start-Process -PassThru returns
+    # a NULL ExitCode). Engine completes -> 'OK'; a thrown failure -> 'FAIL'.
+    $sf = $script:statusFile.Replace("'","''")
+    $body = "`$ErrorActionPreference='Continue'`r`ntry {`r`n" + $innerCmd + "`r`n  Set-Content -LiteralPath '$sf' -Value 'OK' -Encoding ASCII`r`n} catch {`r`n  Write-Host ('FATAL: ' + `$_.Exception.Message)`r`n  try { Set-Content -LiteralPath '$sf' -Value 'FAIL' -Encoding ASCII } catch {}`r`n}`r`n"
     Set-Content -LiteralPath $script:wrapper -Value $body -Encoding UTF8
     $script:outFile = [System.IO.Path]::GetTempFileName()
     $script:errFile = [System.IO.Path]::GetTempFileName()
@@ -142,7 +146,7 @@ $el.ChkConfirm.Add_Unchecked({ $el.BtnRemove.IsEnabled = $false })
 $togglePw = { $el.PwPanel.IsEnabled = -not $el.ChkKeepDb.IsChecked }
 $el.ChkKeepDb.Add_Checked($togglePw); $el.ChkKeepDb.Add_Unchecked($togglePw)
 
-$script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null
+$script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null; $script:statusFile=$null
 $script:logFile=$null; $script:logName='NocVault-Suite-Uninstall'
 $script:seen=0; $script:step=0; $script:total=6
 
@@ -223,9 +227,11 @@ $el.BtnRemove.Add_Click({
                     Append-Log "  ($($errLines.Count) diagnostic/stderr lines hidden - full detail in the saved log)"
                 }
             } catch {}
-            Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
-            if ($script:proc.ExitCode -eq 0) { Finish $true 'NocVault Suite removed.' }
-            else { Finish $false "Uninstaller exited with code $($script:proc.ExitCode). See log above." }
+            $status = ''
+            try { $status = ("" + (Get-Content -LiteralPath $script:statusFile -Raw -ErrorAction SilentlyContinue)).Trim() } catch {}
+            Remove-Item $script:outFile,$script:errFile,$script:wrapper,$script:statusFile -ErrorAction SilentlyContinue
+            if ($status -eq 'OK') { Finish $true 'NocVault Suite removed.' }
+            else { Finish $false 'Uninstall did not complete - see the FATAL line / saved log.' }
         }
     })
     $script:timer.Start()

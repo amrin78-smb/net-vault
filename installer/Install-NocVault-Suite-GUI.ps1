@@ -62,7 +62,12 @@ function Start-EngineWorker([string]$innerCmd) {
     # 'exit 0' and native tools (npm/nssm/sc) leave a non-zero $LASTEXITCODE even on a
     # successful run, so keying on the exit code gave false "failed" results. A real
     # engine failure THROWS (e.g. 'SpanVault frontend build failed') -> caught -> exit 1.
-    $body = "`$ErrorActionPreference='Continue'`r`ntry {`r`n" + $innerCmd + "`r`n  exit 0`r`n} catch {`r`n  Write-Host ('FATAL: ' + `$_.Exception.Message)`r`n  exit 1`r`n}`r`n"
+    $script:statusFile = [System.IO.Path]::GetTempFileName()
+    # Signal success via a STATUS FILE, not the exit code: Start-Process -PassThru (no
+    # -Wait, redirected output) returns a NULL ExitCode, so it can't be trusted. Engine
+    # completes -> 'OK'; a thrown failure -> 'FAIL'.
+    $sf = $script:statusFile.Replace("'","''")
+    $body = "`$ErrorActionPreference='Continue'`r`ntry {`r`n" + $innerCmd + "`r`n  Set-Content -LiteralPath '$sf' -Value 'OK' -Encoding ASCII`r`n} catch {`r`n  Write-Host ('FATAL: ' + `$_.Exception.Message)`r`n  try { Set-Content -LiteralPath '$sf' -Value 'FAIL' -Encoding ASCII } catch {}`r`n}`r`n"
     Set-Content -LiteralPath $script:wrapper -Value $body -Encoding UTF8
     $script:outFile = [System.IO.Path]::GetTempFileName()
     $script:errFile = [System.IO.Path]::GetTempFileName()
@@ -190,6 +195,7 @@ $script:timer   = $null
 $script:outFile = $null
 $script:errFile = $null
 $script:wrapper = $null
+$script:statusFile = $null
 $script:logFile = $null
 $script:logName = 'NocVault-Suite-Setup'
 $script:seen    = 0
@@ -298,11 +304,13 @@ $el.BtnInstall.Add_Click({
                     Append-Log "  ($($errLines.Count) diagnostic/stderr lines hidden - full detail in the saved log)"
                 }
             } catch {}
-            Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
-            if ($script:proc.ExitCode -eq 0) {
+            $status = ''
+            try { $status = ("" + (Get-Content -LiteralPath $script:statusFile -Raw -ErrorAction SilentlyContinue)).Trim() } catch {}
+            Remove-Item $script:outFile,$script:errFile,$script:wrapper,$script:statusFile -ErrorAction SilentlyContinue
+            if ($status -eq 'OK') {
                 Finish $true  "Suite installed. Open http://$($el.TxtServerIP.Text.Trim()):3000"
             } else {
-                Finish $false "Installer exited with code $($script:proc.ExitCode). See log above."
+                Finish $false "Install did not complete - see the FATAL line / saved log."
             }
         }
     })
