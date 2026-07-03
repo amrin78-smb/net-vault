@@ -16,14 +16,25 @@
 [CmdletBinding()]
 param()
 
+# Resolve our own path/folder whether running as a .ps1 or a compiled ps2exe .exe
+# (compiled: $PSCommandPath/$PSScriptRoot are EMPTY -> use the process image path).
+$SelfPath = if ($PSCommandPath) { $PSCommandPath }
+            elseif ($MyInvocation.MyCommand.Path) { $MyInvocation.MyCommand.Path }
+            else { [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName }
+$ScriptDir = Split-Path -Parent $SelfPath
+$Compiled  = [string]::IsNullOrEmpty($PSCommandPath)
+
 # ---------- self-elevate (hidden) ----------
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
           ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $IsAdmin) {
     try {
-        Start-Process -FilePath (Get-Process -Id $PID).Path `
-            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-WindowStyle","Hidden","-File","`"$PSCommandPath`"" `
-            -Verb RunAs
+        if ($Compiled) {
+            Start-Process -FilePath $SelfPath -Verb RunAs
+        } else {
+            Start-Process -FilePath (Get-Process -Id $PID).Path `
+                -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-WindowStyle","Hidden","-File","`"$SelfPath`"" -Verb RunAs
+        }
     } catch { }
     exit
 }
@@ -31,7 +42,6 @@ if (-not $IsAdmin) {
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms
 
 # ---------- locate the real installer next to this file ----------
-$ScriptDir   = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
 $InstallerPs1 = Join-Path $ScriptDir 'Install-NocVault-Suite.ps1'
 
 # ---------- auto-detect a server IP (same rule as the smoke tester) ----------
@@ -131,6 +141,9 @@ if (-not $DetectedIP) { $DetectedIP = '127.0.0.1' }
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win    = [Windows.Markup.XamlReader]::Load($reader)
 
+# taskbar progress (the fill on the taskbar button), synced to the ProgressBar below
+$win.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
+
 # ---------- grab named elements ----------
 $el = @{}
 'ConfigPanel','TxtInstallDir','TxtServerIP','ChkLog','ChkDdi','ChkSpan','ChkDefaults','PwGrid','PwPg','PwRo',
@@ -138,6 +151,7 @@ $el = @{}
     $el[$_] = $win.FindName($_)
 }
 $el.TxtServerIP.Text = $DetectedIP
+$el.Bar.Add_ValueChanged({ try { $win.TaskbarItemInfo.ProgressValue = ([double]$el.Bar.Value / 100) } catch {} })
 
 # toggle password boxes with the "use defaults" checkbox
 $togglePw = { $el.PwGrid.IsEnabled = -not $el.ChkDefaults.IsChecked }
@@ -167,6 +181,7 @@ function Finish($ok, $msg) {
     $el.BtnInstall.IsEnabled = $false
     $el.BtnCancel.Content = 'Close'
     $el.BtnCancel.IsEnabled = $true
+    try { $win.TaskbarItemInfo.ProgressState = if ($ok) { 'Normal' } else { 'Error' } } catch {}
 }
 
 # ---------- Install click ----------
@@ -211,6 +226,7 @@ $el.BtnInstall.Add_Click({
     $el.ProgressPanel.Visibility = 'Visible'
     $el.BtnInstall.IsEnabled = $false
     $el.LblStatus.Text = 'Installing...'
+    try { $win.TaskbarItemInfo.ProgressState = 'Normal' } catch {}
 
     $script:outFile = [System.IO.Path]::GetTempFileName()
     $script:errFile = [System.IO.Path]::GetTempFileName()

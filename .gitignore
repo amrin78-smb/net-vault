@@ -53,3 +53,6 @@ demo-seed.js
 
 # packaging archives (build/distribution output, never source)
 *.zip
+
+# NocVault Suite GUI build artifacts (produced by installer/Build-Setup-Exe.ps1)
+installer/*.exe

@@ -14,21 +14,31 @@
 [CmdletBinding()]
 param()
 
+# Resolve our own path/folder whether running as a .ps1 or a compiled ps2exe .exe
+# (compiled: $PSCommandPath/$PSScriptRoot are EMPTY -> use the process image path).
+$SelfPath = if ($PSCommandPath) { $PSCommandPath }
+            elseif ($MyInvocation.MyCommand.Path) { $MyInvocation.MyCommand.Path }
+            else { [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName }
+$ScriptDir = Split-Path -Parent $SelfPath
+$Compiled  = [string]::IsNullOrEmpty($PSCommandPath)
+
 # ---------- self-elevate (hidden) ----------
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
           ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $IsAdmin) {
     try {
-        Start-Process -FilePath (Get-Process -Id $PID).Path `
-            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-WindowStyle","Hidden","-File","`"$PSCommandPath`"" `
-            -Verb RunAs
+        if ($Compiled) {
+            Start-Process -FilePath $SelfPath -Verb RunAs
+        } else {
+            Start-Process -FilePath (Get-Process -Id $PID).Path `
+                -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-WindowStyle","Hidden","-File","`"$SelfPath`"" -Verb RunAs
+        }
     } catch { }
     exit
 }
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-$ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
 $TestPs1   = Join-Path $ScriptDir 'Test-NocVault-Suite.ps1'
 
 $DetectedIP = try {
@@ -106,12 +116,14 @@ if (-not $DetectedIP) { $DetectedIP = '127.0.0.1' }
 
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win    = [Windows.Markup.XamlReader]::Load($reader)
+$win.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
 $el = @{}
 'ConfigPanel','TxtServerIP','TxtInstallDir','ChkSkipDb','ChkLogin','PwPanel','PwPg',
 'ProgressPanel','LblStep','Bar','LblPass','LblWarn','LblFail','TxtLog','LblStatus','BtnCancel','BtnRun' | ForEach-Object {
     $el[$_] = $win.FindName($_)
 }
 $el.TxtServerIP.Text = $DetectedIP
+$el.Bar.Add_ValueChanged({ try { $win.TaskbarItemInfo.ProgressValue = ([double]$el.Bar.Value / 100) } catch {} })
 $togglePw = { $el.PwPanel.IsEnabled = -not $el.ChkSkipDb.IsChecked }
 $el.ChkSkipDb.Add_Checked($togglePw); $el.ChkSkipDb.Add_Unchecked($togglePw)
 
@@ -144,6 +156,7 @@ $el.BtnRun.Add_Click({
 
     $el.ConfigPanel.Visibility='Collapsed'; $el.ProgressPanel.Visibility='Visible'
     $el.BtnRun.IsEnabled=$false; $el.LblStatus.Text='Running...'
+    try { $win.TaskbarItemInfo.ProgressState = 'Normal' } catch {}
     $script:outFile=[System.IO.Path]::GetTempFileName(); $script:errFile=[System.IO.Path]::GetTempFileName()
     $script:seen=0; $script:step=0; $script:pass=0; $script:warn=0; $script:fail=0; $script:prevBar=$false
 
@@ -185,6 +198,7 @@ $el.BtnRun.Add_Click({
             $script:timer.Stop()
             $el.Bar.Value=100
             $ok = ($script:fail -eq 0)
+            try { $win.TaskbarItemInfo.ProgressState = if ($ok) { 'Normal' } else { 'Error' } } catch {}
             $el.LblStep.Text = if ($ok) { 'All checks passed' } else { "$($script:fail) check(s) failed" }
             $el.Bar.Foreground = if ($ok) { '#15803D' } else { '#B91C1C' }
             $el.LblStatus.Text = "PASS $($script:pass)  WARN $($script:warn)  FAIL $($script:fail)"

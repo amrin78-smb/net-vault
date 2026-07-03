@@ -13,21 +13,31 @@
 [CmdletBinding()]
 param()
 
+# Resolve our own path/folder whether running as a .ps1 or a compiled ps2exe .exe
+# (compiled: $PSCommandPath/$PSScriptRoot are EMPTY -> use the process image path).
+$SelfPath = if ($PSCommandPath) { $PSCommandPath }
+            elseif ($MyInvocation.MyCommand.Path) { $MyInvocation.MyCommand.Path }
+            else { [System.Diagnostics.Process]::GetCurrentProcess().MainModule.FileName }
+$ScriptDir = Split-Path -Parent $SelfPath
+$Compiled  = [string]::IsNullOrEmpty($PSCommandPath)
+
 # ---------- self-elevate (hidden) ----------
 $IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
           ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $IsAdmin) {
     try {
-        Start-Process -FilePath (Get-Process -Id $PID).Path `
-            -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-WindowStyle","Hidden","-File","`"$PSCommandPath`"" `
-            -Verb RunAs
+        if ($Compiled) {
+            Start-Process -FilePath $SelfPath -Verb RunAs
+        } else {
+            Start-Process -FilePath (Get-Process -Id $PID).Path `
+                -ArgumentList "-NoProfile","-ExecutionPolicy","Bypass","-WindowStyle","Hidden","-File","`"$SelfPath`"" -Verb RunAs
+        }
     } catch { }
     exit
 }
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
-$ScriptDir     = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $PSCommandPath }
 $UninstallPs1  = Join-Path $ScriptDir 'Uninstall-NocVault-Suite.ps1'
 
 [xml]$xaml = @"
@@ -96,11 +106,14 @@ $UninstallPs1  = Join-Path $ScriptDir 'Uninstall-NocVault-Suite.ps1'
 
 $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win    = [Windows.Markup.XamlReader]::Load($reader)
+$win.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
 $el = @{}
 'ConfigPanel','TxtInstallDir','ChkKeepDb','ChkRemoveDeps','PwPanel','PwPg','ChkConfirm',
 'ProgressPanel','LblStep','Bar','LblPct','TxtLog','LblStatus','BtnCancel','BtnRemove' | ForEach-Object {
     $el[$_] = $win.FindName($_)
 }
+
+$el.Bar.Add_ValueChanged({ try { $win.TaskbarItemInfo.ProgressValue = ([double]$el.Bar.Value / 100) } catch {} })
 
 # confirm checkbox gates the Remove button; keep-db disables the password field
 $el.ChkConfirm.Add_Checked({   $el.BtnRemove.IsEnabled = $true })
@@ -120,6 +133,7 @@ function Finish($ok,$msg) {
     $el.LblStatus.Foreground = if ($ok) { '#15803D' } else { '#B91C1C' }
     $el.BtnRemove.IsEnabled = $false
     $el.BtnCancel.Content = 'Close'; $el.BtnCancel.IsEnabled = $true
+    try { $win.TaskbarItemInfo.ProgressState = if ($ok) { 'Normal' } else { 'Error' } } catch {}
 }
 
 $el.BtnRemove.Add_Click({
@@ -149,6 +163,7 @@ $el.BtnRemove.Add_Click({
 
     $el.ConfigPanel.Visibility='Collapsed'; $el.ProgressPanel.Visibility='Visible'
     $el.BtnRemove.IsEnabled=$false; $el.LblStatus.Text='Removing...'
+    try { $win.TaskbarItemInfo.ProgressState = 'Normal' } catch {}
     $script:outFile=[System.IO.Path]::GetTempFileName(); $script:errFile=[System.IO.Path]::GetTempFileName()
     $script:seen=0; $script:step=0
 
