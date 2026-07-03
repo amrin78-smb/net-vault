@@ -23,6 +23,18 @@ table/column/seed/extension/grant, a new collector data path, a new scheduled ta
 health/endpoint contract — update BOTH the installer AND this test script in the same change,
 so fresh installs stay verifiable.
 
+**Graphical installer/uninstaller/tester (GUI `.exe` wrappers) — IMPORTANT.** The suite ships
+Windows GUI wrappers in `installer/` (`Install-`/`Uninstall-`/`Test-NocVault-Suite-GUI.ps1`,
+compiled to `NocVault-Suite-Setup.exe` / `-Uninstall.exe` / `-Test.exe` via
+`installer/Build-Setup-Exe.ps1` with ps2exe). **These `.exe`s are thin GUI shells only — all
+the real logic lives in the `.ps1` scripts they drive** (`Install-`/`Uninstall-`/
+`Test-NocVault-Suite.ps1`, launched with `-Unattended`/`-Force`). So for normal
+install/uninstall/test changes (a new step, schema, service, grant, env var, port, task) you
+just edit the `.ps1` — **no exe rebuild needed**. The ONE exception: if you add or rename a
+`param()` on one of those `.ps1` scripts, the matching `*-GUI.ps1` must be updated to pass the
+new argument AND the exe rebuilt (`Build-Setup-Exe.ps1`). Always check the parameter surface
+when editing an installer script.
+
 ---
 
 ## Performance notes (already investigated — don't re-litigate)
