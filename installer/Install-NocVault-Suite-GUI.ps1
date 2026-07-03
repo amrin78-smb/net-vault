@@ -289,10 +289,14 @@ $el.BtnInstall.Add_Click({
             $script:seen = $lines.Count
         }
         if ($script:proc.HasExited) {
-            # drain stderr
+            # drain stderr: keep full detail in the log file, but don't flood the pane
+            # with psql NOTICEs / npm warnings / NativeCommandError noise - show a summary.
             try {
-                $errTxt = Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue
-                if ($errTxt) { foreach ($e in $errTxt) { Append-Log "[stderr] $e" } }
+                $errLines = @(Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue)
+                if ($errLines.Count) {
+                    if ($script:logFile) { foreach ($e in $errLines) { try { Add-Content -LiteralPath $script:logFile -Value "[stderr] $e" -Encoding UTF8 } catch {} } }
+                    Append-Log "  ($($errLines.Count) diagnostic/stderr lines hidden - full detail in the saved log)"
+                }
             } catch {}
             Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
             if ($script:proc.ExitCode -eq 0) {

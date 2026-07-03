@@ -216,7 +216,13 @@ $el.BtnRemove.Add_Click({
             $script:seen = $lines.Count
         }
         if ($script:proc.HasExited) {
-            try { $e = Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue; if ($e) { foreach ($x in $e){ Append-Log "[stderr] $x" } } } catch {}
+            try {
+                $errLines = @(Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue)
+                if ($errLines.Count) {
+                    if ($script:logFile) { foreach ($x in $errLines) { try { Add-Content -LiteralPath $script:logFile -Value "[stderr] $x" -Encoding UTF8 } catch {} } }
+                    Append-Log "  ($($errLines.Count) diagnostic/stderr lines hidden - full detail in the saved log)"
+                }
+            } catch {}
             Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
             if ($script:proc.ExitCode -eq 0) { Finish $true 'NocVault Suite removed.' }
             else { Finish $false "Uninstaller exited with code $($script:proc.ExitCode). See log above." }

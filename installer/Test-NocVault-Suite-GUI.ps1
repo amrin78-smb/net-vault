@@ -215,7 +215,13 @@ $el.BtnRun.Add_Click({
             $script:seen = $lines.Count
         }
         if ($script:proc.HasExited) {
-            try { $e = Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue; if ($e){ foreach ($x in $e){ Append-Log "[stderr] $x" } } } catch {}
+            try {
+                $errLines = @(Get-Content -LiteralPath $script:errFile -ErrorAction SilentlyContinue)
+                if ($errLines.Count) {
+                    if ($script:logFile) { foreach ($x in $errLines) { try { Add-Content -LiteralPath $script:logFile -Value "[stderr] $x" -Encoding UTF8 } catch {} } }
+                    Append-Log "  ($($errLines.Count) diagnostic/stderr lines hidden - full detail in the saved log)"
+                }
+            } catch {}
             Remove-Item $script:outFile,$script:errFile,$script:wrapper -ErrorAction SilentlyContinue
             $script:timer.Stop()
             $el.Bar.Value=100
