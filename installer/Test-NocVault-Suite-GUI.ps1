@@ -51,7 +51,10 @@ function Start-EngineWorker([string]$innerCmd) {
     $script:logFile = Join-Path $logDir ($script:logName + '.log')
     try { Set-Content -LiteralPath $script:logFile -Value ("NocVault Suite - $($script:logName)`r`n$(Get-Date)`r`n" + ('=' * 60)) -Encoding UTF8 } catch { $script:logFile = $null }
     $script:wrapper = Join-Path $env:TEMP ('nocvault_' + [guid]::NewGuid().ToString('N') + '.ps1')
-    Set-Content -LiteralPath $script:wrapper -Value ($innerCmd + "`r`nexit `$LASTEXITCODE`r`n") -Encoding UTF8
+    # Success = COMPLETION, not $LASTEXITCODE (the engine ends without a clean 'exit 0').
+    # The tester decides pass/fail from its own [ FAIL ] tally, not this exit code.
+    $body = "`$ErrorActionPreference='Continue'`r`ntry {`r`n" + $innerCmd + "`r`n  exit 0`r`n} catch {`r`n  Write-Host ('FATAL: ' + `$_.Exception.Message)`r`n  exit 1`r`n}`r`n"
+    Set-Content -LiteralPath $script:wrapper -Value $body -Encoding UTF8
     $script:outFile = [System.IO.Path]::GetTempFileName()
     $script:errFile = [System.IO.Path]::GetTempFileName()
     return (Start-Process -FilePath $PoshExe -PassThru -WindowStyle Hidden `
