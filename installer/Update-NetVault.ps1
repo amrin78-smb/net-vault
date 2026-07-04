@@ -51,6 +51,15 @@ function Set-EnvVar([string]$Path, [string]$Key, [string]$Value) {
     }
 }
 
+# Read a single value from a KEY=VALUE file (e.g. C:\ProgramData\NocVault\secrets.env).
+function Get-EnvVal([string]$file, [string]$key) {
+    if (-not (Test-Path $file)) { return $null }
+    foreach ($line in (Get-Content -LiteralPath $file -ErrorAction SilentlyContinue)) {
+        if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") { return $Matches[1].Trim() }
+    }
+    return $null
+}
+
 Write-Host ""
 Write-Host "  NetVault - Update" -ForegroundColor White
 Write-Host "  Install directory : $InstallDir" -ForegroundColor Gray
@@ -152,12 +161,14 @@ try {
         # NocVault Hub cross-DB read role (added for existing installs that predate the Hub).
         # nocvault_readonly is SELECT-only across all suite DBs; the Hub reads via it.
         # PRESERVE the existing RO password from the restored .env - it was set by the
-        # suite installer (prompted, default NocV@ult_RO#2026) and must match the actual
-        # DB role. Never clobber it with a literal. Only fall back to the installer's
-        # default on a legacy box where the key is genuinely absent/empty.
+        # suite installer (unique per-install) and must match the actual DB role. Never
+        # clobber it with a literal. Only fall back on a legacy box where the key is
+        # genuinely absent/empty: read the unique per-install password from the machine-level
+        # secrets.env. If still unknown, leave it empty and warn (never write a bogus literal).
         $roPassLine = Get-Content "$AppDir\.env" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^NOCVAULT_RO_PASS=' } | Select-Object -First 1
         $RoPass = if ($roPassLine) { $roPassLine.Substring('NOCVAULT_RO_PASS='.Length) } else { '' }
-        if (-not $RoPass) { $RoPass = 'NocV@ult_RO#2026' }
+        if (-not $RoPass) { $RoPass = Get-EnvVal 'C:\ProgramData\NocVault\secrets.env' 'NOCVAULT_RO_PASS' }
+        if (-not $RoPass) { Write-Warn "NOCVAULT_RO_PASS could not be determined (.env and secrets.env both missing it) - leaving read-only password empty" }
         Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_HOST' -Value 'localhost'
         Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_PORT' -Value '5432'
         Set-EnvVar -Path "$AppDir\.env" -Key 'NOCVAULT_RO_USER' -Value 'nocvault_readonly'
@@ -262,9 +273,10 @@ try {
         $curStr = ($curEnv | Out-String).Trim()
         if ($curStr -notmatch 'NOCVAULT_RO_USER=') {
             # Preserve the RO password that's in .env (set above from the restored .env /
-            # the installer default) - never seed the service with a hardcoded literal.
+            # the per-install secrets.env) - never seed the service with a hardcoded literal.
             $roPassLine = Get-Content "$AppDir\.env" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^NOCVAULT_RO_PASS=' } | Select-Object -First 1
-            $RoPass = if ($roPassLine) { $roPassLine.Substring('NOCVAULT_RO_PASS='.Length) } else { 'NocV@ult_RO#2026' }
+            $RoPass = if ($roPassLine) { $roPassLine.Substring('NOCVAULT_RO_PASS='.Length) } else { Get-EnvVal 'C:\ProgramData\NocVault\secrets.env' 'NOCVAULT_RO_PASS' }
+            if (-not $RoPass) { Write-Warn "NOCVAULT_RO_PASS could not be determined for service env - leaving read-only password empty" }
             $roLines = "NOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$RoPass"
             $newEnv = if ($curStr) { "$curStr`n$roLines" } else { $roLines }
             & $NssmExe set NetVault AppEnvironmentExtra $newEnv | Out-Null
