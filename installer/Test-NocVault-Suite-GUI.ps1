@@ -97,13 +97,11 @@ if (-not $DetectedIP) { $DetectedIP = '127.0.0.1' }
         <TextBlock Text="Install location" FontWeight="SemiBold" Margin="0,0,0,4"/>
         <TextBox x:Name="TxtInstallDir" Text="C:\Apps" Height="28" Padding="6,4" Margin="0,0,0,14"/>
 
-        <CheckBox x:Name="ChkSkipDb" Content="Skip database + collector-DB checks (no password needed)" Margin="0,0,0,8"/>
+        <CheckBox x:Name="ChkSkipDb" Content="Skip database + collector-DB checks" Margin="0,0,0,8"/>
         <CheckBox x:Name="ChkLogin" Content="Attempt a real login with default admin credentials" Margin="0,0,0,14"/>
 
-        <StackPanel x:Name="PwPanel">
-          <TextBlock Text="PostgreSQL 'postgres' password (for the DB + collector checks)" FontSize="12" Margin="0,0,0,4"/>
-          <PasswordBox x:Name="PwPg" Height="28" Padding="6,4" Width="360" HorizontalAlignment="Left"/>
-        </StackPanel>
+        <TextBlock TextWrapping="Wrap" Foreground="#64748B" FontSize="12"
+          Text="The PostgreSQL password is read automatically from the install - nothing to enter."/>
       </StackPanel>
 
       <StackPanel x:Name="ProgressPanel" Visibility="Collapsed">
@@ -141,14 +139,12 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win    = [Windows.Markup.XamlReader]::Load($reader)
 $win.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
 $el = @{}
-'ConfigPanel','TxtServerIP','TxtInstallDir','ChkSkipDb','ChkLogin','PwPanel','PwPg',
+'ConfigPanel','TxtServerIP','TxtInstallDir','ChkSkipDb','ChkLogin',
 'ProgressPanel','LblStep','Bar','LblPass','LblWarn','LblFail','TxtLog','LblStatus','BtnCancel','BtnRun' | ForEach-Object {
     $el[$_] = $win.FindName($_)
 }
 $el.TxtServerIP.Text = $DetectedIP
 $el.Bar.Add_ValueChanged({ try { $win.TaskbarItemInfo.ProgressValue = ([double]$el.Bar.Value / 100) } catch {} })
-$togglePw = { $el.PwPanel.IsEnabled = -not $el.ChkSkipDb.IsChecked }
-$el.ChkSkipDb.Add_Checked($togglePw); $el.ChkSkipDb.Add_Unchecked($togglePw)
 
 $script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null; $script:statusFile=$null
 $script:logFile=$null; $script:logName='NocVault-Suite-Test'
@@ -169,15 +165,10 @@ $el.BtnRun.Add_Click({
     $serverIP  = $el.TxtServerIP.Text.Trim()
     $installDir= $el.TxtInstallDir.Text.Trim()
     $skipDb    = [bool]$el.ChkSkipDb.IsChecked
-    $pgPass    = $el.PwPg.Password
-    if (-not $skipDb -and [string]::IsNullOrWhiteSpace($pgPass)) {
-        [System.Windows.MessageBox]::Show("Enter the PostgreSQL 'postgres' password, or tick 'Skip database checks'.",
-            'NocVault Suite Test','OK','Warning') | Out-Null
-        return
-    }
 
+    # The engine auto-reads the postgres password from the install - no password arg.
     $cmd = "& $(Q $TestPs1) -ServerIP $(Q $serverIP) -InstallDir $(Q $installDir)"
-    if ($skipDb) { $cmd += ' -SkipDb' } else { $cmd += " -PgPassword $(Q $pgPass)" }
+    if ($skipDb) { $cmd += ' -SkipDb' }
     if ($el.ChkLogin.IsChecked) { $cmd += ' -TestLogin' }
 
     $el.ConfigPanel.Visibility='Collapsed'; $el.ProgressPanel.Visibility='Visible'

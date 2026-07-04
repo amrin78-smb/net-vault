@@ -54,6 +54,26 @@ function Bad($m)  { Write-Host "  [ FAIL ] $m" -ForegroundColor Red;   $script:F
 function Wn($m)   { Write-Host "  [ WARN ] $m" -ForegroundColor Yellow; $script:Warn++ }
 function Inf($m)  { Write-Host "  [ INFO ] $m" -ForegroundColor Gray }
 
+# ---- PostgreSQL password auto-discovery -----------------------
+function Get-EnvVal([string]$file, [string]$key) {
+    if (-not (Test-Path $file)) { return $null }
+    foreach ($line in (Get-Content -LiteralPath $file -ErrorAction SilentlyContinue)) {
+        if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") { return $Matches[1].Trim() }
+    }
+    return $null
+}
+function Resolve-PgPassword([string]$installDir) {
+    $candidates = @(
+        'C:\ProgramData\NocVault\secrets.env',
+        (Join-Path $installDir 'NetVault\app\.env'),
+        (Join-Path $installDir 'LogVault\app\.env.local'),
+        (Join-Path $installDir 'DDIVault\app\.env.local'),
+        (Join-Path $installDir 'SpanVault\app\.env.local')
+    )
+    foreach ($f in $candidates) { $v = Get-EnvVal $f 'POSTGRES_PASSWORD'; if ($v) { return $v } }
+    return $null
+}
+
 function VerGE($got, $min) { try { return ([version]$got -ge [version]$min) } catch { return $false } }
 
 function Http($url, [int]$timeoutSec = 15, [switch]$NoRedirect) {
@@ -119,9 +139,14 @@ if ($pgsvc -and $pgsvc.Status -eq "Running") { Ok ("PostgreSQL service running: 
 # DB connection setup (shared by sections 9 + 10)
 if (-not $SkipDb -and $script:Psql) {
     if (-not $PgPassword) {
-        $sec = Read-Host "Enter PostgreSQL 'postgres' password" -AsSecureString
-        $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
-        $PgPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+        $PgPassword = Resolve-PgPassword $InstallDir
+        if ($PgPassword) {
+            Inf "Using stored PostgreSQL password."
+        } else {
+            $sec = Read-Host "Enter PostgreSQL 'postgres' password" -AsSecureString
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
+            $PgPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto($bstr)
+        }
     }
     $env:PGPASSWORD = $PgPassword
     $ping = Pg "postgres" "SELECT 1;"

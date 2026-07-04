@@ -96,11 +96,6 @@ function Start-EngineWorker([string]$innerCmd) {
         <CheckBox x:Name="ChkKeepDb" Content="Keep databases (preserve all data - skip the DROP step)" Margin="0,0,0,8"/>
         <CheckBox x:Name="ChkRemoveDeps" Content="Also uninstall shared prerequisites (Node.js, Git, PostgreSQL, VC++)" Margin="0,0,0,14"/>
 
-        <StackPanel x:Name="PwPanel">
-          <TextBlock Text="PostgreSQL 'postgres' password (needed to drop the databases)" FontSize="12" Margin="0,0,0,4"/>
-          <PasswordBox x:Name="PwPg" Height="28" Padding="6,4" Width="360" HorizontalAlignment="Left"/>
-        </StackPanel>
-
         <CheckBox x:Name="ChkConfirm" FontWeight="SemiBold" Foreground="#B91C1C" Margin="0,18,0,0"
                   Content="I understand this permanently removes NocVault and its data."/>
       </StackPanel>
@@ -133,18 +128,16 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win    = [Windows.Markup.XamlReader]::Load($reader)
 $win.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
 $el = @{}
-'ConfigPanel','TxtInstallDir','ChkKeepDb','ChkRemoveDeps','PwPanel','PwPg','ChkConfirm',
+'ConfigPanel','TxtInstallDir','ChkKeepDb','ChkRemoveDeps','ChkConfirm',
 'ProgressPanel','LblStep','Bar','LblPct','TxtLog','LblStatus','BtnCancel','BtnRemove' | ForEach-Object {
     $el[$_] = $win.FindName($_)
 }
 
 $el.Bar.Add_ValueChanged({ try { $win.TaskbarItemInfo.ProgressValue = ([double]$el.Bar.Value / 100) } catch {} })
 
-# confirm checkbox gates the Remove button; keep-db disables the password field
+# confirm checkbox gates the Remove button (the postgres password is auto-read by the engine)
 $el.ChkConfirm.Add_Checked({   $el.BtnRemove.IsEnabled = $true })
 $el.ChkConfirm.Add_Unchecked({ $el.BtnRemove.IsEnabled = $false })
-$togglePw = { $el.PwPanel.IsEnabled = -not $el.ChkKeepDb.IsChecked }
-$el.ChkKeepDb.Add_Checked($togglePw); $el.ChkKeepDb.Add_Unchecked($togglePw)
 
 $script:proc=$null; $script:timer=$null; $script:outFile=$null; $script:errFile=$null; $script:wrapper=$null; $script:statusFile=$null
 $script:logFile=$null; $script:logName='NocVault-Suite-Uninstall'
@@ -178,19 +171,14 @@ $el.BtnRemove.Add_Click({
     $installDir = $el.TxtInstallDir.Text.Trim()
     $keepDb     = [bool]$el.ChkKeepDb.IsChecked
     $removeDeps = [bool]$el.ChkRemoveDeps.IsChecked
-    $pgPass     = $el.PwPg.Password
-    if (-not $keepDb -and [string]::IsNullOrWhiteSpace($pgPass)) {
-        [System.Windows.MessageBox]::Show("Enter the PostgreSQL 'postgres' password (needed to drop the databases), or tick 'Keep databases'.",
-            'NocVault Suite Uninstaller','OK','Warning') | Out-Null
-        return
-    }
 
     $script:total = 7
     if ($keepDb)      { $script:total-- }   # no DROP databases step
     if (-not $removeDeps) { $script:total-- } # no remove-dependencies step
 
+    # The engine auto-reads the postgres password (secrets.env / app .env) - no password arg.
     $cmd = "& $(Q $UninstallPs1) -Force -InstallDir $(Q $installDir)"
-    if ($keepDb)     { $cmd += ' -KeepDatabases' } else { $cmd += " -PgAdminPassword $(Q $pgPass)" }
+    if ($keepDb)     { $cmd += ' -KeepDatabases' }
     if ($removeDeps) { $cmd += ' -RemoveDependencies' }
 
     $el.ConfigPanel.Visibility='Collapsed'; $el.ProgressPanel.Visibility='Visible'

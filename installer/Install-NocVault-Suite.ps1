@@ -32,21 +32,33 @@ param(
     [switch]$Unattended
 )
 
-# Default PostgreSQL superuser password used for fully unattended (one-click)
-# installs when -PgAdminPassword is not supplied. Printed at the end so the
-# admin can change it. Interactive runs still prompt instead.
-$DefaultPgPassword = "NocV@ult_Pg#2026"
-
-# Default password for the cross-DB read-only role (nocvault_readonly) the NocVault
-# Hub uses to read across all suite DBs. Used only in -Unattended mode (printed at
-# the end so it can be changed); interactive installs prompt for it instead.
-$DefaultNocRoPassword = "NocV@ult_RO#2026"
+# The PostgreSQL superuser password ($DefaultPgPassword) and the cross-DB read-only
+# role password ($DefaultNocRoPassword) are NO LONGER hardcoded. They are generated
+# uniquely per install (or loaded from a prior install) in the Credentials section
+# below, persisted to C:\ProgramData\NocVault\secrets.env. -PgAdminPassword /
+# -NocReadOnlyPass still override them.
 
 # ── Helpers ───────────────────────────────────────────────────────
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
 function Write-Info($msg) { Write-Host "    [--] $msg" -ForegroundColor Gray }
+
+# Generate a random alphanumeric password. Alphanumeric-only is deliberate: the
+# values go into SQL string literals, a postgresql://user:PASS@host DATABASE_URL,
+# and KEY=VALUE .env files, so they must have no special characters.
+function New-Pass([int]$len = 28) {
+    $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'.ToCharArray()
+    -join (1..$len | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
+}
+# Read a single KEY=VALUE from a machine-level secrets file (UTF-8, one per line).
+function Get-EnvVal([string]$file, [string]$key) {
+    if (-not (Test-Path $file)) { return $null }
+    foreach ($line in (Get-Content -LiteralPath $file -ErrorAction SilentlyContinue)) {
+        if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") { return $Matches[1].Trim() }
+    }
+    return $null
+}
 
 # Grant the cross-DB read-only role (nocvault_readonly) SELECT on a database. Call
 # AFTER that DB's schema is applied so existing AND future tables are covered. Feeds
@@ -104,12 +116,43 @@ $LVGitUrl       = "https://github.com/amrin78-smb/logvault"
 $DDIGitUrl      = "https://github.com/amrin78-smb/ddivault"
 $SVGitUrl       = "https://github.com/amrin78-smb/spanvault"
 
-# ── Credentials ───────────────────────────────────────────────────
-$NVDbPass     = "PgAdmin@2026!"
-$LVDbPass     = "NVAdmin@2026"
-$DDIDbPass    = "NVAdmin@2026"
-$SVDbPass     = "NVAdmin@2026"
-$SharedSecret = "bue3VdWszntJ24GMhfKg1QkPIEaZYC95"
+# ── Credentials (unique per install, persisted so re-installs are idempotent) ──
+# Secrets are generated once and stored machine-level in secrets.env, so re-running
+# the installer reuses the same values (existing databases/services keep working).
+# No password prompts in any mode.
+New-Item -ItemType Directory -Force 'C:\ProgramData\NocVault' | Out-Null
+$SecretsFile = 'C:\ProgramData\NocVault\secrets.env'
+$script:SecretsExisted = Test-Path $SecretsFile
+
+$PostgresPassword = Get-EnvVal $SecretsFile 'POSTGRES_PASSWORD'; if (-not $PostgresPassword) { $PostgresPassword = New-Pass 28 }
+$NextAuthSecret   = Get-EnvVal $SecretsFile 'NEXTAUTH_SECRET';   if (-not $NextAuthSecret)   { $NextAuthSecret   = New-Pass 32 }
+$NocRoPass        = Get-EnvVal $SecretsFile 'NOCVAULT_RO_PASS';  if (-not $NocRoPass)        { $NocRoPass        = New-Pass 28 }
+$NvPass           = Get-EnvVal $SecretsFile 'NV_DB_PASS';        if (-not $NvPass)           { $NvPass           = New-Pass 28 }
+$LvPass           = Get-EnvVal $SecretsFile 'LV_DB_PASS';        if (-not $LvPass)           { $LvPass           = New-Pass 28 }
+$DdiPass          = Get-EnvVal $SecretsFile 'DDI_DB_PASS';       if (-not $DdiPass)          { $DdiPass          = New-Pass 28 }
+$SvPass           = Get-EnvVal $SecretsFile 'SV_DB_PASS';        if (-not $SvPass)           { $SvPass           = New-Pass 28 }
+
+# Persist ALL keys back (newly generated values become permanent; existing ones are
+# re-written unchanged). UTF-8 no BOM, one KEY=VALUE per line.
+$secretsContent = @(
+    "POSTGRES_PASSWORD=$PostgresPassword",
+    "NEXTAUTH_SECRET=$NextAuthSecret",
+    "NOCVAULT_RO_PASS=$NocRoPass",
+    "NV_DB_PASS=$NvPass",
+    "LV_DB_PASS=$LvPass",
+    "DDI_DB_PASS=$DdiPass",
+    "SV_DB_PASS=$SvPass"
+) -join "`r`n"
+[System.IO.File]::WriteAllText($SecretsFile, $secretsContent + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
+
+# Assign the credential variables everything downstream references (names unchanged).
+$NVDbPass             = $NvPass
+$LVDbPass             = $LvPass
+$DDIDbPass            = $DdiPass
+$SVDbPass             = $SvPass
+$SharedSecret         = $NextAuthSecret
+$DefaultPgPassword    = $PostgresPassword
+$DefaultNocRoPassword = $NocRoPass
 # CRON_SECRET authorises NetVault's daily health-snapshot job (Bearer token).
 # Generated once here so .env, standalone .env.local, the NSSM service env and
 # the scheduled task all share the same value.
@@ -165,29 +208,14 @@ Write-Host "  NOTE: Internet access required (cloning from GitHub)." -Foreground
 Write-Host "  Estimated install time: 15-20 minutes." -ForegroundColor Gray
 Write-Host ""
 
-# ── PostgreSQL admin password ─────────────────────────────────────
-if (-not $PgAdminPassword) {
-    if ($Unattended) {
-        $PgAdminPassword = $DefaultPgPassword
-        Write-Info "Unattended mode: using default PostgreSQL password (shown at end)."
-    } else {
-        $secPwd = Read-Host "Set PostgreSQL admin (postgres) password" -AsSecureString
-        $PgAdminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secPwd))
-    }
-}
-
-# ── NocVault Hub read-only role password (cross-app reads across all suite DBs) ──
-if (-not $NocReadOnlyPass) {
-    if ($Unattended) {
-        $NocReadOnlyPass = $DefaultNocRoPassword
-        Write-Info "Unattended mode: using default NocVault read-only password (shown at end)."
-    } else {
-        $secRo = Read-Host "Set NocVault read-only (nocvault_readonly) DB password" -AsSecureString
-        $NocReadOnlyPass = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secRo))
-    }
-}
+# ── PostgreSQL admin + NocVault read-only role passwords ──────────
+# No prompting in any mode: use the per-install generated secrets unless the caller
+# passed an explicit override. Record whether -PgAdminPassword was supplied so the
+# pre-existing-PostgreSQL sanity check below can distinguish an override from a
+# freshly generated password.
+$PgAdminPasswordProvided = [bool]$PgAdminPassword
+if (-not $PgAdminPassword) { $PgAdminPassword = $DefaultPgPassword }
+if (-not $NocReadOnlyPass) { $NocReadOnlyPass = $DefaultNocRoPassword }
 
 if (-not $Unattended) {
     Write-Host ""
@@ -259,7 +287,10 @@ if ($gitVer) {
 # STEP 5 — PostgreSQL
 # ================================================================
 Write-Step "Installing PostgreSQL 16"
-if (Test-Path "$PgBin\psql.exe") {
+# Record whether PostgreSQL already existed before this run (its superuser password
+# may differ from the one NocVault holds - checked before we create databases).
+$PgPreInstalled = Test-Path "$PgBin\psql.exe"
+if ($PgPreInstalled) {
     Write-OK "PostgreSQL already installed"
 } else {
     Start-Process -Wait -FilePath $PgInstaller -ArgumentList `
@@ -288,6 +319,17 @@ Write-OK "NSSM ready"
 # ================================================================
 Write-Step "Creating databases and users"
 $env:PGPASSWORD = $PgAdminPassword
+
+# Sanity check: if PostgreSQL pre-existed on this machine, the superuser password we
+# hold may not match its actual password. When we just generated a brand-new password
+# (no prior secrets.env) and the caller did not supply -PgAdminPassword, a mismatch
+# would fail cryptically here - convert it into a clear, actionable message instead.
+if ($PgPreInstalled) {
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "SELECT 1" 2>$null | Out-Null
+    if ($LASTEXITCODE -ne 0 -and -not $script:SecretsExisted -and -not $PgAdminPasswordProvided) {
+        throw "PostgreSQL is already installed but its superuser password is not known to NocVault. Uninstall PostgreSQL (or run the uninstaller with -RemoveDependencies) and re-install, or re-run with -PgAdminPassword <existing password>."
+    }
+}
 
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER netvault WITH PASSWORD '$NVDbPass';" 2>$null
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE netvault OWNER netvault;" 2>$null

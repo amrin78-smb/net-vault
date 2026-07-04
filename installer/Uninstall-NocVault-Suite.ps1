@@ -42,6 +42,26 @@ function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
 function Write-Info($msg) { Write-Host "    [--] $msg" -ForegroundColor Gray }
 
+# ── PostgreSQL password auto-discovery ────────────────────────────
+function Get-EnvVal([string]$file, [string]$key) {
+    if (-not (Test-Path $file)) { return $null }
+    foreach ($line in (Get-Content -LiteralPath $file -ErrorAction SilentlyContinue)) {
+        if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") { return $Matches[1].Trim() }
+    }
+    return $null
+}
+function Resolve-PgPassword([string]$installDir) {
+    $candidates = @(
+        'C:\ProgramData\NocVault\secrets.env',
+        (Join-Path $installDir 'NetVault\app\.env'),
+        (Join-Path $installDir 'LogVault\app\.env.local'),
+        (Join-Path $installDir 'DDIVault\app\.env.local'),
+        (Join-Path $installDir 'SpanVault\app\.env.local')
+    )
+    foreach ($f in $candidates) { $v = Get-EnvVal $f 'POSTGRES_PASSWORD'; if ($v) { return $v } }
+    return $null
+}
+
 # ── Banner ────────────────────────────────────────────────────────
 Clear-Host
 Write-Host ""
@@ -117,9 +137,14 @@ if (-not $Force) {
 
 # ── PostgreSQL admin password (only if dropping databases) ────────
 if (-not $KeepDatabases -and -not $PgAdminPassword) {
-    $secPwd = Read-Host "PostgreSQL admin (postgres) password" -AsSecureString
-    $PgAdminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
-        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secPwd))
+    $PgAdminPassword = Resolve-PgPassword $InstallDir
+    if ($PgAdminPassword) {
+        Write-Info "Using stored PostgreSQL password."
+    } else {
+        $secPwd = Read-Host "PostgreSQL admin (postgres) password" -AsSecureString
+        $PgAdminPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+            [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secPwd))
+    }
 }
 
 # ================================================================

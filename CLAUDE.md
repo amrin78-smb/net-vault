@@ -77,6 +77,23 @@ timestamp). Since NocVault is sold to external customers, a public **EV** cert o
 Trusted Signing** (instant SmartScreen trust, issued to the selling entity) is the right
 answer — self-signed only works where the cert is deployed (GPO). No cert yet as of 2026-07-03.
 
+**DB passwords / secrets are auto-generated per install — NO prompts, NO shared defaults.**
+The installer no longer ships hardcoded credentials (it used to bake identical
+`NocV@ult_Pg#2026` / `NVAdmin@2026` / a shared `NEXTAUTH_SECRET` into every customer's
+copy — a real vulnerability). On install it generates unique random alphanumeric secrets
+(`New-Pass`; alnum-only so they're safe inside SQL literals, the `postgresql://…` URL, and
+`KEY=VALUE` .env files) and persists them machine-level in **`C:\ProgramData\NocVault\secrets.env`**
+(`POSTGRES_PASSWORD`, `NEXTAUTH_SECRET`, `NOCVAULT_RO_PASS`, `NV/LV/DDI/SV_DB_PASS`). Each run
+**loads-or-generates** from that file, so re-installs are idempotent (existing DBs/services keep
+working). The **uninstaller and tester auto-read** `POSTGRES_PASSWORD` from `secrets.env` (then
+the app `.env`/`.env.local`) — no prompt, no default. `-PgAdminPassword`/`-PgPassword`/
+`-NocReadOnlyPass` remain as explicit overrides; the GUI password fields were removed. Apps are
+unaffected — they read creds from env vars (`DATABASE_URL`/`*_DB_PASS`/`NEXTAUTH_SECRET`) whose
+**names are unchanged**; only the values became random. If PostgreSQL pre-exists with an unknown
+password (a dirty box) the installer throws a clear message to remove PG (or pass
+`-PgAdminPassword`) rather than failing cryptically. `secrets.env` survives an uninstall unless
+`-RemoveDependencies` is used (so a re-install still matches the retained PostgreSQL).
+
 ---
 
 ## Performance notes (already investigated — don't re-litigate)
