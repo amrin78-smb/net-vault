@@ -35,6 +35,48 @@ just edit the `.ps1` — **no exe rebuild needed**. The ONE exception: if you ad
 new argument AND the exe rebuilt (`Build-Setup-Exe.ps1`). Always check the parameter surface
 when editing an installer script.
 
+**GUI wrapper design (WPF + ps2exe) — each of these was a real bug; do NOT re-break:**
+- **Build with `-STA`** (in `Build-Setup-Exe.ps1`). WPF needs a single-threaded apartment or
+  the window renders but text/password fields can't be clicked. ps2exe defaults to MTA.
+- **Compiled exe has EMPTY `$PSScriptRoot`/`$PSCommandPath`.** Resolve the app's own folder
+  from the process image (`[Diagnostics.Process]::GetCurrentProcess().MainModule.FileName`),
+  never `Split-Path $PSCommandPath` (crashes: "Cannot bind argument to parameter 'Path'").
+- **Launch the engine with the REAL `powershell.exe`** (`$PSHOME\powershell.exe`), NOT
+  `(Get-Process -Id $PID).Path` — that is the exe itself when compiled (fails with "A
+  parameter cannot be found that matches parameter name 'NoProfile'").
+- **`[bool]` params can't bind through `powershell -File`** (`Cannot convert String to
+  Boolean`). The GUI writes a tiny **wrapper `.ps1`** that calls the engine with real
+  `$true`/`$false` and single-quoted (‘’-escaped) string args, then runs it with `-File`.
+  This also makes passwords with spaces/quotes safe.
+- **Success/failure comes from a STATUS FILE, not the process exit code.** `Start-Process
+  -PassThru` (no `-Wait`, redirected stdout/stderr) returns a **null `ExitCode`**, so the
+  GUI can't read it. The wrapper writes `OK`/`FAIL` to a temp file the GUI reads. (The
+  engine `.ps1` also ends without a clean `exit 0` and native tools like npm/nssm/sc leave a
+  non-zero `$LASTEXITCODE` even on success — another reason not to trust the exit code.)
+- **stderr is filtered from the pane** (psql `NOTICE … already exists`, npm deprecation
+  warnings, PowerShell `NativeCommandError` framing are all noise) — shown as a one-line
+  count; the FULL output (stdout + stderr) is written to `Desktop\NocVault-Suite-*.log`,
+  which the GUI auto-opens in Notepad on failure. Real failures surface as a `FATAL:` line
+  on stdout.
+- **Offline build:** the suite install must build with no internet beyond the GitHub clone.
+  NetVault used `next/font/google` (Inter), which fetched from `fonts.googleapis.com` at
+  build time and failed the whole install on restricted/offline networks — Inter now loads
+  via the `@import` in `globals.css` (fixed 1.20.4). Don't reintroduce `next/font/google`.
+
+**Distribution.** The `.exe`s are **gitignored build artifacts** (`installer/*.exe`) — built
+on the dev PC with `Build-Setup-Exe.ps1`. To update a target machine, either rebuild there
+(ps2exe installs on first run) or ship the packaged `NocVault-Suite-Installer-latest.zip`
+(exes + `.ps1` engines together — the exe needs its sibling engine `.ps1`). **A GUI-wrapper
+change needs a new exe; an engine/app-code change flows in via the GitHub clone at install
+time (no new exe).** This is why "it still fails" after a fix is almost always a **stale exe**
+on the target machine.
+
+**Signing.** The exes are UNSIGNED → SmartScreen "unknown publisher" ("More info → Run anyway",
+or `Unblock-File`). `Build-Setup-Exe.ps1 -CertPfx` is wired for Authenticode signing (SHA-256 +
+timestamp). Since NocVault is sold to external customers, a public **EV** cert or **Azure
+Trusted Signing** (instant SmartScreen trust, issued to the selling entity) is the right
+answer — self-signed only works where the cert is deployed (GPO). No cert yet as of 2026-07-03.
+
 ---
 
 ## Performance notes (already investigated — don't re-litigate)
