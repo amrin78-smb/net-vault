@@ -94,6 +94,20 @@ password (a dirty box) the installer throws a clear message to remove PG (or pas
 `-PgAdminPassword`) rather than failing cryptically. `secrets.env` survives an uninstall unless
 `-RemoveDependencies` is used (so a re-install still matches the retained PostgreSQL).
 
+**Demo data seeder (bundled tool — NOT part of a fresh install).** The zip also ships
+`NocVault-Demo-Seed.exe` (built from `installer/NocVault-Demo-Seed-GUI.ps1`) + the seed scripts
+`installer/seeds/<app>-seed.js`. It's a standalone GUI for populating demo data on a demo/test
+install: pick a history window (7/14/30/90 days), a volume (light/normal/heavy), which apps, and
+whether to clear existing demo data first. It reads `POSTGRES_PASSWORD` from `secrets.env`,
+resolves `node` + the installed `pg` module (via `NODE_PATH` to an app's `node_modules`), and runs
+each `seeds/<app>-seed.js` **as postgres** against that app's DB. **Seed contract** (all four scripts
+honor it): env `DAYS`/`VOLUME`/`RESET`/`PG*`/`PGDATABASE`; time-series spans the last `DAYS`; `VOLUME`
+scales counts (light 0.4 / normal 1 / heavy 2.5); `RESET=1` removes ONLY demo-tagged rows (never
+users/settings/auth); `process.exit(0/1)`; no hardcoded DB password. These `seeds/` scripts are the
+tool's own copies (in the netvault repo, bundled in the zip) — the older per-app `demo-seed.js` in
+each product repo is a local-only version and is not shipped. This tool is optional demo tooling, so
+it is deliberately NOT wired into `Test-NocVault-Suite.ps1`.
+
 ---
 
 ## Performance notes (already investigated — don't re-litigate)

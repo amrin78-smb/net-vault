@@ -42,7 +42,8 @@ if (-not $IconFile) {
 $targets = @(
     @{ Src='Install-NocVault-Suite-GUI.ps1';   Out='NocVault-Suite-Setup.exe';     Title='NocVault Suite Setup';       Desc='NocVault Network Intelligence Suite - Installer' },
     @{ Src='Uninstall-NocVault-Suite-GUI.ps1'; Out='NocVault-Suite-Uninstall.exe'; Title='NocVault Suite Uninstaller';  Desc='NocVault Network Intelligence Suite - Uninstaller' },
-    @{ Src='Test-NocVault-Suite-GUI.ps1';      Out='NocVault-Suite-Test.exe';      Title='NocVault Suite Test';        Desc='NocVault Network Intelligence Suite - Post-Install Test' }
+    @{ Src='Test-NocVault-Suite-GUI.ps1';      Out='NocVault-Suite-Test.exe';      Title='NocVault Suite Test';        Desc='NocVault Network Intelligence Suite - Post-Install Test' },
+    @{ Src='NocVault-Demo-Seed-GUI.ps1';       Out='NocVault-Demo-Seed.exe';       Title='NocVault Demo Data Seeder';  Desc='NocVault Network Intelligence Suite - Demo Data Seeder' }
 )
 
 # ensure ps2exe is available
