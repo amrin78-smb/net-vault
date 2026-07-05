@@ -206,6 +206,17 @@ function reverseZone(network /* e.g. 10.10.20.0 */) {
 
 // ── cleanup ─────────────────────────────────────────────────────────────────
 async function cleanup() {
+  // Detach child rows whose server_id FK is NOT ON DELETE CASCADE (alert_events,
+  // dhcp_events, lease_history). The DDIVault collector can generate these for the
+  // demo servers between runs, so the ddi_servers delete below would otherwise hit
+  // a foreign-key violation on a re-run. (Table names are a fixed literal list.)
+  for (const t of ['alert_events', 'dhcp_events', 'lease_history']) {
+    await client.query(
+      `DELETE FROM ${t} WHERE server_id IN (SELECT id FROM ddi_servers WHERE hostname = ANY($1))`,
+      [SERVER_HOSTNAMES]
+    );
+  }
+
   // Server-keyed DDI data — one cascade per server clears scopes, scope_history,
   // leases, scope_forecasts, device_baselines, dns_zones, dns_records,
   // dns_server_roles, dns_zone_sync, server_health_history, failover pairs, etc.
