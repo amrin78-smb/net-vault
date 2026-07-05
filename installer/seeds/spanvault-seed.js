@@ -521,7 +521,9 @@ async function main() {
         [randMac('a4:83:e7'), `10.${s.sub}.${ri(20, 40)}.${ri(2, 250)}`, `${pick(CLIENT_HOSTS)}-${i}`,
          ctrlId, apIdByHost[ap.host], ap.host, pick(['Cahaya-Corp', 'Cahaya-Guest']), band,
          band === '2.4GHz' ? pick([1, 6, 11]) : pick([36, 44, 149]), rssi,
-         round1(rf(6, 866)), round1(rf(6, 866)), pick(['wpa2-psk', 'wpa2-enterprise', 'wpa3-sae']),
+         round1(rf(6, 866)), round1(rf(6, 866)),
+         new Date(Date.now() - ri(5, 2880) * 60000), // $13 connected_since (5 min-48h ago)
+         pick(['wpa2-psk', 'wpa2-enterprise', 'wpa3-sae']),
          rssi < -75, rssi < -75 && roam <= 2, roam]
       );
       clientCount++;
