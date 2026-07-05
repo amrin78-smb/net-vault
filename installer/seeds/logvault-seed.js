@@ -748,6 +748,7 @@ async function main() {
 
   await client.end();
   console.log('[logvault-seed] done.');
+  process.exit(0); // force a clean exit code 0 so a late stray rejection/handle can't flag the run failed
 }
 
 main().catch((err) => {
