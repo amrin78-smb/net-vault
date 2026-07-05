@@ -3,6 +3,7 @@ import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import ThemeToggle from '@/components/ThemeToggle'
+import LicenseBanner from '@/components/LicenseBanner'
 
 type LicenseInfo = { status: string; daysRemaining: number; expiry: string | null; modules?: string[] }
 type HealthStatus = 'Healthy' | 'Warning' | 'Unavailable'
@@ -397,8 +398,6 @@ export default function LauncherPage() {
     },
   ]
 
-  const license = licenseInfo
-
   // Open the Asset 360 drawer for a search hit; aggregates its cross-app story.
   const openAsset = (r: SearchResult) => {
     setAssetOpen(true); setAssetLoading(true); setAsset(null); setAssetTab('overview')
@@ -449,41 +448,8 @@ export default function LauncherPage() {
         </div>
       </div>
 
-      {/* License banners */}
-      {license?.status === 'trial' && license.daysRemaining <= 5 && license.daysRemaining > 0 && (
-        <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 32px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-          <span>Your trial expires in <strong>{license.daysRemaining} day{license.daysRemaining !== 1 ? 's' : ''}</strong>. Go to <a href="/settings" style={{ color: '#92400e', fontWeight: '600' }}>Settings → License</a> to activate.</span>
-        </div>
-      )}
-      {license?.status === 'grace' && (
-        <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 32px', fontSize: '13px', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-          <span>Your trial has expired. Activate a license key to continue using NocVault.</span>
-        </div>
-      )}
-      {license?.status === 'expired' && (
-        <div style={{ background: '#fee2e2', borderBottom: '1px solid #fecaca', padding: '10px 32px', fontSize: '13px', color: '#991b1b', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>
-          <span><strong>NocVault license required.</strong> Contact <a href="mailto:sales@nocvault.com" style={{ color: '#991b1b', fontWeight: '600' }}>sales@nocvault.com</a></span>
-        </div>
-      )}
-      {license?.status === 'active' && license.expiry && (() => {
-        const days = Math.ceil((new Date(license.expiry).getTime() - Date.now()) / 86400000)
-        if (days <= 30) return (
-          <div style={{ background: '#ffedd5', borderBottom: '1px solid #fed7aa', padding: '10px 32px', fontSize: '13px', color: '#c2410c', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-            <span>Your license expires on <strong>{license.expiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#c2410c', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
-          </div>
-        )
-        if (days <= 90) return (
-          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '10px 32px', fontSize: '13px', color: '#92400e', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-            <span>Your license expires on <strong>{license.expiry}</strong>. Contact <a href="mailto:sales@nocvault.com" style={{ color: '#92400e', fontWeight: '600' }}>sales@nocvault.com</a> to renew.</span>
-          </div>
-        )
-        return null
-      })()}
+      {/* Standardized suite license banner — full-width bar directly below the launcher top bar */}
+      <LicenseBanner />
 
       {/* Main content */}
       <div style={{ flex: 1, padding: '28px 32px', maxWidth: '1400px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>

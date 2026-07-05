@@ -70,6 +70,12 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.0': [
+    'License banner is now the NocVault suite-standard full-width bar, consistent with DDIVault/LogVault/SpanVault: a solid per-state color strip directly below the header — trial (blue), expiring within 30 days (amber), grace period (orange), and expired/read-only (red) — each with a "Manage License →" link to Settings → License',
+    'The trial banner now shows for the whole trial (days remaining) instead of only the last 5 days, so an unlicensed install is always clearly flagged; an active license also warns once it is within 30 days of expiry',
+    'The same standardized banner now appears on both the main app (every route) and the launcher/hub landing page, and shows "Licensed to: <customer>" when an activated license carries a customer name',
+    'Display-only change — license enforcement (read-only mode past grace, write-route guards, module gating) is unchanged',
+  ],
   '1.20.4': [
     'Build no longer depends on Google Fonts: Inter was loaded via next/font/google, which fetched from fonts.googleapis.com at BUILD time and failed the whole build on any machine/network that can\'t reach Google Fonts (offline or restricted LAN) — this broke fresh installs. Inter now loads via the existing CSS @import in globals.css (with a system-ui fallback), so the build is network-independent',
   ],
