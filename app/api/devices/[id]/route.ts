@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { calcTechnicalDebt } from '@/lib/techDebt'
+import { stripBrandFromModel } from '@/lib/model'
 import { checkWriteAllowed } from '@/app/api/license/route'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -53,7 +54,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       os_type=$26,os_version=$27,os_eol_date=$28,
       updated_by=$29
     WHERE id=$30`,
-    [body.name,body.brand,body.model,body.serial_number,body.device_type,
+    [body.name,body.brand,stripBrandFromModel(body.brand,body.model),body.serial_number,body.device_type,
      body.ip_address||null,body.mgmt_protocol||null,body.mgmt_url||null,
      body.site,body.location_detail||null,body.lifecycle_status,body.device_status,
      body.risk_score||null,calcTechnicalDebt(body.lifecycle_status,body.device_status,body.device_type),body.remark||null,

@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { calcTechnicalDebt } from '@/lib/techDebt'
+import { stripBrandFromModel } from '@/lib/model'
 import { checkWriteAllowed } from '@/app/api/license/route'
 
 function normaliseType(t: string) {
@@ -130,6 +131,9 @@ export async function POST(req: NextRequest) {
       const brand = normaliseBrand(getVal(rowData, 'brand'))
       const deviceTypeId = await getOrCreate('device_types', 'name', deviceType)
       const brandId = brand ? await getOrCreate('brands', 'name', brand) : null
+      // Strip a redundant brand baked into the model ("Cisco SW 500" -> "SW 500") so
+      // it doesn't render as "Cisco Cisco SW 500". Only the incoming value is cleaned.
+      const importModel = stripBrandFromModel(brand, getVal(rowData, 'model') || null)
 
       const ipRaw = getVal(rowData, 'ip').split('/')[0].trim()
       const validIp = ipRaw ? (/^\d{1,3}(\.\d{1,3}){3}$/.test(ipRaw) ? ipRaw : null) : null
@@ -165,7 +169,7 @@ export async function POST(req: NextRequest) {
             [
               getVal(rowData, 'name') || null,
               brandId,
-              getVal(rowData, 'model') || null,
+              importModel,
               deviceTypeId,
               validIp,
               lifecycle,
@@ -197,7 +201,7 @@ export async function POST(req: NextRequest) {
         if (sameSite.rows[0]) {
           const ex = sameSite.rows[0]
           const effName = (getVal(rowData, 'name') || null) ?? ex.name
-          const effModel = (getVal(rowData, 'model') || null) ?? ex.model
+          const effModel = importModel ?? ex.model
           const effSerial = serialRaw ?? ex.serial_number
           const effBrandId = brandId ?? ex.brand_id
           const effTypeId = deviceTypeId ?? ex.device_type_id
@@ -239,7 +243,7 @@ export async function POST(req: NextRequest) {
           [
             getVal(rowData, 'name') || null,
             brandId,
-            getVal(rowData, 'model') || null,
+            importModel,
             serialRaw,
             deviceTypeId,
             validIp,

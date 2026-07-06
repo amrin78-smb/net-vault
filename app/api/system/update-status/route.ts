@@ -70,6 +70,11 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.1': [
+    'Device model cleanup: some imported devices had the brand baked into the model field, so the list showed it twice — "Cisco Cisco SW 500", "Aruba Aruba 505". Imports now strip a redundant leading brand from the model (and the same on manual add/edit), so new/updated devices read correctly ("Cisco SW 500")',
+    'Product lines are preserved (Catalyst, Aironet, Instant On, NGFW, MSM), and the full "Aruba Networking" vendor name is handled',
+    'Ships a one-time, optional cleanup script (scripts/cleanup-brand-in-model.sql) to fix the ~1,549 existing rows — previewed + transactional + reversible; run manually when convenient. EOL matching is unaffected either way',
+  ],
   '1.21.0': [
     'License banner is now the NocVault suite-standard full-width bar, consistent with DDIVault/LogVault/SpanVault: a solid per-state color strip directly below the header — trial (blue), expiring within 30 days (amber), grace period (orange), and expired/read-only (red) — each with a "Manage License →" link to Settings → License',
     'The trial banner now shows for the whole trial (days remaining) instead of only the last 5 days, so an unlicensed install is always clearly flagged; an active license also warns once it is within 30 days of expiry',
