@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import * as XLSX from 'xlsx'
+import { stripBrandFromModel, normaliseBrand } from '@/lib/model'
 
 export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -33,6 +34,15 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  const preview = rows.slice(0, 5)
+  // Show the same cleaned model the import will actually save: strip a redundant
+  // brand baked into the model ("Cisco SW 500" -> "SW 500"), so the preview matches
+  // the result. Column names are matched case-insensitively, like the importer's getVal.
+  const preview = rows.slice(0, 5).map(row => {
+    const modelKey = Object.keys(row).find(h => h.toLowerCase().includes('model'))
+    if (!modelKey || !row[modelKey]) return row
+    const brandKey = Object.keys(row).find(h => h.toLowerCase().includes('brand'))
+    const brand = brandKey ? normaliseBrand(row[brandKey]) : ''
+    return { ...row, [modelKey]: stripBrandFromModel(brand, row[modelKey]) ?? row[modelKey] }
+  })
   return NextResponse.json({ preview, total: rows.length, headers: Object.keys(preview[0] || {}) })
 }

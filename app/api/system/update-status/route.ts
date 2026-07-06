@@ -70,6 +70,9 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.2': [
+    'Import preview now shows the cleaned model name (with the redundant brand stripped), so the preview matches exactly what the import will save',
+  ],
   '1.21.1': [
     'Device model cleanup: some imported devices had the brand baked into the model field, so the list showed it twice — "Cisco Cisco SW 500", "Aruba Aruba 505". Imports now strip a redundant leading brand from the model (and the same on manual add/edit), so new/updated devices read correctly ("Cisco SW 500")',
     'Product lines are preserved (Catalyst, Aironet, Instant On, NGFW, MSM), and the full "Aruba Networking" vendor name is handled',

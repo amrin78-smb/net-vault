@@ -4,16 +4,12 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import * as XLSX from 'xlsx'
 import { calcTechnicalDebt } from '@/lib/techDebt'
-import { stripBrandFromModel } from '@/lib/model'
+import { stripBrandFromModel, normaliseBrand } from '@/lib/model'
 import { checkWriteAllowed } from '@/app/api/license/route'
 
 function normaliseType(t: string) {
   const map: Record<string,string> = { 'SWITCH':'Switch','switch':'Switch','Wireless controller':'Wireless Controller','ArubaMM-VA':'Aruba MM-VA','ArubaCPPM':'Aruba CPPM' }
   return map[t] || t
-}
-function normaliseBrand(b: string) {
-  const map: Record<string,string> = { 'CISCO':'Cisco','ForcePoint':'Forcepoint','Forcepoint ':'Forcepoint','Netgear ':'Netgear','D-Link ':'D-Link','Dlink':'D-Link','Tplink':'TP-Link','Totolink':'TOTOLINK' }
-  return map[b?.trim()] || b?.trim()
 }
 function normaliseCountry(c: string) {
   const map: Record<string,string> = { 'uK':'UK','Luxemborg':'Luxembourg' }
