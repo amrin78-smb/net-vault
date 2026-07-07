@@ -214,7 +214,7 @@ Section "4. HTTP Health + Versions"
 $apps = @(
     @{ Name="netvault";  Port=3000; Min="1.19.7" },
     @{ Name="logvault";  Port=3004; Min="2.18.2" },
-    @{ Name="ddivault";  Port=3006; Min="1.15.3" },
+    @{ Name="ddivault";  Port=3006; Min="1.17.0" },
     @{ Name="spanvault"; Port=3008; Min="1.48.4" }
 )
 foreach ($a in $apps) {
@@ -335,7 +335,7 @@ else {
     if ($ext -eq "t") { Ok "uuid-ossp extension installed" } else { Bad ("uuid-ossp MISSING (got '" + $ext + "')") }
     # ROLE-SCOPED: the ddivault_user app role must be able to SELECT each core table.
     $ddOk = $true; $ddBad = @()
-    foreach ($t in @('ddi_servers','dhcp_scopes','dns_zones','ipam_subnets')) {
+    foreach ($t in @('ddi_servers','dhcp_scopes','dns_zones','ipam_subnets','saved_reports','report_schedules','report_run_history','report_email_log')) {
         $p = Pg "ddivault" "SELECT has_table_privilege('ddivault_user','$t','SELECT');"
         if ($p -ne "t") { $ddOk = $false; $ddBad += ($t + "=" + $p) }
     }
