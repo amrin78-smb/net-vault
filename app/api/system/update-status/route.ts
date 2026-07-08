@@ -6,10 +6,6 @@ import pkg from '../../../../package.json'
 
 export const dynamic = 'force-dynamic'
 
-const REPO = 'amrin78-smb/net-vault'
-const RAW_BASE = `https://raw.githubusercontent.com/${REPO}/main/`
-const COMMITS_API = `https://api.github.com/repos/${REPO}/commits/main`
-
 function findGitRoot(start: string): string {
   let dir = start
   for (let i = 0; i < 6; i++) {
@@ -33,36 +29,44 @@ function localCommitHash(repoRoot: string): string | null {
   }
 }
 
-async function fetchText(url: string): Promise<string> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 6000)
+// Short git commit hash for origin/main via the git transport (`git ls-remote`),
+// which works from the server's egress even where GitHub's web APIs are
+// per-IP rate-limited (raw.githubusercontent 429 / api.github.com timeouts).
+// Returns the first 7 chars, or null on any failure — update detection degrades
+// gracefully to "up to date" when this is null.
+function remoteCommitHash(repoRoot: string): string | null {
   try {
-    const res = await fetch(url, { cache: 'no-store', signal: controller.signal })
-    if (!res.ok) throw new Error('HTTP ' + res.status)
-    return await res.text()
-  } finally {
-    clearTimeout(timer)
+    const out = execSync('git ls-remote origin main', {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      timeout: 10000,
+    })
+    const token = out.trim().split(/\s+/)[0]
+    return token ? token.slice(0, 7) : null
+  } catch {
+    return null
   }
 }
 
-// Fetch the latest commit SHA on GitHub's main branch via the commits API.
-// Returns the first 7 chars, or null on any failure.
-async function remoteCommitHash(): Promise<string | null> {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 6000)
+// Read the package.json version on origin/main via the git transport. Only call
+// this when the remote hash differs from local (an update is available), so the
+// fetch cost is paid only when there's something new. Falls back to the local
+// pkg.version on any failure.
+function remoteVersion(repoRoot: string): string {
   try {
-    const res = await fetch(COMMITS_API, {
-      headers: { Accept: 'application/vnd.github.v3+json' },
-      cache: 'no-store',
-      signal: controller.signal,
+    execSync('git fetch --quiet origin main', {
+      cwd: repoRoot,
+      timeout: 20000,
+      stdio: 'ignore',
     })
-    if (!res.ok) throw new Error('HTTP ' + res.status)
-    const commit = await res.json()
-    return commit && commit.sha ? String(commit.sha).slice(0, 7) : null
+    const text = execSync('git show origin/main:package.json', {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      timeout: 10000,
+    })
+    return JSON.parse(text).version || pkg.version
   } catch {
-    return null
-  } finally {
-    clearTimeout(timer)
+    return pkg.version
   }
 }
 
@@ -70,6 +74,9 @@ async function remoteCommitHash(): Promise<string | null> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.3': [
+    'Fixed "Could not check for updates" in Settings → Updates. The update check was calling GitHub\'s public web APIs (api.github.com + raw.githubusercontent.com), which are rate-limited per source IP — from a shared network with several apps checking, raw.githubusercontent started returning 429 and the check failed. It now checks via git (the same transport the updater already uses), which is not rate-limited.',
+  ],
   '1.21.2': [
     'Import preview now shows the cleaned model name (with the redundant brand stripped), so the preview matches exactly what the import will save',
   ],
@@ -385,39 +392,31 @@ const releaseNotes: Record<string, string[]> = {
   ],
 }
 
-// Compares the local git commit hash against the latest commit on GitHub's main
-// branch. ANY differing commit counts as an update available — the package.json
-// version is for display only, so patches pushed without a version bump are no
-// longer missed. Never 500s: a fetch/git failure degrades to "up to date" so we
-// never show a false "update available".
+// Compares the local git commit hash against the latest commit on origin/main
+// via the git transport (`git ls-remote`). ANY differing commit counts as an
+// update available — the package.json version is for display only, so patches
+// pushed without a version bump are no longer missed. Never 500s: a git failure
+// degrades to "up to date" so we never show a false "update available".
 export async function GET() {
   const repoRoot = findGitRoot(process.cwd())
   const current_version = pkg.version
   const localHash = localCommitHash(repoRoot)
 
   try {
-    // Cache-bust the raw files so GitHub's CDN can't return a stale copy — the
-    // "Check for updates" button must reflect a freshly pushed commit at once.
-    const bust = Date.now()
-    const [remoteHash, remotePkgText] = await Promise.all([
-      remoteCommitHash(),
-      fetchText(`${RAW_BASE}package.json?cb=${bust}`),
-    ])
+    const remoteHash = remoteCommitHash(repoRoot)
 
-    let latest_version: string | undefined
-    try {
-      latest_version = JSON.parse(remotePkgText).version
-    } catch {
-      // best-effort; version is display-only
-    }
+    // Any differing commit = update available. If either hash is missing
+    // (git unavailable or transport error), treat as up to date to avoid a
+    // false alarm.
+    const update_available = !!remoteHash && !!localHash && remoteHash !== localHash
+
+    // The remote version is display-only. Only read it (a git fetch) when an
+    // update is actually available; otherwise the local version is authoritative.
+    const latest_version: string = update_available ? remoteVersion(repoRoot) : current_version
 
     // Release notes for the version being offered (the latest), falling back to
     // a generic message when there's no curated entry for that version.
     const release_notes = (latest_version && releaseNotes[latest_version]) || releaseNotes['default']
-
-    // Any differing commit = update available. If either hash is missing
-    // (git unavailable or API error), treat as up to date to avoid a false alarm.
-    const update_available = !!remoteHash && !!localHash && remoteHash !== localHash
 
     return NextResponse.json({
       current_version,
