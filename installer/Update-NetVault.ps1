@@ -30,7 +30,28 @@ $env:PATH = @(
 Write-Host "=== Update starting in 5 seconds ==="
 Start-Sleep -Seconds 5
 
+# Resolve a path to its TRUE on-disk casing (walking each parent for the real component
+# name). Get-Item().FullName only echoes the TYPED casing, which is not enough here.
+function Get-TrueCasePath([string]$p) {
+    try {
+        $di = New-Object System.IO.DirectoryInfo([System.IO.Path]::GetFullPath($p))
+        $parts = @()
+        while ($null -ne $di.Parent) {
+            $m = $di.Parent.GetFileSystemInfos($di.Name)
+            if ($m.Count -eq 0) { return [System.IO.Path]::GetFullPath($p) }
+            $parts = ,($m[0].Name) + $parts; $di = $di.Parent
+        }
+        $root = $di.Name; if (-not $root.EndsWith('\')) { $root += '\' }
+        return $root + ($parts -join '\')
+    } catch { return $p }
+}
 $AppDir  = "$InstallDir\app"
+# Normalize the build directory to its true on-disk casing. `next build` caches absolute
+# module paths in .next; if a later run's cwd casing differs (e.g. C:\Apps\NetVault vs
+# ...\netvault, depending on how -InstallDir / the invocation path was typed), webpack
+# treats the two casings as different modules and loads React twice -> the build crashes
+# with "Cannot read properties of null (reading 'useContext')". Pin to on-disk casing.
+$AppDir  = Get-TrueCasePath $AppDir
 $NssmExe = "$InstallDir\nssm\nssm-2.24\win64\nssm.exe"
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }

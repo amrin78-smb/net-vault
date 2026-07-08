@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.5': [
+    'Updater hardening: the update script now pins the build directory to its true on-disk casing. A build could fail (duplicate React, "useContext" error) if the updater was invoked with a different path casing than a previous run (e.g. C:\\Apps\\NetVault vs ...\\netvault), because Next.js caches absolute paths. This makes the casing stable regardless of how the path is typed.',
+  ],
   '1.21.4': [
     'Update check hardening: the git-based check now runs asynchronously so a slow or unreachable GitHub can no longer briefly freeze the app while checking, and it correctly reports "Could not check for updates" instead of silently showing "up to date" when the remote is unreachable.',
   ],
