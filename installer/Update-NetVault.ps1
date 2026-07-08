@@ -290,18 +290,28 @@ try {
     # (idempotent — existing services predate it). Same vars as .env / standalone.
     Write-Step "Ensuring NocVault Hub env in service config"
     if (Test-Path $NssmExe) {
-        $curEnv = & $NssmExe get NetVault AppEnvironmentExtra 2>$null
-        $curStr = ($curEnv | Out-String).Trim()
-        if ($curStr -notmatch 'NOCVAULT_RO_USER=') {
+        # `nssm get AppEnvironmentExtra` returns the entries as console lines with CRLF
+        # endings (and can include blank lines). Feeding that value straight back to
+        # `nssm set` fails with "Environment should comprise strings of the form KEY=VALUE"
+        # because of the stray carriage returns / empty lines. Normalize to clean KEY=VALUE
+        # lines first (strip CR, drop blanks and any line without '='), then rebuild as a
+        # single LF-separated string — the exact format the suite installer uses and nssm
+        # accepts.
+        $curEnv   = & $NssmExe get NetVault AppEnvironmentExtra 2>$null
+        $existing = @(($curEnv -join "`n") -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '=' })
+        if (-not ($existing -match '^NOCVAULT_RO_USER=')) {
             # Preserve the RO password that's in .env (set above from the restored .env /
             # the per-install secrets.env) - never seed the service with a hardcoded literal.
             $roPassLine = Get-Content "$AppDir\.env" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^NOCVAULT_RO_PASS=' } | Select-Object -First 1
             $RoPass = if ($roPassLine) { $roPassLine.Substring('NOCVAULT_RO_PASS='.Length) } else { Get-EnvVal 'C:\ProgramData\NocVault\secrets.env' 'NOCVAULT_RO_PASS' }
             if (-not $RoPass) { Write-Warn "NOCVAULT_RO_PASS could not be determined for service env - leaving read-only password empty" }
-            $roLines = "NOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$RoPass"
-            $newEnv = if ($curStr) { "$curStr`n$roLines" } else { $roLines }
+            # Drop any stale RO entries, then append fresh ones (idempotent, no duplicates).
+            $kept    = @($existing | Where-Object { $_ -notmatch '^NOCVAULT_RO_(HOST|PORT|USER|PASS)=' })
+            $roLines = @('NOCVAULT_RO_HOST=localhost', 'NOCVAULT_RO_PORT=5432', 'NOCVAULT_RO_USER=nocvault_readonly', "NOCVAULT_RO_PASS=$RoPass")
+            $newEnv  = ($kept + $roLines) -join "`n"
             & $NssmExe set NetVault AppEnvironmentExtra $newEnv | Out-Null
-            Write-OK "NOCVAULT_RO_* added to NetVault service env"
+            if ($LASTEXITCODE -eq 0) { Write-OK "NOCVAULT_RO_* added to NetVault service env" }
+            else { Write-Warn "nssm set AppEnvironmentExtra returned exit code $LASTEXITCODE (Hub RO env not written to the service config)" }
         } else {
             Write-OK "NOCVAULT_RO_* already present in service env"
         }

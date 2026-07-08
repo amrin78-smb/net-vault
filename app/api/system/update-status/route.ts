@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.6': [
+    'Installer: fixed the harmless-but-noisy "Error setting parameter AppEnvironmentExtra" warning during updates. The updater read the existing service environment back (which comes with Windows line endings) and fed it straight to NSSM, which rejected it; it now normalizes the entries to clean KEY=VALUE lines before writing, so the Hub read-only DB credentials are reliably set in the service config and the update reports accurately.',
+  ],
   '1.21.5': [
     'Updater hardening: the update script now pins the build directory to its true on-disk casing. A build could fail (duplicate React, "useContext" error) if the updater was invoked with a different path casing than a previous run (e.g. C:\\Apps\\NetVault vs ...\\netvault), because Next.js caches absolute paths. This makes the casing stable regardless of how the path is typed.',
   ],
