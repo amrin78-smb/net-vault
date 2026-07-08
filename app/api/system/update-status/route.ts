@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server'
-import { execSync } from 'child_process'
+import { execSync, execFile } from 'child_process'
+import { promisify } from 'util'
 import fs from 'fs'
 import path from 'path'
 import pkg from '../../../../package.json'
 
 export const dynamic = 'force-dynamic'
+
+const execFileP = promisify(execFile)
+// Disable git's interactive credential prompt so an auth-required remote fails
+// fast (returns null / falls back) instead of blocking on a hidden prompt.
+const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
 
 function findGitRoot(start: string): string {
   let dir = start
@@ -33,15 +39,17 @@ function localCommitHash(repoRoot: string): string | null {
 // which works from the server's egress even where GitHub's web APIs are
 // per-IP rate-limited (raw.githubusercontent 429 / api.github.com timeouts).
 // Returns the first 7 chars, or null on any failure — update detection degrades
-// gracefully to "up to date" when this is null.
-function remoteCommitHash(repoRoot: string): string | null {
+// gracefully to "up to date" when this is null. Async (execFile) so the network
+// git I/O does not block the Node event loop.
+async function remoteCommitHash(repoRoot: string): Promise<string | null> {
   try {
-    const out = execSync('git ls-remote origin main', {
+    const { stdout } = await execFileP('git', ['ls-remote', 'origin', 'main'], {
       cwd: repoRoot,
-      encoding: 'utf8',
       timeout: 10000,
+      encoding: 'utf8',
+      env: GIT_ENV,
     })
-    const token = out.trim().split(/\s+/)[0]
+    const token = stdout.trim().split(/\s+/)[0]
     return token ? token.slice(0, 7) : null
   } catch {
     return null
@@ -51,20 +59,23 @@ function remoteCommitHash(repoRoot: string): string | null {
 // Read the package.json version on origin/main via the git transport. Only call
 // this when the remote hash differs from local (an update is available), so the
 // fetch cost is paid only when there's something new. Falls back to the local
-// pkg.version on any failure.
-function remoteVersion(repoRoot: string): string {
+// pkg.version on any failure. Async (execFile) so the network fetch does not
+// block the Node event loop. Reads FETCH_HEAD (the ref just fetched) rather than
+// origin/main, which can be a stale local tracking ref.
+async function remoteVersion(repoRoot: string): Promise<string> {
   try {
-    execSync('git fetch --quiet origin main', {
+    await execFileP('git', ['fetch', '--quiet', 'origin', 'main'], {
       cwd: repoRoot,
       timeout: 20000,
-      stdio: 'ignore',
+      env: GIT_ENV,
     })
-    const text = execSync('git show origin/main:package.json', {
+    const { stdout } = await execFileP('git', ['show', 'FETCH_HEAD:package.json'], {
       cwd: repoRoot,
-      encoding: 'utf8',
       timeout: 10000,
+      encoding: 'utf8',
+      env: GIT_ENV,
     })
-    return JSON.parse(text).version || pkg.version
+    return JSON.parse(stdout).version || pkg.version
   } catch {
     return pkg.version
   }
@@ -74,6 +85,9 @@ function remoteVersion(repoRoot: string): string {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.4': [
+    'Update check hardening: the git-based check now runs asynchronously so a slow or unreachable GitHub can no longer briefly freeze the app while checking, and it correctly reports "Could not check for updates" instead of silently showing "up to date" when the remote is unreachable.',
+  ],
   '1.21.3': [
     'Fixed "Could not check for updates" in Settings → Updates. The update check was calling GitHub\'s public web APIs (api.github.com + raw.githubusercontent.com), which are rate-limited per source IP — from a shared network with several apps checking, raw.githubusercontent started returning 429 and the check failed. It now checks via git (the same transport the updater already uses), which is not rate-limited.',
   ],
@@ -403,16 +417,29 @@ export async function GET() {
   const localHash = localCommitHash(repoRoot)
 
   try {
-    const remoteHash = remoteCommitHash(repoRoot)
+    const remoteHash = await remoteCommitHash(repoRoot)
 
-    // Any differing commit = update available. If either hash is missing
-    // (git unavailable or transport error), treat as up to date to avoid a
-    // false alarm.
-    const update_available = !!remoteHash && !!localHash && remoteHash !== localHash
+    // If the remote is unreachable (git unavailable or transport error), we
+    // genuinely could not check — say so explicitly rather than falling through
+    // to the success shape, which would make a truly-outdated deploy that can't
+    // reach the remote look up-to-date.
+    if (!remoteHash) {
+      return NextResponse.json({
+        current_version,
+        current_commit: localHash,
+        up_to_date: true,
+        update_available: false,
+        error: 'Could not check for updates',
+      })
+    }
+
+    // Any differing commit = update available. If the local hash is missing
+    // (git unavailable locally), treat as up to date to avoid a false alarm.
+    const update_available = !!localHash && remoteHash !== localHash
 
     // The remote version is display-only. Only read it (a git fetch) when an
     // update is actually available; otherwise the local version is authoritative.
-    const latest_version: string = update_available ? remoteVersion(repoRoot) : current_version
+    const latest_version: string = update_available ? await remoteVersion(repoRoot) : current_version
 
     // Release notes for the version being offered (the latest), falling back to
     // a generic message when there's no curated entry for that version.
