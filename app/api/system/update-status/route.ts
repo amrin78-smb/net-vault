@@ -85,6 +85,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.22.1': [
+    'Fixed: Sites Import failed with a server error whenever a row matched an existing site and had an empty field to fill in — the update referenced a column that does not exist, so nothing was imported. Filling empty fields on existing sites now works.',
+    'Fixed: a failed import used to show a green "Import complete" message with blank numbers. Import and preview now show a clear error if the server rejects the file, and only report success when the import actually succeeded.',
+  ],
   '1.22.0': [
     'New: Sites Import. On the Sites page, "Import Sites" lets you upload a spreadsheet of sites — download the built-in template, fill it in, and import. It creates new sites and fills in only the empty fields on existing ones (it never overwrites data you already have).',
     'Smart matching: existing sites are matched by code (or name + country); a preview shows exactly what will be created, filled, or skipped before you commit, and a "Dry run" reports the outcome without changing anything.',

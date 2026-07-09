@@ -61,7 +61,11 @@ export default function SitesImportModal({ onClose, onImported }: { onClose: () 
     setPreviewLoading(true)
     try {
       const res = await fetch('/api/sites/import/preview', { method: 'POST', body: formData })
-      const data: PreviewResponse = await res.json()
+      const data = await res.json()
+      if (!res.ok || data?.error) {
+        showToast(data?.error || 'Failed to preview file', 'error')
+        return
+      }
       setPreview(data.preview || [])
       setTotal(data.total || 0)
     } catch {
@@ -79,7 +83,13 @@ export default function SitesImportModal({ onClose, onImported }: { onClose: () 
     formData.append('dryRun', dry ? 'true' : 'false')
     try {
       const res = await fetch('/api/sites/import', { method: 'POST', body: formData })
-      const data: ImportResult = await res.json()
+      const data = await res.json()
+      if (!res.ok || data?.error) {
+        setResult(null)
+        setDryResult(null)
+        showToast(data?.error || (dry ? 'Dry run failed' : 'Import failed'), 'error')
+        return
+      }
       if (dry) {
         setDryResult(data)
         setResult(null)
@@ -188,7 +198,7 @@ export default function SitesImportModal({ onClose, onImported }: { onClose: () 
         )}
 
         {/* Result */}
-        {active && (
+        {active && typeof active.created === 'number' && (
           <div style={{ marginTop: '4px' }}>
             <div style={{ background: result ? 'var(--tint-success)' : 'var(--tint-info)', color: result ? 'var(--tint-success-fg)' : 'var(--tint-info-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: '10px' }}>
               {result ? 'Import complete — ' : 'Dry run — '}

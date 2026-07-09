@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
           if (write) {
             setVals.push(existing.id)
             await client.query(
-              `UPDATE sites SET ${setCols.join(', ')}, updated_at = NOW() WHERE id = $${setVals.length}`,
+              `UPDATE sites SET ${setCols.join(', ')} WHERE id = $${setVals.length}`,
               setVals
             )
           }
