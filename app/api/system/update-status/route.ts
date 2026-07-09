@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.8': [
+    'Installer: fixed the long "Waiting for NetVault to respond" pause during updates. The health check used http://localhost:3000, which on Windows tries IPv6 (::1) first — but the app listens on IPv4 only, so the check timed out even though the app was already up. It now uses 127.0.0.1, so the update proceeds as soon as the app is ready.',
+  ],
   '1.21.7': [
     'Installer: removed the redundant NSSM step that caused the "Error setting parameter AppEnvironmentExtra" message on every update. The Hub read-only DB credentials are already provided to the app via the standalone runtime env file (the mechanism NetVault actually reads, verified working), so the extra service-config write was both broken and unnecessary — it only produced confusing output.',
     'Installer: the "Starting NetVault service" step now shows progress dots while it waits for the freshly-built app to answer, so a normal 10-30s startup no longer looks like the updater has hung.',

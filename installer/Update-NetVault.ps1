@@ -324,7 +324,11 @@ try {
     $healthy = $false
     for ($i = 0; $i -lt 60; $i++) {
         try {
-            $resp = Invoke-WebRequest -Uri "http://localhost:3000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            # Use 127.0.0.1, NOT localhost: on Windows `localhost` resolves to IPv6 ::1 first,
+            # but the standalone server binds HOSTNAME=0.0.0.0 (IPv4 only), so a ::1 request
+            # never answers and the poll waits out its whole timeout while the app is actually
+            # up. The explicit IPv4 loopback matches the bind and returns as soon as it's ready.
+            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:3000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
             if ($resp.StatusCode -eq 200) { $healthy = $true; break }
         } catch {}
         Write-Host "." -ForegroundColor DarkGray -NoNewline
@@ -346,7 +350,7 @@ try {
     $cronLine = Get-Content "$AppDir\.env" | Where-Object { $_ -match '^CRON_SECRET=' } | Select-Object -First 1
     $CronSecret = if ($cronLine) { $cronLine.Substring('CRON_SECRET='.Length) } else { '' }
     if ($CronSecret) {
-        $action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
+        $action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
         $trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
         Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
         Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
