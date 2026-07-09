@@ -85,6 +85,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.22.0': [
+    'New: Sites Import. On the Sites page, "Import Sites" lets you upload a spreadsheet of sites — download the built-in template, fill it in, and import. It creates new sites and fills in only the empty fields on existing ones (it never overwrites data you already have).',
+    'Smart matching: existing sites are matched by code (or name + country); a preview shows exactly what will be created, filled, or skipped before you commit, and a "Dry run" reports the outcome without changing anything.',
+    'Countries and regions are resolved automatically from the sheet (created if new), so you can add sites in new locations without setting them up first. Admin/super-admin only.',
+  ],
   '1.21.8': [
     'Installer: fixed the long "Waiting for NetVault to respond" pause during updates. The health check used http://localhost:3000, which on Windows tries IPv6 (::1) first — but the app listens on IPv4 only, so the check timed out even though the app was already up. It now uses 127.0.0.1, so the update proceeds as soon as the app is ready.',
   ],

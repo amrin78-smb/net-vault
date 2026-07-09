@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
+import SitesImportModal from './SitesImportModal'
 
 type Site = {
   id: string; site: string; code: string; country: string
@@ -13,10 +14,14 @@ export default function SitesPage() {
   const [loading, setLoading] = useState(true)
   const [region, setRegion] = useState('')
   const [search, setSearch] = useState('')
+  const [showImport, setShowImport] = useState(false)
 
-  useEffect(() => {
-    fetch('/api/sites').then(r => r.json()).then(d => { setSites(d); setLoading(false) })
+  const fetchSites = useCallback(() => {
+    setLoading(true)
+    return fetch('/api/sites').then(r => r.json()).then(d => { setSites(d); setLoading(false) })
   }, [])
+
+  useEffect(() => { fetchSites() }, [fetchSites])
 
   const regions = [...new Set(sites.map(s => s.region))]
   const filtered = sites.filter(s => {
@@ -60,7 +65,18 @@ export default function SitesPage() {
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Sites</h1>
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>{filtered.length} sites · {totalDevices.toLocaleString()} devices · {totalEol.toLocaleString()} EOL</p>
         </div>
+        <button onClick={() => setShowImport(true)} title="Import sites from Excel / CSV"
+          style={{ padding: '7px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}
+          onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-subtle)')}
+          onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-card)')}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          Import Sites
+        </button>
       </div>
+
+      {showImport && (
+        <SitesImportModal onClose={() => setShowImport(false)} onImported={fetchSites} />
+      )}
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
