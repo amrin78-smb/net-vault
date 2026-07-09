@@ -85,6 +85,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.21.7': [
+    'Installer: removed the redundant NSSM step that caused the "Error setting parameter AppEnvironmentExtra" message on every update. The Hub read-only DB credentials are already provided to the app via the standalone runtime env file (the mechanism NetVault actually reads, verified working), so the extra service-config write was both broken and unnecessary — it only produced confusing output.',
+    'Installer: the "Starting NetVault service" step now shows progress dots while it waits for the freshly-built app to answer, so a normal 10-30s startup no longer looks like the updater has hung.',
+  ],
   '1.21.6': [
     'Installer: fixed the harmless-but-noisy "Error setting parameter AppEnvironmentExtra" warning during updates. The updater read the existing service environment back (which comes with Windows line endings) and fed it straight to NSSM, which rejected it; it now normalizes the entries to clean KEY=VALUE lines before writing, so the Hub read-only DB credentials are reliably set in the service config and the update reports accurately.',
   ],

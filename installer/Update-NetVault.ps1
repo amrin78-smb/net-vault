@@ -286,36 +286,19 @@ try {
         Write-Warn "Root .env not found - standalone .env.local not updated"
     }
 
-    # Ensure the NocVault Hub read-role env is also in the NSSM service config
-    # (idempotent — existing services predate it). Same vars as .env / standalone.
-    Write-Step "Ensuring NocVault Hub env in service config"
-    if (Test-Path $NssmExe) {
-        # `nssm get AppEnvironmentExtra` returns the entries as console lines with CRLF
-        # endings (and can include blank lines). Feeding that value straight back to
-        # `nssm set` fails with "Environment should comprise strings of the form KEY=VALUE"
-        # because of the stray carriage returns / empty lines. Normalize to clean KEY=VALUE
-        # lines first (strip CR, drop blanks and any line without '='), then rebuild as a
-        # single LF-separated string — the exact format the suite installer uses and nssm
-        # accepts.
-        $curEnv   = & $NssmExe get NetVault AppEnvironmentExtra 2>$null
-        $existing = @(($curEnv -join "`n") -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '=' })
-        if (-not ($existing -match '^NOCVAULT_RO_USER=')) {
-            # Preserve the RO password that's in .env (set above from the restored .env /
-            # the per-install secrets.env) - never seed the service with a hardcoded literal.
-            $roPassLine = Get-Content "$AppDir\.env" -ErrorAction SilentlyContinue | Where-Object { $_ -match '^NOCVAULT_RO_PASS=' } | Select-Object -First 1
-            $RoPass = if ($roPassLine) { $roPassLine.Substring('NOCVAULT_RO_PASS='.Length) } else { Get-EnvVal 'C:\ProgramData\NocVault\secrets.env' 'NOCVAULT_RO_PASS' }
-            if (-not $RoPass) { Write-Warn "NOCVAULT_RO_PASS could not be determined for service env - leaving read-only password empty" }
-            # Drop any stale RO entries, then append fresh ones (idempotent, no duplicates).
-            $kept    = @($existing | Where-Object { $_ -notmatch '^NOCVAULT_RO_(HOST|PORT|USER|PASS)=' })
-            $roLines = @('NOCVAULT_RO_HOST=localhost', 'NOCVAULT_RO_PORT=5432', 'NOCVAULT_RO_USER=nocvault_readonly', "NOCVAULT_RO_PASS=$RoPass")
-            $newEnv  = ($kept + $roLines) -join "`n"
-            & $NssmExe set NetVault AppEnvironmentExtra $newEnv | Out-Null
-            if ($LASTEXITCODE -eq 0) { Write-OK "NOCVAULT_RO_* added to NetVault service env" }
-            else { Write-Warn "nssm set AppEnvironmentExtra returned exit code $LASTEXITCODE (Hub RO env not written to the service config)" }
-        } else {
-            Write-OK "NOCVAULT_RO_* already present in service env"
-        }
-    }
+    # NocVault Hub read-only DB credentials (NOCVAULT_RO_*) reach the running app via the
+    # standalone runtime env file .next/standalone/.env.local (written just above), which the
+    # Next standalone server loads at startup — that is the mechanism NetVault actually reads,
+    # and it is verified working (Hub cross-DB reads succeed).
+    #
+    # We intentionally do NOT also push them into the NSSM AppEnvironmentExtra. nssm's
+    # multi-value AppEnvironmentExtra set (a single argument with several KEY=VALUE lines)
+    # rejects the value from a read-modify-write with "Environment should comprise strings of
+    # the form KEY=VALUE" (exit 6), and it is redundant here — so it only produced a confusing
+    # error on every update while the app worked fine off .env.local. Removed to keep the
+    # update output clean.
+    Write-Step "NocVault Hub read-only env"
+    Write-OK "Provided via standalone .env.local (NOCVAULT_RO_* written above)"
 
     Write-Step "Starting NetVault service"
     Write-Host "    Running: sc.exe start NetVault" -ForegroundColor Gray
@@ -334,14 +317,20 @@ try {
     # 2-3s, so this returns as soon as it's actually up rather than always waiting 5s.
     # Falls back to the previous behaviour (warn + proceed) if it doesn't answer in
     # ~30s — same non-fatal outcome as before, never blocks the update.
+    # A freshly-built standalone server can take a while to answer its first request, so show
+    # progress during the poll rather than sitting silent (which looks like a hang). Allow up
+    # to 60s before falling back to the service-state check below.
+    Write-Host "    Waiting for NetVault to respond on :3000 " -ForegroundColor Gray -NoNewline
     $healthy = $false
-    for ($i = 0; $i -lt 30; $i++) {
+    for ($i = 0; $i -lt 60; $i++) {
         try {
             $resp = Invoke-WebRequest -Uri "http://localhost:3000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
             if ($resp.StatusCode -eq 200) { $healthy = $true; break }
         } catch {}
+        Write-Host "." -ForegroundColor DarkGray -NoNewline
         Start-Sleep -Seconds 1
     }
+    Write-Host ""
     if ($healthy) {
         Write-OK "NetVault service is running (health check passed)"
     } else {
