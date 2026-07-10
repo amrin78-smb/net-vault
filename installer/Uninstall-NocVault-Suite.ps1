@@ -223,7 +223,11 @@ if (-not $KeepDatabases) {
 # ================================================================
 Write-Step "Clearing git safe.directory entries"
 $env:PATH = @("C:\Program Files\Git\cmd", "C:\Program Files\Git\bin", $env:PATH) -join ";"
-$gitOk = & git --version 2>$null
+# `& git ...` throws a terminating "term not recognized" error when git isn't on
+# PATH at all - `2>$null` doesn't catch that (it's PowerShell's own command
+# resolution failing, not the native command's stderr) - wrap in try/catch so this
+# falls through to the "skip cleanup" branch below instead of crashing the uninstall.
+$gitOk = try { & git --version 2>$null } catch { $null }
 if ($gitOk) {
     foreach ($repo in $RepoDirs) {
         $repoFwd = ($repo -replace '\\','/')

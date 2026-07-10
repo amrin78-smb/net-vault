@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.4': [
+    'Fixed a fresh-install crash on a truly clean Windows machine (no Node.js or Git pre-installed): the installer\'s "already installed?" check for both tools threw a fatal "term not recognized" error instead of detecting they were missing and installing them. Affects only brand-new machines - any box that already had Node.js or Git was unaffected. Also hardened the equivalent check in the uninstaller.',
+  ],
   '1.23.3': [
     'Security fix: a device\'s audit history (GET /api/audit/device/:id) had the same missing site-scoping the 1.23.2 fix closed on sites/circuits — any authenticated user, including a site_admin outside that device\'s site, could read its full change history (cost, contract, serial, IP). Now scoped the same way.',
     'Hardening: a database error while checking a user\'s per-app access previously granted that request access to every app rather than denying it. A transient DB error now fails closed instead of open.',

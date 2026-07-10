@@ -259,7 +259,12 @@ if (Test-Path $VcRedist) {
 # STEP 3 — Node.js
 # ================================================================
 Write-Step "Installing Node.js v20.19.0"
-$nodeVer = & node --version 2>$null
+# On a truly clean machine (node not on PATH), `& node ...` throws a terminating
+# "term not recognized" error that `2>$null` does NOT suppress (that redirects the
+# native command's stderr stream; here there is no process to redirect from, since
+# PowerShell's own command resolution fails first) - wrap in try/catch so a bare
+# machine falls through to the msiexec install below instead of crashing the setup.
+$nodeVer = try { & node --version 2>$null } catch { $null }
 if ($nodeVer -eq 'v20.19.0') {
     Write-OK "Node.js v20.19.0 already installed"
 } else {
@@ -272,7 +277,8 @@ if ($nodeVer -eq 'v20.19.0') {
 # STEP 4 — Git
 # ================================================================
 Write-Step "Installing Git"
-$gitVer = & git --version 2>$null
+# Same command-not-found gotcha as the Node.js check above - see that comment.
+$gitVer = try { & git --version 2>$null } catch { $null }
 if ($gitVer) {
     Write-OK "Git already installed: $gitVer"
 } elseif (Test-Path $GitInstaller) {
