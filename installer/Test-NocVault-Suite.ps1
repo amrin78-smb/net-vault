@@ -327,6 +327,9 @@ else {
     if ($script:PgExit -eq 0) { Ok ("v_devices_flat queryable (" + $vsel + " rows)") } else { Bad ("SELECT from v_devices_flat FAILED: " + $vsel) }
     $usr = Pg "netvault" "SELECT count(*) FROM users;"
     if ($script:PgExit -eq 0 -and [int]$usr -ge 1) { Ok ("users seeded (" + $usr + " row(s))") } else { Bad ("users empty/unreadable (" + $usr + ")") }
+    # user_apps drives per-user app-access RBAC (netvault 1.23.0). No rows for a user = all apps.
+    $uapps = Pg "netvault" "SELECT has_table_privilege('netvault','user_apps','SELECT');"
+    if ($script:PgExit -eq 0 -and $uapps -eq "t") { Ok "user_apps table present (per-user app access)" } else { Bad ("user_apps table missing/unreadable (got '" + $uapps + "')") }
     $aset = Pg "netvault" "SELECT count(*) FROM app_settings;"
     if ($script:PgExit -eq 0) { Ok ("app_settings present (" + $aset + " keys)") } else { Bad "app_settings unreadable" }
 

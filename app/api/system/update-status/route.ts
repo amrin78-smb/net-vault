@@ -85,6 +85,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.0': [
+    'New: per-user app access. When creating or editing a user you can now choose which of the four suite apps (NetVault, LogVault, DDIVault, SpanVault) they can access. NetVault is always available; super admins always have all apps; existing users keep access to everything until you change them.',
+    'The launcher greys out apps a user is not allowed to open, and trying to open a disallowed app bounces back to the launcher with a clear "no access" message.',
+    'Note: this is the NetVault (hub) side. Enforcement inside LogVault/DDIVault/SpanVault themselves is being rolled out in their own updates; until then those apps honour the launcher + login gate.',
+  ],
   '1.22.1': [
     'Fixed: Sites Import failed with a server error whenever a row matched an existing site and had an empty field to fill in — the update referenced a column that does not exist, so nothing was imported. Filling empty fields on existing sites now works.',
     'Fixed: a failed import used to show a green "Import complete" message with blank numbers. Import and preview now show a clear error if the server rejects the file, and only report success when the import actually succeeded.',

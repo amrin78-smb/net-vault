@@ -1,7 +1,7 @@
 'use client'
 import { useSession, signOut } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { useEffect, useState, Suspense } from 'react'
 import ThemeToggle from '@/components/ThemeToggle'
 import LicenseBanner from '@/components/LicenseBanner'
 
@@ -204,9 +204,13 @@ function DEmpty({ app }: { app: string }) {
   return <div style={{ fontSize: '12.5px', color: 'var(--text-muted)', padding: '12px 0' }}>No {app} data correlated for this asset.</div>
 }
 
-export default function LauncherPage() {
+function LauncherInner() {
   const { data: session, status } = useSession()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  // Per-user SSO access denial → ?denied=<slug> (set by the SSO route on refusal).
+  const deniedSlug = searchParams.get('denied')
+  const [deniedDismissed, setDeniedDismissed] = useState(false)
   const [settings, setSettings] = useState({ app_primary_color: '#C8102E', app_navy_color: '#1a2744' })
   const [licenseInfo, setLicenseInfo] = useState<LicenseInfo | null>(null)
   const [health, setHealth] = useState<SuiteHealth[] | null>(null)
@@ -355,6 +359,12 @@ export default function LauncherPage() {
           && licenseInfo.modules.length > 0
           && !licenseInfo.modules.includes(slug))
 
+  // PER-USER app access (independent of licensing). NetVault is always accessible;
+  // an empty/undefined apps list means "all apps" (legacy users / super_admin).
+  const apps = (session?.user as any)?.apps as string[] | undefined
+  const canAccess = (slug: AppCard['slug']): boolean =>
+    slug === 'netvault' || !apps || apps.length === 0 || apps.includes(slug)
+
   const cards: AppCard[] = [
     {
       name: 'NetVault', slug: 'netvault', subtitle: 'Network Asset Management',
@@ -451,6 +461,21 @@ export default function LauncherPage() {
       {/* Standardized suite license banner — full-width bar directly below the launcher top bar */}
       <LicenseBanner />
 
+      {/* SSO access-denied notice — shown when redirected here with ?denied=<slug> */}
+      {deniedSlug && !deniedDismissed && (() => {
+        const APP_NAMES: Record<string, string> = { netvault: 'NetVault', logvault: 'LogVault', ddivault: 'DDIVault', spanvault: 'SpanVault' }
+        const name = APP_NAMES[deniedSlug] || deniedSlug
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 32px', background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', borderBottom: '1px solid var(--border)', fontSize: 'var(--text-base)' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span style={{ flex: 1, fontWeight: 500 }}>You don’t have access to {name}. Contact an administrator if you need it.</span>
+            <button onClick={() => setDeniedDismissed(true)} aria-label="Dismiss" style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '2px 4px', flexShrink: 0 }}>✕</button>
+          </div>
+        )
+      })()}
+
       {/* Main content */}
       <div style={{ flex: 1, padding: '28px 32px', maxWidth: '1400px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
 
@@ -528,7 +553,12 @@ export default function LauncherPage() {
         <div className="nv-app-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '18px', marginBottom: '24px' }}>
           {cards.map(card => {
             const st = healthFor(card.name)
-            const licensed = isLicensed(card.slug)
+            const isLic = isLicensed(card.slug)
+            const access = canAccess(card.slug)
+            // A tile is fully enabled only when BOTH licensed AND the user has access.
+            const licensed = isLic && access
+            // No-access takes precedence in the disabled-state copy; else fall back to licensing copy.
+            const noAccess = isLic && !access
             const netvaultEmpty = card.name === 'NetVault' && !statsLoading && netStats != null && netStats.devices_total === 0 && netStats.sites_total === 0 && netStats.eol_total === 0
             return (
               <div key={card.name} style={{ background: NAVY, borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '18px', display: 'flex', flexDirection: 'column', color: 'white', position: 'relative' }}>
@@ -571,10 +601,12 @@ export default function LauncherPage() {
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.12)', cursor: 'not-allowed' }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
-                      Not licensed
+                      {noAccess ? 'No access' : 'Not licensed'}
                     </div>
                     <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.45)', textAlign: 'center', marginTop: '7px', lineHeight: 1.4 }}>
-                      Not licensed — contact <a href="mailto:sales@nocvault.com" style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>sales@nocvault.com</a>
+                      {noAccess
+                        ? 'You don’t have access to this app — ask an administrator.'
+                        : <>Not licensed — contact <a href="mailto:sales@nocvault.com" style={{ color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>sales@nocvault.com</a></>}
                     </div>
                   </div>
                 )}
@@ -886,5 +918,14 @@ export default function LauncherPage() {
         </>
       )}
     </div>
+  )
+}
+
+// useSearchParams (for ?denied) requires a Suspense boundary to be prerender-safe.
+export default function LauncherPage() {
+  return (
+    <Suspense fallback={null}>
+      <LauncherInner />
+    </Suspense>
   )
 }

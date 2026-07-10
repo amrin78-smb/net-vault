@@ -109,6 +109,13 @@ CREATE TABLE IF NOT EXISTS user_sites (
     PRIMARY KEY (user_id, site_id)
 );
 
+-- ── User App Access ──────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS user_apps (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    app     TEXT    NOT NULL,
+    PRIMARY KEY (user_id, app)
+);
+
 -- ── Circuits ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS circuits (
     id               SERIAL PRIMARY KEY,

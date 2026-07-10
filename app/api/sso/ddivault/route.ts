@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getToken } from 'next-auth/jwt'
+import { getUserApps, canAccessApp } from '@/lib/appAccess'
 import jwt from 'jsonwebtoken'
 
 export async function GET(req: NextRequest) {
@@ -12,6 +13,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login?callbackUrl=%2Fapi%2Fsso%2Fddivault`)
   }
 
+  const apps = await getUserApps(token.id as string | number, token.role as string)
+  if (!canAccessApp(apps, 'ddivault')) {
+    console.log('[SSO DDIVault] Access denied for:', token.email)
+    return NextResponse.redirect(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/launcher?denied=ddivault`)
+  }
+
   const ssoToken = jwt.sign(
     {
       userId: token.id,
@@ -19,6 +26,7 @@ export async function GET(req: NextRequest) {
       role: token.role,
       name: token.name,
       app: 'ddivault',
+      apps,
     },
     process.env.NEXTAUTH_SECRET!,
     { expiresIn: '2m' }

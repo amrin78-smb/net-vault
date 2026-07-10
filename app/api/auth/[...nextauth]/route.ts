@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth'
 import CredentialsProvider from 'next-auth/providers/credentials'
 import { query } from '@/lib/db'
+import { getUserApps } from '@/lib/appAccess'
 import bcrypt from 'bcryptjs'
 
 const authOptions = {
@@ -34,17 +35,19 @@ const authOptions = {
           }
         } catch {}
 
-        return { id: String(user.id), name: user.name, email: user.email, role: user.role, siteIds }
+        const apps = await getUserApps(user.id, user.role)
+
+        return { id: String(user.id), name: user.name, email: user.email, role: user.role, siteIds, apps }
       }
     })
   ],
   callbacks: {
     async jwt({ token, user }: any) {
-      if (user) { token.role = user.role; token.id = user.id; token.siteIds = user.siteIds || [] }
+      if (user) { token.role = user.role; token.id = user.id; token.siteIds = user.siteIds || []; token.apps = user.apps || [] }
       return token
     },
     async session({ session, token }: any) {
-      if (session.user) { session.user.role = token.role; session.user.id = token.id; session.user.siteIds = token.siteIds || [] }
+      if (session.user) { session.user.role = token.role; session.user.id = token.id; session.user.siteIds = token.siteIds || []; session.user.apps = token.apps || [] }
       return session
     }
   },

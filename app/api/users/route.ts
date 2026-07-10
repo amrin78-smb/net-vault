@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { checkWriteAllowed } from '@/app/api/license/route'
+import { ALL_APPS } from '@/lib/appAccess'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -15,7 +16,10 @@ export async function GET() {
       COALESCE(
         json_agg(json_build_object('id', s.id, 'name', s.name, 'code', s.code))
         FILTER (WHERE s.id IS NOT NULL), '[]'
-      ) as sites
+      ) as sites,
+      COALESCE(
+        (SELECT json_agg(ua.app) FROM user_apps ua WHERE ua.user_id = u.id), '[]'
+      ) as apps
     FROM users u
     LEFT JOIN user_sites us ON us.user_id = u.id
     LEFT JOIN sites s ON s.id = us.site_id
@@ -45,6 +49,15 @@ export async function POST(req: NextRequest) {
   if (body.site_ids?.length > 0) {
     for (const siteId of body.site_ids) {
       await query('INSERT INTO user_sites (user_id, site_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [userId, siteId])
+    }
+  }
+  // App access: only write explicit rows when app_slugs is a non-empty array
+  // (absent/empty → no rows → default-all). netvault is always accessible.
+  if (Array.isArray(body.app_slugs) && body.app_slugs.length > 0) {
+    const slugs = new Set<string>(body.app_slugs.filter((s: unknown) => (ALL_APPS as readonly string[]).includes(s as string)) as string[])
+    slugs.add('netvault')
+    for (const app of slugs) {
+      await query('INSERT INTO user_apps (user_id, app) VALUES ($1,$2) ON CONFLICT DO NOTHING', [userId, app])
     }
   }
   return NextResponse.json({ id: userId }, { status: 201 })

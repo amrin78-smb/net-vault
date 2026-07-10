@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { checkWriteAllowed } from '@/app/api/license/route'
+import { ALL_APPS } from '@/lib/appAccess'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
@@ -34,6 +35,16 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   if (body.site_ids?.length > 0) {
     for (const siteId of body.site_ids) {
       await query('INSERT INTO user_sites (user_id, site_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [parseInt(id), siteId])
+    }
+  }
+  // Rewrite explicit app access. No app_slugs → no rows → default-all.
+  // netvault is always accessible.
+  await query('DELETE FROM user_apps WHERE user_id=$1', [id])
+  if (body.app_slugs?.length) {
+    const slugs = new Set<string>(body.app_slugs.filter((s: unknown) => (ALL_APPS as readonly string[]).includes(s as string)) as string[])
+    slugs.add('netvault')
+    for (const app of slugs) {
+      await query('INSERT INTO user_apps (user_id, app) VALUES ($1,$2) ON CONFLICT DO NOTHING', [parseInt(id), app])
     }
   }
   return NextResponse.json({ success: true })
