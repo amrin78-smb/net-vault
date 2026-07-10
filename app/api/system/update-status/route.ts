@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.1': [
+    'Fixed: the per-user "App access" control (added in 1.23.0) was not appearing on the Settings → Users form, because it was added to a different user-management screen. The app-access checkboxes and an "App access" column now show on Settings → Users where users are actually managed.',
+  ],
   '1.23.0': [
     'New: per-user app access. When creating or editing a user you can now choose which of the four suite apps (NetVault, LogVault, DDIVault, SpanVault) they can access. NetVault is always available; super admins always have all apps; existing users keep access to everything until you change them.',
     'The launcher greys out apps a user is not allowed to open, and trying to open a disallowed app bounces back to the launcher with a clear "no access" message.',

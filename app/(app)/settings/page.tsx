@@ -177,7 +177,17 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
   )
 }
 
-type User = { id: number; name: string; email: string; role: string; created_at: string; sites?: { id: number; name: string; code: string }[] }
+type User = { id: number; name: string; email: string; role: string; created_at: string; sites?: { id: number; name: string; code: string }[]; apps?: string[] }
+// Per-user app access (netvault 1.23.0). NetVault is always accessible; an empty/absent
+// `apps` list means "all apps" (default). The form always sends 'netvault' + checked apps.
+const APP_OPTIONS: { slug: string; label: string }[] = [
+  { slug: 'netvault', label: 'NetVault' },
+  { slug: 'logvault', label: 'LogVault' },
+  { slug: 'ddivault', label: 'DDIVault' },
+  { slug: 'spanvault', label: 'SpanVault' },
+]
+const ALL_SLUGS = APP_OPTIONS.map(a => a.slug)
+const APP_LABEL: Record<string, string> = Object.fromEntries(APP_OPTIONS.map(a => [a.slug, a.label]))
 type Site = { id: number; site: string; name: string; code: string; country: string; country_id: number; region: string; total: string }
 type Country = { id: number; name: string; iso_code: string; region: string }
 
@@ -230,7 +240,7 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [showUserForm, setShowUserForm] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
-  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'viewer', site_ids: [] as number[] })
+  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'viewer', site_ids: [] as number[], app_slugs: [...ALL_SLUGS] as string[] })
   const [savingUser, setSavingUser] = useState(false)
   const [userError, setUserError] = useState('')
 
@@ -315,17 +325,28 @@ export default function SettingsPage() {
   function fetchUsers() { fetch('/api/users').then(r => r.json()).then(setUsers) }
   function fetchSites() { fetch('/api/sites').then(r => r.json()).then(setSites) }
 
-  function openAddUser() { setUserForm({ name: '', email: '', password: '', role: 'viewer', site_ids: [] }); setEditUser(null); setShowUserForm(true); setUserError('') }
-  function openEditUser(u: User) { setUserForm({ name: u.name, email: u.email, password: '', role: u.role, site_ids: (u as any).sites?.map((s: any) => s.id) || [] }); setEditUser(u); setShowUserForm(true); setUserError('') }
+  function openAddUser() { setUserForm({ name: '', email: '', password: '', role: 'viewer', site_ids: [], app_slugs: [...ALL_SLUGS] }); setEditUser(null); setShowUserForm(true); setUserError('') }
+  function openEditUser(u: User) {
+    // Empty/absent apps = all apps (default); otherwise the stored set (netvault always in).
+    const appInit = (u.apps && u.apps.length > 0)
+      ? Array.from(new Set(['netvault', ...u.apps.filter(s => ALL_SLUGS.includes(s))]))
+      : [...ALL_SLUGS]
+    setUserForm({ name: u.name, email: u.email, password: '', role: u.role, site_ids: (u as any).sites?.map((s: any) => s.id) || [], app_slugs: appInit })
+    setEditUser(u); setShowUserForm(true); setUserError('')
+  }
 
   async function saveUser() {
     if (!userForm.name || !userForm.email) { setUserError('Name and email required'); return }
     if (!editUser && !userForm.password) { setUserError('Password required for new users'); return }
     setSavingUser(true); setUserError('')
+    // super_admin always gets all apps; everyone else = netvault + their checked apps.
+    const app_slugs = userForm.role === 'super_admin'
+      ? [...ALL_SLUGS]
+      : Array.from(new Set(['netvault', ...userForm.app_slugs.filter(s => ALL_SLUGS.includes(s))]))
     const res = await fetch(editUser ? `/api/users/${editUser.id}` : '/api/users', {
       method: editUser ? 'PUT' : 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userForm)
+      body: JSON.stringify({ ...userForm, app_slugs })
     })
     if (res.ok) { setShowUserForm(false); fetchUsers() }
     else { const d = await res.json(); setUserError(d.error || 'Failed to save') }
@@ -568,6 +589,36 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 )}
+                {/* App access — which suite apps this user can open (NetVault always on). */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                    App access
+                    {userForm.role === 'super_admin' && <span style={{ fontWeight: '400', color: 'var(--text-muted)', marginLeft: '6px' }}>— super admins can access all apps</span>}
+                  </label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {APP_OPTIONS.map(app => {
+                      const locked = app.slug === 'netvault' || userForm.role === 'super_admin'
+                      const checked = userForm.role === 'super_admin' || userForm.app_slugs.includes(app.slug)
+                      return (
+                        <label key={app.slug} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', background: checked ? 'var(--tint-danger)' : 'var(--bg-card)', cursor: locked ? 'default' : 'pointer', opacity: locked && !checked ? 0.6 : 1 }}>
+                          <input type="checkbox" checked={checked} disabled={locked}
+                            onChange={e => {
+                              const slug = app.slug
+                              setUserForm(p => ({
+                                ...p,
+                                app_slugs: e.target.checked
+                                  ? Array.from(new Set([...p.app_slugs, slug]))
+                                  : p.app_slugs.filter(s => s !== slug)
+                              }))
+                            }}
+                          />
+                          <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{app.label}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '6px' }}>NetVault is always accessible. Unchecked apps are hidden from the launcher and blocked at login.</div>
+                </div>
               </div>
               {userError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{userError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -578,7 +629,7 @@ export default function SettingsPage() {
           )}
           <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
             <table>
-              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Site access</th><th>Created</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Site access</th><th>App access</th><th>Created</th><th>Actions</th></tr></thead>
               <tbody>
                 {users.map(u => (
                   <tr key={u.id}>
@@ -592,6 +643,15 @@ export default function SettingsPage() {
                         ? u.sites.map((s: any) => s.name || s.code).join(', ')
                         : u.role === 'site_admin' ? <span style={{ color: 'var(--yellow)' }}>No sites assigned</span>
                         : <span style={{ color: 'var(--text-muted)' }}>All sites</span>}
+                    </td>
+                    <td style={{ fontSize: 'var(--text-sm)', maxWidth: '220px' }}>
+                      {(u.role === 'super_admin' || !u.apps || u.apps.length === 0 || u.apps.length >= ALL_SLUGS.length)
+                        ? <span style={{ color: 'var(--text-muted)' }}>All apps</span>
+                        : <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: '4px' }}>
+                            {Array.from(new Set(['netvault', ...u.apps.filter(s => ALL_SLUGS.includes(s))])).map(s => (
+                              <span key={s} style={{ fontSize: 'var(--text-xs)', padding: '1px 7px', borderRadius: '10px', background: 'var(--surface-subtle)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>{APP_LABEL[s] || s}</span>
+                            ))}
+                          </span>}
                     </td>
                     <td style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>{new Date(u.created_at).toLocaleDateString()}</td>
                     <td>
