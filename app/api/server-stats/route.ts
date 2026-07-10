@@ -3,8 +3,13 @@ import os from 'os'
 import path from 'path'
 import { promises as fs } from 'fs'
 import { execSync } from 'child_process'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 
-// Public server-metrics endpoint (no auth) — mirrors /api/health's openness.
+// Authenticated server-metrics endpoint. Exposes live OS-level telemetry
+// (disk/CPU/mem/uptime/hostname) — session-gated like every other non-health
+// endpoint. Its only consumer is the launcher page, which is itself
+// session-gated, so this requires no new client changes.
 // Runs on Node (needs child_process + os); never prerender/cache.
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -116,6 +121,8 @@ async function diskForecastDays(usedBytes: number, freeBytes: number): Promise<n
 }
 
 export async function GET() {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   try {
     const disk = readDisk()
     const cpu = await cpuPercent()

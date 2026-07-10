@@ -85,6 +85,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.2': [
+    'Security fix: site_admin users could read any other site\'s device inventory and any circuit\'s cost/subnet/contract details by guessing IDs (GET /api/sites/:id and /api/circuits/:id never applied the same site-scoping their list-view siblings already enforce). Fixed to match.',
+    'The unauthenticated /api/server-stats endpoint (disk/CPU/memory/uptime, no secrets but more infra detail than a health check) now requires a signed-in session like the rest of the API.',
+  ],
   '1.23.1': [
     'Fixed: the per-user "App access" control (added in 1.23.0) was not appearing on the Settings → Users form, because it was added to a different user-management screen. The app-access checkboxes and an "App access" column now show on Settings → Users where users are actually managed.',
   ],

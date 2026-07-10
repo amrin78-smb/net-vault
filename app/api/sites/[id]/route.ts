@@ -7,38 +7,42 @@ import { checkWriteAllowed } from '@/app/api/license/route'
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = session.user as { role: string; siteIds?: number[] }
   const { id } = await params
 
-  const [siteRes, devicesRes] = await Promise.all([
-    query(`
-      SELECT s.id, s.name as site, s.code, s.site_status,
-             s.city, s.address, s.coordinates, s.postal_code,
-             s.site_type, s.phone, s.contact_name, s.contact_email,
-             c.name as country, c.iso_code, r.name as region
-      FROM sites s
-      JOIN countries c ON c.id = s.country_id
-      JOIN regions r ON r.id = c.region_id
-      WHERE s.id = $1
-    `, [id]),
-    query(`
-      SELECT
-        d.id, d.name, d.model, d.serial_number,
-        d.ip_address, d.device_status, d.lifecycle_status,
-        d.location_detail, d.risk_score,
-        dt.name as device_type,
-        b.name as brand,
-        s.name as site,
-        s.id as site_id
-      FROM devices d
-      LEFT JOIN device_types dt ON dt.id = d.device_type_id
-      LEFT JOIN brands b ON b.id = d.brand_id
-      LEFT JOIN sites s ON s.id = d.site_id
-      WHERE d.site_id = $1
-      ORDER BY dt.name, d.name
-    `, [id]),
-  ])
+  const siteRes = await query(`
+    SELECT s.id, s.name as site, s.code, s.site_status,
+           s.city, s.address, s.coordinates, s.postal_code,
+           s.site_type, s.phone, s.contact_name, s.contact_email,
+           c.name as country, c.iso_code, r.name as region
+    FROM sites s
+    JOIN countries c ON c.id = s.country_id
+    JOIN regions r ON r.id = c.region_id
+    WHERE s.id = $1
+  `, [id])
 
   if (!siteRes.rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (user.role === 'site_admin' && !user.siteIds?.includes(siteRes.rows[0].id)) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
+
+  const devicesRes = await query(`
+    SELECT
+      d.id, d.name, d.model, d.serial_number,
+      d.ip_address, d.device_status, d.lifecycle_status,
+      d.location_detail, d.risk_score,
+      dt.name as device_type,
+      b.name as brand,
+      s.name as site,
+      s.id as site_id
+    FROM devices d
+    LEFT JOIN device_types dt ON dt.id = d.device_type_id
+    LEFT JOIN brands b ON b.id = d.brand_id
+    LEFT JOIN sites s ON s.id = d.site_id
+    WHERE d.site_id = $1
+    ORDER BY dt.name, d.name
+  `, [id])
+
   return NextResponse.json({ site: siteRes.rows[0], devices: devicesRes.rows })
 }
 
