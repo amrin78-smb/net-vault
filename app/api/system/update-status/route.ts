@@ -85,6 +85,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.3': [
+    'Security fix: a device\'s audit history (GET /api/audit/device/:id) had the same missing site-scoping the 1.23.2 fix closed on sites/circuits — any authenticated user, including a site_admin outside that device\'s site, could read its full change history (cost, contract, serial, IP). Now scoped the same way.',
+    'Hardening: a database error while checking a user\'s per-app access previously granted that request access to every app rather than denying it. A transient DB error now fails closed instead of open.',
+  ],
   '1.23.2': [
     'Security fix: site_admin users could read any other site\'s device inventory and any circuit\'s cost/subnet/contract details by guessing IDs (GET /api/sites/:id and /api/circuits/:id never applied the same site-scoping their list-view siblings already enforce). Fixed to match.',
     'The unauthenticated /api/server-stats endpoint (disk/CPU/memory/uptime, no secrets but more infra detail than a health check) now requires a signed-in session like the rest of the API.',

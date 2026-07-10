@@ -7,8 +7,8 @@ export const ALL_APPS = ['netvault', 'logvault', 'ddivault', 'spanvault'] as con
  * - super_admin  → always all apps
  * - no user_apps rows → all apps (legacy / default-all)
  * - otherwise → the explicit set stored in user_apps
- * Fails OPEN on any DB error (returns all apps) so a transient error
- * never locks a user out.
+ * Fails CLOSED on any DB error (returns no extra apps) so a transient
+ * error never grants access an explicit deny would have blocked.
  */
 export async function getUserApps(userId: string | number, role: string): Promise<string[]> {
   if (role === 'super_admin') return [...ALL_APPS]
@@ -18,8 +18,8 @@ export async function getUserApps(userId: string | number, role: string): Promis
     if (res.rows.length === 0) return [...ALL_APPS]
     return res.rows.map((r: any) => r.app)
   } catch {
-    // Fail open — never lock someone out on a transient DB error.
-    return [...ALL_APPS]
+    // Fail closed — a DB error must not silently grant every app.
+    return []
   }
 }
 
