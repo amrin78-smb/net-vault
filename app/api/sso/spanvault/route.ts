@@ -5,20 +5,16 @@ import { resolveOrigin, SIBLING_PORTS } from '@/lib/publicUrl'
 import jwt from 'jsonwebtoken'
 
 export async function GET(req: NextRequest) {
-  console.log('[SSO DDIVault] Request received')
-
   const ownOrigin = resolveOrigin(req, null, process.env.NEXTAUTH_URL || 'http://localhost:3000')
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET })
 
   if (!token) {
-    console.log('[SSO DDIVault] No token - redirecting to login')
-    return NextResponse.redirect(`${ownOrigin}/login?callbackUrl=%2Fapi%2Fsso%2Fddivault`)
+    return NextResponse.redirect(`${ownOrigin}/login?callbackUrl=%2Fapi%2Fsso%2Fspanvault`)
   }
 
   const apps = await getUserApps(token.id as string | number, token.role as string)
-  if (!canAccessApp(apps, 'ddivault')) {
-    console.log('[SSO DDIVault] Access denied for:', token.email)
-    return NextResponse.redirect(`${ownOrigin}/launcher?denied=ddivault`)
+  if (!canAccessApp(apps, 'spanvault')) {
+    return NextResponse.redirect(`${ownOrigin}/launcher?denied=spanvault`)
   }
 
   const ssoToken = jwt.sign(
@@ -27,18 +23,17 @@ export async function GET(req: NextRequest) {
       email: token.email,
       role: token.role,
       name: token.name,
-      app: 'ddivault',
+      app: 'spanvault',
       apps,
     },
     process.env.NEXTAUTH_SECRET!,
     { expiresIn: '2m' }
   )
 
-  console.log('[SSO DDIVault] Generated token for:', token.email, '- redirecting to DDIVault')
-  const ddiUrl = resolveOrigin(
+  const svUrl = resolveOrigin(
     req,
-    SIBLING_PORTS.ddivault,
-    (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(':3000', ':3006')
+    SIBLING_PORTS.spanvault,
+    (process.env.NEXTAUTH_URL || 'http://localhost:3000').replace(':3000', ':3008')
   )
-  return NextResponse.redirect(`${ddiUrl}/sso?token=${ssoToken}`)
+  return NextResponse.redirect(`${svUrl}/sso?token=${ssoToken}`)
 }

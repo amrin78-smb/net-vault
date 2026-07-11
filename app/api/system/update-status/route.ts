@@ -85,6 +85,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.5': [
+    'Fixed: launcher tiles for LogVault and DDIVault always redirected to the server\'s original install-time IP address, no matter what hostname you actually used to reach NetVault (e.g. a local DNS name your IT team assigned). If that IP wasn\'t reachable from wherever you were browsing, the app would fail to load even though the launcher itself worked fine. Cross-app links now follow whatever hostname you\'re actually using.',
+    'Added a proper single sign-on handoff for SpanVault (previously it used a different, less consistent mechanism) — same fix applies to it too.',
+  ],
   '1.23.4': [
     'Fixed a fresh-install crash on a truly clean Windows machine (no Node.js or Git pre-installed): the installer\'s "already installed?" check for both tools threw a fatal "term not recognized" error instead of detecting they were missing and installing them. Affects only brand-new machines - any box that already had Node.js or Git was unaffected. Also hardened the equivalent check in the uninstaller.',
   ],

@@ -316,10 +316,6 @@ function LauncherInner() {
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
 
-  const spanvaultUrl = typeof window !== 'undefined'
-    ? `http://${window.location.hostname}:3008`
-    : 'http://localhost:3008'
-
   const healthFor = (app: string): HealthStatus =>
     (health?.find(h => h.app === app)?.status) ?? 'Unavailable'
 
@@ -399,7 +395,7 @@ function LauncherInner() {
     {
       name: 'SpanVault', slug: 'spanvault', subtitle: 'Network Monitoring',
       description: 'Device monitoring, availability and performance alerting.',
-      href: spanvaultUrl, color: '#16a34a', logo: '/spanvault-logo.svg',
+      href: '/api/sso/spanvault', color: '#16a34a', logo: '/spanvault-logo.svg',
       metrics: [
         { icon: 'monitor', value: statsLoading ? '' : num(sv?.monitored_devices), label: 'Monitored Devices' },
         { icon: 'availability', value: statsLoading ? '' : (sv?.availability != null ? `${num(sv?.availability)}%` : '—'), label: 'Availability' },
