@@ -341,3 +341,62 @@ aliases with the current normalizer and collapses merged duplicates before apply
 
 Bundled feed **public key** (Ed25519 spki DER b64) in `lib/eolFeed.ts`:
 `MCowBQYDK2VwAyEAI+nk9JoWunzPTASALa5PLWwcLe9NNWRrZ72tMY8ZU2k=`.
+
+---
+
+## Cross-app URL resolution (SSO handoff + launcher links, added 2026-07)
+
+**The bug this fixed:** the hub→sibling SSO handoff routes
+(`app/api/sso/{logvault,ddivault}/route.ts`) used to build the sibling's URL by
+string-replacing a port onto NetVault's own `NEXTAUTH_URL` — an env var baked
+to the install-time server IP and never updated. So no matter what hostname a
+user actually reached NetVault through (a customer's own local-DNS name, for
+instance), the redirect always pointed at the original install IP, which may
+not be reachable from wherever the browser is. SpanVault had no
+netvault-issued SSO route at all — its launcher tile was a raw client-side
+link built from `window.location.hostname`.
+
+**The fix — `lib/publicUrl.ts`** exports `resolveOrigin(req, port,
+legacyFallback)`: derives the target origin from the CURRENT request's
+`x-forwarded-host`/`host` + `x-forwarded-proto` (preferring the forwarded
+headers so this also works behind a reverse proxy/tunnel, where the app
+itself only sees the proxy's own local host/scheme), validated against a
+hostname-shape regex before use, falling back to today's exact
+`NEXTAUTH_URL`-based behavior if the request carries no usable Host — a no-op
+for any install that never hits that edge case. `SIBLING_PORTS` maps each
+sibling's fixed port (logvault 3004 / ddivault 3006 / spanvault 3008).
+
+- `app/api/sso/logvault/route.ts` / `.../ddivault/route.ts` — both the
+  self-redirects (no-session → login, denied → launcher) and the sibling
+  redirect now call this resolver instead of the old port-replace hack.
+- **`app/api/sso/spanvault/route.ts`** is NEW — SpanVault never had a proper
+  signed handoff before; this mirrors the ddivault route (`getToken`-based)
+  exactly. Verified compatible with SpanVault's existing `authorize()` with
+  zero SpanVault-side changes to the JWT claim shape.
+- `app/(auth)/launcher/page.tsx` — the SpanVault tile now links to
+  `/api/sso/spanvault` (relative, server-handled) instead of the old raw
+  client-side `window.location.hostname:3008` link.
+- Every sibling app (logvault/ddivault/spanvault) has its OWN local copy of
+  the identical `resolveOrigin` pattern for the reverse direction (sibling →
+  hub redirects) — see each app's own CLAUDE.md. **This is intentionally
+  duplicated per-repo, not a shared package** — these are small, independent
+  apps with no shared-code mechanism today.
+
+**Deliberately NOT built:** a database-backed, admin-editable "Suite URLs"
+Settings page. Considered and rejected — the request-derived resolver already
+gives zero-config behavior for the common case (one hostname, different port
+per app — covers local-DNS and direct-IP access), and the only case that
+needs anything else (a genuinely different hostname per app, e.g. a
+Cloudflare Tunnel with per-app subdomains) has no way to be inferred from a
+single request no matter what UI sits in front of it — that case is out of
+scope for now (see chat history 2026-07-11/12 if revisited).
+
+**A real regression this surfaced (fixed 2026-07-12, spanvault 1.71.3→1.71.4):**
+porting a "proxy this call server-side to avoid CORS" fix from DDIVault to
+SpanVault broke SpanVault's login, because the two apps proxy `/api/*`
+completely differently (DDIVault: `next.config.js` rewrite allow-list, so an
+unlisted route like `/api/sso` is handled by Next.js directly; SpanVault:
+`middleware.ts` proxies EVERY `/api/*` to Express by default, so a Next.js
+route under `frontend/src/app/api/**` is dead code there). See
+[[spanvault-api-proxy-architecture]] in memory, and SpanVault's own CLAUDE.md,
+before assuming a fix that works in one sibling app will work in another.
