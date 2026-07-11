@@ -177,11 +177,12 @@ across the NocVault suite.
 
 Styling is a custom CSS design system in `app/globals.css` (CSS custom properties in
 `:root` + theme) plus inline `style={{ ... }}` on components — NOT Tailwind. Inter is the
-body font (loaded via `next/font` in `app/layout.tsx`). `--radius: 8px` / `--radius-sm: 6px`.
+body font (loaded via a CSS `@import` in `app/globals.css`, NOT `next/font/google` — see
+"Installer parity" above for why). `--radius: 8px` / `--radius-sm: 6px`.
 
 ### Typography & design tokens (suite standard)
 
-- **Body font:** Inter (via `next/font`).
+- **Body font:** Inter (via the `@import` in `app/globals.css`, not `next/font`).
 - **Monospace:** `var(--font-mono)` = `'JetBrains Mono', 'Fira Code', 'Consolas', 'Courier New', monospace`. One mono stack everywhere — never hardcode a mono font-family.
 
 **7-step type scale** (defined once in `:root`; sizes do NOT change per theme):
@@ -252,7 +253,7 @@ Use it to:
 - Verify data exists before writing display code
 - Diagnose query performance issues
 - Confirm migrations worked correctly
-- Inspect app_settings, known_hosts, alert_rules, etc.
+- Inspect app_settings, devices, circuits, eol_seed, etc.
 
 The password is **never** stored in this repo — it lives in Claude Code's project
 memory and is provided at the start of each session. Never log it or commit it to
@@ -312,8 +313,10 @@ onto `devices` (status-change recommendations are **never** auto-applied — hum
 The seed catalog is fed two ways:
 1. **Bundled baseline** — `lib/eolSeed.ts` (`EOL_SEED`), migrated into `eol_seed` by
    `migrateLegacySeed` in `lib/eolEnrich.ts`. This is the **offline floor**: a fresh /
-   air-gapped install works with NO internet. (Currently ~67 families — smaller than the
-   central feed; see KIV in [[nocvault-eol-central-feed]] about refreshing it at build time.)
+   air-gapped install works with NO internet. (949 vendor-confirmed models as of 1.16.0,
+   up from an original 32 — see commit `1d24806`. `lib/eolSeed.ts` is a GENERATED file;
+   regenerate it from the central nocvault-eol seed with `node scripts/gen-eol-seed.cjs`
+   rather than hand-editing.)
 2. **Central signed feed** (live updates) — the **"Sync from EOL feed"** button on the
    EOL Intelligence page → `POST /api/admin/eol-seed/sync` (super_admin) → `lib/eolFeed.ts`
    `syncFromFeed()`. It fetches `${NOCVAULT_EOL_FEED_URL || 'https://nocvault-eol.netlify.app'}/api/v1/feed`
