@@ -137,6 +137,18 @@ a 1.5s per-app timeout + ~20s in-memory cache. The license check was a secondary
 (`getServerId()` ran a synchronous `execSync` reg-query every call) and is now memoized in
 `lib/license.ts`. The license-aware launcher tiles add no network cost (client-side only).
 
+**Server-side cross-app fetches must use `127.0.0.1`, never `localhost`
+(fixed 1.23.6; the installer health checks already use 127.0.0.1 for the same
+reason).** On Windows `localhost` resolves to `::1` (IPv6) first; the suite apps
+listen on IPv4 only, so every probe stalls ~1s on the dead `::1` connect before
+falling back — enough to trip tight timeouts intermittently (the launcher's Suite
+Health / stat tiles showed "Unavailable" until refresh; LogVault's heavy
+`/api/stats` was the usual casualty). The suite health + stats aggregators
+(`app/api/suite/{health,stats}`) now hardcode `127.0.0.1` defaults and use a
+3000ms per-probe timeout (was 1500). Applies to ANY new server-side fetch of a
+sibling app or local service — use `127.0.0.1`. Env overrides
+(`*_HEALTH_URL`/`*_STATS_URL`) still win for proxied deployments.
+
 ---
 
 ## Versioning Policy
@@ -347,6 +359,23 @@ Bundled feed **public key** (Ed25519 spki DER b64) in `lib/eolFeed.ts`:
 
 ---
 
+## Auth: by-id detail routes must reuse the list route's site-scoping
+
+A `site_admin` is scoped to assigned sites. **Every `GET /api/<thing>/:id`
+detail route must apply the SAME site-scoping its list sibling already does** —
+this was missed on three routes in one week (`sites/:id`, `circuits/:id`,
+`audit/device/:id`, fixed 1.23.2–1.23.3), letting a site_admin read
+out-of-site records (device inventory, circuit cost/subnet/contract, full audit
+history) by walking small integer IDs.
+
+- Reference implementation: `app/api/devices/[id]/route.ts` — copy its scoping.
+- **Return 404, not 403, outside scope** — a 403 confirms the row exists and
+  lets scope be probed; 404 doesn't.
+- When you add any by-id read route, check its scoping against the list route in
+  the same review; don't assume auth middleware alone covers row-level access.
+
+---
+
 ## Cross-app URL resolution (SSO handoff + launcher links, added 2026-07)
 
 **The bug this fixed:** the hub→sibling SSO handoff routes
@@ -368,6 +397,14 @@ hostname-shape regex before use, falling back to today's exact
 `NEXTAUTH_URL`-based behavior if the request carries no usable Host — a no-op
 for any install that never hits that edge case. `SIBLING_PORTS` maps each
 sibling's fixed port (logvault 3004 / ddivault 3006 / spanvault 3008).
+
+- **Known hardening gap (KIV `TRUST_PROXY_HEADERS`):** `x-forwarded-host` is
+  trusted after only a **shape check** (`HOSTNAME_RE`), not an identity/allowlist
+  check — a client that reaches the app directly could spoof the Host and steer a
+  redirect target. Acceptable today (LAN / direct-IP, no proxy in front), but
+  note the SSO handoff routes put a short-lived signed token in the redirect URL
+  — gate forwarded-header trust behind an explicit `TRUST_PROXY_HEADERS`
+  allowlist before relying on it, especially for those token-bearing redirects.
 
 - `app/api/sso/logvault/route.ts` / `.../ddivault/route.ts` — both the
   self-redirects (no-session → login, denied → launcher) and the sibling
@@ -403,3 +440,43 @@ unlisted route like `/api/sso` is handled by Next.js directly; SpanVault:
 route under `frontend/src/app/api/**` is dead code there). See
 [[spanvault-api-proxy-architecture]] in memory, and SpanVault's own CLAUDE.md,
 before assuming a fix that works in one sibling app will work in another.
+
+---
+
+## Per-user app access (NetVault OWNS this — added 1.23.0)
+
+NetVault is the hub and the source of truth for which of the 4 suite apps a
+user may reach. `lib/appAccess.ts`:
+
+- `ALL_APPS = ['netvault','logvault','ddivault','spanvault']`.
+- `getUserApps(userId, role)` resolves the allowed set:
+  - `super_admin` → **all** apps.
+  - **no `user_apps` rows** → all apps (legacy / default-all; deploying the
+    feature must not lock anyone out).
+  - otherwise → the explicit set stored in `user_apps(user_id, app)`.
+  - **DB error → FAIL CLOSED** (returns `[]`, was fail-open until 1.23.3). A
+    transient error must never silently grant an app an explicit deny would
+    have blocked. Note the asymmetry: because `[]` means "no extra apps" but
+    *no rows* means "all apps", a closed failure can only be expressed as the
+    empty set — never conflate "no rows" with "query failed".
+- `canAccessApp(apps, slug)` → **netvault is always allowed**; any other slug
+  must be in the set.
+
+Enforcement is in **two** places and both must carry the apps:
+- **NextAuth** injects `session.user.apps` (jwt + session callbacks) at login.
+- Each **SSO handoff route** (`app/api/sso/{logvault,ddivault,spanvault}`)
+  re-resolves apps live and either **blocks** (redirect `/launcher?denied=<slug>`)
+  or stamps `apps[]` into the signed SSO token, so satellites can enforce in
+  their own middleware (satellite-side gating is Phase 2-4).
+
+Schema/UI lives in the installer path: `user_apps` table in `schema.sql`
+(auto-provisioned on fresh install), checkboxes + "App access" column in the
+user form (see the next note for *which* file).
+
+**User management renders in `app/(app)/settings/page.tsx` (Settings → Users
+tab) — NOT `app/(app)/users/page.tsx`.** The `users/page.tsx` route exists and
+is reachable by URL but is NOT in the sidebar nav (`app/(app)/layout.tsx` lists
+`/settings`, not `/users`), so anything added there never appears. 1.23.0 put
+the app-access checkboxes in `users/page.tsx` and they were invisible until
+1.23.1 ported them into `settings/page.tsx`. Edit the settings file for any
+user-form or user-list change.
