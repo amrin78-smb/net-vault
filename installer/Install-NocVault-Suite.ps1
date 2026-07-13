@@ -472,14 +472,14 @@ Write-OK "Firewall rule added: port 3000"
 
 # Daily fleet health-snapshot job (feeds health_score_history trend).
 # Posts to NetVault with the shared CRON_SECRET as a Bearer token.
-$nvSnapAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
+$nvSnapAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
 $nvSnapTrigger = New-ScheduledTaskTrigger -Daily -At "00:00"
 Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $nvSnapAction -Trigger $nvSnapTrigger -RunLevel Highest -Force | Out-Null
 Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
 
 # Daily EOL/EOS enrichment (matches devices against eol_seed, writes EOL/EOS dates;
 # status-change recommendations stay human-gated). Mirrors Update-NetVault.ps1.
-$nvEolAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
+$nvEolAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
 $nvEolTrigger = New-ScheduledTaskTrigger -Daily -At "01:00"
 Register-ScheduledTask -TaskName "NetVault-EnrichEol" -Action $nvEolAction -Trigger $nvEolTrigger -RunLevel Highest -Force | Out-Null
 Write-OK "Scheduled task 'NetVault-EnrichEol' registered (daily 01:00)"
@@ -487,7 +487,7 @@ Write-OK "Scheduled task 'NetVault-EnrichEol' registered (daily 01:00)"
 # Weekly EOL feed sync (pulls the central signed seed into eol_seed; runs just ahead
 # of Sunday's 01:00 enrichment so it applies the fresh seed; soft-skips when the
 # feed is unreachable so offline/air-gapped installs keep the bundled seed floor).
-$nvSyncAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
+$nvSyncAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
 $nvSyncTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "00:15"
 Register-ScheduledTask -TaskName "NetVault-SyncEol" -Action $nvSyncAction -Trigger $nvSyncTrigger -RunLevel Highest -Force | Out-Null
 Write-OK "Scheduled task 'NetVault-SyncEol' registered (weekly Sun 00:15)"
@@ -896,7 +896,7 @@ Write-OK "NetVault started"
 
 # Baseline health snapshot so the trend chart has a starting data point.
 try {
-    & curl.exe -s -X POST "http://localhost:3000/api/system/health-snapshot" -H "Authorization: Bearer $CronSecret" | Out-Null
+    & curl.exe -s -X POST "http://127.0.0.1:3000/api/system/health-snapshot" -H "Authorization: Bearer $CronSecret" | Out-Null
     Write-OK "Baseline health snapshot recorded"
 } catch {
     Write-Warn "Baseline snapshot call failed (scheduler will take it at 00:00)"

@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.7': [
+    'Fixed 5 more spots (in the installer/updater scripts, not the app itself) still using "localhost" for the same server-to-server health-check/EOL calls fixed for the launcher in 1.23.6 — the daily health-snapshot, daily EOL-enrichment, and weekly EOL-sync scheduled tasks, plus the one-time baseline snapshot taken right after install/update. On Windows these could occasionally stall against the app\'s IPv4-only listener the same way the launcher tiles did. Now consistently 127.0.0.1. No effect on any already-running install; only affects new installs/updates going forward.',
+  ],
   '1.23.6': [
     'Fixed the launcher\'s Suite Health Overview and per-app stat tiles intermittently showing "Unavailable" or blank dashes (especially LogVault) and only filling in after a manual refresh. The server-side probes to the other apps used "localhost", which on Windows tries IPv6 (::1) first and stalls ~1 second against the IPv4-only apps — often long enough to trip the timeout. They now use 127.0.0.1 (same fix already applied to the installer health checks) and have a more forgiving 3-second timeout, so all four apps report reliably on first load.',
   ],

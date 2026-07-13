@@ -362,7 +362,7 @@ try {
 
     Write-Step "Registering daily EOL enrichment task"
     if ($CronSecret) {
-        $eolAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
+        $eolAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
         $eolTrigger = New-ScheduledTaskTrigger -Daily -At "01:00"
         Register-ScheduledTask -TaskName "NetVault-EnrichEol" -Action $eolAction -Trigger $eolTrigger -RunLevel Highest -Force | Out-Null
         Write-OK "Scheduled task 'NetVault-EnrichEol' registered (daily 01:00)"
@@ -376,7 +376,7 @@ try {
 
     Write-Step "Registering weekly EOL feed-sync task"
     if ($CronSecret) {
-        $syncAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:3000/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
+        $syncAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
         # Weekly, Sunday 00:15 - just ahead of the daily 01:00 enrichment, so Sunday's
         # enrichment applies the freshly-pulled seed. The endpoint writes ONLY eol_seed
         # (verifies the feed signature first); offline/air-gapped installs no-op safely

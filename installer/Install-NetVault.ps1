@@ -352,7 +352,7 @@ if ($svc -and $svc.Status -eq 'Running') {
 
 # ── Daily health-snapshot scheduled task + baseline ───────────
 Write-Step "Registering daily health-snapshot task"
-$action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://localhost:$AppPort/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
+$action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$AppPort/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
 $trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
 Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
 Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
@@ -360,7 +360,7 @@ Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
 Write-Step "Taking baseline health snapshot"
 try {
     Start-Sleep -Seconds 3
-    & curl.exe -s -X POST "http://localhost:$AppPort/api/system/health-snapshot" -H "Authorization: Bearer $CronSecret" | Out-Null
+    & curl.exe -s -X POST "http://127.0.0.1:$AppPort/api/system/health-snapshot" -H "Authorization: Bearer $CronSecret" | Out-Null
     Write-OK "Baseline health snapshot recorded"
 } catch { Write-Warn "Baseline snapshot call failed (will be taken by the scheduler tonight)" }
 
