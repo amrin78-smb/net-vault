@@ -63,6 +63,18 @@ when editing an installer script.
   build time and failed the whole install on restricted/offline networks — Inter now loads
   via the `@import` in `globals.css` (fixed 1.20.4). Don't reintroduce `next/font/google`.
 
+**Known gotcha — "is tool X installed?" checks must use try/catch, not bare `2>$null`.**
+`Install-NocVault-Suite.ps1`/`Uninstall-NocVault-Suite.ps1` check for Node/Git with
+`try { & node --version 2>$null } catch { $null }` (see the comments right above those
+lines). This is NOT redundant belt-and-suspenders — on a machine where the tool is
+genuinely absent, `& node ...` throws a terminating PowerShell "the term 'node' is not
+recognized" error, because `2>$null` only redirects a native command's OWN stderr stream;
+there is no process to redirect from when PowerShell's own command-resolution fails first.
+Without the `try/catch`, this crashes a fresh install stone dead on a truly clean machine —
+and any box that already had Node/Git installed never hits the crash path, which is why it
+can ship unnoticed for a while. Any future PowerShell "is tool X installed" check that
+invokes the tool directly via `&` must be wrapped in `try/catch`, never bare `2>$null`.
+
 **Distribution.** The `.exe`s are **gitignored build artifacts** (`installer/*.exe`) — built
 on the dev PC with `Build-Setup-Exe.ps1`. To update a target machine, either rebuild there
 (ps2exe installs on first run) or ship the packaged `NocVault-Suite-Installer-latest.zip`
@@ -167,6 +179,16 @@ Rules:
 - NocVault suite itself has no version number — only the 4 apps
 - When bumping version, also update the releaseNotes object in the update status API with 3-5 bullets describing what changed. No CHANGELOG.md — release notes live in the update status API only.
 
+**Exception — pure documentation changes need no version bump.** A CLAUDE.md-only edit,
+or a source change that touches ONLY a code comment with no logic change, does not bump
+`package.json`. Reasoning: the version exists to tell an admin "did the running app's
+behavior change" (surfaced via `/api/health` and the update-status release notes) — bumping
+it for a doc/comment-only edit would falsely claim a functional change occurred. Everything
+else — any change to actual runtime behavior, however small (a hardcoded IP, a copy tweak,
+a one-line config fix) — still requires a bump per the rules above. If a commit mixes a
+real code change with doc updates, it still needs the bump (the exception is only for
+commits that touch nothing but docs/comments).
+
 ---
 
 ## UI design
@@ -212,6 +234,50 @@ sizes, the Rubik logo, and hero styling as-is.
 
 This is the **NocVault SUITE-WIDE standard** — the same scale and rule apply to spanvault,
 ddivault, and logvault. SpanVault is the reference implementation; copy this pattern exactly.
+
+---
+
+## Access control (RBAC, site-scoping, app-access) — read before touching any guard
+
+**A fixed access-control bug is a fixed INSTANCE, not a fixed CLASS — audit siblings.**
+The `site_admin`-can-only-see-their-own-sites check (`user.siteIds?.includes(...)` →
+404 if not) was added to `app/api/sites/[id]/route.ts` and `app/api/circuits/[id]/route.ts`,
+but the identical missing check sat untouched on the sibling `app/api/audit/device/[id]/route.ts`
+until a separate audit caught it later (fixed together in 1.23.3). All three now carry the
+same guard shape — compare them if you need the pattern. The rule: when you add a
+site-scope/role/ownership check to one route, grep for every OTHER route touching the same
+resource type (or a resource that hangs off the same site_id-bearing entity) and confirm
+they ALL have the equivalent guard. Closing one instance of a bug class is not the same as
+closing the class — don't stop at the route that was reported.
+
+**A new access-control gate must cover BOTH the page-navigation path AND the API path, in
+the same change.** The per-user app-access feature (`lib/appAccess.ts` — `getUserApps()` /
+`canAccessApp()`) governs which of the 4 suite apps a user may reach; the launcher page
+(`app/(auth)/launcher/page.tsx`) filters which tiles render using `session.user.apps`, but
+that's cosmetic — the actual enforcement for reaching a sibling app happens in the SSO
+handoff routes (`app/api/sso/{logvault,ddivault,spanvault}/route.ts`), which call
+`getUserApps()` + `canAccessApp()` before minting the cross-app JWT. Early versions of this
+feature only gated the UI; a denied user's still-valid session could hit the SSO route (or
+any other API) directly and get through. Now fixed — all three SSO routes check
+`canAccessApp` before issuing a token (1.23.3). The general rule for ANY future gate (role,
+site-scope, app-access, license-state, etc.): a page redirect is not a security boundary by
+itself — verify the check also runs on every API route/proxy path reachable with the same
+session, not just the page that renders the denial.
+
+**NetVault's own API gating is per-route, not centralized — there is no `middleware.ts`
+here.** Unlike SpanVault (whose `middleware.ts` proxies every `/api/*` request to Express),
+NetVault has no global request gate; each route does its own `getServerSession` check, its
+own inline role check where needed (e.g. the admin/super_admin split in
+`app/api/settings/route.ts`), and — on routes that write data while the license is
+unlicensed/expired — an explicit `checkWriteAllowed()` call (`app/api/license/route.ts`;
+`sites/[id]` and `circuits/[id]`'s PUT/DELETE both call it). If you add a new intentionally
+public route (must work without a session, like the SSO handoffs above), there's only this
+one layer to reason about here — just don't skip a `checkWriteAllowed()` a sibling write
+route relies on if you're refactoring near one. This is simpler than SpanVault/DDIVault,
+where an unlisted route can silently fall through a proxy allow-list — see each app's own
+CLAUDE.md for their gate structure before assuming NetVault's shape applies there.
+
+---
 
 ## Database Access (Read-Only Diagnostics)
 
