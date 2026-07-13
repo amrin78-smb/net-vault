@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.6': [
+    'Fixed the launcher\'s Suite Health Overview and per-app stat tiles intermittently showing "Unavailable" or blank dashes (especially LogVault) and only filling in after a manual refresh. The server-side probes to the other apps used "localhost", which on Windows tries IPv6 (::1) first and stalls ~1 second against the IPv4-only apps — often long enough to trip the timeout. They now use 127.0.0.1 (same fix already applied to the installer health checks) and have a more forgiving 3-second timeout, so all four apps report reliably on first load.',
+  ],
   '1.23.5': [
     'Fixed: launcher tiles for LogVault and DDIVault always redirected to the server\'s original install-time IP address, no matter what hostname you actually used to reach NetVault (e.g. a local DNS name your IT team assigned). If that IP wasn\'t reachable from wherever you were browsing, the app would fail to load even though the launcher itself worked fine. Cross-app links now follow whatever hostname you\'re actually using.',
     'Added a proper single sign-on handoff for SpanVault (previously it used a different, less consistent mechanism) — same fix applies to it too.',

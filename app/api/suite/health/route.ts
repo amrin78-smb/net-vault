@@ -5,11 +5,16 @@ import { NextResponse } from 'next/server'
 
 type AppStatus = 'Healthy' | 'Warning' | 'Unavailable'
 
+// Use 127.0.0.1, NOT localhost: on Windows `localhost` resolves to ::1 (IPv6)
+// first, and the sibling apps listen on IPv4 — so each probe stalls ~1s on the
+// dead ::1 connect before falling back, intermittently blowing the timeout and
+// showing "Unavailable" until a refresh. (Same IPv6-stall fix already applied to
+// the installer health checks.) Env overrides still win for proxied deployments.
 const APPS: { app: string; url: string }[] = [
-  { app: 'NetVault', url: process.env.NETVAULT_HEALTH_URL || 'http://localhost:3000/api/health' },
-  { app: 'LogVault', url: process.env.LOGVAULT_HEALTH_URL || 'http://localhost:3004/api/health' },
-  { app: 'DDIVault', url: process.env.DDIVAULT_HEALTH_URL || 'http://localhost:3006/api/health' },
-  { app: 'SpanVault', url: process.env.SPANVAULT_HEALTH_URL || 'http://localhost:3008/api/health' },
+  { app: 'NetVault', url: process.env.NETVAULT_HEALTH_URL || 'http://127.0.0.1:3000/api/health' },
+  { app: 'LogVault', url: process.env.LOGVAULT_HEALTH_URL || 'http://127.0.0.1:3004/api/health' },
+  { app: 'DDIVault', url: process.env.DDIVAULT_HEALTH_URL || 'http://127.0.0.1:3006/api/health' },
+  { app: 'SpanVault', url: process.env.SPANVAULT_HEALTH_URL || 'http://127.0.0.1:3008/api/health' },
 ]
 
 type HealthResult = { app: string; status: AppStatus }
@@ -20,7 +25,7 @@ const TTL_MS = 20000
 
 async function checkOne(url: string): Promise<AppStatus> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 1500)
+  const timer = setTimeout(() => controller.abort(), 3000)
   try {
     const res = await fetch(url, { signal: controller.signal, cache: 'no-store' })
     if (!res.ok) return 'Warning'
