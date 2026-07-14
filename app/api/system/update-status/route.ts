@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.8': [
+    'Standardized the updater script (installer/Update-NetVault.ps1) to self-locate its app folder from the script\'s own location, instead of trusting the -InstallDir parameter to match. LogVault and DDIVault already worked this way; NetVault and SpanVault (fixed alongside this) instead derived the app folder from -InstallDir\'s default value, which only happened to work because it matched the current install layout. All four update scripts can now be run with no parameters at all, from any correctly-placed copy of the script, regardless of what folder name or casing was used to get there.',
+  ],
   '1.23.7': [
     'Fixed 5 more spots (in the installer/updater scripts, not the app itself) still using "localhost" for the same server-to-server health-check/EOL calls fixed for the launcher in 1.23.6 — the daily health-snapshot, daily EOL-enrichment, and weekly EOL-sync scheduled tasks, plus the one-time baseline snapshot taken right after install/update. On Windows these could occasionally stall against the app\'s IPv4-only listener the same way the launcher tiles did. Now consistently 127.0.0.1. No effect on any already-running install; only affects new installs/updates going forward.',
   ],

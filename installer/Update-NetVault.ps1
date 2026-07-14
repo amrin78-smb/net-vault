@@ -45,10 +45,17 @@ function Get-TrueCasePath([string]$p) {
         return $root + ($parts -join '\')
     } catch { return $p }
 }
-$AppDir  = "$InstallDir\app"
+# Self-locate the app root. This script lives at <appRoot>\installer\Update-NetVault.ps1,
+# so the real app root is the PARENT of the script's own folder. This is correct on BOTH
+# the suite install (C:\Apps\NetVault\app) and a standalone install (C:\Apps\netvault),
+# regardless of what -InstallDir is (or isn't) passed. The -InstallDir param is kept for
+# backward-compat but NO LONGER drives any path - self-location always wins, so the updater
+# can never Set-Location to a non-repo parent dir and leave services down. (Mirrors
+# LogVault/DDIVault's fix for this exact class of bug — see their installer/Update-*.ps1.)
+$AppDir  = Split-Path -Parent $PSScriptRoot
 # Normalize the build directory to its true on-disk casing. `next build` caches absolute
 # module paths in .next; if a later run's cwd casing differs (e.g. C:\Apps\NetVault vs
-# ...\netvault, depending on how -InstallDir / the invocation path was typed), webpack
+# ...\netvault, depending on how the invocation path was typed), webpack
 # treats the two casings as different modules and loads React twice -> the build crashes
 # with "Cannot read properties of null (reading 'useContext')". Pin to on-disk casing.
 $AppDir  = Get-TrueCasePath $AppDir
