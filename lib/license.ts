@@ -2,8 +2,30 @@ import { execSync } from 'child_process'
 import { createHash, createDecipheriv } from 'crypto'
 import os from 'os'
 
-// Read from env to allow rotation; fall back to the original literal so existing
-// keys keep validating on servers where the env var is unset.
+// SECURITY TRADE-OFF (reviewed 2026-07-14, kept as-is — do not "fix" this into
+// a fail-fast the way ddivault's api/emailer.js NEXTAUTH_SECRET fallback was
+// fixed in commit 4f53641): that ddivault fix was safe because NEXTAUTH_SECRET
+// is auto-generated per install by the suite installer (secrets.env), so it is
+// always actually set in practice. NETVAULT_LICENSE_SECRET is different: no
+// installer/updater script (Install-NetVault.ps1, Update-NetVault.ps1,
+// Install-NocVault-Suite.ps1) or .env.example ever provisions it — it is never
+// set on any existing install. Making this fail loudly on a missing env var
+// would brick license validation on every current production install, not
+// just guard a theoretical path.
+//
+// The literal below is therefore the REAL, deliberate, permanent shared AES
+// key used to derive/validate every purchased license key across ALL
+// installs today (the env var only exists as an unused rotation hook — set it
+// on a given server and that server alone would need re-issued keys). Anyone
+// with filesystem/repo read access to this literal can, with knowledge of the
+// LicensePayload shape and a target serverId, forge a valid license key and
+// bypass the trial/paywall. This is accepted for now because NetVault is an
+// on-prem product with no server-side license-server to check keys against —
+// there is no online revocation/verification step this secret could be
+// swapped out for without adding one. If that risk profile changes (e.g. this
+// becomes a higher-value licensing target), the real fix is switching to
+// asymmetric signing (keep a private signing key out of this repo entirely,
+// ship only the public key here) rather than a shared symmetric secret.
 const LICENSE_SECRET = process.env.NETVAULT_LICENSE_SECRET || 'NocVault-License-Secret-2026-X9K' // 32 chars
 const TRIAL_DAYS = 30
 const GRACE_DAYS = 7
