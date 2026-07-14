@@ -27,6 +27,20 @@ $env:PATH = @(
     $env:PATH
 ) -join ";"
 
+# The in-app updater (Settings -> Updates) is fire-and-forget: it schedules this
+# script as a SYSTEM task (schtasks /create ... /ru SYSTEM, then schtasks /run)
+# and immediately returns { started: true } to the browser, with no live output
+# stream. Without a transcript, a run triggered that way leaves NO durable
+# record of what happened - every Write-Host/Write-Step/Write-OK/Write-Warn line
+# below is otherwise lost the moment the scheduled task's process exits, which
+# is exactly the case that most needs diagnosing. Start it as early as possible
+# (before pre-flight / git / build) so even an early failure is captured.
+# Best-effort: a transcript that fails to start must never block the actual
+# update. (Mirrors Update-SpanVault.ps1's fix for this same gap.)
+New-Item -ItemType Directory -Force -Path "$InstallDir\logs" | Out-Null
+$transcriptPath = Join-Path "$InstallDir\logs" "update-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+try { Start-Transcript -Path $transcriptPath -Append | Out-Null } catch { Write-Warning "Could not start transcript: $($_.Exception.Message)" }
+
 Write-Host "=== Update starting in 5 seconds ==="
 Start-Sleep -Seconds 5
 
@@ -131,6 +145,19 @@ try {
 
     Write-Step "Pulling latest code from GitHub"
     Set-Location $AppDir
+
+    # SYSTEM has never run git in this repo before (only whichever interactive
+    # account originally cloned it has), and Git >= 2.35.2 (CVE-2022-24765)
+    # refuses to operate in a repo it doesn't consider "owned" by the current
+    # account: "fatal: detected dubious ownership in repository at '...'". A
+    # failure here was previously only surfaced as a thrown "git fetch failed"
+    # below, aborting the update - but worse, if a future edit ever loosened
+    # that into a tolerated warning (as SpanVault's script does), this could
+    # silently keep redeploying the OLD checkout while reporting success.
+    # Register this repo as safe for whichever account is running right now
+    # (idempotent - safe to add the same path twice) so this class of failure
+    # can't happen at all. (Mirrors Update-SpanVault.ps1's fix for this same gap.)
+    try { $null = & git config --global --add safe.directory $AppDir 2>&1 } catch {}
 
     # git writes informational messages (e.g. "From https://github.com/...") to
     # stderr. Under $ErrorActionPreference = 'Stop', merging stderr via 2>&1 turns
@@ -401,9 +428,16 @@ try {
     Write-Host "    Attempting to restart NetVault service..." -ForegroundColor Yellow
     $null = & sc.exe start NetVault 2>&1
     Write-Host ""
+    # Best-effort - flush the transcript before exiting so a failed run started
+    # by the fire-and-forget SYSTEM task still leaves a durable record.
+    try { Stop-Transcript | Out-Null } catch {}
     exit 1
 }
 
 Write-Host ""
 Write-Host "  Update complete. Access NetVault at: http://localhost:3000" -ForegroundColor Green
 Write-Host ""
+
+# Best-effort - if Start-Transcript never succeeded (see top of script), this
+# throws harmlessly; never let it mask the update's own success/failure.
+try { Stop-Transcript | Out-Null } catch {}

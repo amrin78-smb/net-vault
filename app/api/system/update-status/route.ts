@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.9': [
+    'Hardened the in-app "Update" button: it now registers this repo as a git safe.directory for the SYSTEM account it runs under (Git refuses to operate in a repo it doesn\'t consider "owned" by the current account, which SYSTEM never is on an existing install) and writes a full transcript of the update run to installer\\logs\\ — previously a failed in-app-triggered update left no record of what happened, since that button runs fully in the background with no live output.',
+  ],
   '1.23.8': [
     'Standardized the updater script (installer/Update-NetVault.ps1) to self-locate its app folder from the script\'s own location, instead of trusting the -InstallDir parameter to match. LogVault and DDIVault already worked this way; NetVault and SpanVault (fixed alongside this) instead derived the app folder from -InstallDir\'s default value, which only happened to work because it matched the current install layout. All four update scripts can now be run with no parameters at all, from any correctly-placed copy of the script, regardless of what folder name or casing was used to get there.',
   ],
