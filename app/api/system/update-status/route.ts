@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.10': [
+    'Added the two new LogVault reporting-engine tables (saved_reports, report_run_history) to the fresh-install smoke tester\'s LogVault privilege checks, matching the pattern already used for DDIVault\'s equivalent tables.',
+  ],
   '1.23.9': [
     'Hardened the in-app "Update" button: it now registers this repo as a git safe.directory for the SYSTEM account it runs under (Git refuses to operate in a repo it doesn\'t consider "owned" by the current account, which SYSTEM never is on an existing install) and writes a full transcript of the update run to installer\\logs\\ — previously a failed in-app-triggered update left no record of what happened, since that button runs fully in the background with no live output.',
   ],

@@ -370,6 +370,13 @@ else {
     if ($ins -eq "t") { Ok "logvault_user CAN INSERT syslog_entries" } else { Bad ("logvault_user cannot INSERT (got '" + $ins + "')") }
     if ($upd -eq "f" -and $del -eq "f") { Ok "logvault_user CANNOT UPDATE/DELETE syslog_entries (tamper model intact)" }
     else { Bad ("Tamper model BROKEN: UPDATE=" + $upd + " DELETE=" + $del + " (expected f/f)") }
+    # ROLE-SCOPED: reporting engine tables (2.20.0) — mirrors the DDIVault check above.
+    $lvOk = $true; $lvBad = @()
+    foreach ($t in @('saved_reports','report_run_history')) {
+        $p = Pg "logvault" "SELECT has_table_privilege('logvault_user','$t','SELECT');"
+        if ($p -ne "t") { $lvOk = $false; $lvBad += ($t + "=" + $p) }
+    }
+    if ($lvOk) { Ok "logvault_user can SELECT reporting-engine tables (saved_reports, report_run_history)" } else { Bad ("logvault_user cannot SELECT reporting-engine tables: " + ($lvBad -join ', ')) }
 
     Write-Host "  --- Cross-DB grants ---" -ForegroundColor DarkGray
     $svSites = Pg "netvault" "SELECT has_table_privilege('spanvault_user','sites','SELECT');"
