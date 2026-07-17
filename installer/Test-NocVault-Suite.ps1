@@ -388,6 +388,14 @@ else {
     if ($srcipCol -ne "t") { $lvrOk = $false; $lvrBad += ("syslog_entries.srcip=" + $srcipCol) }
     if ($lvrOk) { Ok "logvault_user can SELECT the rollup tables + srcip column (syslog_stats_rollup, syslog_talker_rollup, syslog_entries.srcip)" } else { Bad ("logvault_user cannot SELECT rollup tables/column: " + ($lvrBad -join ', ')) }
 
+    # ROLE-SCOPED: Phase 2/3 dashboard-widget rollup tables (perf pass, 2.23.0-2.24.0).
+    $lvr2Ok = $true; $lvr2Bad = @()
+    foreach ($t in @('syslog_security_event_rollup','syslog_dest_event_rollup','syslog_vpn_rollup','syslog_dest_rollup','syslog_source_host_rollup','syslog_distinct_value_rollup','syslog_known_bad_hit_rollup')) {
+        $p = Pg "logvault" "SELECT has_table_privilege('logvault_user','$t','SELECT');"
+        if ($p -ne "t") { $lvr2Ok = $false; $lvr2Bad += ($t + "=" + $p) }
+    }
+    if ($lvr2Ok) { Ok "logvault_user can SELECT the Phase 2/3 rollup tables (7 tables)" } else { Bad ("logvault_user cannot SELECT Phase 2/3 rollup tables: " + ($lvr2Bad -join ', ')) }
+
     Write-Host "  --- Cross-DB grants ---" -ForegroundColor DarkGray
     $svSites = Pg "netvault" "SELECT has_table_privilege('spanvault_user','sites','SELECT');"
     if ($script:PgExit -eq 0 -and $svSites -eq "t") { Ok "spanvault_user has SELECT on netvault.sites" }

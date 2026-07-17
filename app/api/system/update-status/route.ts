@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.12': [
+    'Added the remaining 7 LogVault dashboard rollup tables (from today\'s Phase 2/3 performance work) to the fresh-install smoke tester\'s LogVault privilege checks — the previous check only covered the first 2.',
+  ],
   '1.23.11': [
     'Added LogVault\'s new dashboard-performance rollup tables (syslog_stats_rollup, syslog_talker_rollup) and the new syslog_entries.srcip column to the fresh-install smoke tester\'s LogVault privilege checks, matching the existing pattern for its reporting-engine tables.',
   ],
