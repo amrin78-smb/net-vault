@@ -378,6 +378,16 @@ else {
     }
     if ($lvOk) { Ok "logvault_user can SELECT reporting-engine tables (saved_reports, report_run_history)" } else { Bad ("logvault_user cannot SELECT reporting-engine tables: " + ($lvBad -join ', ')) }
 
+    # ROLE-SCOPED: dashboard-widget rollup tables + srcip column (perf pass, 2.20.x).
+    $lvrOk = $true; $lvrBad = @()
+    foreach ($t in @('syslog_stats_rollup','syslog_talker_rollup')) {
+        $p = Pg "logvault" "SELECT has_table_privilege('logvault_user','$t','SELECT');"
+        if ($p -ne "t") { $lvrOk = $false; $lvrBad += ($t + "=" + $p) }
+    }
+    $srcipCol = Pg "logvault" "SELECT has_column_privilege('logvault_user','syslog_entries','srcip','SELECT');"
+    if ($srcipCol -ne "t") { $lvrOk = $false; $lvrBad += ("syslog_entries.srcip=" + $srcipCol) }
+    if ($lvrOk) { Ok "logvault_user can SELECT the rollup tables + srcip column (syslog_stats_rollup, syslog_talker_rollup, syslog_entries.srcip)" } else { Bad ("logvault_user cannot SELECT rollup tables/column: " + ($lvrBad -join ', ')) }
+
     Write-Host "  --- Cross-DB grants ---" -ForegroundColor DarkGray
     $svSites = Pg "netvault" "SELECT has_table_privilege('spanvault_user','sites','SELECT');"
     if ($script:PgExit -eq 0 -and $svSites -eq "t") { Ok "spanvault_user has SELECT on netvault.sites" }
