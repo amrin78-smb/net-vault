@@ -396,6 +396,14 @@ else {
     }
     if ($lvr2Ok) { Ok "logvault_user can SELECT the Phase 2/3 rollup tables (7 tables)" } else { Bad ("logvault_user cannot SELECT Phase 2/3 rollup tables: " + ($lvr2Bad -join ', ')) }
 
+    # ROLE-SCOPED: Phase 4 dashboard-widget rollup tables (perf pass, 2.24.x).
+    $lvr3Ok = $true; $lvr3Bad = @()
+    foreach ($t in @('syslog_fortinet_field_rollup','syslog_device_status_rollup','syslog_entity_activity_rollup')) {
+        $p = Pg "logvault" "SELECT has_table_privilege('logvault_user','$t','SELECT');"
+        if ($p -ne "t") { $lvr3Ok = $false; $lvr3Bad += ($t + "=" + $p) }
+    }
+    if ($lvr3Ok) { Ok "logvault_user can SELECT the Phase 4 rollup tables (3 tables)" } else { Bad ("logvault_user cannot SELECT Phase 4 rollup tables: " + ($lvr3Bad -join ', ')) }
+
     Write-Host "  --- Cross-DB grants ---" -ForegroundColor DarkGray
     $svSites = Pg "netvault" "SELECT has_table_privilege('spanvault_user','sites','SELECT');"
     if ($script:PgExit -eq 0 -and $svSites -eq "t") { Ok "spanvault_user has SELECT on netvault.sites" }
