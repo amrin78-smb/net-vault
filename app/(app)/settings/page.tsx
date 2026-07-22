@@ -712,7 +712,7 @@ export default function SettingsPage() {
           {showSiteForm && (
             <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>Add new site</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div className="form-grid-compact" style={{ marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Site name <span style={{ color: 'var(--primary)' }}>*</span></label>
                   <input className="input" placeholder="e.g. Bangkok Office" value={siteForm.name} onChange={e => setSiteForm(f => ({ ...f, name: e.target.value }))} />
@@ -721,7 +721,7 @@ export default function SettingsPage() {
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Site code</label>
                   <input className="input input-sm" placeholder="e.g. BKK-01" value={siteForm.code} onChange={e => setSiteForm(f => ({ ...f, code: e.target.value }))} />
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ flexBasis: '100%' }}>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Country <span style={{ color: 'var(--primary)' }}>*</span></label>
                   <select className="input select" value={siteForm.country_id} onChange={e => setSiteForm(f => ({ ...f, country_id: e.target.value }))}>
                     <option value="">Select country</option>
@@ -753,11 +753,11 @@ export default function SettingsPage() {
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>GPS coordinates</label>
                   <input className="input input-sm" placeholder="e.g. 13.7563, 100.5018" value={siteForm.coordinates} onChange={e => setSiteForm(f => ({ ...f, coordinates: e.target.value }))} />
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ flexBasis: '100%' }}>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Address</label>
                   <textarea className="input" rows={2} placeholder="Full street address" value={siteForm.address} onChange={e => setSiteForm(f => ({ ...f, address: e.target.value }))} style={{ resize: 'vertical' }} />
                 </div>
-                <div style={{ borderTop: '1px solid var(--border-light)', gridColumn: '1 / -1', paddingTop: '12px', marginTop: '4px' }}>
+                <div style={{ borderTop: '1px solid var(--border-light)', flexBasis: '100%', paddingTop: '12px', marginTop: '4px' }}>
                   <div style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px' }}>Site contact</div>
                 </div>
                 <div>
@@ -784,7 +784,7 @@ export default function SettingsPage() {
           {editSite && (
             <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
               <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>Edit site — {editSite.name || (editSite as any).site}</h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+              <div className="form-grid-compact" style={{ marginBottom: '16px' }}>
                 {[
                   { label: 'Site name *', field: 'name', placeholder: 'e.g. Bangkok Office' },
                   { label: 'Site code', field: 'code', placeholder: 'e.g. BKK-01', short: true },
@@ -809,7 +809,7 @@ export default function SettingsPage() {
                     {['Head Office','Factory','Warehouse','Branch Office','Data Center','Cloud','Other'].map(t => <option key={t}>{t}</option>)}
                   </select>
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ flexBasis: '100%' }}>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Address</label>
                   <textarea className="input" rows={2} placeholder="Full street address"
                     value={editSiteForm.address}

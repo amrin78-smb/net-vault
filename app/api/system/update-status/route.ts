@@ -85,6 +85,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.16': [
+    'Follow-up to 1.23.14: capping the short-value inputs (Site code, Postal code, GPS coordinates, Phone, EOL/EOS date, Confidence) fixed the INPUT width, but the surrounding 2-column CSS grid column was still forced to ~half the panel width, leaving a large dead gap before the next field. The Add/Edit Site forms and the EOL Intelligence seed form now use a new flex-wrap based .form-grid-compact layout so fields size to their own content width and flow compactly, while full-width fields (Country, Address, Aliases) now use flexBasis: 100% instead of the grid-only gridColumn: 1 / -1.',
+    'Styling only — no functional, validation, or data changes. The Add user/Edit user form grid was left untouched (still a real CSS grid) since it has no capped short-value fields.',
+  ],
   '1.23.15': [
     'Fixed: the updater could report "Update failed" for an update that had actually succeeded. sc.exe start NetVault can return exit 1056 (service already running) because NSSM auto-restarts the service the instant this script kills a leftover process, racing the script\'s own explicit start call -- that exit code is now treated as success (the health-check poll right after is the real verification) instead of a hard failure.',
   ],

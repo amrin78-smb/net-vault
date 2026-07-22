@@ -396,6 +396,22 @@ select.input {
 .form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 .form-field  { display: flex; flex-direction: column; gap: 5px; }
 .form-field label { font-size: var(--text-base); font-weight: 500; color: var(--text-secondary); }
+
+/* Compact form layout — for grids that mix full-width fields with capped
+   short-value fields (.input-sm/.input-md, e.g. Site code, Postal code, GPS
+   coordinates, Phone, EOL/EOS date, Confidence). A rigid 2-column CSS grid
+   leaves a huge dead gap after a capped short input because the GRID COLUMN
+   is still forced to ~half the panel width. Flex-wrap instead lets each
+   field size to its own natural content width, with short fields shrinking
+   to fit. Kept as a SEPARATE class (not a redefinition of .form-grid) —
+   other .form-grid-style usages elsewhere rely on CSS Grid's
+   `gridColumn: '1 / -1'` to span a field across the full row, which has no
+   effect under flex; those fields use `flexBasis: '100%'` instead when
+   placed inside this class. */
+.form-grid-compact { display: flex; flex-wrap: wrap; gap: 16px 32px; }
+.form-grid-compact > div { flex: 1 1 220px; }
+.form-grid-compact > div:has(.input-sm),
+.form-grid-compact > div:has(.input-md) { flex: 0 0 auto; }
 .form-field .hint { font-size: var(--text-sm); color: var(--text-muted); }
 .form-span   { grid-column: 1 / -1; }
 .form-section {

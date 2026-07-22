@@ -979,7 +979,7 @@ export default function EolIntelligencePage() {
         {showForm && (
           <div ref={formRef} style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '18px', marginBottom: '18px', background: 'var(--surface-subtle)' }}>
             <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 600, margin: '0 0 16px', color: 'var(--text-primary)' }}>{editId != null ? 'Edit seed entry' : 'Add seed entry'}</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '14px' }}>
+            <div className="form-grid-compact" style={{ marginBottom: '14px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>Vendor <span style={{ color: 'var(--primary)' }}>*</span></label>
                 <select className="input select" value={form.vendor} onChange={e => setForm(f => ({ ...f, vendor: e.target.value }))}>
@@ -992,7 +992,7 @@ export default function EolIntelligencePage() {
                 <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>Model (raw) <span style={{ color: 'var(--primary)' }}>*</span></label>
                 <input className="input" placeholder="e.g. Catalyst 2960-X" value={form.model_raw} onChange={e => setForm(f => ({ ...f, model_raw: e.target.value }))} />
               </div>
-              <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ flexBasis: '100%' }}>
                 <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>Aliases <span style={{ fontWeight: 400, color: 'var(--text-muted)' }}>(comma-separated)</span></label>
                 <input className="input" placeholder="e.g. WS-C2960X, 2960X" value={form.aliases} onChange={e => setForm(f => ({ ...f, aliases: e.target.value }))} />
               </div>
