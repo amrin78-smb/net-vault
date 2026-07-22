@@ -85,6 +85,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.14': [
+    'Fixed short-value form fields (Site code, Postal code, GPS coordinates, Phone in Settings → Sites; EOL date, EOS date, Confidence in EOL Intelligence) rendering stretched across the full width of their 2-column form grid — added shared .input-sm/.input-md width caps (matching the fix already shipped in SpanVault) instead of scattered one-off inline widths.',
+    'Unified the Settings site-search and EOL Intelligence search boxes onto the same .input-md width, replacing two different one-off inline widths (240px and 440px) with one consistent size.',
+    'Styling only — no functional, validation, or data changes.',
+  ],
   '1.23.13': [
     'Added LogVault\'s 3 new Phase 4 dashboard rollup tables (syslog_fortinet_field_rollup, syslog_device_status_rollup, syslog_entity_activity_rollup) to the fresh-install smoke tester\'s LogVault privilege checks.',
   ],

@@ -705,7 +705,7 @@ export default function SettingsPage() {
       {activeTab === 'sites' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <input className="input" style={{ width: '240px' }} placeholder="Search sites or countries..." value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
+            <input className="input input-md" placeholder="Search sites or countries..." value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
             <button className="btn-primary" onClick={() => { setShowSiteForm(true); setSiteError('') }}>+ Add site</button>
           </div>
 
@@ -719,7 +719,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Site code</label>
-                  <input className="input" placeholder="e.g. BKK-01" value={siteForm.code} onChange={e => setSiteForm(f => ({ ...f, code: e.target.value }))} />
+                  <input className="input input-sm" placeholder="e.g. BKK-01" value={siteForm.code} onChange={e => setSiteForm(f => ({ ...f, code: e.target.value }))} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Country <span style={{ color: 'var(--primary)' }}>*</span></label>
@@ -747,11 +747,11 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Postal code</label>
-                  <input className="input" placeholder="e.g. 10110" value={siteForm.postal_code} onChange={e => setSiteForm(f => ({ ...f, postal_code: e.target.value }))} />
+                  <input className="input input-sm" placeholder="e.g. 10110" value={siteForm.postal_code} onChange={e => setSiteForm(f => ({ ...f, postal_code: e.target.value }))} />
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>GPS coordinates</label>
-                  <input className="input" placeholder="e.g. 13.7563, 100.5018" value={siteForm.coordinates} onChange={e => setSiteForm(f => ({ ...f, coordinates: e.target.value }))} />
+                  <input className="input input-sm" placeholder="e.g. 13.7563, 100.5018" value={siteForm.coordinates} onChange={e => setSiteForm(f => ({ ...f, coordinates: e.target.value }))} />
                 </div>
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Address</label>
@@ -770,7 +770,7 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Phone</label>
-                  <input className="input" placeholder="e.g. +66 2 123 4567" value={siteForm.phone} onChange={e => setSiteForm(f => ({ ...f, phone: e.target.value }))} />
+                  <input className="input input-sm" placeholder="e.g. +66 2 123 4567" value={siteForm.phone} onChange={e => setSiteForm(f => ({ ...f, phone: e.target.value }))} />
                 </div>
               </div>
               {siteError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{siteError}</div>}
@@ -787,17 +787,17 @@ export default function SettingsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 {[
                   { label: 'Site name *', field: 'name', placeholder: 'e.g. Bangkok Office' },
-                  { label: 'Site code', field: 'code', placeholder: 'e.g. BKK-01' },
+                  { label: 'Site code', field: 'code', placeholder: 'e.g. BKK-01', short: true },
                   { label: 'City', field: 'city', placeholder: 'e.g. Bangkok' },
-                  { label: 'Postal code', field: 'postal_code', placeholder: 'e.g. 10110' },
-                  { label: 'GPS coordinates', field: 'coordinates', placeholder: 'e.g. 13.7563, 100.5018' },
-                  { label: 'Phone', field: 'phone', placeholder: 'e.g. +66 2 123 4567' },
+                  { label: 'Postal code', field: 'postal_code', placeholder: 'e.g. 10110', short: true },
+                  { label: 'GPS coordinates', field: 'coordinates', placeholder: 'e.g. 13.7563, 100.5018', short: true },
+                  { label: 'Phone', field: 'phone', placeholder: 'e.g. +66 2 123 4567', short: true },
                   { label: 'Contact name', field: 'contact_name', placeholder: 'e.g. John Smith' },
                   { label: 'Contact email', field: 'contact_email', placeholder: 'e.g. john@company.com' },
                 ].map(f => (
                   <div key={f.field}>
                     <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>{f.label}</label>
-                    <input className="input" placeholder={f.placeholder}
+                    <input className={(f as { short?: boolean }).short ? 'input input-sm' : 'input'} placeholder={f.placeholder}
                       value={editSiteForm[f.field as keyof typeof editSiteForm]}
                       onChange={e => setEditSiteForm(p => ({ ...p, [f.field]: e.target.value }))} />
                   </div>

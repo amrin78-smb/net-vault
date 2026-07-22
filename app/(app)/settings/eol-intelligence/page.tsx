@@ -998,15 +998,15 @@ export default function EolIntelligencePage() {
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>EOL date</label>
-                <input className="input" type="date" value={form.eol_date} onChange={e => setForm(f => ({ ...f, eol_date: e.target.value }))} />
+                <input className="input input-sm" type="date" value={form.eol_date} onChange={e => setForm(f => ({ ...f, eol_date: e.target.value }))} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>EOS date</label>
-                <input className="input" type="date" value={form.eos_date} onChange={e => setForm(f => ({ ...f, eos_date: e.target.value }))} />
+                <input className="input input-sm" type="date" value={form.eos_date} onChange={e => setForm(f => ({ ...f, eos_date: e.target.value }))} />
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}>Confidence</label>
-                <select className="input select" value={form.confidence} onChange={e => setForm(f => ({ ...f, confidence: e.target.value as SeedForm['confidence'] }))}>
+                <select className="input select input-sm" value={form.confidence} onChange={e => setForm(f => ({ ...f, confidence: e.target.value as SeedForm['confidence'] }))}>
                   <option value="high">High</option>
                   <option value="medium">Medium</option>
                   <option value="low">Low</option>
@@ -1053,11 +1053,10 @@ export default function EolIntelligencePage() {
         {/* search box — non-empty query switches to a flat result table */}
         <div style={{ marginBottom: '14px' }}>
           <input
-            className="input"
+            className="input input-md"
             placeholder="Search all seed entries by vendor, model, or alias…"
             value={seedSearch}
             onChange={e => setSeedSearch(e.target.value)}
-            style={{ maxWidth: '440px' }}
           />
         </div>
 

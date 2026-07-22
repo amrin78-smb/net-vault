@@ -357,6 +357,11 @@ tbody tr:hover td { background: var(--bg-primary); }
 .input::placeholder { color: var(--text-muted); }
 textarea.input { resize: vertical; min-height: 80px; }
 
+/* Width caps for short-value inputs (numbers, codes, dates) and search boxes —
+   pair with .input so a short value doesn't stretch across a full grid cell. */
+.input-sm { max-width: 140px; }
+.input-md { max-width: 220px; }
+
 /* ── Selects ───────────────────────────────────────────────── */
 .select {
   padding: 9px 32px 9px 12px;
