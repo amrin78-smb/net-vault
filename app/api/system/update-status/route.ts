@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.15': [
+    'Fixed: the updater could report "Update failed" for an update that had actually succeeded. sc.exe start NetVault can return exit 1056 (service already running) because NSSM auto-restarts the service the instant this script kills a leftover process, racing the script\'s own explicit start call -- that exit code is now treated as success (the health-check poll right after is the real verification) instead of a hard failure.',
+  ],
   '1.23.14': [
     'Fixed short-value form fields (Site code, Postal code, GPS coordinates, Phone in Settings → Sites; EOL date, EOS date, Confidence in EOL Intelligence) rendering stretched across the full width of their 2-column form grid — added shared .input-sm/.input-md width caps (matching the fix already shipped in SpanVault) instead of scattered one-off inline widths.',
     'Unified the Settings site-search and EOL Intelligence search boxes onto the same .input-md width, replacing two different one-off inline widths (240px and 440px) with one consistent size.',

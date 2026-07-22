@@ -346,7 +346,17 @@ try {
         }
     }
     $null = & sc.exe start NetVault 2>&1
-    if ($LASTEXITCODE -ne 0) { throw "sc.exe start NetVault failed (exit $LASTEXITCODE)" }
+    # Exit 1056 = ERROR_SERVICE_ALREADY_RUNNING, and that's expected here, not a
+    # failure: NSSM's own AppRestartDelay (3s) auto-relaunches its child the
+    # moment the process this script just killed (above, or the port-3000 clear
+    # right before this call) exits unexpectedly — the "NetVault" service itself
+    # (the NSSM wrapper) never actually stopped from SCM's point of view, it just
+    # lost and regrew its child. By the time this sc.exe start runs, SCM correctly
+    # reports "already running". Treat that as success and let the health poll
+    # below be the real source of truth, instead of throwing on a technically-true
+    # but misleading exit code (this previously reported "Update failed" for
+    # updates that had actually succeeded).
+    if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1056) { throw "sc.exe start NetVault failed (exit $LASTEXITCODE)" }
     # Poll /api/health instead of a fixed sleep: the app is usually serving within
     # 2-3s, so this returns as soon as it's actually up rather than always waiting 5s.
     # Falls back to the previous behaviour (warn + proceed) if it doesn't answer in
