@@ -10,7 +10,20 @@ import { query } from '@/lib/db'
 function findGitRoot(start: string): string {
   let dir = start
   for (let i = 0; i < 6; i++) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir
+    // Never trust a .git sitting inside a .next build-output tree. NSSM runs
+    // this app with AppDirectory = .../.next/standalone (see
+    // installer/Install-NetVault.ps1), so process.cwd() starts INSIDE the
+    // build output — if a stray/duplicate .git ever ends up nested in there
+    // (confirmed happening on the live server: a near-complete second repo
+    // checkout at .next/standalone/.git), this would stop at the first
+    // match and run installer/Update-NetVault.ps1 from that STALE, nested
+    // copy instead of the real one, silently updating the wrong tree while
+    // still restarting the real NSSM-managed service — exactly the failure
+    // mode that made "Update Now" intermittently not actually update
+    // anything. Skip any .git whose path contains a \.next\ segment and keep
+    // walking up past it.
+    const isBuildOutput = /[\\/]\.next([\\/]|$)/i.test(dir)
+    if (!isBuildOutput && fs.existsSync(path.join(dir, '.git'))) return dir
     const parent = path.dirname(dir)
     if (parent === dir) break
     dir = parent

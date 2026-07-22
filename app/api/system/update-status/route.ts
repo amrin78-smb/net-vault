@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.17': [
+    'Fixed a serious in-app "Update Now" bug: NSSM runs NetVault with its working directory inside .next/standalone (the build output), and this app\'s update trigger walks up from there looking for a .git folder to locate the real installer script. A stray/duplicate git checkout had ended up nested inside .next/standalone on the live server, so every in-app update click was silently running the update script from that STALE nested copy instead of the real one -- rebuilding the wrong tree while still restarting the actual service, which is why updates triggered from the UI could intermittently fail to actually update anything (or fail outright). The update trigger now refuses to treat a .git folder found inside a .next path as the real repo root.',
+  ],
   '1.23.16': [
     'Follow-up to 1.23.14: capping the short-value inputs (Site code, Postal code, GPS coordinates, Phone, EOL/EOS date, Confidence) fixed the INPUT width, but the surrounding 2-column CSS grid column was still forced to ~half the panel width, leaving a large dead gap before the next field. The Add/Edit Site forms and the EOL Intelligence seed form now use a new flex-wrap based .form-grid-compact layout so fields size to their own content width and flow compactly, while full-width fields (Country, Address, Aliases) now use flexBasis: 100% instead of the grid-only gridColumn: 1 / -1.',
     'Styling only — no functional, validation, or data changes. The Add user/Edit user form grid was left untouched (still a real CSS grid) since it has no capped short-value fields.',
