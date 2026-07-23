@@ -73,6 +73,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.23': [
+    'Extended the same "don\'t silently swallow a real schema error" fix from 1.23.22 to SpanVault\'s fresh-install step in the suite installer, and to SpanVault\'s own per-app updater -- both now abort loudly instead of reporting success if scripts/schema.sql hits a genuine SQL error partway through.',
+  ],
   '1.23.22': [
     'Security fix, corrected: the 1.23.18 fix for the cross-app diagnostic read role seeing user password hashes and the license key did NOT actually work -- the filtered view it added referenced a column that doesn\'t exist on NetVault\'s app_settings table, which made that view fail to create and silently aborted the whole access-narrowing step, leaving both password hashes and the license key just as exposed as before the "fix" shipped. Verified live against production and corrected: the view now only selects columns that actually exist, and the fix for each table is now independent and impossible to silently no-op.',
     'The database update scripts now stop and report clearly if a schema change fails to apply, instead of quietly carrying on as if it succeeded (which is how the above went unnoticed for a release).',

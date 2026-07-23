@@ -532,7 +532,16 @@ if ($InstallLogVault) {
     # schema.sql's own tail end narrows nocvault_readonly off app_settings
     # (secrets: smtp_pass/abuseipdb_api_key) onto an allowlist view instead.
     GrantNocRoRead "logvault"
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -f "$LVAppDir\scripts\schema.sql"
+    # -v ON_ERROR_STOP=1 (added 2026-07-23, mirrors the NetVault/SpanVault steps
+    # above): a fresh install must not silently "succeed" with a broken schema -
+    # without this flag psql prints a genuine SQL error and keeps going, exiting 0
+    # regardless, which is how the users_public/app_settings_public fix on NetVault
+    # shipped un-applied for a full release without anyone noticing. schema.sql's
+    # own idempotent statements (IF NOT EXISTS/IF EXISTS/OR REPLACE/ON CONFLICT) are
+    # not errors on a fresh DB, so this does not affect them - only a genuine SQL
+    # error now stops the install.
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -v ON_ERROR_STOP=1 -f "$LVAppDir\scripts\schema.sql"
+    if ($LASTEXITCODE -ne 0) { throw "LogVault schema.sql failed to apply (exit $LASTEXITCODE) - installation aborted; the append-only tamper-evidence REVOKEs or a partition function may not have applied. Check the psql output above." }
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO logvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO logvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL ON SCHEMA public TO logvault_user;"
@@ -661,10 +670,23 @@ if ($InstallDDIVault) {
     GrantNocRoRead "ddivault"
 
     # Run 4 schemas in order
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema.sql"
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-ipam.sql"
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-server-auth.sql"
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-sites.sql"
+    # -v ON_ERROR_STOP=1 (added 2026-07-23, mirrors the NetVault/LogVault/
+    # SpanVault steps above - this DDIVault step was the one missed in that
+    # same pass): without this flag psql prints a SQL error and keeps going,
+    # exiting 0 regardless, which is how the ddi_servers/smtp_config
+    # credential-column REVOKE could silently fail to apply on a fresh
+    # install without anyone noticing. Each of the 4 files' own idempotent
+    # statements (IF NOT EXISTS/OR REPLACE/ON CONFLICT) are not errors on a
+    # fresh DB, so this does not affect them - only a genuine SQL error now
+    # aborts the install.
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 -f "$DDIAppDir\scripts\schema.sql"
+    if ($LASTEXITCODE -ne 0) { throw "DDIVault schema.sql failed to apply (exit $LASTEXITCODE) - installation aborted; a security-relevant grant/view (app_settings_public/api_keys_public/smtp_config_public views or the ddi_servers credential-column REVOKE) may not have applied. Check the psql output above." }
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 -f "$DDIAppDir\scripts\schema-ipam.sql"
+    if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-ipam.sql failed to apply (exit $LASTEXITCODE) - installation aborted. Check the psql output above." }
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 -f "$DDIAppDir\scripts\schema-server-auth.sql"
+    if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-server-auth.sql failed to apply (exit $LASTEXITCODE) - installation aborted; the ddi_servers ps_username/ps_password credential columns may not exist. Check the psql output above." }
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 -f "$DDIAppDir\scripts\schema-sites.sql"
+    if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-sites.sql failed to apply (exit $LASTEXITCODE) - installation aborted. Check the psql output above." }
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL ON SCHEMA public TO ddivault_user;"
@@ -800,7 +822,16 @@ if ($InstallSpanVault) {
     # schema.sql's own tail end narrows nocvault_readonly off
     # wireless_controllers' 5 credential columns onto a column-level grant.
     GrantNocRoRead "spanvault"
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -f "$SVAppDir\scripts\schema.sql"
+    # -v ON_ERROR_STOP=1 (added 2026-07-23, mirrors the NetVault step above):
+    # a fresh install must not silently "succeed" with a broken schema -
+    # without this flag psql prints a SQL error and keeps going, exiting 0
+    # regardless, which is how the users_public/app_settings_public fix on
+    # NetVault shipped un-applied for a full release without anyone noticing.
+    # schema.sql's own idempotent statements (IF NOT EXISTS/IF EXISTS/OR
+    # REPLACE/ON CONFLICT) are not errors on a fresh DB, so this does not
+    # affect them - only a genuine SQL error now stops the install.
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -v ON_ERROR_STOP=1 -f "$SVAppDir\scripts\schema.sql"
+    if ($LASTEXITCODE -ne 0) { throw "SpanVault schema.sql failed to apply (exit $LASTEXITCODE) - installation aborted; a security-relevant grant/view (monitored_devices/agents/agent_discovered_devices/app_settings secret exclusions or wireless_controllers) may not have applied. Check the psql output above." }
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO spanvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO spanvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL ON SCHEMA public TO spanvault_user;"
