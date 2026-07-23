@@ -671,7 +671,7 @@ export default function SettingsPage() {
       {/* GENERAL TAB */}
       {activeTab === 'general' && (
         <div>
-          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px', maxWidth: '860px' }}>
             <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Session security</div>
             <div style={{ marginBottom: '20px' }}>
               <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '6px' }}>Session timeout</label>

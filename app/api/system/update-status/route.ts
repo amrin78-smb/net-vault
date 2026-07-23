@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.20': [
+    'Settings > General: the Session Security panel no longer stretches to the full page width around its single field. Same panel-width fix already shipped in LogVault and SpanVault.',
+  ],
   '1.23.19': [
     'Deduplicated a device-status color map in global search that had drifted into its own hardcoded copy of the same colors already defined for status badges elsewhere in the app -- now reuses the shared badge component directly, so a future palette change can\'t accidentally leave global search out of sync. Purely cosmetic, no visible change.',
   ],
