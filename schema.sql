@@ -424,3 +424,33 @@ BEGIN
     END IF;
 END
 $$;
+
+-- ── Secret-bearing table row/column-level exclusion (security pass, 2026-07) ─
+-- The blanket grant above previously gave nocvault_readonly/claude_readonly
+-- unrestricted table-level SELECT on `users` (password_hash) and
+-- `app_settings` (value holds license_key alongside plain cosmetic settings)
+-- — live-verified readable. `users_public`/`app_settings_public` are
+-- ALLOWLIST views: a newly added users column or app_settings key defaults
+-- to HIDDEN from these two roles until deliberately added below, so a future
+-- secret can never leak by omission. Placed AFTER the blanket grant block —
+-- order matters, the LAST statement touching a privilege wins (see LogVault/
+-- SpanVault CLAUDE.md for the incident that made this ordering rule explicit).
+CREATE OR REPLACE VIEW users_public AS
+SELECT id, name, email, role, created_at FROM users;
+
+CREATE OR REPLACE VIEW app_settings_public AS
+SELECT key, value, updated_at FROM app_settings
+WHERE key IN ('app_name', 'app_subtitle', 'app_logo_url', 'app_navy_color', 'app_primary_color');
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nocvault_readonly') THEN
+    REVOKE SELECT ON users, app_settings FROM nocvault_readonly;
+    GRANT SELECT ON users_public, app_settings_public TO nocvault_readonly;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'claude_readonly') THEN
+    REVOKE SELECT ON users, app_settings FROM claude_readonly;
+    GRANT SELECT ON users_public, app_settings_public TO claude_readonly;
+  END IF;
+END
+$$;

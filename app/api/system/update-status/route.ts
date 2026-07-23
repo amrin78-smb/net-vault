@@ -85,6 +85,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.18': [
+    'Added a pre-built codebase index (.ai-codex/) so future development sessions can find things faster, with a rule that keeps it in sync going forward.',
+    'Security: closed a gap where the cross-app diagnostic/dashboard read role could see user password hashes and the app\'s license key. Those now live behind filtered views that only expose safe fields -- any new sensitive field added in the future is hidden from that role by default until someone deliberately decides it\'s safe to share.',
+    'Fixed the same gap for LogVault, DDIVault, and SpanVault, and fixed an installer ordering bug that would have silently undone this fix on every brand-new install of the whole suite.',
+  ],
   '1.23.17': [
     'Fixed a serious in-app "Update Now" bug: NSSM runs NetVault with its working directory inside .next/standalone (the build output), and this app\'s update trigger walks up from there looking for a .git folder to locate the real installer script. A stray/duplicate git checkout had ended up nested inside .next/standalone on the live server, so every in-app update click was silently running the update script from that STALE nested copy instead of the real one -- rebuilding the wrong tree while still restarting the actual service, which is why updates triggered from the UI could intermittently fail to actually update anything (or fail outright). The update trigger now refuses to treat a .git folder found inside a .next path as the real repo root.',
   ],

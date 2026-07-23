@@ -2,6 +2,36 @@
 
 ---
 
+## Codebase Index — READ FIRST
+
+Pre-built index files live in `.ai-codex/`. Read these BEFORE exploring the codebase:
+- `.ai-codex/routes.md`      — all API routes
+- `.ai-codex/pages.md`       — page tree
+- `.ai-codex/lib.md`         — library exports
+- `.ai-codex/schema.md`      — database schema + known debt
+- `.ai-codex/components.md`  — component index
+- `.ai-codex/gotchas.md`     — non-obvious behaviours
+
+### Maintaining the index — MANDATORY
+
+The index is only useful if it is accurate. A stale index is worse than none: it
+sends sessions confidently to the wrong place.
+
+Any commit that changes the shape of the codebase MUST update the matching index
+file in the SAME commit. Specifically:
+- Add / remove / rename an API route, or change its method or auth   -> routes.md
+- Add / remove / rename a page, or flip client<->server              -> pages.md
+- Add / remove / rename a lib export, or change a signature          -> lib.md
+- Any change to schema.sql or a migration script                     -> schema.md
+- Add / remove a component, or change its props                      -> components.md
+- Discover a new non-obvious behaviour or footgun                    -> gotchas.md
+
+This runs at the same point as the version bump. If you are bumping the version,
+check whether the index needs updating. Do not defer it to "later" — later never
+comes and the index rots.
+
+---
+
 ## Installer parity (IMPORTANT — read before any deploy-affecting change)
 
 NetVault ships the shared **suite installer** `installer/Install-NocVault-Suite.ps1`

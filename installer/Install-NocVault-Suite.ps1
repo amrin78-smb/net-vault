@@ -386,11 +386,21 @@ Write-OK "NetVault cloned"
 
 # Run schema
 $env:PGPASSWORD = $PgAdminPassword
+# GrantNocRoRead runs BEFORE schema.sql, not after (security fix, 2026-07) —
+# schema.sql's own tail end narrows nocvault_readonly's access on secret-
+# bearing tables (users_public/app_settings_public views instead of raw
+# table SELECT); whichever grant runs LAST wins in Postgres, so
+# GrantNocRoRead's blanket GRANT SELECT ON ALL TABLES must execute first or
+# it silently re-widens access schema.sql just narrowed. Safe to run before
+# any table exists yet — GRANT SELECT ON ALL TABLES on zero tables is a
+# harmless no-op, and its ALTER DEFAULT PRIVILEGES only auto-grants SELECT
+# on tables schema.sql is ABOUT to create, which schema.sql's own later
+# REVOKE still correctly narrows regardless of how the grant first landed.
+GrantNocRoRead "netvault"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -f "$NVAppDir\schema.sql"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO netvault;"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO netvault;"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -f "$NVAppDir\setup.sql"
-GrantNocRoRead "netvault"
 Write-OK "NetVault schema applied"
 
 # Create .env
@@ -508,6 +518,11 @@ if ($InstallLogVault) {
 
     # Run schema
     $env:PGPASSWORD = $PgAdminPassword
+    # GrantNocRoRead runs BEFORE schema.sql — see the NetVault step above for
+    # why (security fix, 2026-07): whichever grant runs LAST wins, and
+    # schema.sql's own tail end narrows nocvault_readonly off app_settings
+    # (secrets: smtp_pass/abuseipdb_api_key) onto an allowlist view instead.
+    GrantNocRoRead "logvault"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -f "$LVAppDir\scripts\schema.sql"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO logvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO logvault_user;"
@@ -516,7 +531,6 @@ if ($InstallLogVault) {
     # UPDATE/DELETE that schema.sql deliberately REVOKEs on the hash-chained tables.
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "REVOKE UPDATE, DELETE ON syslog_entries FROM logvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d logvault -c "REVOKE UPDATE, DELETE ON audit_log FROM logvault_user;"
-    GrantNocRoRead "logvault"
     Write-OK "LogVault schema applied"
 
     # Create .env.local in root AND frontend
@@ -629,6 +643,14 @@ if ($InstallDDIVault) {
     # so psql receives the hyphenated name unquoted and errors with a syntax error.
     $env:PGPASSWORD = $PgAdminPassword
 
+    # GrantNocRoRead runs BEFORE the schema files — see the NetVault step
+    # above for why (security fix, 2026-07): whichever grant runs LAST wins,
+    # and scripts/schema.sql's own tail end narrows nocvault_readonly off
+    # app_settings/api_keys onto allowlist views instead. schema-ipam/
+    # -server-auth/-sites.sql never touch nocvault_readonly at all, so
+    # running GrantNocRoRead before the whole 4-file sequence is sufficient.
+    GrantNocRoRead "ddivault"
+
     # Run 4 schemas in order
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema.sql"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -f "$DDIAppDir\scripts\schema-ipam.sql"
@@ -640,7 +662,6 @@ if ($InstallDDIVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT CONNECT ON DATABASE netvault TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT USAGE ON SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON sites, countries TO ddivault_user;"
-    GrantNocRoRead "ddivault"
 
     # Reassign ownership of all app objects from postgres to ddivault_user. The schema
     # is applied as the postgres superuser, but the updater (and future migrations)
@@ -765,11 +786,15 @@ if ($InstallSpanVault) {
 
     # Run schema
     $env:PGPASSWORD = $PgAdminPassword
+    # GrantNocRoRead runs BEFORE schema.sql — see the NetVault step above for
+    # why (security fix, 2026-07): whichever grant runs LAST wins, and
+    # schema.sql's own tail end narrows nocvault_readonly off
+    # wireless_controllers' 5 credential columns onto a column-level grant.
+    GrantNocRoRead "spanvault"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -f "$SVAppDir\scripts\schema.sql"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO spanvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO spanvault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d spanvault -c "GRANT ALL ON SCHEMA public TO spanvault_user;"
-    GrantNocRoRead "spanvault"
 
     # Cross-DB grant: SpanVault reads NetVault for SSO + device sync. Done HERE (not in
     # STEP 7) because netvault's tables don't exist until STEP 8 applies its schema; a
