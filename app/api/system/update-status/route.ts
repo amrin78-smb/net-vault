@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.21': [
+    'Fixed the updater (Update-NetVault.ps1) reporting "Update failed" on a benign npm notice (an npm registry deprecation message about their audit-check endpoint) even when npm actually succeeded -- a PowerShell quirk where any stderr output from a native command gets treated as a fatal error. Found and fixed 3 other places in the same script with the identical risk (both sc.exe calls), not just the one that was reported.',
+  ],
   '1.23.20': [
     'Settings > General: the Session Security panel no longer stretches to the full page width around its single field. Same panel-width fix already shipped in LogVault and SpanVault.',
   ],

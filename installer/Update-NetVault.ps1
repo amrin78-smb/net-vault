@@ -113,7 +113,13 @@ try {
     Write-Host "    Running: sc.exe stop NetVault" -ForegroundColor Gray
     $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -eq 'Running') {
+        # sc.exe writes informational output that can end up on stderr; under
+        # $ErrorActionPreference = 'Stop', merging it via 2>&1 turns that into a
+        # terminating ErrorRecord even on a clean stop. Same class of bug fixed
+        # below for git/npm/psql — relax Stop around this call too.
+        $ErrorActionPreference = 'Continue'
         $null = & sc.exe stop NetVault 2>&1
+        $ErrorActionPreference = 'Stop'
         Start-Sleep -Seconds 3
         Write-OK "Service stopped"
     } else {
@@ -270,11 +276,22 @@ try {
 
     Write-Step "Rebuilding NetVault"
     Write-Host "    Running: npm install" -ForegroundColor Gray
+    # npm writes deprecation/audit notices to stderr (e.g. "This endpoint is being
+    # retired..."). Under $ErrorActionPreference = 'Stop', merging that via 2>&1
+    # turns a benign notice into a terminating ErrorRecord even though npm exits 0
+    # — same class of bug already fixed above for git/psql. Relax Stop around the
+    # call, capture the real exit code, then restore Stop and check that instead.
+    $ErrorActionPreference = 'Continue'
     $null = & npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
-    if ($LASTEXITCODE -ne 0) { throw "npm install failed (exit $LASTEXITCODE) - check $InstallDir\logs\npm-install.log" }
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($exitCode -ne 0) { throw "npm install failed (exit $exitCode) - check $InstallDir\logs\npm-install.log" }
     Write-Host "    Running: npm run build" -ForegroundColor Gray
+    $ErrorActionPreference = 'Continue'
     $null = & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
-    if ($LASTEXITCODE -ne 0) { throw "npm run build failed (exit $LASTEXITCODE) - check $InstallDir\logs\npm-build.log" }
+    $exitCode = $LASTEXITCODE
+    $ErrorActionPreference = 'Stop'
+    if ($exitCode -ne 0) { throw "npm run build failed (exit $exitCode) - check $InstallDir\logs\npm-build.log" }
     Write-OK "Build complete"
 
     Write-Step "Copying static files into standalone output"
@@ -345,7 +362,11 @@ try {
             Write-OK "Cleared port 3000"
         }
     }
+    # Relax Stop around sc.exe too — same stderr-as-terminating-error risk as the
+    # git/npm/psql calls above.
+    $ErrorActionPreference = 'Continue'
     $null = & sc.exe start NetVault 2>&1
+    $ErrorActionPreference = 'Stop'
     # Exit 1056 = ERROR_SERVICE_ALREADY_RUNNING, and that's expected here, not a
     # failure: NSSM's own AppRestartDelay (3s) auto-relaunches its child the
     # moment the process this script just killed (above, or the port-3000 clear
@@ -436,7 +457,10 @@ try {
     Write-Host ""
     Write-Host "=== Update failed: $_ ===" -ForegroundColor Red
     Write-Host "    Attempting to restart NetVault service..." -ForegroundColor Yellow
-    $null = & sc.exe start NetVault 2>&1
+    # Best-effort recovery attempt after a failure already happened — swallow any
+    # error here (including the same stderr-as-terminating-error risk as above) so
+    # it can never mask the real failure or skip the clean exit path below.
+    try { $null = & sc.exe start NetVault 2>&1 } catch {}
     Write-Host ""
     # Best-effort - flush the transcript before exiting so a failed run started
     # by the fire-and-forget SYSTEM task still leaves a durable record.
