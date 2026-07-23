@@ -1,18 +1,12 @@
 'use client'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { StatusBadge } from './Badges'
 
 type DeviceResult   = { id: string; name: string; device_type: string; ip_address: string; site: string; device_status: string }
 type SiteResult     = { id: string; name: string; code: string; country: string; region: string }
 type CircuitResult  = { id: string; circuit_id: string; isp: string; usage: string; site: string }
 type Results        = { devices: DeviceResult[]; sites: SiteResult[]; circuits: CircuitResult[] }
-
-const statusColor: Record<string, string> = {
-  'Active': '#15803d', 'Decommed': '#475569', 'Spare': '#b45309', 'Faulty, Replaced': '#c2410c',
-}
-const statusBg: Record<string, string> = {
-  'Active': '#dcfce7', 'Decommed': '#f1f5f9', 'Spare': '#fef3c7', 'Faulty, Replaced': '#ffedd5',
-}
 
 export default function GlobalSearch() {
   const router = useRouter()
@@ -142,9 +136,7 @@ export default function GlobalSearch() {
                       {d.device_type} · {d.site}{d.ip_address && <span className="mono"> · {d.ip_address}</span>}
                     </div>
                   </div>
-                  <span className="badge" style={{ background: statusBg[d.device_status] || '#f1f5f9', color: statusColor[d.device_status] || 'var(--text-secondary)', flexShrink: 0, fontSize: 'var(--text-xs)' }}>
-                    {d.device_status}
-                  </span>
+                  <StatusBadge status={d.device_status} />
                 </div>
               ))}
             </>

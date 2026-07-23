@@ -85,6 +85,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.19': [
+    'Deduplicated a device-status color map in global search that had drifted into its own hardcoded copy of the same colors already defined for status badges elsewhere in the app -- now reuses the shared badge component directly, so a future palette change can\'t accidentally leave global search out of sync. Purely cosmetic, no visible change.',
+  ],
   '1.23.18': [
     'Added a pre-built codebase index (.ai-codex/) so future development sessions can find things faster, with a rule that keeps it in sync going forward.',
     'Security: closed a gap where the cross-app diagnostic/dashboard read role could see user password hashes and the app\'s license key. Those now live behind filtered views that only expose safe fields -- any new sensitive field added in the future is hidden from that role by default until someone deliberately decides it\'s safe to share.',
