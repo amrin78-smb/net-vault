@@ -48,6 +48,9 @@ eolSeed.ts
   EOL_SEED — const array of ~949 bundled vendor-confirmed EOL/EOS seed entries (generated data, offline floor)
   resolveEol(brand, model) — exact raw-model lookup against EOL_SEED
 
+gitRoot.ts
+  findGitRoot(start) — walk up from start to the nearest ancestor dir containing .git, skipping any .git found inside a .next build-output path; shared by app/api/system/update/route.ts + app/api/system/update-status/route.ts (extracted 2026-07-23 — was two independently-maintained copies whose .next-path guard had drifted between them)
+
 healthScore.ts
   HealthResult (type) — health score/grade/status/metrics shape
   computeHealthScore(opts) — compute live infra health score/grade from compliance score + EOL/site metrics

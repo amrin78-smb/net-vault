@@ -1,6 +1,6 @@
 {
   "name": "netvault",
-  "version": "1.23.21",
+  "version": "1.23.22",
   "private": true,
   "scripts": {
     "dev": "next dev",

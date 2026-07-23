@@ -261,16 +261,32 @@ try {
         Write-Warn "POSTGRES_PASSWORD not in .env - skipping schema re-apply (add it to .env to enable on this pre-existing install)"
     } else {
         $env:PGPASSWORD = $PgAdminPassword
+        # -v ON_ERROR_STOP=1 (added 2026-07-23): without it, psql prints a SQL
+        # error (e.g. a CREATE VIEW referencing a nonexistent column) and just
+        # keeps going, exiting 0 at the end as if nothing failed — which is
+        # exactly how a broken security fix (revoking readonly-role access to
+        # users.password_hash/app_settings.license_key) shipped silently
+        # un-applied for a full release. With this flag, the FIRST real SQL
+        # error aborts psql with a nonzero exit, so $schemaExit below is now
+        # trustworthy. Statements schema.sql relies on for idempotency
+        # (IF NOT EXISTS / IF EXISTS / OR REPLACE / ON CONFLICT) are not
+        # errors when the object already exists, so re-runs stay silent and
+        # successful as before - only a genuine SQL error now stops the script.
         Write-Host "    Running: psql -U postgres -d netvault -f schema.sql" -ForegroundColor Gray
         $ErrorActionPreference = 'Continue'
-        & $PsqlExe -U postgres -h localhost -p 5432 -d netvault -f $SchemaPath 2>&1 | Tee-Object -FilePath "$InstallDir\logs\schema-apply.log" | Out-Null
+        & $PsqlExe -U postgres -h localhost -p 5432 -d netvault -v ON_ERROR_STOP=1 -f $SchemaPath 2>&1 | Tee-Object -FilePath "$InstallDir\logs\schema-apply.log" | Out-Null
         $schemaExit = $LASTEXITCODE
         $ErrorActionPreference = 'Stop'
         $env:PGPASSWORD = $null
         if ($schemaExit -eq 0) {
             Write-OK "schema.sql re-applied as postgres superuser"
         } else {
-            Write-Warn "schema.sql re-apply exited $schemaExit - check $InstallDir\logs\schema-apply.log"
+            # Non-fatal by design (a pre-existing install may be mid-migration and
+            # this step is a best-effort self-heal) - but this is now a REAL SQL
+            # error, not noise, and may mean a security-relevant grant/view (e.g.
+            # users_public/app_settings_public) did not apply. Surfaced loudly via
+            # Write-Warn plus the full psql output already in schema-apply.log.
+            Write-Warn "schema.sql re-apply FAILED (exit $schemaExit) - a SQL statement errored and the schema may be partially applied (possibly including security-relevant grants/views). Check $InstallDir\logs\schema-apply.log and re-run manually."
         }
     }
 

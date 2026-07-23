@@ -425,7 +425,8 @@ BEGIN
 END
 $$;
 
--- ── Secret-bearing table row/column-level exclusion (security pass, 2026-07) ─
+-- ── Secret-bearing table row/column-level exclusion (security pass, 2026-07;
+--    CORRECTED 2026-07-23 — see below) ──────────────────────────────────────
 -- The blanket grant above previously gave nocvault_readonly/claude_readonly
 -- unrestricted table-level SELECT on `users` (password_hash) and
 -- `app_settings` (value holds license_key alongside plain cosmetic settings)
@@ -435,22 +436,62 @@ $$;
 -- secret can never leak by omission. Placed AFTER the blanket grant block —
 -- order matters, the LAST statement touching a privilege wins (see LogVault/
 -- SpanVault CLAUDE.md for the incident that made this ordering rule explicit).
+--
+-- CORRECTED 2026-07-23: the original 2026-07 fix was broken and never
+-- actually took effect. `app_settings_public` selected an `updated_at` column
+-- that does not exist on NetVault's `app_settings` table (`key TEXT PRIMARY
+-- KEY, value TEXT` — copy-pasted from LogVault/DDIVault, whose app_settings
+-- genuinely has that column). That CREATE VIEW failed at apply time, and
+-- because `psql -f schema.sql` was not run with ON_ERROR_STOP, the script
+-- printed the error and kept going into the REVOKE/GRANT DO block below —
+-- which ALSO referenced the never-created app_settings_public, so its own
+-- GRANT failed, which aborted the ENTIRE DO block atomically (both the
+-- users AND app_settings REVOKE/GRANT, and both roles) — silently leaving
+-- BOTH tables fully exposed to nocvault_readonly/claude_readonly exactly as
+-- before, live-verified via `information_schema.role_table_grants`. Fixed by
+-- (a) dropping the nonexistent `updated_at` column from the view, and
+-- (b) splitting the single two-table DO block into one independent DO block
+-- PER TABLE, each with its own EXCEPTION handler that RAISE WARNINGs loudly
+-- instead of silently swallowing a failure — so a future mistake in one
+-- table's block can no longer take down the other table's fix, and can no
+-- longer vanish unnoticed even without ON_ERROR_STOP (which the invoking
+-- scripts now also pass — see installer/Update-NetVault.ps1).
 CREATE OR REPLACE VIEW users_public AS
 SELECT id, name, email, role, created_at FROM users;
 
 CREATE OR REPLACE VIEW app_settings_public AS
-SELECT key, value, updated_at FROM app_settings
+SELECT key, value FROM app_settings
 WHERE key IN ('app_name', 'app_subtitle', 'app_logo_url', 'app_navy_color', 'app_primary_color');
 
+-- users: independent of app_settings' block below — a failure here cannot
+-- prevent (or be prevented by) app_settings' REVOKE/GRANT.
 DO $$
 BEGIN
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nocvault_readonly') THEN
-    REVOKE SELECT ON users, app_settings FROM nocvault_readonly;
-    GRANT SELECT ON users_public, app_settings_public TO nocvault_readonly;
+    REVOKE SELECT ON users FROM nocvault_readonly;
+    GRANT SELECT ON users_public TO nocvault_readonly;
   END IF;
   IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'claude_readonly') THEN
-    REVOKE SELECT ON users, app_settings FROM claude_readonly;
-    GRANT SELECT ON users_public, app_settings_public TO claude_readonly;
+    REVOKE SELECT ON users FROM claude_readonly;
+    GRANT SELECT ON users_public TO claude_readonly;
   END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'SECURITY: users_public REVOKE/GRANT for nocvault_readonly/claude_readonly FAILED (%). users.password_hash may still be exposed to those roles — investigate and re-run this schema file immediately.', SQLERRM;
+END
+$$;
+
+-- app_settings: independent of users' block above.
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nocvault_readonly') THEN
+    REVOKE SELECT ON app_settings FROM nocvault_readonly;
+    GRANT SELECT ON app_settings_public TO nocvault_readonly;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'claude_readonly') THEN
+    REVOKE SELECT ON app_settings FROM claude_readonly;
+    GRANT SELECT ON app_settings_public TO claude_readonly;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'SECURITY: app_settings_public REVOKE/GRANT for nocvault_readonly/claude_readonly FAILED (%). app_settings.value (incl. license_key) may still be exposed to those roles — investigate and re-run this schema file immediately.', SQLERRM;
 END
 $$;

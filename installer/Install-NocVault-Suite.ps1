@@ -397,7 +397,16 @@ $env:PGPASSWORD = $PgAdminPassword
 # on tables schema.sql is ABOUT to create, which schema.sql's own later
 # REVOKE still correctly narrows regardless of how the grant first landed.
 GrantNocRoRead "netvault"
-& "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -f "$NVAppDir\schema.sql"
+# -v ON_ERROR_STOP=1 (added 2026-07-23): a fresh install must not silently
+# "succeed" with a broken schema - without this flag psql prints a SQL error
+# (e.g. a CREATE VIEW referencing a nonexistent column) and keeps going,
+# exiting 0 regardless, which is how the users_public/app_settings_public
+# security fix shipped un-applied for a full release without anyone noticing.
+# schema.sql's own idempotent statements (IF NOT EXISTS/IF EXISTS/OR REPLACE/
+# ON CONFLICT) are not errors on a fresh DB, so this does not affect them -
+# only a genuine SQL error now stops the install.
+& "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -v ON_ERROR_STOP=1 -f "$NVAppDir\schema.sql"
+if ($LASTEXITCODE -ne 0) { throw "NetVault schema.sql failed to apply (exit $LASTEXITCODE) - installation aborted; a security-relevant grant/view may not have applied. Check the psql output above." }
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO netvault;"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO netvault;"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -f "$NVAppDir\setup.sql"

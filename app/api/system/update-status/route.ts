@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server'
 import { execSync, execFile } from 'child_process'
 import { promisify } from 'util'
-import fs from 'fs'
-import path from 'path'
 import pkg from '../../../../package.json'
+import { findGitRoot } from '@/lib/gitRoot'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,17 +10,6 @@ const execFileP = promisify(execFile)
 // Disable git's interactive credential prompt so an auth-required remote fails
 // fast (returns null / falls back) instead of blocking on a hidden prompt.
 const GIT_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
-
-function findGitRoot(start: string): string {
-  let dir = start
-  for (let i = 0; i < 6; i++) {
-    if (fs.existsSync(path.join(dir, '.git'))) return dir
-    const parent = path.dirname(dir)
-    if (parent === dir) break
-    dir = parent
-  }
-  return start
-}
 
 // Short git commit hash for the deployed checkout, or null if git is
 // unavailable (e.g. a non-git on-prem deploy). Update detection degrades
@@ -85,6 +73,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.22': [
+    'Security fix, corrected: the 1.23.18 fix for the cross-app diagnostic read role seeing user password hashes and the license key did NOT actually work -- the filtered view it added referenced a column that doesn\'t exist on NetVault\'s app_settings table, which made that view fail to create and silently aborted the whole access-narrowing step, leaving both password hashes and the license key just as exposed as before the "fix" shipped. Verified live against production and corrected: the view now only selects columns that actually exist, and the fix for each table is now independent and impossible to silently no-op.',
+    'The database update scripts now stop and report clearly if a schema change fails to apply, instead of quietly carrying on as if it succeeded (which is how the above went unnoticed for a release).',
+    'Merged two duplicate, slightly-inconsistent copies of internal update-checking logic into one, so a future fix to it can\'t drift between the "Update Now" button and the update-available check again.',
+  ],
   '1.23.21': [
     'Fixed the updater (Update-NetVault.ps1) reporting "Update failed" on a benign npm notice (an npm registry deprecation message about their audit-check endpoint) even when npm actually succeeded -- a PowerShell quirk where any stderr output from a native command gets treated as a fatal error. Found and fixed 3 other places in the same script with the identical risk (both sc.exe calls), not just the one that was reported.',
   ],

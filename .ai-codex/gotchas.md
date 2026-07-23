@@ -7,6 +7,7 @@
 - Do NOT disable `typescript.ignoreBuildErrors` — the build type-check is the deploy safety gate.
 - Updater build is slow (~82 endpoints, full type-check) and this is INHERENT — no safe speed knob remains; don't re-litigate.
 - No Tailwind — custom CSS design system (`app/globals.css` CSS vars + inline `style={{}}`). Never hardcode font-size/color hex that duplicates a `--text-*`/`--bg-*`/`--border-*` token (breaks theming). Login/launcher pages are exempt (intentional hero typography).
+- `findGitRoot()` is now a single shared function in `lib/gitRoot.ts` (extracted 2026-07-23) — imported by both `app/api/system/update/route.ts` and `app/api/system/update-status/route.ts`. It was previously two independent copies and their `.next`-build-output guard (never trust a `.git` nested inside `.next/standalone`) drifted between them. Any future hardening of this function only needs to happen once — don't re-fork it.
 
 ## Auth / access control
 - No `middleware.ts` — API gating is per-route (`getServerSession` + inline role checks), unlike SpanVault which proxies all `/api/*` through one middleware. Don't assume a centralized gate exists.
@@ -47,6 +48,8 @@
 - Installer `.exe`s are gitignored build artifacts, UNSIGNED (SmartScreen warns) — a GUI-wrapper (.ps1) code change ships via git clone at install time, no exe rebuild needed; only a `param()` surface change on the wrapped `.ps1` needs a rebuilt exe.
 - DB passwords/secrets are auto-generated per install (no shared hardcoded defaults) and persisted in `C:\ProgramData\NocVault\secrets.env` — never re-introduce shared/hardcoded credentials.
 - Demo data seeder (`NocVault-Demo-Seed.exe` / `installer/seeds/*.js`) is optional tooling, deliberately NOT wired into `Test-NocVault-Suite.ps1`.
+- `psql -f schema.sql` invocations (`installer/Update-NetVault.ps1` and `installer/Install-NocVault-Suite.ps1`'s NetVault step) now pass `-v ON_ERROR_STOP=1` (added 2026-07-23) — without it, a genuine SQL error (e.g. a view referencing a nonexistent column) just prints and psql exits 0 anyway, which is exactly how a security-relevant REVOKE/GRANT fix shipped silently un-applied for a full release. schema.sql's idempotent statements (`IF NOT EXISTS`/`IF EXISTS`/`OR REPLACE`/`ON CONFLICT`) are unaffected — they don't error on a re-run. Any future top-level statement added to schema.sql must stay idempotent or it will now correctly halt the apply.
+- A `DO $$ ... $$` block with no `EXCEPTION` handler fails ATOMICALLY — one failing statement inside it (e.g. a `GRANT` on a view that failed to create) rolls back every other statement in that same block, including unrelated tables/roles. Keep independent fixes (e.g. one table's REVOKE/GRANT vs another's) in SEPARATE `DO $$` blocks, and add an `EXCEPTION WHEN OTHERS THEN RAISE WARNING ...` to any block whose failure must stay visible instead of silently rolling back (see schema.sql's `users_public`/`app_settings_public` blocks, corrected 2026-07-23 after exactly this bug).
 
 ## License / entitlements
 - `lib/license.ts` `LICENSE_SECRET` is a hardcoded shared AES key baked into every install (reviewed 2026-07-14 trade-off, kept as-is intentionally) — do not "fix" this into an env var without reading the comment first; it validates every customer's license key.
