@@ -172,6 +172,23 @@ health-poll instead of long fixed sleeps.
 - Net: if asked again to "speed up the slow updater," the answer is the build is the cost of
   shipping the largest app in the suite; no safe change remains.
 
+**Known gotcha — the in-app "Update Now" trigger runs the build at BelowNormal CPU
+priority unless the script corrects it (fixed 1.23.26).** `app/api/system/update/route.ts`
+schedules the update via a bare `schtasks /create ... /ru SYSTEM` with no priority
+specified — Windows Task Scheduler's default task priority is level 7, which maps to the
+`BelowNormal` process priority class. A manually-run script from an interactive PowerShell
+window gets the normal `Normal` priority class instead. This starves the CPU-bound
+`npm run build` step (see above — it's already the slowest, heaviest part of the update)
+under any contention from the rest of the suite (Postgres, the other 3 apps, their
+collectors) running at Normal-or-higher, making an in-app-triggered update look "stuck" at
+the build step compared to the same update run manually. `Update-NetVault.ps1` now resets
+its own process priority to `Normal` at startup, regardless of how it was invoked — Windows
+child processes inherit their parent's priority class by default, so this also covers the
+npm/node/Turbopack children it spawns. A no-op when already `Normal` (the manual-run case).
+Don't "fix" this at the `schtasks /create` call site instead (e.g. hunting for a `/priority`
+flag) — `schtasks.exe` doesn't expose one on the classic command-line syntax; resetting the
+script's own priority is the simpler fix and works for both invocation paths at once.
+
 **Launcher load speed (fixed in 1.19.8).** The launcher's slowness was mainly the suite
 cross-app probes (`app/api/suite/health` + `app/api/suite/stats`), not the license check —
 they fan out to sibling apps and a slow/offline sibling could stall the tiles. They now use
