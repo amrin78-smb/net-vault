@@ -189,6 +189,21 @@ Don't "fix" this at the `schtasks /create` call site instead (e.g. hunting for a
 flag) — `schtasks.exe` doesn't expose one on the classic command-line syntax; resetting the
 script's own priority is the simpler fix and works for both invocation paths at once.
 
+**Known gotcha — a slow update could reload the browser into a dead page (fixed 1.23.28).**
+Even with the priority fix above, a genuinely slow `npm run build` can still outrun the
+`UpdatingOverlay` component's (`app/(app)/settings/page.tsx`) 3-consecutive-healthy gate,
+because NSSM auto-restarts its managed process shortly after this script kills the old
+`node` process (see the `sc.exe start` "already running" note elsewhere in this file) —
+that can briefly relaunch the OLD build's `server.js` before the real update has replaced
+it, which is enough to fool the gate into declaring the update "back up" while the actual
+new code is still mid-build. The overlay's final confirmation step (comparing
+`/api/system/update-status`'s `current_commit` against the pre-update commit) used to
+assume success and navigate anyway if THAT check's own fetch failed — which is exactly
+what happens when the service drops again for real right after the false-positive. It now
+retries for ~10s and shows a "taking longer than expected" message instead of guessing.
+Don't revert this to a bare "fetch failed -> assume it's up" fallback even though that
+reads as harmless simplification — it reintroduces the exact "page cannot be reached" bug.
+
 **Launcher load speed (fixed in 1.19.8).** The launcher's slowness was mainly the suite
 cross-app probes (`app/api/suite/health` + `app/api/suite/stats`), not the license check —
 they fan out to sibling apps and a slow/offline sibling could stall the tiles. They now use
