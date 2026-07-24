@@ -73,6 +73,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.28': [
+    'Fixed the "Update Now" progress overlay reloading into a dead page ("This site can\'t be reached") on a slow update. After 3 consecutive healthy checks it counts down and does one final check that the code actually changed before reloading -- but if THAT check itself failed to reach the server (the service can drop again right after briefly answering healthy, e.g. from a known NSSM auto-restart race that can relaunch the OLD build for a few seconds before the real update replaces it), the overlay assumed "it must be up anyway" and reloaded blind. It now retries the final check for about 10 seconds instead of guessing, and falls back to a "taking longer than expected, refresh manually" message rather than reloading into a server that might still be down.',
+  ],
   '1.23.27': [
     'Fixed the new last-update-status.json (added in 1.23.24) being unreadable by the app: Windows PowerShell 5.1\'s Out-File -Encoding UTF8 writes a byte-order-mark, which Node\'s file reader does not strip, so JSON.parse threw on every single write -- the update-failure banner and status API always reported "no status" regardless of what actually happened. The updater now writes the file via .NET directly with a BOM-less encoding, and the API route also strips a BOM defensively in case an old BOM-prefixed file is still on disk.',
   ],

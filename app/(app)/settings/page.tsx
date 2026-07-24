@@ -56,7 +56,7 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
   // If it matches the pre-update version, the pull/build silently failed —
   // show an error instead of redirecting with a false success banner. Driven by
   // the countdown effect (and the "Reload Now" button) once the API is back up.
-  const verifyAndRedirect = async () => {
+  const verifyAndRedirect = async (attempt = 0) => {
     try {
       const ctrl = new AbortController()
       const abortId = setTimeout(() => ctrl.abort(), 5000)
@@ -71,11 +71,26 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
         setPhase('verify_failed')
         return
       }
+      window.location.href = '/dashboard?updated=true'
+      return
     } catch {
-      // Verification itself failed (e.g. transient) — the service is back up,
-      // so fall through and let the user land on the dashboard.
+      // The verify fetch itself failed - most likely the service dropped again
+      // right after the 3-consecutive-healthy gate passed. That gate can be
+      // satisfied by NSSM briefly auto-restarting the OLD build (a known race -
+      // see Update-NetVault.ps1's "already running" note) before the real
+      // update has actually replaced it, so "back_up" isn't a hard guarantee
+      // the new code is actually serving yet. Previously this assumed "must be
+      // up" and reloaded straight into a dead server ("page cannot be
+      // reached"). Retry a few times instead of trusting an unverified guess.
     }
-    window.location.href = '/dashboard?updated=true'
+    if (attempt < 4) {
+      setTimeout(() => { void verifyAndRedirect(attempt + 1) }, 2000)
+    } else {
+      // Still can't confirm after retrying - safer to say so than to guess and
+      // risk reloading into a dead page. The user can retry manually once the
+      // service has genuinely settled.
+      setPhase('timeout')
+    }
   }
 
   useEffect(() => {
