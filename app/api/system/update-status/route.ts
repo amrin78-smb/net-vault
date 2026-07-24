@@ -73,6 +73,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.25': [
+    'Cosmetic-only fix: corrected a misaligned hashtable entry in Update-NetVault.ps1 left over from 1.23.24 (no logic change). Also serves as a small, real commit to validate the new self-updating resilience flow end-to-end via the in-app "Update Now" button.',
+  ],
   '1.23.24': [
     'Made the updater (Update-NetVault.ps1) resilient to a failed update instead of just reporting one: it now snapshots the current commit and build output before touching anything, and if any stage of an update fails (git pull, npm install/build, static copy, service start, or a NEW mandatory post-start health check), it automatically reverts to the last known-good version, restarts the service on it, and re-verifies /api/health -- instead of possibly leaving the hub on broken/partial code.',
     'Every update run (success or failure) now writes a structured result to logs\\last-update-status.json -- what stage it reached, an error code, the error message, whether it rolled back, and whether the health check passed after -- so a failure has a durable, specific record instead of just a scrollback log.',

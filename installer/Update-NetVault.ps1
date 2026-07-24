@@ -120,7 +120,7 @@ $standaloneEnvBackup = $null
 
 $StageCodes = @{
     'init'            = 5
-    'pre-flight'       = 10
+    'pre-flight'      = 10
     'git-pull'        = 20
     'npm-install'     = 30
     'npm-build'       = 40
