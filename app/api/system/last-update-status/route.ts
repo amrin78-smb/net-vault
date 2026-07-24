@@ -30,8 +30,12 @@ export async function GET() {
     return NextResponse.json({ exists: false })
   }
   try {
+    // Strip a leading UTF-8 BOM defensively: Windows PowerShell 5.1's
+    // `Out-File -Encoding UTF8` used to write this file with one (fixed on the
+    // writer side too, but an already-written file on disk may still have it).
+    const BOM = String.fromCharCode(0xfeff)
     const raw = fs.readFileSync(statusPath, 'utf8')
-    const status = JSON.parse(raw)
+    const status = JSON.parse(raw.startsWith(BOM) ? raw.slice(1) : raw)
     return NextResponse.json({ exists: true, ...status })
   } catch {
     return NextResponse.json({ exists: false, error: 'Could not read update status file' })

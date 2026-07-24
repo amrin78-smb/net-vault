@@ -174,7 +174,14 @@ function Write-StatusJson {
         schemaWarning     = $schemaWarning
     }
     try {
-        $status | ConvertTo-Json | Out-File -FilePath $StatusPath -Encoding UTF8
+        # Windows PowerShell 5.1's `Out-File -Encoding UTF8` writes a UTF-8 BOM,
+        # which Node's `fs.readFileSync(path, 'utf8')` (used by the API route
+        # that reads this file) does NOT strip - a leading BOM breaks JSON.parse
+        # on every single write. Write via .NET directly with a BOM-less UTF8Encoding
+        # instead of the Out-File cmdlet to avoid this (there is no utf8NoBOM
+        # option for Out-File in Windows PowerShell 5.1, only in PS 6+/Core).
+        $json = $status | ConvertTo-Json
+        [System.IO.File]::WriteAllText($StatusPath, $json, (New-Object System.Text.UTF8Encoding $false))
     } catch {
         Write-Warn "Could not write status file $StatusPath - $($_.Exception.Message)"
     }
