@@ -27,6 +27,27 @@ $env:PATH = @(
     $env:PATH
 ) -join ";"
 
+# The in-app updater's scheduled task (see the comment below) is created with a
+# bare `schtasks /create`, which leaves the task at Task Scheduler's DEFAULT
+# priority level (7), mapping to the BelowNormal process priority class - unlike
+# a manually-run script from an interactive PowerShell window, which gets the
+# normal Normal priority class. This starves the CPU-bound `npm run build` step
+# (full TypeScript type-check + Turbopack compile) under any contention from the
+# rest of the suite (Postgres, the other 3 apps, their collectors) running at
+# Normal-or-higher, making an in-app-triggered update look "stuck" at that step
+# even though it's just being continuously preempted. Windows child processes
+# inherit their parent's priority class by default, so resetting THIS process
+# (however it was invoked) to Normal here, before git/npm/build run, fixes it
+# for both invocation paths - a no-op when already Normal (the manual-run case).
+try {
+    $proc = Get-Process -Id $PID
+    $originalPriority = $proc.PriorityClass
+    if ($originalPriority -ne 'Normal') {
+        $proc.PriorityClass = 'Normal'
+        Write-Host "Adjusted process priority to Normal (was $originalPriority)"
+    }
+} catch { Write-Warning "Could not adjust process priority: $($_.Exception.Message)" }
+
 # The in-app updater (Settings -> Updates) is fire-and-forget: it schedules this
 # script as a SYSTEM task (schtasks /create ... /ru SYSTEM, then schtasks /run)
 # and immediately returns { started: true } to the browser, with no live output

@@ -73,6 +73,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.26': [
+    'Fixed the in-app "Update Now" button running noticeably slower than a manual update, appearing "stuck" at the build step. The scheduled task it creates (schtasks /create, no priority specified) inherits Task Scheduler\'s default priority level (7 = BelowNormal process priority), unlike a manually-run script, which gets Normal priority -- starving the CPU-bound npm build step under contention from the rest of the suite (Postgres, the other 3 apps, their collectors). The updater now resets its own process priority to Normal at startup regardless of how it was invoked; a no-op for a manual run, which was already Normal.',
+  ],
   '1.23.25': [
     'Cosmetic-only fix: corrected a misaligned hashtable entry in Update-NetVault.ps1 left over from 1.23.24 (no logic change). Also serves as a small, real commit to validate the new self-updating resilience flow end-to-end via the in-app "Update Now" button.',
   ],
