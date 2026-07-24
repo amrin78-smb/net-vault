@@ -48,23 +48,6 @@ try {
     }
 } catch { Write-Warning "Could not adjust process priority: $($_.Exception.Message)" }
 
-# The in-app updater (Settings -> Updates) is fire-and-forget: it schedules this
-# script as a SYSTEM task (schtasks /create ... /ru SYSTEM, then schtasks /run)
-# and immediately returns { started: true } to the browser, with no live output
-# stream. Without a transcript, a run triggered that way leaves NO durable
-# record of what happened - every Write-Host/Write-Step/Write-OK/Write-Warn line
-# below is otherwise lost the moment the scheduled task's process exits, which
-# is exactly the case that most needs diagnosing. Start it as early as possible
-# (before pre-flight / git / build) so even an early failure is captured.
-# Best-effort: a transcript that fails to start must never block the actual
-# update. (Mirrors Update-SpanVault.ps1's fix for this same gap.)
-New-Item -ItemType Directory -Force -Path "$InstallDir\logs" | Out-Null
-$transcriptPath = Join-Path "$InstallDir\logs" "update-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
-try { Start-Transcript -Path $transcriptPath -Append | Out-Null } catch { Write-Warning "Could not start transcript: $($_.Exception.Message)" }
-
-Write-Host "=== Update starting in 5 seconds ==="
-Start-Sleep -Seconds 5
-
 # Resolve a path to its TRUE on-disk casing (walking each parent for the real component
 # name). Get-Item().FullName only echoes the TYPED casing, which is not enough here.
 function Get-TrueCasePath([string]$p) {
@@ -94,7 +77,44 @@ $AppDir  = Split-Path -Parent $PSScriptRoot
 # treats the two casings as different modules and loads React twice -> the build crashes
 # with "Cannot read properties of null (reading 'useContext')". Pin to on-disk casing.
 $AppDir  = Get-TrueCasePath $AppDir
+
+# Self-locate -InstallDir too, the same way $AppDir already self-locates - the
+# in-app "Update Now" trigger (app/api/system/update/route.ts) never passes
+# -InstallDir, so it always fell back to this parameter's hardcoded default
+# regardless of the REAL install location. That silently broke the transcript,
+# last-update-status.json, and $NssmExe paths (all still built from $InstallDir
+# below) on any install whose real path differs from the default - the failure
+# banner would never appear even after a genuinely failed/rolled-back update,
+# since app/api/system/last-update-status/route.ts finds the real $AppDir just
+# fine but looks for the status file relative to IT, not this now-wrong
+# $InstallDir. A suite install's app root ends in "...\<App>\app" (this
+# script's own doc comment above); a standalone install's app root has no such
+# "app" leaf. Detect which by checking $AppDir's own leaf folder name, and
+# derive InstallDir from that instead of trusting the (possibly-stale-default)
+# parameter - mirrors $AppDir's own self-location, not a partial fix.
+if ((Split-Path -Leaf $AppDir) -ieq 'app') {
+    $InstallDir = Split-Path -Parent $AppDir
+} else {
+    $InstallDir = $AppDir
+}
 $NssmExe = "$InstallDir\nssm\nssm-2.24\win64\nssm.exe"
+
+# The in-app updater (Settings -> Updates) is fire-and-forget: it schedules this
+# script as a SYSTEM task (schtasks /create ... /ru SYSTEM, then schtasks /run)
+# and immediately returns { started: true } to the browser, with no live output
+# stream. Without a transcript, a run triggered that way leaves NO durable
+# record of what happened - every Write-Host/Write-Step/Write-OK/Write-Warn line
+# below is otherwise lost the moment the scheduled task's process exits, which
+# is exactly the case that most needs diagnosing. Start it as early as possible
+# (before pre-flight / git / build) so even an early failure is captured.
+# Best-effort: a transcript that fails to start must never block the actual
+# update. (Mirrors Update-SpanVault.ps1's fix for this same gap.)
+New-Item -ItemType Directory -Force -Path "$InstallDir\logs" | Out-Null
+$transcriptPath = Join-Path "$InstallDir\logs" "update-$(Get-Date -Format 'yyyyMMdd-HHmmss').log"
+try { Start-Transcript -Path $transcriptPath -Append | Out-Null } catch { Write-Warning "Could not start transcript: $($_.Exception.Message)" }
+
+Write-Host "=== Update starting in 5 seconds ==="
+Start-Sleep -Seconds 5
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
@@ -312,11 +332,21 @@ try {
     } else {
         Write-Warn "NetVault service was not running"
     }
-    $node = Get-Process -Name node -ErrorAction SilentlyContinue
+    # Scope this to node.exe processes running FROM THIS install ($AppDir) only.
+    # `Stop-Process -Name node -Force` matches by process NAME alone - on the
+    # shared suite server every one of LogVault/DDIVault/SpanVault ALSO runs as
+    # a plain "node.exe", so an unscoped kill here force-kills their processes
+    # too as collateral damage during a NetVault-only update, triggering an
+    # unplanned NSSM auto-restart cycle in apps nobody asked to touch. Filter by
+    # command line instead so only THIS app's leftover process is killed.
+    $node = Get-CimInstance -ClassName Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine.ToLower().Contains($AppDir.ToLower()) }
     if ($node) {
-        Stop-Process -Name node -Force
+        foreach ($p in $node) {
+            Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+        }
         Start-Sleep -Seconds 2
-        Write-OK "Killed leftover node process"
+        Write-OK "Killed leftover node process(es) for this install"
     }
 
     # Backup .env before git reset
@@ -356,7 +386,28 @@ try {
     # always snapshot the CURRENTLY-serving build, not an older leftover one.
     $standaloneDir    = "$AppDir\.next\standalone"
     $standaloneBackup = "$AppDir\.next\standalone.lastgood"
-    if (Test-Path $standaloneBackup) { Remove-Item $standaloneBackup -Recurse -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $standaloneBackup) {
+        Remove-Item $standaloneBackup -Recurse -Force -ErrorAction SilentlyContinue
+        if (Test-Path $standaloneBackup) {
+            # Deleting a stale backup left by a prior interrupted run failed
+            # (e.g. a locked file) - do NOT proceed to rename the CURRENT good
+            # build into this same name, which would throw on the collision and,
+            # worse, could leave the stale backup in place for Invoke-Rollback to
+            # mistake for THIS run's own snapshot later (silently restoring an
+            # old, wrong version while still reporting a "successful" rollback).
+            # A rename only touches the directory entry itself, not every file
+            # inside it, so it can succeed even when a full delete can't - move
+            # the stale one aside under a name Invoke-Rollback will never look
+            # for, instead of leaving it colliding with this run's own backup.
+            $staleName = "standalone.stale-$(Get-Date -Format 'yyyyMMddHHmmss')"
+            try {
+                Rename-Item -Path $standaloneBackup -NewName $staleName -ErrorAction Stop
+                Write-Warn "Stale backup from a prior run could not be deleted - moved aside as $staleName for manual cleanup"
+            } catch {
+                throw "Stale backup at $standaloneBackup could not be removed or moved aside - manual cleanup required before this update can safely run: $($_.Exception.Message)"
+            }
+        }
+    }
     if (Test-Path $standaloneDir) {
         Rename-Item -Path $standaloneDir -NewName 'standalone.lastgood' -ErrorAction Stop
         Write-OK "Snapshotted current build output for rollback"

@@ -57,6 +57,8 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
   // show an error instead of redirecting with a false success banner. Driven by
   // the countdown effect (and the "Reload Now" button) once the API is back up.
   const verifyAndRedirect = async (attempt = 0) => {
+    let fetchOk = false
+    let newVersion = ''
     try {
       const ctrl = new AbortController()
       const abortId = setTimeout(() => ctrl.abort(), 5000)
@@ -66,13 +68,8 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
       // Compare commit hashes, not the semver version: a patch pushed without
       // a version bump still changes the commit, so the version string alone
       // would falsely report "verify_failed".
-      const newVersion: string = data?.current_commit || ''
-      if (preVersionRef.current && newVersion && newVersion === preVersionRef.current) {
-        setPhase('verify_failed')
-        return
-      }
-      window.location.href = '/dashboard?updated=true'
-      return
+      newVersion = data?.current_commit || ''
+      fetchOk = true
     } catch {
       // The verify fetch itself failed - most likely the service dropped again
       // right after the 3-consecutive-healthy gate passed. That gate can be
@@ -83,6 +80,27 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
       // up" and reloaded straight into a dead server ("page cannot be
       // reached"). Retry a few times instead of trusting an unverified guess.
     }
+
+    if (fetchOk) {
+      if (newVersion) {
+        if (preVersionRef.current && newVersion === preVersionRef.current) {
+          setPhase('verify_failed')
+          return
+        }
+        window.location.href = '/dashboard?updated=true'
+        return
+      }
+      // fetchOk but newVersion is empty: the request itself succeeded (HTTP 200)
+      // but the server-side git rev-parse behind it failed transiently, so
+      // current_commit came back null. This is NOT the same as "verified
+      // unchanged" - it's inconclusive, and must retry exactly like the
+      // network-failure path below rather than falling through to an
+      // unconditional redirect (a 200 response with no commit used to be
+      // treated as success, reintroducing the same "guessed and reloaded into
+      // an unverified state" bug class via a different trigger than the
+      // original fetch-exception case).
+    }
+
     if (attempt < 4) {
       setTimeout(() => { void verifyAndRedirect(attempt + 1) }, 2000)
     } else {

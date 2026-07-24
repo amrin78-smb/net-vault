@@ -73,6 +73,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.30': [
+    'Found via a full adversarial bug sweep of yesterday\'s resilience work (4 real issues, all fixed): the status file location still used the unfixed -InstallDir parameter while the app path already self-located independently of it, so on any install where the two diverge the failure banner would never appear even after a genuinely failed/rolled-back update -- -InstallDir now self-locates the same way the app path already does.',
+    'The "kill any leftover node process" step during an update used to match by process name alone, which on the shared suite server also matches LogVault/DDIVault/SpanVault\'s own node.exe processes -- a routine NetVault-only update could force-kill sibling apps as collateral damage. Now scoped to only this install\'s own process.',
+    'A stale rollback backup left behind by a rare failed cleanup (e.g. a locked file) could silently collide with the next update\'s own snapshot step and cause that run\'s rollback to restore the wrong, older version while still reporting success. The stale backup is now moved aside safely instead of causing a collision.',
+    'The update-progress overlay\'s final verification could still fall through to declaring success without actually confirming anything, if the version-check request succeeded but came back with no commit data (a narrower trigger than the network-failure case already fixed) -- now retried the same way a network failure already was.',
+  ],
   '1.23.29': [
     'Fixed the same rollback-ordering bug found live in LogVault/DDIVault/SpanVault\'s identical rollback code (production incident): the rollback restored .next\\standalone BEFORE stopping the NetVault service, so a failure after the service had already restarted (the service-start or health-check stage) would mutate a live build directory while the running process was still serving from it -- exactly the race that corrupted node_modules down to a handful of packages in the other apps. NetVault wasn\'t hit by it yet, but the exposure was identical. Reordered to stop the service first, matching the order the main update flow already uses.',
   ],
