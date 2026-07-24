@@ -73,6 +73,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.29': [
+    'Fixed the same rollback-ordering bug found live in LogVault/DDIVault/SpanVault\'s identical rollback code (production incident): the rollback restored .next\\standalone BEFORE stopping the NetVault service, so a failure after the service had already restarted (the service-start or health-check stage) would mutate a live build directory while the running process was still serving from it -- exactly the race that corrupted node_modules down to a handful of packages in the other apps. NetVault wasn\'t hit by it yet, but the exposure was identical. Reordered to stop the service first, matching the order the main update flow already uses.',
+  ],
   '1.23.28': [
     'Fixed the "Update Now" progress overlay reloading into a dead page ("This site can\'t be reached") on a slow update. After 3 consecutive healthy checks it counts down and does one final check that the code actually changed before reloading -- but if THAT check itself failed to reach the server (the service can drop again right after briefly answering healthy, e.g. from a known NSSM auto-restart race that can relaunch the OLD build for a few seconds before the real update replaces it), the overlay assumed "it must be up anyway" and reloaded blind. It now retries the final check for about 10 seconds instead of guessing, and falls back to a "taking longer than expected, refresh manually" message rather than reloading into a server that might still be down.',
   ],

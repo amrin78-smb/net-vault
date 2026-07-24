@@ -218,6 +218,29 @@ function Invoke-Rollback([string]$Reason) {
     Write-Step "ROLLING BACK - reason: $Reason"
     $ok = $true
     try {
+        # Stop/kill the service BEFORE touching .next\standalone below. A failure
+        # at the 'service-start' or 'health-check' stage means sc.exe start
+        # NetVault already ran earlier in the main flow, so without this the
+        # restore's Remove-Item/Rename-Item would be mutating a directory tree
+        # while the live NetVault process is still running against it - a real
+        # race that corrupted node_modules in production for the identical
+        # LogVault/DDIVault/SpanVault rollback code (Collector crash-looped on a
+        # missing module even though the restore itself reported success).
+        # Mirrors the safe order the main update flow already uses (the service
+        # is stopped before the build/standalone snapshot is ever touched).
+        Write-Step "Stopping NetVault before restoring last known-good version"
+        $ErrorActionPreference = 'Continue'
+        $null = & sc.exe stop NetVault 2>&1
+        $ErrorActionPreference = 'Stop'
+        $portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+        if ($portProc) {
+            $procPid = $portProc.OwningProcess
+            if ($procPid -and $procPid -gt 0) {
+                Get-Process -Id $procPid -ErrorAction SilentlyContinue | Stop-Process -Force
+            }
+        }
+        Start-Sleep -Seconds 2
+
         Set-Location $AppDir
         if ($prevCommit) {
             Write-Host "    Reverting source to $prevCommit" -ForegroundColor Gray
@@ -247,14 +270,6 @@ function Invoke-Rollback([string]$Reason) {
         }
 
         Write-Step "Restarting NetVault on last known-good version"
-        $portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
-        if ($portProc) {
-            $procPid = $portProc.OwningProcess
-            if ($procPid -and $procPid -gt 0) {
-                Get-Process -Id $procPid -ErrorAction SilentlyContinue | Stop-Process -Force
-                Start-Sleep -Seconds 2
-            }
-        }
         $ErrorActionPreference = 'Continue'
         $null = & sc.exe start NetVault 2>&1
         $startExit = $LASTEXITCODE
