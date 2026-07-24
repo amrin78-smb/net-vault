@@ -679,13 +679,21 @@ if ($InstallDDIVault) {
     # statements (IF NOT EXISTS/OR REPLACE/ON CONFLICT) are not errors on a
     # fresh DB, so this does not affect them - only a genuine SQL error now
     # aborts the install.
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 -f "$DDIAppDir\scripts\schema.sql"
+    # --single-transaction (added 2026-07-24, installer-parity fix mirroring
+    # Update-DDIVault.ps1's own updater, which gained this same day as part
+    # of the resilience-system review): without it, a failure partway through
+    # one of these 4 files can leave that file's DDL partially committed on a
+    # fresh install, same as on an upgrade. Confirmed (same review) that none
+    # of the 4 files use a statement that cannot run inside a transaction
+    # (no CREATE INDEX CONCURRENTLY, ALTER TYPE ... ADD VALUE, VACUUM, or
+    # CREATE DATABASE) - safe to wrap each file's own apply in one transaction.
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 --single-transaction -f "$DDIAppDir\scripts\schema.sql"
     if ($LASTEXITCODE -ne 0) { throw "DDIVault schema.sql failed to apply (exit $LASTEXITCODE) - installation aborted; a security-relevant grant/view (app_settings_public/api_keys_public/smtp_config_public views or the ddi_servers credential-column REVOKE) may not have applied. Check the psql output above." }
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 -f "$DDIAppDir\scripts\schema-ipam.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 --single-transaction -f "$DDIAppDir\scripts\schema-ipam.sql"
     if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-ipam.sql failed to apply (exit $LASTEXITCODE) - installation aborted. Check the psql output above." }
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 -f "$DDIAppDir\scripts\schema-server-auth.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 --single-transaction -f "$DDIAppDir\scripts\schema-server-auth.sql"
     if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-server-auth.sql failed to apply (exit $LASTEXITCODE) - installation aborted; the ddi_servers ps_username/ps_password credential columns may not exist. Check the psql output above." }
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 -f "$DDIAppDir\scripts\schema-sites.sql"
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 --single-transaction -f "$DDIAppDir\scripts\schema-sites.sql"
     if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-sites.sql failed to apply (exit $LASTEXITCODE) - installation aborted. Check the psql output above." }
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ddivault_user;"

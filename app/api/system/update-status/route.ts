@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.32': [
+    'Installer-parity fix: the shared suite installer (fresh-install path, used for every new customer deployment) applies DDIVault\'s 4 schema files with the same --single-transaction protection just added to DDIVault\'s own updater — without it, a failure partway through one of those files could leave that file\'s DDL partially applied on a brand-new install, same risk the updater fix closed for upgrades. Confirmed none of the 4 files use a statement that can\'t run inside a transaction. Everything else from yesterday\'s resilience-system fixes (concurrency locks, rollback logic, version-aware health checks, frontend success/rollback states) is specific to the update path and has no fresh-install equivalent, so no other installer changes were needed.',
+  ],
   '1.23.31': [
     'A full adversarial review of the self-healing updater found and fixed 10 real issues in the update/rollback machinery itself: the initial service stop now always runs even if the service wasn\'t sampled as "Running" (a crash-looping service could otherwise keep auto-restarting into the update, corrupting the build mid-write); a rollback that can\'t find the pre-update commit now correctly reports failure instead of possibly claiming success without ever reverting the code.',
     'Fixed a false "rollback ALSO failed, NetVault may be DOWN" alarm that could fire even when the original build was never touched (a pre-flight snapshot failure before the live build was ever swapped out) — it now correctly recognizes "nothing needed to be rolled back" instead of triggering the scariest possible message for a run that never actually broke anything.',
