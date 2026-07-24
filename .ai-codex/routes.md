@@ -120,6 +120,7 @@ GET /api/system/enrich-eol/status [auth] [db] — poll an EOL enrichment job's l
 POST /api/system/health-snapshot [auth] [db] — cron: snapshot + persist fleet health score
 POST /api/system/sync-eol [auth] [db,external] — cron: weekly pull of central EOL feed
 GET /api/system/update-status [public] [external] — check origin/main for a newer git commit
+GET /api/system/last-update-status [public] — reads logs\last-update-status.json written by Update-NetVault.ps1 (stage/error code/rollback outcome of the last update run); {exists:false} if none yet
 POST /api/system/update [auth] [db] — schedule self-update task (admin+)
 
 ## users

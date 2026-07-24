@@ -73,6 +73,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.24': [
+    'Made the updater (Update-NetVault.ps1) resilient to a failed update instead of just reporting one: it now snapshots the current commit and build output before touching anything, and if any stage of an update fails (git pull, npm install/build, static copy, service start, or a NEW mandatory post-start health check), it automatically reverts to the last known-good version, restarts the service on it, and re-verifies /api/health -- instead of possibly leaving the hub on broken/partial code.',
+    'Every update run (success or failure) now writes a structured result to logs\\last-update-status.json -- what stage it reached, an error code, the error message, whether it rolled back, and whether the health check passed after -- so a failure has a durable, specific record instead of just a scrollback log.',
+    'New in-app failure banner (any admin, on every page including the launcher): if the last update failed, it surfaces immediately with what stage failed, whether it was automatically rolled back, and an error code -- previously the only way to notice a failed update was to happen to look at the server logs.',
+    'The post-start health check that used to just warn and continue if NetVault never answered /api/health is now a hard gate -- an update is no longer reported as successful unless the running version is actually confirmed serving traffic.',
+    'A schema-apply failure (already non-fatal, does not block an update) is now also surfaced as a lower-severity banner on an otherwise-successful update, since it still needs a human to check even though it did not cause downtime.',
+  ],
   '1.23.23': [
     'Extended the same "don\'t silently swallow a real schema error" fix from 1.23.22 to SpanVault\'s fresh-install step in the suite installer, and to SpanVault\'s own per-app updater -- both now abort loudly instead of reporting success if scripts/schema.sql hits a genuine SQL error partway through.',
   ],

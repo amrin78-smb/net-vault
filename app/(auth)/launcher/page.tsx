@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, Suspense } from 'react'
 import ThemeToggle from '@/components/ThemeToggle'
 import LicenseBanner from '@/components/LicenseBanner'
+import UpdateFailureBanner from '@/app/components/UpdateFailureBanner'
 
 type LicenseInfo = { status: string; daysRemaining: number; expiry: string | null; modules?: string[] }
 type HealthStatus = 'Healthy' | 'Warning' | 'Unavailable'
@@ -456,6 +457,8 @@ function LauncherInner() {
 
       {/* Standardized suite license banner — full-width bar directly below the launcher top bar */}
       <LicenseBanner />
+
+      {(user?.role === 'admin' || user?.role === 'super_admin') && <UpdateFailureBanner />}
 
       {/* SSO access-denied notice — shown when redirected here with ?denied=<slug> */}
       {deniedSlug && !deniedDismissed && (() => {

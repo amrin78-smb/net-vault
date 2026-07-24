@@ -102,6 +102,150 @@ function Get-EnvVal([string]$file, [string]$key) {
     return $null
 }
 
+# --- Resilience: rollback + structured status reporting -------------------
+# NetVault is the suite hub (SSO, licensing) - a failed update must never leave
+# it sitting on broken/partial code with no working service. The mechanism:
+# snapshot the current commit + build output BEFORE any mutation, and if any
+# stage from here fails, revert to that snapshot, restart, and re-verify health
+# before giving up. Every run (success or failure) writes a structured status
+# file the app itself reads (GET /api/system/last-update-status) to surface a
+# banner - so "the updater silently left it broken" is no longer possible.
+$StatusPath      = "$InstallDir\logs\last-update-status.json"
+$prevCommit      = $null   # full HEAD sha before this update touched anything
+$attemptedCommit = $null   # full HEAD sha this update tried to move to
+$currentStage    = 'init'
+$schemaWarning   = $null
+$envBackup       = $null
+$standaloneEnvBackup = $null
+
+$StageCodes = @{
+    'init'            = 5
+    'pre-flight'       = 10
+    'git-pull'        = 20
+    'npm-install'     = 30
+    'npm-build'       = 40
+    'static-copy'     = 45
+    'service-start'   = 50
+    'health-check'    = 60
+    'rollback-failed' = 70
+}
+
+function Write-StatusJson {
+    param(
+        [bool]$Success,
+        [string]$Stage,
+        [int]$ErrorCode = 0,
+        [string]$ErrorMessage = $null,
+        [bool]$RolledBack = $false,
+        [bool]$HealthCheckPassed = $false
+    )
+    $status = [ordered]@{
+        timestamp         = (Get-Date).ToString('o')
+        success           = $Success
+        stage             = $Stage
+        errorCode         = $ErrorCode
+        errorMessage      = $ErrorMessage
+        previousCommit    = $prevCommit
+        attemptedCommit   = $attemptedCommit
+        finalCommit       = if ($RolledBack) { $prevCommit } else { $attemptedCommit }
+        rolledBack        = $RolledBack
+        healthCheckPassed = $HealthCheckPassed
+        schemaWarning     = $schemaWarning
+    }
+    try {
+        $status | ConvertTo-Json | Out-File -FilePath $StatusPath -Encoding UTF8
+    } catch {
+        Write-Warn "Could not write status file $StatusPath - $($_.Exception.Message)"
+    }
+}
+
+# Poll /api/health until it answers 200 or $TimeoutSec elapses. Shared by the
+# main flow's mandatory final health check and the rollback recovery path.
+function Wait-Healthy([int]$TimeoutSec = 60) {
+    Write-Host "    Waiting for NetVault to respond on :3000 " -ForegroundColor Gray -NoNewline
+    $healthy = $false
+    for ($i = 0; $i -lt $TimeoutSec; $i++) {
+        try {
+            # 127.0.0.1, not localhost - see the comment on the original health poll below.
+            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:3000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            if ($resp.StatusCode -eq 200) { $healthy = $true; break }
+        } catch {}
+        Write-Host "." -ForegroundColor DarkGray -NoNewline
+        Start-Sleep -Seconds 1
+    }
+    Write-Host ""
+    return $healthy
+}
+
+# Revert to the pre-update commit + build output, restart the service, and
+# confirm the OLD version actually answers /api/health before declaring the
+# rollback itself successful. NSSM serves the app from .next\standalone\
+# server.js, which bundles its own self-contained node_modules - restoring
+# that folder alone is enough to bring back a fully working prior version,
+# independent of whatever state the root node_modules/build cache was left in
+# by the failed npm install/build. Returns $true only if the OLD version is
+# confirmed back up and healthy.
+function Invoke-Rollback([string]$Reason) {
+    Write-Host ""
+    Write-Step "ROLLING BACK - reason: $Reason"
+    $ok = $true
+    try {
+        Set-Location $AppDir
+        if ($prevCommit) {
+            Write-Host "    Reverting source to $prevCommit" -ForegroundColor Gray
+            $ErrorActionPreference = 'Continue'
+            $null = & git reset --hard $prevCommit 2>&1
+            $rbExit = $LASTEXITCODE
+            $ErrorActionPreference = 'Stop'
+            if ($rbExit -eq 0) { Write-OK "Source reverted" } else { Write-Warn "git reset during rollback failed (exit $rbExit)"; $ok = $false }
+        } else {
+            Write-Warn "No pre-update commit recorded - skipping source revert"
+        }
+
+        $standaloneDir    = "$AppDir\.next\standalone"
+        $standaloneBackup = "$AppDir\.next\standalone.lastgood"
+        if (Test-Path $standaloneBackup) {
+            if (Test-Path $standaloneDir) { Remove-Item $standaloneDir -Recurse -Force -ErrorAction SilentlyContinue }
+            Rename-Item -Path $standaloneBackup -NewName 'standalone' -ErrorAction Stop
+            Write-OK "Restored last known-good build output"
+        } else {
+            Write-Warn "No last known-good build snapshot found - cannot restore a working standalone build"
+            $ok = $false
+        }
+
+        if ($envBackup) { $envBackup | Out-File -FilePath "$AppDir\.env" -Encoding UTF8 -NoNewline }
+        if ($standaloneEnvBackup -and (Test-Path $standaloneDir)) {
+            $standaloneEnvBackup | Out-File -FilePath "$standaloneDir\.env.local" -Encoding UTF8 -NoNewline
+        }
+
+        Write-Step "Restarting NetVault on last known-good version"
+        $portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+        if ($portProc) {
+            $procPid = $portProc.OwningProcess
+            if ($procPid -and $procPid -gt 0) {
+                Get-Process -Id $procPid -ErrorAction SilentlyContinue | Stop-Process -Force
+                Start-Sleep -Seconds 2
+            }
+        }
+        $ErrorActionPreference = 'Continue'
+        $null = & sc.exe start NetVault 2>&1
+        $startExit = $LASTEXITCODE
+        $ErrorActionPreference = 'Stop'
+        if ($startExit -ne 0 -and $startExit -ne 1056) {
+            Write-Warn "sc.exe start NetVault failed during rollback (exit $startExit)"
+            $ok = $false
+        }
+
+        $healthy = Wait-Healthy -TimeoutSec 30
+        if ($healthy) { Write-OK "Rollback verified - last known-good version is up and healthy" }
+        else { Write-Warn "Rollback restart did not pass the health check"; $ok = $false }
+        return ($ok -and $healthy)
+    } catch {
+        Write-Warn "Rollback itself failed: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 Write-Host ""
 Write-Host "  NetVault - Update" -ForegroundColor White
 Write-Host "  Install directory : $InstallDir" -ForegroundColor Gray
@@ -149,7 +293,36 @@ try {
     $standaloneEnvBackup = Get-Content "$AppDir\.next\standalone\.env.local" -Raw -ErrorAction SilentlyContinue
     if ($standaloneEnvBackup) { Write-OK "standalone .env.local backed up" }
 
+    $currentStage = 'pre-flight'
+    Write-Step "Snapshotting current version for rollback"
+    Set-Location $AppDir
+    try {
+        $ErrorActionPreference = 'Continue'
+        $rp = & git rev-parse HEAD 2>&1
+        $ErrorActionPreference = 'Stop'
+        if ($rp -match '^[0-9a-f]{40}$') { $prevCommit = $rp }
+    } catch { $prevCommit = $null }
+    if ($prevCommit) { Write-OK "Current commit: $prevCommit" }
+    else { Write-Warn "Could not determine current commit - rollback will not be able to revert source" }
+
+    # NSSM serves the app straight out of .next\standalone (self-contained, own
+    # node_modules copy) - `npm run build` wipes and regenerates this directory
+    # from scratch, so it must be snapshotted before the build touches it. The
+    # service was already stopped above, so nothing still holds a file handle
+    # into it. Clear any stale backup from a prior interrupted run first so we
+    # always snapshot the CURRENTLY-serving build, not an older leftover one.
+    $standaloneDir    = "$AppDir\.next\standalone"
+    $standaloneBackup = "$AppDir\.next\standalone.lastgood"
+    if (Test-Path $standaloneBackup) { Remove-Item $standaloneBackup -Recurse -Force -ErrorAction SilentlyContinue }
+    if (Test-Path $standaloneDir) {
+        Rename-Item -Path $standaloneDir -NewName 'standalone.lastgood' -ErrorAction Stop
+        Write-OK "Snapshotted current build output for rollback"
+    } else {
+        Write-Warn "No existing build output to snapshot (first run?) - a failure below could not be rolled back to a working build"
+    }
+
     Write-Step "Pulling latest code from GitHub"
+    $currentStage = 'git-pull'
     Set-Location $AppDir
 
     # SYSTEM has never run git in this repo before (only whichever interactive
@@ -194,7 +367,9 @@ try {
 
     $ErrorActionPreference = 'Continue'
     $headRef = & git rev-parse --short HEAD 2>&1
+    $rp = & git rev-parse HEAD 2>&1
     $ErrorActionPreference = 'Stop'
+    if ($rp -match '^[0-9a-f]{40}$') { $attemptedCommit = $rp }
     Write-Host "==> HEAD now: $headRef" -ForegroundColor Cyan
     Write-OK "Git reset and clean done"
 
@@ -285,12 +460,17 @@ try {
             # this step is a best-effort self-heal) - but this is now a REAL SQL
             # error, not noise, and may mean a security-relevant grant/view (e.g.
             # users_public/app_settings_public) did not apply. Surfaced loudly via
-            # Write-Warn plus the full psql output already in schema-apply.log.
+            # Write-Warn plus the full psql output already in schema-apply.log, AND
+            # recorded on the status file (schemaWarning) so it surfaces in the
+            # in-app banner even on an otherwise-successful update - a schema error
+            # doesn't take the hub down, but it still needs a human to look at it.
+            $schemaWarning = "schema.sql re-apply failed (exit $schemaExit) - check $InstallDir\logs\schema-apply.log"
             Write-Warn "schema.sql re-apply FAILED (exit $schemaExit) - a SQL statement errored and the schema may be partially applied (possibly including security-relevant grants/views). Check $InstallDir\logs\schema-apply.log and re-run manually."
         }
     }
 
     Write-Step "Rebuilding NetVault"
+    $currentStage = 'npm-install'
     Write-Host "    Running: npm install" -ForegroundColor Gray
     # npm writes deprecation/audit notices to stderr (e.g. "This endpoint is being
     # retired..."). Under $ErrorActionPreference = 'Stop', merging that via 2>&1
@@ -302,6 +482,7 @@ try {
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
     if ($exitCode -ne 0) { throw "npm install failed (exit $exitCode) - check $InstallDir\logs\npm-install.log" }
+    $currentStage = 'npm-build'
     Write-Host "    Running: npm run build" -ForegroundColor Gray
     $ErrorActionPreference = 'Continue'
     $null = & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
@@ -311,6 +492,7 @@ try {
     Write-OK "Build complete"
 
     Write-Step "Copying static files into standalone output"
+    $currentStage = 'static-copy'
     $standaloneDir = "$AppDir\.next\standalone"
     Write-Host "    Standalone dir: $standaloneDir" -ForegroundColor Gray
     if (-not (Test-Path $standaloneDir)) {
@@ -368,6 +550,7 @@ try {
     Write-OK "Provided via standalone .env.local (NOCVAULT_RO_* written above)"
 
     Write-Step "Starting NetVault service"
+    $currentStage = 'service-start'
     Write-Host "    Running: sc.exe start NetVault" -ForegroundColor Gray
     $portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
     if ($portProc) {
@@ -394,38 +577,18 @@ try {
     # but misleading exit code (this previously reported "Update failed" for
     # updates that had actually succeeded).
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1056) { throw "sc.exe start NetVault failed (exit $LASTEXITCODE)" }
-    # Poll /api/health instead of a fixed sleep: the app is usually serving within
-    # 2-3s, so this returns as soon as it's actually up rather than always waiting 5s.
-    # Falls back to the previous behaviour (warn + proceed) if it doesn't answer in
-    # ~30s — same non-fatal outcome as before, never blocks the update.
-    # A freshly-built standalone server can take a while to answer its first request, so show
-    # progress during the poll rather than sitting silent (which looks like a hang). Allow up
-    # to 60s before falling back to the service-state check below.
-    Write-Host "    Waiting for NetVault to respond on :3000 " -ForegroundColor Gray -NoNewline
-    $healthy = $false
-    for ($i = 0; $i -lt 60; $i++) {
-        try {
-            # Use 127.0.0.1, NOT localhost: on Windows `localhost` resolves to IPv6 ::1 first,
-            # but the standalone server binds HOSTNAME=0.0.0.0 (IPv4 only), so a ::1 request
-            # never answers and the poll waits out its whole timeout while the app is actually
-            # up. The explicit IPv4 loopback matches the bind and returns as soon as it's ready.
-            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:3000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-            if ($resp.StatusCode -eq 200) { $healthy = $true; break }
-        } catch {}
-        Write-Host "." -ForegroundColor DarkGray -NoNewline
-        Start-Sleep -Seconds 1
+
+    # Mandatory final health check (item 4 of the resilience plan): exit code 0
+    # from sc.exe/npm is NOT sufficient proof the update succeeded - a service
+    # that "started" per SCM but is stuck crash-looping or never opens its port
+    # must not be reported as a successful update. If this fails, treat it the
+    # same as any other stage failure below (triggers the rollback path).
+    $currentStage = 'health-check'
+    $healthy = Wait-Healthy -TimeoutSec 60
+    if (-not $healthy) {
+        throw "NetVault did not answer /api/health within 60s of starting - service may be crash-looping or stuck"
     }
-    Write-Host ""
-    if ($healthy) {
-        Write-OK "NetVault service is running (health check passed)"
-    } else {
-        $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
-        if ($svc -and $svc.Status -eq 'Running') {
-            Write-OK "NetVault service is running"
-        } else {
-            Write-Warn "Service may still be starting - check logs at $InstallDir\logs"
-        }
-    }
+    Write-OK "NetVault service is running (health check passed)"
 
     Write-Step "Registering daily health-snapshot task"
     $cronLine = Get-Content "$AppDir\.env" | Where-Object { $_ -match '^CRON_SECRET=' } | Select-Object -First 1
@@ -469,14 +632,33 @@ try {
         Write-Warn "CRON_SECRET not found in .env - skipping EOL feed-sync task"
     }
 
+    # Update succeeded and is confirmed healthy - the pre-update snapshot is no
+    # longer needed. Remove it so it doesn't accumulate across updates or get
+    # mistaken for a stale rollback target on the next run.
+    $standaloneBackup = "$AppDir\.next\standalone.lastgood"
+    if (Test-Path $standaloneBackup) { Remove-Item $standaloneBackup -Recurse -Force -ErrorAction SilentlyContinue }
+
+    Write-StatusJson -Success $true -Stage $null -ErrorCode 0 -RolledBack $false -HealthCheckPassed $true
+
 } catch {
+    $failureMessage = $_.Exception.Message
     Write-Host ""
-    Write-Host "=== Update failed: $_ ===" -ForegroundColor Red
-    Write-Host "    Attempting to restart NetVault service..." -ForegroundColor Yellow
-    # Best-effort recovery attempt after a failure already happened — swallow any
-    # error here (including the same stderr-as-terminating-error risk as above) so
-    # it can never mask the real failure or skip the clean exit path below.
-    try { $null = & sc.exe start NetVault 2>&1 } catch {}
+    Write-Host "=== Update failed at stage '$currentStage': $failureMessage ===" -ForegroundColor Red
+    $code = if ($StageCodes.ContainsKey($currentStage)) { $StageCodes[$currentStage] } else { 99 }
+
+    # This is the "make it foolproof" step: don't just attempt a blind restart of
+    # whatever code is currently on disk (which may be the broken half-updated
+    # version) - revert to the last known-good commit + build output first, THEN
+    # restart, THEN re-verify /api/health before calling it recovered.
+    $rollbackOk = Invoke-Rollback -Reason $failureMessage
+    if (-not $rollbackOk) {
+        Write-Host ""
+        Write-Host "    !!! ROLLBACK ALSO FAILED - NetVault may be DOWN. Manual intervention required. !!!" -ForegroundColor Red
+        $code = $StageCodes['rollback-failed']
+    }
+
+    Write-StatusJson -Success $false -Stage $currentStage -ErrorCode $code -ErrorMessage $failureMessage -RolledBack $rollbackOk -HealthCheckPassed $rollbackOk
+
     Write-Host ""
     # Best-effort - flush the transcript before exiting so a failed run started
     # by the fire-and-forget SYSTEM task still leaves a durable record.

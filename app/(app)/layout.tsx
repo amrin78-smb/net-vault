@@ -5,6 +5,7 @@ import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import IdleTimeout from '@/components/IdleTimeout'
 import UpdateNotifier from '@/app/components/UpdateNotifier'
+import UpdateFailureBanner from '@/app/components/UpdateFailureBanner'
 import ThemeToggle from '@/components/ThemeToggle'
 import LicenseBanner from '@/components/LicenseBanner'
 
@@ -586,6 +587,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {/* Standardized suite license banner — full-width bar directly below the
             header, in normal flow (avatar dropdown z-index 999 overlays it). */}
         <LicenseBanner />
+
+        {/* NetVault is the suite hub (SSO/license) - a failed update needs to be
+            unmissable, so it's shown to any admin on every page, not tucked away
+            in Settings. Non-admins don't get the operational detail. */}
+        {(userRole === 'admin' || userRole === 'super_admin') && <UpdateFailureBanner />}
 
         <UpdateNotifier />
 
