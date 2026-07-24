@@ -99,6 +99,37 @@ if ((Split-Path -Leaf $AppDir) -ieq 'app') {
 }
 $NssmExe = "$InstallDir\nssm\nssm-2.24\win64\nssm.exe"
 
+# --- Concurrency guard (item 6, 2026-07-24 resilience review) --------------
+# Nothing before this stopped two overlapping runs (a manual console run
+# racing the in-app "Update Now" trigger, or a double-click on either) - both
+# would mutate the SAME on-disk git checkout and .next\standalone build
+# concurrently, which is exactly the kind of corruption this script's rollback
+# machinery exists to recover FROM, not something it can safely run DURING.
+# Check for a lock left by another still-running instance before doing
+# anything else - not even the service stop below - so a genuinely overlapping
+# run is a true no-op (no service touched, no file touched).
+$LockPath = "$InstallDir\logs\update.lock"
+$lockAcquired = $false
+New-Item -ItemType Directory -Force -Path "$InstallDir\logs" | Out-Null
+if (Test-Path $LockPath) {
+    $lockPidRaw = (Get-Content -LiteralPath $LockPath -ErrorAction SilentlyContinue | Select-Object -First 1)
+    $lockPid = 0
+    if ($lockPidRaw -and [int]::TryParse($lockPidRaw.Trim(), [ref]$lockPid) -and (Get-Process -Id $lockPid -ErrorAction SilentlyContinue)) {
+        Write-Warning "Another update is already running (PID $lockPid, lock file $LockPath) - exiting without making any changes."
+        exit 1
+    }
+    # Lock file exists but its PID is gone/unreadable - a prior run crashed or
+    # was killed before cleaning up. Safe to reclaim.
+    Write-Warning "Found a stale lock file (owning process is no longer running) - removing it and proceeding: $LockPath"
+    Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue
+}
+try {
+    [System.IO.File]::WriteAllText($LockPath, "$PID", (New-Object System.Text.UTF8Encoding $false))
+    $lockAcquired = $true
+} catch {
+    Write-Warning "Could not write lock file $LockPath - continuing without a concurrency guard for this run: $($_.Exception.Message)"
+}
+
 # The in-app updater (Settings -> Updates) is fire-and-forget: it schedules this
 # script as a SYSTEM task (schtasks /create ... /ru SYSTEM, then schtasks /run)
 # and immediately returns { started: true } to the browser, with no live output
@@ -119,6 +150,35 @@ Start-Sleep -Seconds 5
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
+
+# Best-effort cleanup for a stale/leftover backup directory (item 8 of the
+# 2026-07-24 resilience review): try a full delete, and if that fails (e.g. a
+# locked file), rename it aside instead so it can never collide with - or be
+# silently mistaken for - a future run's own snapshot of the same name. A
+# rename only touches the directory entry itself, not every file inside it, so
+# it can succeed even when a full delete can't.
+# -ThrowOnFailure: the PRE-FLIGHT snapshot step must abort the update rather
+# than risk colliding with (or shadowing) this run's own backup if a leftover
+# truly cannot be cleared - pass this there. The SUCCESS-PATH final cleanup
+# (running after the update has already succeeded) must never escalate a
+# leftover-directory issue into rolling back an otherwise-working update, so it
+# omits this switch and only warns loudly on repeated failure instead.
+function Clear-StaleBackup([string]$Path, [switch]$ThrowOnFailure) {
+    if (-not (Test-Path $Path)) { return $true }
+    Remove-Item $Path -Recurse -Force -ErrorAction SilentlyContinue
+    if (-not (Test-Path $Path)) { return $true }
+    $staleName = "$(Split-Path -Leaf $Path).stale-$(Get-Date -Format 'yyyyMMddHHmmss')"
+    try {
+        Rename-Item -Path $Path -NewName $staleName -ErrorAction Stop
+        Write-Warn "Could not delete $Path - moved aside as $staleName for manual cleanup"
+        return $true
+    } catch {
+        $msg = "Stale backup at $Path could not be removed or moved aside - manual cleanup required: $($_.Exception.Message)"
+        if ($ThrowOnFailure) { throw $msg }
+        Write-Warn $msg
+        return $false
+    }
+}
 
 function Set-EnvVar([string]$Path, [string]$Key, [string]$Value) {
     if (Test-Path $Path) {
@@ -154,8 +214,12 @@ function Get-EnvVal([string]$file, [string]$key) {
 $StatusPath      = "$InstallDir\logs\last-update-status.json"
 $prevCommit      = $null   # full HEAD sha before this update touched anything
 $attemptedCommit = $null   # full HEAD sha this update tried to move to
+$prevVersion     = $null   # package.json version before this update touched anything
+$attemptedVersion = $null  # package.json version this update tried to move to
 $currentStage    = 'init'
 $schemaWarning   = $null
+$schemaApplied   = $false  # did schema.sql actually succeed THIS run (item 4)
+$standaloneSwapped = $false # did the pre-flight snapshot actually swap .next\standalone out (item 3)
 $envBackup       = $null
 $standaloneEnvBackup = $null
 
@@ -178,7 +242,8 @@ function Write-StatusJson {
         [int]$ErrorCode = 0,
         [string]$ErrorMessage = $null,
         [bool]$RolledBack = $false,
-        [bool]$HealthCheckPassed = $false
+        [bool]$HealthCheckPassed = $false,
+        [bool]$SchemaAppliedButRolledBack = $false
     )
     $status = [ordered]@{
         timestamp         = (Get-Date).ToString('o')
@@ -192,6 +257,7 @@ function Write-StatusJson {
         rolledBack        = $RolledBack
         healthCheckPassed = $HealthCheckPassed
         schemaWarning     = $schemaWarning
+        schemaAppliedButRolledBack = $SchemaAppliedButRolledBack
     }
     try {
         # Windows PowerShell 5.1's `Out-File -Encoding UTF8` writes a UTF-8 BOM,
@@ -200,23 +266,45 @@ function Write-StatusJson {
         # on every single write. Write via .NET directly with a BOM-less UTF8Encoding
         # instead of the Out-File cmdlet to avoid this (there is no utf8NoBOM
         # option for Out-File in Windows PowerShell 5.1, only in PS 6+/Core).
+        #
+        # Write to a temp file in the SAME directory, then Move-Item -Force onto
+        # the real path (item 9) - an atomic rename on the same NTFS volume, so
+        # a crash/kill mid-write can never leave the reader (the API route) with
+        # a truncated/corrupt JSON file to silently swallow.
         $json = $status | ConvertTo-Json
-        [System.IO.File]::WriteAllText($StatusPath, $json, (New-Object System.Text.UTF8Encoding $false))
+        $tmpPath = "$StatusPath.tmp-$PID"
+        [System.IO.File]::WriteAllText($tmpPath, $json, (New-Object System.Text.UTF8Encoding $false))
+        Move-Item -Path $tmpPath -Destination $StatusPath -Force
     } catch {
         Write-Warn "Could not write status file $StatusPath - $($_.Exception.Message)"
+        try { if (Test-Path $tmpPath) { Remove-Item $tmpPath -Force -ErrorAction SilentlyContinue } } catch {}
     }
 }
 
 # Poll /api/health until it answers 200 or $TimeoutSec elapses. Shared by the
 # main flow's mandatory final health check and the rollback recovery path.
-function Wait-Healthy([int]$TimeoutSec = 60) {
+function Wait-Healthy([int]$TimeoutSec = 60, [string]$ExpectedVersion = $null) {
     Write-Host "    Waiting for NetVault to respond on :3000 " -ForegroundColor Gray -NoNewline
     $healthy = $false
     for ($i = 0; $i -lt $TimeoutSec; $i++) {
         try {
             # 127.0.0.1, not localhost - see the comment on the original health poll below.
             $resp = Invoke-WebRequest -Uri "http://127.0.0.1:3000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-            if ($resp.StatusCode -eq 200) { $healthy = $true; break }
+            if ($resp.StatusCode -eq 200) {
+                if ($ExpectedVersion) {
+                    # A 200/status:ok alone is not proof the CORRECT build is
+                    # serving (item 5) - NSSM can briefly relaunch the OLD build
+                    # right after this script kills the prior process (see the
+                    # "already running" note below), which would otherwise pass
+                    # a bare status check while still running stale code. Only
+                    # declare healthy once /api/health's own version matches.
+                    $body = $null
+                    try { $body = $resp.Content | ConvertFrom-Json } catch { $body = $null }
+                    if ($body -and $body.version -eq $ExpectedVersion) { $healthy = $true; break }
+                } else {
+                    $healthy = $true; break
+                }
+            }
         } catch {}
         Write-Host "." -ForegroundColor DarkGray -NoNewline
         Start-Sleep -Seconds 1
@@ -270,12 +358,36 @@ function Invoke-Rollback([string]$Reason) {
             $ErrorActionPreference = 'Stop'
             if ($rbExit -eq 0) { Write-OK "Source reverted" } else { Write-Warn "git reset during rollback failed (exit $rbExit)"; $ok = $false }
         } else {
+            # No commit to revert to means source can't be confirmed reverted -
+            # this run must not be able to report an overall success (item 2).
             Write-Warn "No pre-update commit recorded - skipping source revert"
+            $ok = $false
         }
 
         $standaloneDir    = "$AppDir\.next\standalone"
         $standaloneBackup = "$AppDir\.next\standalone.lastgood"
-        if (Test-Path $standaloneBackup) {
+        if (-not $standaloneSwapped) {
+            # The pre-flight snapshot step never got as far as swapping the live
+            # build out (it failed/threw earlier - e.g. a stale leftover backup
+            # from a prior run could not be cleared even by Clear-StaleBackup,
+            # see the pre-flight step below). NetVault's original build sitting
+            # in $standaloneDir right now was NEVER touched by this run, so
+            # there is nothing to restore, and restarting the service further
+            # down brings back that same untouched, still-fully-functional
+            # build. Do NOT treat this as a failure - doing so produces a false
+            # "rollback also failed, may be DOWN" alarm for a run that never
+            # actually broke anything in the first place (item 3).
+            #
+            # Checked BEFORE Test-Path $standaloneBackup below and NOT merely as
+            # an "else" of it: in exactly this scenario, $standaloneBackup can
+            # still be occupied by an UNRELATED stale leftover from a past run
+            # that this run's own Clear-StaleBackup failed to clear (that is
+            # why it threw) - Test-Path on that path alone would read as
+            # true and, without this check taking priority, would wrongly fall
+            # into the restore branch below: deleting the still-good, untouched
+            # live build and overwriting it with that old stale leftover.
+            Write-OK "Build output was never touched by this update (it failed before the pre-flight snapshot completed) - nothing to restore"
+        } elseif (Test-Path $standaloneBackup) {
             if (Test-Path $standaloneDir) { Remove-Item $standaloneDir -Recurse -Force -ErrorAction SilentlyContinue }
             Rename-Item -Path $standaloneBackup -NewName 'standalone' -ErrorAction Stop
             Write-OK "Restored last known-good build output"
@@ -299,7 +411,10 @@ function Invoke-Rollback([string]$Reason) {
             $ok = $false
         }
 
-        $healthy = Wait-Healthy -TimeoutSec 30
+        # Gate on the PREVIOUS version too (item 5), not just a bare 200 - the
+        # same NSSM-relaunch race that motivates the version check in the main
+        # flow's health check applies here as well.
+        $healthy = Wait-Healthy -TimeoutSec 30 -ExpectedVersion $prevVersion
         if ($healthy) { Write-OK "Rollback verified - last known-good version is up and healthy" }
         else { Write-Warn "Rollback restart did not pass the health check"; $ok = $false }
         return ($ok -and $healthy)
@@ -314,12 +429,30 @@ Write-Host "  NetVault - Update" -ForegroundColor White
 Write-Host "  Install directory : $InstallDir" -ForegroundColor Gray
 Write-Host ""
 
+# Outer try/finally (item 6): guarantees the lock file acquired near the top of
+# this script is released on EVERY exit path from here down - normal success,
+# the handled-failure/rollback path below (whose inner catch calls `exit 1`),
+# or any other terminating error. PowerShell's `finally` still runs even when
+# `exit` fires from inside a try block it wraps.
+try {
 try {
 
     Write-Step "Stopping NetVault service"
     Write-Host "    Running: sc.exe stop NetVault" -ForegroundColor Gray
     $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
-    if ($svc -and $svc.Status -eq 'Running') {
+    if ($svc) {
+        # Always issue the stop, regardless of the sampled status (item 1) - a
+        # service that isn't currently "Running" is NOT necessarily durably
+        # stopped: StartPending/StopPending, or a crash-loop sampled between
+        # restarts, all leave NSSM's own auto-restart armed. A crash-looping
+        # service is itself a very plausible reason someone triggers an update
+        # in the first place, so skipping the stop specifically in that case
+        # was exactly backwards - it left auto-restart armed for the whole
+        # update window while this script rewrote the build output underneath
+        # it. sc.exe stop on an already-stopped service is a harmless no-op.
+        # (Mirrors the identical fix already applied to DDIVault/LogVault's own
+        # MAIN update flow - see Update-DDIVault.ps1/Update-LogVault.ps1.)
+        #
         # sc.exe writes informational output that can end up on stderr; under
         # $ErrorActionPreference = 'Stop', merging it via 2>&1 turns that into a
         # terminating ErrorRecord even on a clean stop. Same class of bug fixed
@@ -328,9 +461,9 @@ try {
         $null = & sc.exe stop NetVault 2>&1
         $ErrorActionPreference = 'Stop'
         Start-Sleep -Seconds 3
-        Write-OK "Service stopped"
+        Write-OK "Service stop issued (was $($svc.Status))"
     } else {
-        Write-Warn "NetVault service was not running"
+        Write-Warn "NetVault service not found - skipping stop"
     }
     # Scope this to node.exe processes running FROM THIS install ($AppDir) only.
     # `Stop-Process -Name node -Force` matches by process NAME alone - on the
@@ -378,6 +511,16 @@ try {
     if ($prevCommit) { Write-OK "Current commit: $prevCommit" }
     else { Write-Warn "Could not determine current commit - rollback will not be able to revert source" }
 
+    # Capture the pre-update package.json version too (item 5) - Invoke-Rollback's
+    # post-rollback health check needs to know what version SHOULD be running
+    # again once source is reverted. Best-effort: a missing/unreadable
+    # package.json just disables the version gate for the rollback path, it
+    # never blocks the update.
+    try {
+        $prevVersion = (Get-Content "$AppDir\package.json" -Raw -ErrorAction Stop | ConvertFrom-Json).version
+    } catch { $prevVersion = $null }
+    if ($prevVersion) { Write-OK "Current version: $prevVersion" }
+
     # NSSM serves the app straight out of .next\standalone (self-contained, own
     # node_modules copy) - `npm run build` wipes and regenerates this directory
     # from scratch, so it must be snapshotted before the build touches it. The
@@ -386,30 +529,23 @@ try {
     # always snapshot the CURRENTLY-serving build, not an older leftover one.
     $standaloneDir    = "$AppDir\.next\standalone"
     $standaloneBackup = "$AppDir\.next\standalone.lastgood"
-    if (Test-Path $standaloneBackup) {
-        Remove-Item $standaloneBackup -Recurse -Force -ErrorAction SilentlyContinue
-        if (Test-Path $standaloneBackup) {
-            # Deleting a stale backup left by a prior interrupted run failed
-            # (e.g. a locked file) - do NOT proceed to rename the CURRENT good
-            # build into this same name, which would throw on the collision and,
-            # worse, could leave the stale backup in place for Invoke-Rollback to
-            # mistake for THIS run's own snapshot later (silently restoring an
-            # old, wrong version while still reporting a "successful" rollback).
-            # A rename only touches the directory entry itself, not every file
-            # inside it, so it can succeed even when a full delete can't - move
-            # the stale one aside under a name Invoke-Rollback will never look
-            # for, instead of leaving it colliding with this run's own backup.
-            $staleName = "standalone.stale-$(Get-Date -Format 'yyyyMMddHHmmss')"
-            try {
-                Rename-Item -Path $standaloneBackup -NewName $staleName -ErrorAction Stop
-                Write-Warn "Stale backup from a prior run could not be deleted - moved aside as $staleName for manual cleanup"
-            } catch {
-                throw "Stale backup at $standaloneBackup could not be removed or moved aside - manual cleanup required before this update can safely run: $($_.Exception.Message)"
-            }
-        }
-    }
+    # A stale backup here means a PRIOR run's cleanup failed to fully remove or
+    # move it aside. If it can't be cleared now either, we must NOT proceed to
+    # rename today's live (good) build onto this same name - it would collide,
+    # and worse, could leave the stale one in place for Invoke-Rollback to
+    # mistake for THIS run's own snapshot later (silently restoring an old,
+    # wrong version while still reporting a "successful" rollback).
+    # -ThrowOnFailure aborts the update in that case, before the live build
+    # below has been touched at all (see Clear-StaleBackup near the top).
+    Clear-StaleBackup -Path $standaloneBackup -ThrowOnFailure | Out-Null
     if (Test-Path $standaloneDir) {
         Rename-Item -Path $standaloneDir -NewName 'standalone.lastgood' -ErrorAction Stop
+        # Only from this point on has the live build actually been swapped out -
+        # Invoke-Rollback (item 3) uses this flag to tell "genuinely can't
+        # recover" apart from "this run failed before ever touching the working
+        # build", so a pre-flight abort above doesn't produce a false "rollback
+        # also failed, may be DOWN" alarm later.
+        $standaloneSwapped = $true
         Write-OK "Snapshotted current build output for rollback"
     } else {
         Write-Warn "No existing build output to snapshot (first run?) - a failure below could not be rolled back to a working build"
@@ -466,6 +602,15 @@ try {
     if ($rp -match '^[0-9a-f]{40}$') { $attemptedCommit = $rp }
     Write-Host "==> HEAD now: $headRef" -ForegroundColor Cyan
     Write-OK "Git reset and clean done"
+
+    # Capture the version we're now attempting to move to (item 5) - the main
+    # flow's post-build health check compares against THIS, so a health check
+    # that merely gets a 200 from a stale/relaunched OLD build (see the NSSM
+    # "already running" race noted further below) can no longer be mistaken
+    # for a successful update.
+    try {
+        $attemptedVersion = (Get-Content "$AppDir\package.json" -Raw -ErrorAction Stop | ConvertFrom-Json).version
+    } catch { $attemptedVersion = $null }
 
     # Restore known-problematic files (best-effort, informational stderr ignored)
     $ErrorActionPreference = 'Continue'
@@ -549,6 +694,12 @@ try {
         $env:PGPASSWORD = $null
         if ($schemaExit -eq 0) {
             Write-OK "schema.sql re-applied as postgres superuser"
+            # schema.sql runs BEFORE the stages that can still trigger a
+            # rollback (npm install/build/etc) - if one of those later fails,
+            # the code gets reverted but this schema apply does NOT (item 4).
+            # Record that it genuinely succeeded THIS run so the catch block
+            # can flag the mismatch instead of leaving it silent.
+            $schemaApplied = $true
         } else {
             # Non-fatal by design (a pre-existing install may be mid-migration and
             # this step is a best-effort self-heal) - but this is now a REAL SQL
@@ -678,9 +829,10 @@ try {
     # must not be reported as a successful update. If this fails, treat it the
     # same as any other stage failure below (triggers the rollback path).
     $currentStage = 'health-check'
-    $healthy = Wait-Healthy -TimeoutSec 60
+    $healthy = Wait-Healthy -TimeoutSec 60 -ExpectedVersion $attemptedVersion
     if (-not $healthy) {
-        throw "NetVault did not answer /api/health within 60s of starting - service may be crash-looping or stuck"
+        $verMsg = if ($attemptedVersion) { " (or never reported version $attemptedVersion - may still be serving a stale relaunched build)" } else { "" }
+        throw "NetVault did not answer /api/health within 60s of starting$verMsg - service may be crash-looping or stuck"
     }
     Write-OK "NetVault service is running (health check passed)"
 
@@ -730,7 +882,12 @@ try {
     # longer needed. Remove it so it doesn't accumulate across updates or get
     # mistaken for a stale rollback target on the next run.
     $standaloneBackup = "$AppDir\.next\standalone.lastgood"
-    if (Test-Path $standaloneBackup) { Remove-Item $standaloneBackup -Recurse -Force -ErrorAction SilentlyContinue }
+    # Same careful handling as the pre-flight snapshot above (item 8) - retries,
+    # renames aside, and warns loudly on repeated failure - instead of a bare
+    # best-effort delete with no record if it silently fails. Never throws
+    # here: the update already succeeded, so a leftover backup directory must
+    # not escalate into rolling back an otherwise-working update.
+    Clear-StaleBackup -Path $standaloneBackup | Out-Null
 
     Write-StatusJson -Success $true -Stage $null -ErrorCode 0 -RolledBack $false -HealthCheckPassed $true
 
@@ -739,6 +896,13 @@ try {
     Write-Host ""
     Write-Host "=== Update failed at stage '$currentStage': $failureMessage ===" -ForegroundColor Red
     $code = if ($StageCodes.ContainsKey($currentStage)) { $StageCodes[$currentStage] } else { 99 }
+
+    # Item 4: schema.sql runs BEFORE the stages that can trigger a rollback
+    # (npm install/build/etc) - if it already succeeded in THIS run, reverting
+    # the code below does NOT revert the schema, and nothing else surfaces that
+    # mismatch. Record it now, before Invoke-Rollback runs, so it lands in the
+    # status file no matter how the rollback itself goes.
+    $schemaAppliedButRolledBack = $schemaApplied
 
     # This is the "make it foolproof" step: don't just attempt a blind restart of
     # whatever code is currently on disk (which may be the broken half-updated
@@ -751,7 +915,7 @@ try {
         $code = $StageCodes['rollback-failed']
     }
 
-    Write-StatusJson -Success $false -Stage $currentStage -ErrorCode $code -ErrorMessage $failureMessage -RolledBack $rollbackOk -HealthCheckPassed $rollbackOk
+    Write-StatusJson -Success $false -Stage $currentStage -ErrorCode $code -ErrorMessage $failureMessage -RolledBack $rollbackOk -HealthCheckPassed $rollbackOk -SchemaAppliedButRolledBack $schemaAppliedButRolledBack
 
     Write-Host ""
     # Best-effort - flush the transcript before exiting so a failed run started
@@ -767,3 +931,10 @@ Write-Host ""
 # Best-effort - if Start-Transcript never succeeded (see top of script), this
 # throws harmlessly; never let it mask the update's own success/failure.
 try { Stop-Transcript | Out-Null } catch {}
+} finally {
+    # Item 6: release the concurrency lock on every path out of the outer try
+    # above - success, failure-then-rollback (exit 1), or anything else.
+    if ($lockAcquired) {
+        Remove-Item -LiteralPath $LockPath -Force -ErrorAction SilentlyContinue
+    }
+}

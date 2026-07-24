@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { execSync, execFile } from 'child_process'
 import { promisify } from 'util'
 import pkg from '../../../../package.json'
@@ -73,6 +75,15 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.23.31': [
+    'A full adversarial review of the self-healing updater found and fixed 10 real issues in the update/rollback machinery itself: the initial service stop now always runs even if the service wasn\'t sampled as "Running" (a crash-looping service could otherwise keep auto-restarting into the update, corrupting the build mid-write); a rollback that can\'t find the pre-update commit now correctly reports failure instead of possibly claiming success without ever reverting the code.',
+    'Fixed a false "rollback ALSO failed, NetVault may be DOWN" alarm that could fire even when the original build was never touched (a pre-flight snapshot failure before the live build was ever swapped out) — it now correctly recognizes "nothing needed to be rolled back" instead of triggering the scariest possible message for a run that never actually broke anything.',
+    'If a database schema change succeeds but a later update step fails and triggers a rollback, the code is reverted but the schema is not — this mismatch is now flagged explicitly in the update status and shown as an extra warning line if it happens, instead of being silent.',
+    'The post-update and post-rollback health checks now also verify the running version matches what was expected, not just that the server answers — closing a narrow window where a briefly-relaunched OLD build could be mistaken for a successfully completed update or rollback.',
+    'Added a concurrency guard so two update runs can no longer overlap (e.g. a manual console run racing the in-app "Update Now" button) — a second attempt is refused with a clear message instead of corrupting the same files from two directions at once.',
+    'The "Update Now" progress screen now checks whether the last update actually succeeded or was silently auto-rolled-back before showing the green success message and reloading — a failed-but-recovered update now shows a clearly different warning instead of looking identical to a real success, and a failed rollback shows the most urgent state without auto-reloading into a possibly-dead server.',
+    'Hardening: the update status file is now written atomically (so a crash mid-write can never leave a corrupt file), the same careful stale-backup cleanup logic used before an update now also applies to the after-a-successful-update cleanup, and the two update-status API routes now require a signed-in session (previously reachable without one).',
+  ],
   '1.23.30': [
     'Found via a full adversarial bug sweep of yesterday\'s resilience work (4 real issues, all fixed): the status file location still used the unfixed -InstallDir parameter while the app path already self-located independently of it, so on any install where the two diverge the failure banner would never appear even after a genuinely failed/rolled-back update -- -InstallDir now self-locates the same way the app path already does.',
     'The "kill any leftover node process" step during an update used to match by process name alone, which on the shared suite server also matches LogVault/DDIVault/SpanVault\'s own node.exe processes -- a routine NetVault-only update could force-kill sibling apps as collateral damage. Now scoped to only this install\'s own process.',
@@ -533,7 +544,19 @@ const releaseNotes: Record<string, string[]> = {
 // update available — the package.json version is for display only, so patches
 // pushed without a version bump are no longer missed. Never 500s: a git failure
 // degrades to "up to date" so we never show a false "update available".
+// Item 10 (2026-07-24 resilience review): this route was reachable with no
+// session check at all, even though every caller in the app (UpdateNotifier,
+// shown to any logged-in user; the Settings > Updates tab, admin-only in the
+// UI) only ever renders behind a login. The data itself is mild (version
+// strings, short commit hashes, release-note text - comparable to the
+// already-public /api/health) - not sensitive enough to warrant this route
+// being intentionally public - so gated to any authenticated session, per
+// this app's per-route auth convention (see CLAUDE.md's access-control
+// section), rather than left open as an oversight.
 export async function GET() {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const repoRoot = findGitRoot(process.cwd())
   const current_version = pkg.version
   const localHash = localCommitHash(repoRoot)

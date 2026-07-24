@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import fs from 'fs'
 import path from 'path'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { findGitRoot } from '@/lib/gitRoot'
 
 export const dynamic = 'force-dynamic'
@@ -24,7 +26,23 @@ function resolveStatusPath(): string | null {
   return candidates.find(p => fs.existsSync(p)) || null
 }
 
+// Item 10 (2026-07-24 resilience review): this route had no session check at
+// all. Its only caller, UpdateFailureBanner, is itself rendered only for
+// admin/super_admin (both mount points - app layout and the launcher - gate it
+// that way in the UI). The payload can include internal file paths and raw
+// error text (e.g. "check C:\Apps\NetVault\logs\npm-install.log") which,
+// while not credentials, is more than a non-admin needs to see - so gated
+// server-side to match the UI exactly, per this app's "gate the API, not just
+// the page" convention (see CLAUDE.md's access-control section), rather than
+// left open as an oversight.
 export async function GET() {
+  const session = await getServerSession(authOptions)
+  const role = (session?.user as { role?: string } | undefined)?.role
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (role !== 'admin' && role !== 'super_admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   const statusPath = resolveStatusPath()
   if (!statusPath) {
     return NextResponse.json({ exists: false })

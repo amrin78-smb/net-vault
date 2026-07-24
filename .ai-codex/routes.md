@@ -119,9 +119,9 @@ POST /api/system/enrich-eol [auth] [db] — start EOL enrichment background job 
 GET /api/system/enrich-eol/status [auth] [db] — poll an EOL enrichment job's live progress
 POST /api/system/health-snapshot [auth] [db] — cron: snapshot + persist fleet health score
 POST /api/system/sync-eol [auth] [db,external] — cron: weekly pull of central EOL feed
-GET /api/system/update-status [public] [external] — check origin/main for a newer git commit
-GET /api/system/last-update-status [public] — reads logs\last-update-status.json written by Update-NetVault.ps1 (stage/error code/rollback outcome of the last update run); {exists:false} if none yet
-POST /api/system/update [auth] [db] — schedule self-update task (admin+)
+GET /api/system/update-status [auth] [external] — check origin/main for a newer git commit (any session; gated 2026-07-24, was public)
+GET /api/system/last-update-status [auth] — reads logs\last-update-status.json written by Update-NetVault.ps1 (stage/error code/rollback outcome/schemaAppliedButRolledBack of the last update run); {exists:false} if none yet (admin+; gated 2026-07-24, was public)
+POST /api/system/update [auth] [db] — schedule self-update task (admin+); 409 if Update-NetVault.ps1's update.lock shows another run still in progress
 
 ## users
 PUT /api/users/[id] [auth] [db] — update user: role/sites/app-access (admin+)

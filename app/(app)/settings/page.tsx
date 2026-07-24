@@ -4,6 +4,22 @@ import { RoleBadge } from '@/components/Badges'
 import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { STAGE_LABELS } from '@/app/components/UpdateFailureBanner'
+
+// Shape of GET /api/system/last-update-status - written by Update-NetVault.ps1's
+// Write-StatusJson on every run (success or failure). The "Update Now" overlay
+// below uses this to tell a clean success apart from a silent auto-rollback
+// (item 7) instead of just watching /api/health flip up/down/up.
+type LastUpdateStatus = {
+  exists?: boolean
+  success?: boolean
+  stage?: string | null
+  errorCode?: number
+  errorMessage?: string | null
+  rolledBack?: boolean
+  healthCheckPassed?: boolean
+  schemaAppliedButRolledBack?: boolean
+}
 
 type UpdateStatus = {
   current_version?: string; latest_version?: string
@@ -42,15 +58,74 @@ const UPDATE_TIMEOUT_MS = 10 * 60 * 1000 // 10 minutes — covers slow npm insta
 // otherwise the reload lands on "page cannot be reached" for 20-30 seconds.
 const RELOAD_COUNTDOWN_SECONDS = 15
 
+// How long to keep retrying GET /api/system/last-update-status once the API
+// answers healthy again, before giving up and treating it as a clean success
+// (item 7) - covers the gap between Update-NetVault.ps1's own post-health-check
+// work (scheduled-task registration, .lastgood cleanup) finishing and it
+// actually writing the status file, plus the same gap on a standalone install
+// with no updater at all (no status file will EVER appear there).
+const CONFIRM_MAX_ATTEMPTS = 6
+
+type Phase = 'starting' | 'down' | 'confirming' | 'back_up' | 'rolled_back' | 'rollback_failed' | 'verify_failed' | 'timeout'
+
 function UpdatingOverlay({ preVersion }: { preVersion: string }) {
-  const [phase, setPhase] = useState<'starting' | 'down' | 'back_up' | 'verify_failed' | 'timeout'>('starting')
+  const [phase, setPhase] = useState<Phase>('starting')
   const [countdown, setCountdown] = useState(RELOAD_COUNTDOWN_SECONDS)
+  const [lastStatusInfo, setLastStatusInfo] = useState<LastUpdateStatus | null>(null)
   const wentDown = useRef(false)
   const consecutiveUp = useRef(0)
   // Capture the version that was running before the update so we can confirm
   // the code actually changed once services come back up.
   const preVersionRef = useRef(preVersion)
   useEffect(() => { preVersionRef.current = preVersion }, [preVersion])
+
+  // Once the API answers healthy again, find out BEFORE showing any success UI
+  // whether this was a clean update or a silent auto-rollback (item 7) - the
+  // old code declared "✓ Services are back online" purely from the up/down/up
+  // health-poll transition, with no idea whether the service that came back up
+  // is running the NEW code or the OLD code that Update-NetVault.ps1's own
+  // Invoke-Rollback restored after a failure.
+  const confirmOutcome = async (attempt = 0) => {
+    let data: LastUpdateStatus | null = null
+    try {
+      const ctrl = new AbortController()
+      const abortId = setTimeout(() => ctrl.abort(), 4000)
+      const res = await fetch('/api/system/last-update-status', { cache: 'no-store', signal: ctrl.signal })
+      clearTimeout(abortId)
+      data = await res.json()
+    } catch {
+      data = null
+    }
+
+    if (data && data.exists) {
+      if (data.success === false) {
+        // A failed run recorded a result - branch on whether the automatic
+        // rollback itself succeeded or ALSO failed, rather than assuming
+        // success just because the API is answering again (it may be
+        // answering on the REVERTED old version, or - in the "rollback also
+        // failed" case - on some unknown/unstable state).
+        setLastStatusInfo(data)
+        setPhase(data.rolledBack ? 'rolled_back' : 'rollback_failed')
+        return
+      }
+      // success === true (or an older status shape without the field) - a
+      // clean update was recorded. Proceed to the normal success flow below,
+      // which still independently verifies the commit actually changed.
+      setPhase('back_up')
+      return
+    }
+
+    // No status recorded yet (or the fetch itself failed) - retry briefly to
+    // cover the gap between the app answering healthy and the script finishing
+    // its post-health-check work, then degrade to the normal success flow
+    // rather than blocking forever (a standalone install with no updater has
+    // no status file at all, and must not get stuck here permanently).
+    if (attempt < CONFIRM_MAX_ATTEMPTS) {
+      setTimeout(() => { void confirmOutcome(attempt + 1) }, 2000)
+    } else {
+      setPhase('back_up')
+    }
+  }
 
   // After services recover, confirm the running version actually changed.
   // If it matches the pre-update version, the pull/build silently failed —
@@ -151,10 +226,16 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
         // mid-startup, which would trigger a premature reload.
         consecutiveUp.current += 1
         if (consecutiveUp.current >= 3) {
-          setPhase('back_up')
+          // Don't jump straight to the green "back_up" success UI (item 7) -
+          // confirm via the durable status file first, in case this is a
+          // silent auto-rollback rather than a real success. confirmOutcome
+          // itself sets 'back_up' once it's satisfied this was clean.
+          setPhase('confirming')
           if (pollId !== null) clearInterval(pollId)
-          // The reload is driven by the countdown effect below — the API is up,
-          // but Next.js needs a little longer before it can serve pages.
+          void confirmOutcome()
+          // The reload (once phase becomes 'back_up') is driven by the
+          // countdown effect below — the API is up, but Next.js needs a
+          // little longer before it can serve pages.
         }
       }
     }
@@ -177,31 +258,53 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
     return () => clearTimeout(id)
   }, [phase, countdown])
 
+  const stageLabel = lastStatusInfo?.stage ? (STAGE_LABELS[lastStatusInfo.stage] || lastStatusInfo.stage) : 'an earlier stage'
+  const schemaNote = lastStatusInfo?.schemaAppliedButRolledBack
+    ? " Note: the database schema was updated as part of this attempt and was NOT reverted — verify it's compatible with the restored code version."
+    : ''
+
   let statusLine = 'Starting update…'
   if (phase === 'down') statusLine = 'Services restarting…'
+  else if (phase === 'confirming') statusLine = 'Services are responding — confirming the update actually applied…'
   else if (phase === 'back_up') statusLine = `✓ Services are back online. Reloading in ${countdown} second${countdown === 1 ? '' : 's'}…`
+  else if (phase === 'rolled_back') statusLine = `The update failed at ${stageLabel} and was automatically rolled back — NetVault is running normally on the previous version.${schemaNote}`
+  else if (phase === 'rollback_failed') statusLine = `CRITICAL: The update failed at ${stageLabel} and the automatic rollback ALSO failed — NetVault may be DOWN or unstable.${schemaNote} Do not rely on an automatic reload; manual intervention may be required.`
   else if (phase === 'verify_failed') statusLine = 'Services restarted, but the version did not change. The update may not have applied — try again or check the server logs.'
   else if (phase === 'timeout') statusLine = 'Update is taking longer than expected. Try refreshing the page manually.'
 
   const isError = phase === 'timeout' || phase === 'verify_failed'
+  const isRolledBack = phase === 'rolled_back'
+  const isRollbackFailed = phase === 'rollback_failed'
+  // Neither of the rollback outcomes reloads automatically or on its own
+  // countdown (item 7) - 'rollback_failed' in particular must never guess that
+  // reloading is safe, since the server may genuinely be down; both offer only
+  // the manual "Reload Now" button below.
+  const showSpinner = phase !== 'back_up' && !isError && !isRolledBack && !isRollbackFailed
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-      <div style={{ background: 'var(--bg-card)', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)', padding: 28, maxWidth: 440, width: '100%', textAlign: 'center' }}>
-        {phase !== 'back_up' && !isError && (
+      <div style={{ background: 'var(--bg-card)', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)', padding: 28, maxWidth: 440, width: '100%', textAlign: 'center', border: isRollbackFailed ? '2px solid #7f1d1d' : undefined }}>
+        {showSpinner && (
           <div style={{ fontSize: 44, lineHeight: 1, display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</div>
         )}
         {phase === 'back_up' && <div style={{ fontSize: 44, lineHeight: 1 }}>✓</div>}
+        {isRolledBack && <div style={{ fontSize: 44, lineHeight: 1, color: '#b45309' }}>⚠</div>}
+        {isRollbackFailed && <div style={{ fontSize: 52, lineHeight: 1, color: '#7f1d1d' }}>⛔</div>}
         {isError && <div style={{ fontSize: 44, lineHeight: 1 }}>⚠</div>}
         <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginTop: 14 }}>Updating NetVault…</div>
         <p style={{ color: 'var(--text-muted)', marginTop: 6 }}>Pulling latest code and restarting services. Do not close this window.</p>
-        <p style={{ fontWeight: 600, margin: '14px 0' }}>{statusLine}</p>
+        <p style={{
+          fontWeight: isRollbackFailed ? 800 : 600,
+          fontSize: isRollbackFailed ? 'var(--text-lg)' : undefined,
+          color: isRollbackFailed ? '#7f1d1d' : isRolledBack ? '#b45309' : undefined,
+          margin: '14px 0',
+        }}>{statusLine}</p>
         {phase === 'back_up' && (
           <div style={{ fontSize: 40, fontWeight: 800, lineHeight: 1, margin: '4px 0 10px', color: 'var(--primary, #C8102E)' }}>
             {countdown}
           </div>
         )}
-        {phase !== 'back_up' && (
+        {phase !== 'back_up' && !isRolledBack && !isRollbackFailed && (
           <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>(This usually takes 1-3 minutes)</p>
         )}
         <button className="btn btn-primary" style={{ marginTop: 10 }} onClick={phase === 'back_up' ? () => { void verifyAndRedirect() } : () => window.location.reload()}>Reload Now</button>
@@ -339,6 +442,14 @@ export default function SettingsPage() {
         // License blocked the update — do NOT show the updating overlay.
         const data = await res.json().catch(() => ({}))
         setApplyUpdateErr(data.error || 'Updates are not available for your license.')
+        return
+      }
+      if (res.status === 409) {
+        // Item 6: another update is already running (a manual console run, or
+        // a double-click before this button disabled) - do NOT show the
+        // updating overlay for a run that never actually started.
+        const data = await res.json().catch(() => ({}))
+        setApplyUpdateErr(data.error || 'An update is already in progress. Please wait for it to finish.')
         return
       }
       setUpdatingApp(true)
