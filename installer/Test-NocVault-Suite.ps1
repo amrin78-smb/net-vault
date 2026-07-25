@@ -1,6 +1,6 @@
 <#
 ================================================================
-  NocVault Suite - Post-Install Smoke Test  (v2.2)
+  NocVault Suite - Post-Install Smoke Test  (v2.3)
   Run this ON THE SERVER/LAPTOP where the suite was installed.
 
   WHAT IT CHECKS
@@ -12,7 +12,9 @@
     6. NextAuth / login smoke (best-effort)
     7. Scheduled tasks (the 3 NetVault cron tasks)
     8. Firewall rules (NocVault*)
-    9. Database deep checks (schema, the 3 bug-fixes, tamper model, grants, seed)
+    9. Database deep checks (schema, the 3 bug-fixes, tamper model, grants, seed,
+       Hub cross-DB reads incl. column-level grants, and the credential/secret
+       exclusions -- readonly role blocked from secret columns + *_public views)
    10. COLLECTORS:
         - LogVault : live synthetic syslog packet -> confirm it lands in the DB
                      (full pipeline: socket -> parser -> taxonomy -> DB)
@@ -103,7 +105,7 @@ function Pg($db, $sql) {
 }
 
 # ===============================================================
-Section "NocVault Suite Smoke Test (v2.2)"
+Section "NocVault Suite Smoke Test (v2.3)"
 Inf ("Run time : " + (Get-Date))
 Inf ("Host     : " + $env:COMPUTERNAME)
 Inf ("InstallDir: " + $InstallDir)
@@ -415,21 +417,76 @@ else {
     if ($script:PgExit -eq 0 -and $ddSites -eq "t") { Ok "ddivault_user has SELECT on netvault.sites" }
     else { Bad ("ddivault_user missing SELECT on netvault.sites (got '" + $ddSites + "')") }
 
-    # nocvault_readonly can actually SELECT in ALL FOUR DBs? The installer grants RO
-    # SELECT on every suite DB, so a missing grant is a hard FAIL (not a warning) and
-    # is checked on a representative table in each DB (not just netvault.devices).
+    # nocvault_readonly (the Hub's cross-DB read role) must be able to read a
+    # representative object in each suite DB. NOTE (2026-07 security fix): two of
+    # these tables now have COLUMN-LEVEL grants (credential columns excluded), so a
+    # TABLE-level has_table_privilege check returns 'f' BY DESIGN and is the WRONG
+    # assertion for them -- the Hub reads the non-secret columns and that still
+    # works. Check table-level only where the grant is genuinely table-wide, and a
+    # representative NON-secret column where the grant is column-level.
     Write-Host "  --- nocvault_readonly (Hub cross-DB role) ---" -ForegroundColor DarkGray
-    $roTargets = @(
-        @{ Db="netvault";  Tbl="devices" },
-        @{ Db="logvault";  Tbl="syslog_entries" },
-        @{ Db="ddivault";  Tbl="ddi_servers" },
-        @{ Db="spanvault"; Tbl="monitored_devices" }
+    $roTable = @(
+        @{ Db="netvault"; Tbl="devices" },
+        @{ Db="logvault"; Tbl="syslog_entries" }
     )
-    foreach ($ro in $roTargets) {
+    foreach ($ro in $roTable) {
         $roSel = Pg $ro.Db "SELECT has_table_privilege('nocvault_readonly','$($ro.Tbl)','SELECT');"
         if ($roSel -eq "t") { Ok ("nocvault_readonly has SELECT on " + $ro.Db + "." + $ro.Tbl) }
         else { Bad ("nocvault_readonly missing SELECT on " + $ro.Db + "." + $ro.Tbl + " (got '" + $roSel + "') -- Hub cross-DB reads broken") }
     }
+    $roCol = @(
+        @{ Db="ddivault";  Tbl="ddi_servers";       Col="id" },
+        @{ Db="spanvault"; Tbl="monitored_devices"; Col="id" }
+    )
+    foreach ($ro in $roCol) {
+        $roSel = Pg $ro.Db "SELECT has_column_privilege('nocvault_readonly','$($ro.Tbl)','$($ro.Col)','SELECT');"
+        if ($roSel -eq "t") { Ok ("nocvault_readonly can SELECT " + $ro.Db + "." + $ro.Tbl + "." + $ro.Col + " (column-level grant; table-level intentionally revoked by the credential-column security fix)") }
+        else { Bad ("nocvault_readonly cannot SELECT " + $ro.Db + "." + $ro.Tbl + "." + $ro.Col + " (got '" + $roSel + "') -- Hub cross-DB reads broken") }
+    }
+
+    # Credential/secret exclusions (2026-07 security fix). The readonly diagnostic
+    # role must NOT be able to read secret columns or secret-bearing base tables:
+    # they were revoked and replaced with column-level grants (ddi_servers,
+    # monitored_devices, agents, agent_discovered_devices, wireless_controllers)
+    # or filtered *_public views (app_settings, api_keys, smtp_config, users).
+    # This is the guard for the exact regression the app CLAUDE.md warns about --
+    # a blanket "GRANT SELECT ON ALL TABLES" re-run silently re-widens the secret.
+    # Checks nocvault_readonly (installer-created); claude_readonly is dev-only and
+    # deliberately not assumed to exist on a customer box.
+    Write-Host "  --- Secret exclusions (readonly role must NOT read credentials) ---" -ForegroundColor DarkGray
+    # (a) column-level: a representative secret column must be UNreadable.
+    $secCol = @(
+        @{ Db="ddivault";  Tbl="ddi_servers";              Col="ps_password" },
+        @{ Db="spanvault"; Tbl="monitored_devices";        Col="snmp_community" },
+        @{ Db="spanvault"; Tbl="agents";                   Col="api_key" },
+        @{ Db="spanvault"; Tbl="agent_discovered_devices"; Col="snmp_community" },
+        @{ Db="spanvault"; Tbl="wireless_controllers";     Col="api_refresh_token" }
+    )
+    $secOk = $true; $secBad = @()
+    foreach ($s in $secCol) {
+        $r = Pg $s.Db "SELECT has_column_privilege('nocvault_readonly','$($s.Tbl)','$($s.Col)','SELECT');"
+        if ($r -ne "f") { $secOk = $false; $secBad += ($s.Db + "." + $s.Tbl + "." + $s.Col + "=" + $r) }
+    }
+    if ($secOk) { Ok "nocvault_readonly is BLOCKED from every secret credential column (ddi_servers.ps_password, monitored_devices/agent_discovered_devices.snmp_community, agents.api_key, wireless_controllers.api_refresh_token)" }
+    else { Bad ("SECURITY REGRESSION: nocvault_readonly CAN read secret column(s): " + ($secBad -join ', ') + " -- a blanket GRANT likely re-widened access") }
+    # (b) view-based: each secret base table must be UNreadable AND its *_public view readable.
+    $secView = @(
+        @{ Db="ddivault";  Tbl="smtp_config" },
+        @{ Db="ddivault";  Tbl="api_keys" },
+        @{ Db="ddivault";  Tbl="app_settings" },
+        @{ Db="spanvault"; Tbl="app_settings" },
+        @{ Db="netvault";  Tbl="users" },
+        @{ Db="netvault";  Tbl="app_settings" }
+    )
+    $vwOk = $true; $vwBad = @()
+    foreach ($v in $secView) {
+        $base = Pg $v.Db "SELECT has_table_privilege('nocvault_readonly','$($v.Tbl)','SELECT');"
+        $pub  = Pg $v.Db "SELECT has_table_privilege('nocvault_readonly','$($v.Tbl)_public','SELECT');"
+        if ($base -ne "f") { $vwOk = $false; $vwBad += ($v.Db + "." + $v.Tbl + " base READABLE") }
+        if ($pub  -ne "t") { $vwOk = $false; $vwBad += ($v.Db + "." + $v.Tbl + "_public NOT readable/missing") }
+    }
+    if ($vwOk) { Ok "nocvault_readonly reads the filtered *_public views (app_settings/api_keys/smtp_config/users) but NOT the secret base tables" }
+    else { Bad ("SECURITY REGRESSION or missing view: " + ($vwBad -join ', ')) }
 }
 
 # ---------------------------------------------------------------
