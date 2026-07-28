@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.28.0': [
+    'NocVault Agents — Phase 4a: the hub Agents (fleet) page can now Restart a hub-enrolled agent and Fetch its recent logs, remotely. Because the hub reaches agents over a periodic check-in (not a live connection), a Restart or Fetch-logs is queued and the agent carries it out on its next check-in (~30s); the fleet page shows the returned log tail once it arrives, and warns if the agent is offline (the action stays queued until it reconnects).',
+    'Under the hood: a new agent_commands queue + POST /api/agents/[id]/commands (super_admin) enqueues a restart/get_logs; the agent heartbeat response now carries any pending commands (claimed exactly-once); the agent runs them and, for logs, POSTs its tail back to a new agent-authed POST /api/agents/[id]/logs (the hub has no socket to receive a push), which the fleet page reads via GET /api/agents/[id]/logs. (Agent 2.4.0.)',
+    'This command channel is the general hub->agent instruction path the DDIVault/LogVault agent modules will reuse. SpanVault\'s own agent page was slimmed in the same release (see SpanVault 1.85.0): its legacy per-app "add agent"/rotate-key/install-command UI is retired now that agents are enrolled centrally from this hub.',
+  ],
   '1.27.0': [
     'NocVault Agents — Phase 3 Workstream B: agents can now self-update from the hub with full cryptographic verification. The hub serves a signed release manifest (Ed25519) listing every agent file and its hash; an agent checks the signature AND re-hashes every downloaded file BEFORE it touches anything on disk, so a tampered or partial build can never run. This closes the previous unsigned-update risk (where anything that could answer the update URL could push code to the fleet).',
     'The update is applied crash-safely: verified files are staged, then swapped in on the next restart with the previous build backed up first — and if the new build fails to start (crash-loops), the agent automatically rolls back to the previous version. The rollback gate runs before any replaceable module loads, so even a new build with a startup error self-heals rather than bricking.',

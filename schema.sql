@@ -331,16 +331,43 @@ CREATE TABLE IF NOT EXISTS agent_health (       -- small rolling history for the
 );
 CREATE INDEX IF NOT EXISTS idx_agent_health_agent_ts ON agent_health(agent_id, ts DESC);
 
+-- Log return-path columns on `agents` (Phase 4a). The hub has no server→agent
+-- socket, so a get_logs command's result comes back as a POST from the agent to
+-- /api/agents/[id]/logs, which stashes the tail here for the fleet page to read.
+-- ALTER … IF NOT EXISTS is idempotent: adds the columns on existing installs and
+-- is a no-op on a fresh one (agents is created just above). Neither is secret.
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS last_logs    JSONB;
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS last_logs_at TIMESTAMPTZ;
+
+-- Poll-carried command channel (Phase 4a). The hub↔agent link is an HTTP poll
+-- with NO server→agent socket, so a command is QUEUED here (status='pending'),
+-- carried back in the agent's next heartbeat RESPONSE (then 'delivered'), and the
+-- agent executes it — restart implicitly acks on its next beat, get_logs acks by
+-- POSTing its tail (which marks the row 'done'). References agents(id), created
+-- just above, so no fresh-install forward-ref.
+CREATE TABLE IF NOT EXISTS agent_commands (
+    id           BIGSERIAL PRIMARY KEY,
+    agent_id     TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    type         TEXT NOT NULL,                   -- 'restart' | 'get_logs'
+    args         JSONB NOT NULL DEFAULT '{}',
+    status       TEXT NOT NULL DEFAULT 'pending', -- pending|delivered|done
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    delivered_at TIMESTAMPTZ,
+    done_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_agent_commands_agent_status ON agent_commands(agent_id, status);
+
 -- Grant the diagnostic read role explicitly. The netvault app role and
 -- nocvault_readonly are covered by the blanket grants in the Permissions
 -- block at the tail (GRANT ALL / GRANT SELECT ON ALL TABLES), but
 -- claude_readonly has no blanket grant there — only per-table REVOKEs on the
 -- secret tables — so it needs an explicit SELECT here. No-op if the role is
--- absent (standalone / non-diagnostic installs).
+-- absent (standalone / non-diagnostic installs). agent_commands holds no secret
+-- columns (queued instruction type + args), so it is granted alongside the rest.
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'claude_readonly') THEN
-        GRANT SELECT ON agents, agent_enrollment_tokens, agent_modules, agent_health TO claude_readonly;
+        GRANT SELECT ON agents, agent_enrollment_tokens, agent_modules, agent_health, agent_commands TO claude_readonly;
     END IF;
 END
 $$;

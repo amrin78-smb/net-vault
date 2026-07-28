@@ -291,11 +291,129 @@ async function testEnrollBackoff() {
   }
 }
 
+// ── Test 4: hub-carried commands (Phase 4a) — get_logs POST + restart exit ──────
+// The hub returns queued commands in the heartbeat 200 body (no server→agent socket).
+// A `get_logs` must POST the log tail back to /api/agents/<id>/logs (Bearer JWT) with
+// { lines, command_id }; a `restart` must call the INJECTED exit with 0 (never the
+// real process.exit, which would kill the test runner). Commands are served on the
+// FIRST heartbeat only, then the hub returns [].
+async function testHubCommands() {
+  const IDENTITY_PATH = path.join(os.tmpdir(), `hub-identity-cmd-${process.pid}.json`);
+  rmIfExists(IDENTITY_PATH);
+
+  let heartbeats = 0;
+  let logsAuth = null;
+  let logsBody = null;
+  let logsCount = 0;
+
+  const readJsonBody = (req, cb) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      let body = null;
+      try {
+        body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      } catch (_e) {}
+      cb(body);
+    });
+  };
+
+  const server = http.createServer((req, res) => {
+    const reply = (code, obj) => {
+      res.writeHead(code, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(obj));
+    };
+    if (req.method === 'POST' && req.url === '/api/agents/enroll') {
+      return readJsonBody(req, () =>
+        reply(200, {
+          agent_id: 'agt_cmd',
+          identity: { jwt: 'fake.jwt', expires_at: new Date(Date.now() + 3600e3).toISOString() },
+          modules: [],
+        })
+      );
+    }
+    if (req.method === 'POST' && req.url === '/api/agents/agt_cmd/heartbeat') {
+      heartbeats++;
+      return readJsonBody(req, () => {
+        // Carry both commands on the FIRST heartbeat only; [] thereafter (mirrors the
+        // hub marking them 'delivered' so they aren't handed back a second time).
+        const commands =
+          heartbeats === 1
+            ? [
+                { id: 1, type: 'get_logs' },
+                { id: 2, type: 'restart' },
+              ]
+            : [];
+        reply(200, { ok: true, commands });
+      });
+    }
+    if (req.method === 'POST' && req.url === '/api/agents/agt_cmd/logs') {
+      logsCount++;
+      logsAuth = req.headers.authorization;
+      return readJsonBody(req, (body) => {
+        logsBody = body;
+        reply(200, { ok: true });
+      });
+    }
+    if (req.method === 'GET' && req.url === '/api/agents/agt_cmd/policy') {
+      return reply(200, { modules: [] });
+    }
+    reply(404, { error: 'not found' });
+  });
+
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const exitCalls = [];
+
+  const hub = createHubClient({
+    config: { hubUrl: `http://127.0.0.1:${port}`, enrollToken: 'tok-cmd' },
+    health: { build: () => ({}) },
+    version: '2.0.0',
+    hostname: 'test-host',
+    getModuleStatus: () => ({ span: 'ok' }),
+    getBufferDepth: () => 0,
+    // logger.tail feeds get_logs — give it a couple of ring lines to ship.
+    logger: {
+      info() {},
+      error() {},
+      tail: (n) => ['line-a', 'line-b'].slice(-(n == null ? 200 : n)),
+    },
+    // Injected exit: record the code instead of killing the runner.
+    exit: (code) => exitCalls.push(code),
+    intervalMs: 200,
+    policyIntervalMs: 100000,
+    identityPath: IDENTITY_PATH,
+  });
+
+  hub.start();
+  await delay(900); // enroll + a couple of heartbeats (commands land on the first)
+
+  try {
+    // get_logs → a single POST to /logs with the right auth + body shape.
+    assert.strictEqual(logsCount, 1, `get_logs posts exactly once — saw ${logsCount}`);
+    assert.strictEqual(logsAuth, 'Bearer fake.jwt', 'logs upload carries Bearer fake.jwt');
+    assert.ok(logsBody, 'logs upload had a JSON body');
+    assert.deepStrictEqual(logsBody.lines, ['line-a', 'line-b'], 'logs body carries logger.tail() lines');
+    assert.strictEqual(logsBody.command_id, 1, 'logs body echoes command_id:1');
+    okc('get_logs command posts the log tail to /logs (Bearer + {lines,command_id})');
+
+    // restart → the INJECTED exit called once with 0 (test runner still alive).
+    assert.deepStrictEqual(exitCalls, [0], `restart calls the injected exit with 0 — saw ${JSON.stringify(exitCalls)}`);
+    okc('restart command calls the injected exit(0) — runner not killed');
+  } finally {
+    try { hub.stop(); } catch (_e) {}
+    try { server.close(); } catch (_e) {}
+    rmIfExists(IDENTITY_PATH);
+  }
+}
+
 // ── Runner ─────────────────────────────────────────────────────────────────────
 (async () => {
   await testHappyPath();
   await test401StopsHeartbeat();
   await testEnrollBackoff();
+  await testHubCommands();
   console.log('\nAll hub tests passed.');
   process.exit(0);
 })().catch((e) => {

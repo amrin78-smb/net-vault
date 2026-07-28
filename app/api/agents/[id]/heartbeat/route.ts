@@ -50,7 +50,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       [id]
     )
 
-    return NextResponse.json({ ok: true })
+    // Poll-carried command channel (Phase 4a): the heartbeat RESPONSE is the only
+    // way the hub reaches the agent (no server→agent socket). Atomically claim
+    // this agent's pending commands — the UPDATE … RETURNING flips them to
+    // 'delivered' and hands them back in the SAME statement, so a command is
+    // carried exactly once (a concurrent beat can't re-read a still-pending row).
+    const cmds = await query(
+      `UPDATE agent_commands
+          SET status = 'delivered', delivered_at = NOW()
+        WHERE agent_id = $1 AND status = 'pending'
+      RETURNING id, type, args`,
+      [id]
+    )
+    const commands = cmds.rows.map((c: { id: string | number; type: string; args: unknown }) => ({
+      id: c.id,
+      type: c.type,
+      args: c.args ?? {},
+    }))
+
+    return NextResponse.json({ ok: true, commands })
   } catch {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }

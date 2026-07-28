@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useToast, useConfirm } from '@/app/providers'
@@ -230,12 +230,14 @@ function CopyBox({ label, value, mono }: { label: string; value: string; mono?: 
 }
 
 // ── Fleet row (parent, expandable) + its detail panel ──────────────────────────
-function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, busy }: {
+function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, onRestart, onFetchLogs, busy }: {
   agent: Agent
   expanded: boolean
   onToggleExpand: () => void
   onToggleModule: (appKey: ModuleKey) => void
   onRevoke: () => void
+  onRestart: () => void
+  onFetchLogs: () => void
   busy: boolean
 }) {
   const revoked = agent.status === 'revoked'
@@ -352,10 +354,31 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, b
                   Actions
                 </div>
                 <button
+                  className="btn btn-secondary"
+                  disabled={busy || revoked}
+                  onClick={onRestart}
+                  style={{ justifyContent: 'center' }}
+                >
+                  Restart
+                </button>
+                <button
+                  className="btn btn-secondary"
+                  disabled={busy || revoked}
+                  onClick={onFetchLogs}
+                  style={{ justifyContent: 'center' }}
+                >
+                  Fetch logs
+                </button>
+                {agent.status === 'offline' && !revoked && (
+                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-warn-fg)', lineHeight: 1.4 }}>
+                    Agent is offline — a command is queued and runs on its next check-in.
+                  </div>
+                )}
+                <button
                   className="btn btn-danger"
                   disabled={busy || revoked}
                   onClick={onRevoke}
-                  style={{ justifyContent: 'center' }}
+                  style={{ justifyContent: 'center', marginTop: 4 }}
                 >
                   {revoked ? 'Revoked' : busy ? <Spinner size={13} /> : 'Revoke agent'}
                 </button>
@@ -386,6 +409,13 @@ export default function AgentsPage() {
   const [sites, setSites] = useState<Site[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
+
+  // Fetch-logs modal + poll state (Phase 4a command channel — get_logs returns
+  // asynchronously via the agent's POST /logs, so we queue then poll the GET).
+  const [logsAgent, setLogsAgent] = useState<Agent | null>(null)
+  const [logsState, setLogsState] = useState<'polling' | 'done' | 'timeout' | 'error'>('polling')
+  const [logsLines, setLogsLines] = useState<string[] | null>(null)
+  const pollRef = useRef<string | null>(null)  // active poll's agent id (stale-closure guard)
 
   // Add-agent modal + enrollment
   const [showAdd, setShowAdd] = useState(false)
@@ -428,7 +458,10 @@ export default function AgentsPage() {
   }
   function openAdd() { resetForm(); setShowAdd(true) }
   function closeAdd() { setShowAdd(false) }
-  useEscape(() => { if (showAdd) setShowAdd(false) })
+  useEscape(() => {
+    if (showAdd) setShowAdd(false)
+    else if (logsAgent) closeLogs()
+  })
 
   function toggleFormModule(k: ModuleKey) {
     setFormModules(prev => {
@@ -503,6 +536,87 @@ export default function AgentsPage() {
     } finally {
       setBusyId(null)
     }
+  }
+
+  async function restartAgent(agent: Agent) {
+    const offline = agent.status === 'offline'
+    const ok = await confirm({
+      title: 'Restart agent?',
+      message: offline
+        ? `"${agent.name}" appears offline. The restart is queued now and applies when it next checks in.`
+        : `Restart "${agent.name}"? It applies on the agent's next check-in (within ~30s).`,
+      confirmLabel: 'Restart',
+    })
+    if (!ok) return
+    setBusyId(agent.id)
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'restart' }),
+      })
+      if (!res.ok) throw new Error()
+      showToast(offline
+        ? 'Restart queued — it will run when the agent reconnects'
+        : "Restart queued (applies on the agent's next check-in)")
+    } catch {
+      showToast('Failed to queue restart', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function fetchLogs(agent: Agent) {
+    pollRef.current = agent.id
+    setLogsAgent(agent)
+    setLogsLines(null)
+    setLogsState('polling')
+
+    // Baseline the currently-stored tail so we can tell a NEW answer from the
+    // one left over from a previous get_logs (ts changes when the agent replies).
+    let baselineTs: string | null = null
+    try {
+      const b = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/logs`)
+      if (b.ok) { const bd = await b.json(); baselineTs = bd?.ts ?? null }
+    } catch { /* baseline is best-effort */ }
+
+    // Queue the get_logs command (carried to the agent on its next heartbeat).
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'get_logs' }),
+      })
+      if (!res.ok) throw new Error()
+    } catch {
+      if (pollRef.current === agent.id) setLogsState('error')
+      return
+    }
+
+    // Poll the GET ~every 2s for ~12s waiting for the agent to POST its tail back.
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 2000))
+      if (pollRef.current !== agent.id) return  // modal closed / switched agent
+      try {
+        const r = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/logs`)
+        if (r.ok) {
+          const d = await r.json()
+          if (d?.ts && d.ts !== baselineTs) {
+            setLogsLines(Array.isArray(d.lines) ? d.lines : [])
+            setLogsState('done')
+            return
+          }
+        }
+      } catch { /* keep polling */ }
+    }
+    if (pollRef.current === agent.id) setLogsState('timeout')
+  }
+
+  function closeLogs() {
+    pollRef.current = null
+    setLogsAgent(null)
+    setLogsLines(null)
+    setLogsState('polling')
   }
 
   // ── render gating ─────────────────────────────────────────────────────────────
@@ -601,6 +715,8 @@ export default function AgentsPage() {
                     onToggleExpand={() => setExpandedId(id => id === a.id ? null : a.id)}
                     onToggleModule={(k) => toggleModule(a, k)}
                     onRevoke={() => revokeAgent(a)}
+                    onRestart={() => restartAgent(a)}
+                    onFetchLogs={() => fetchLogs(a)}
                     busy={busyId === a.id}
                   />
                 ))}
@@ -711,6 +827,82 @@ export default function AgentsPage() {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Fetch-logs modal ── */}
+      {logsAgent && (
+        <div className="modal-overlay" onClick={closeLogs}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-card)', borderRadius: 'var(--radius)', width: '100%', maxWidth: 720,
+              boxShadow: 'var(--shadow-lg)', maxHeight: '90vh', display: 'flex', flexDirection: 'column',
+            }}
+          >
+            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div>
+                <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                  Agent logs — {logsAgent.name}
+                </h2>
+                <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                  Last ~200 lines, fetched over the poll-carried command channel.
+                </p>
+              </div>
+              <button className="btn btn-secondary" onClick={closeLogs} style={{ padding: '6px 10px' }} aria-label="Close">✕</button>
+            </div>
+
+            <div style={{ padding: '20px 24px', overflowY: 'auto' }}>
+              {logsAgent.status === 'offline' && logsState === 'polling' && (
+                <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: 14 }}>
+                  This agent appears offline — the log request is queued and will run when it reconnects, so this may time out.
+                </div>
+              )}
+
+              {logsState === 'polling' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-secondary)', fontSize: 'var(--text-base)', padding: '20px 0' }}>
+                  <Spinner size={15} /> Waiting for the agent to return its logs…
+                </div>
+              )}
+
+              {logsState === 'error' && (
+                <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>
+                  Failed to queue the log request. Please try again.
+                </div>
+              )}
+
+              {logsState === 'timeout' && (
+                <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '12px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>
+                  No logs returned yet. The agent may be offline or still checking in — the request stays queued and will run on its next check-in. Try Fetch logs again shortly.
+                </div>
+              )}
+
+              {logsState === 'done' && (
+                logsLines && logsLines.length > 0 ? (
+                  <pre style={{
+                    margin: 0, padding: '14px 16px',
+                    background: 'var(--surface-subtle)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)',
+                    fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)', color: 'var(--text-primary)',
+                    lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    maxHeight: '60vh', overflowY: 'auto',
+                  }}>
+                    {logsLines.join('\n')}
+                  </pre>
+                ) : (
+                  <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', padding: '20px 0' }}>
+                    The agent returned no log lines.
+                  </div>
+                )
+              )}
+            </div>
+
+            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => fetchLogs(logsAgent)} disabled={logsState === 'polling'}>
+                {logsState === 'polling' ? 'Fetching…' : 'Fetch again'}
+              </button>
+              <button className="btn btn-primary" onClick={closeLogs}>Close</button>
             </div>
           </div>
         </div>

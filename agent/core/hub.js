@@ -137,6 +137,11 @@ function createHubClient(opts) {
     // self-update — on the policy tick we fetch the signed manifest and hand it to
     // updater.consider(); absent an updater this is simply skipped.
     updater,
+    // Phase 4a: injectable process exit for the hub-carried `restart` command. The hub
+    // has no server→agent socket, so a restart arrives in a heartbeat response and is
+    // executed here (process.exit(0) → NSSM restarts). Overridable so tests can assert
+    // a restart was requested WITHOUT killing the test runner. Default = real exit.
+    exit = () => process.exit(0),
     // Testability: override the heartbeat cadence (default 30s) and identity path.
     intervalMs = 30000,
     policyIntervalMs = 300000, // ~5 min
@@ -352,6 +357,52 @@ function createHubClient(opts) {
     store.reject();
   }
 
+  // ── Phase 4a: execute a hub-carried command ────────────────────────────────────
+  // The hub↔agent link is an HTTP poll with NO server→agent socket, so lifecycle ops
+  // (restart / get_logs) are queued server-side and carried back in a heartbeat 200
+  // body ({ commands:[{id,type,args}] }); the hub marks each 'delivered' when it hands
+  // it back, so the agent won't receive the same command twice. This runs ON the
+  // heartbeat path, so it is strictly best-effort and MUST NEVER crash: any error can
+  // cost only a log line, never the span data path. Unlike the span-WS runtime (which
+  // replies over the socket), the hub has no socket — so `get_logs` POSTs its tail
+  // back to the hub's /logs endpoint (the return path); `restart` needs no return.
+  async function handleCommand(cmd) {
+    // Guard a null / typeless command (defensive — the hub shouldn't send one).
+    if (!cmd || !cmd.type) return;
+    try {
+      if (cmd.type === 'restart') {
+        log(`restart command received (id=${cmd.id}) — exiting; the service manager will restart`);
+        exit(0);
+        return;
+      }
+      if (cmd.type === 'get_logs') {
+        const id = store.get();
+        if (!id) return; // no identity → nowhere to authenticate the upload
+        const lines = logger && typeof logger.tail === 'function' ? logger.tail(200) : [];
+        try {
+          const res = await httpPostJson(
+            `${hubUrl}/api/agents/${id.agent_id}/logs`,
+            { lines, command_id: cmd.id },
+            { Authorization: `Bearer ${id.jwt}` }
+          );
+          if (res.statusCode === 200) {
+            log(`get_logs command (id=${cmd.id}) — ${lines.length} line(s) posted to hub`);
+          } else {
+            logErr(`get_logs upload failed (HTTP ${res.statusCode})`);
+          }
+        } catch (e) {
+          // Best-effort return path — a failed upload only logs, never crashes.
+          logErr('get_logs upload network error:', e.message);
+        }
+        return;
+      }
+      logErr(`unknown hub command type '${cmd.type}' (id=${cmd.id}) — ignoring`);
+    } catch (e) {
+      // A command handler must NEVER crash the heartbeat/data path.
+      logErr('command handler error:', e.message);
+    }
+  }
+
   async function sendHeartbeat() {
     const id = store.get();
     if (stopped || !id) return;
@@ -382,6 +433,14 @@ function createHubClient(opts) {
     }
     if (res.statusCode !== 200) {
       logErr(`heartbeat failed (HTTP ${res.statusCode})`);
+      return;
+    }
+    // Phase 4a: the hub carries any queued commands back in the 200 body (there is no
+    // server→agent socket). Execute each — handleCommand is fully self-guarding, so a
+    // bad command can never crash this heartbeat tick or the span data path.
+    const commands = res.body && Array.isArray(res.body.commands) ? res.body.commands : [];
+    for (const cmd of commands) {
+      await handleCommand(cmd);
     }
   }
 

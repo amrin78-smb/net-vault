@@ -319,6 +319,40 @@ if ($refCode -eq 401) {
     Bad ("/api/agents/<id>/refresh unauthed POST returned code=" + $refCode + " (expected 401 - route missing or not agent-gated)")
 }
 
+# Phase 4a: the poll-carried command channel. The agent-authed log return path
+# (POST /api/agents/<id>/logs) must EXIST and reject an unauthed POST with 401
+# (requireAgentAuth, same guard as heartbeat/refresh) - proving it's present and
+# locked to agent JWTs, not a 404 (route missing).
+$logCode = $null
+try {
+    $lf = Invoke-WebRequest "http://127.0.0.1:3000/api/agents/smoke-test/logs" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
+    $logCode = [int]$lf.StatusCode
+} catch {
+    if ($_.Exception.Response) { try { $logCode = [int]$_.Exception.Response.StatusCode } catch {} }
+}
+if ($logCode -eq 401) {
+    Ok "/api/agents/<id>/logs exists and is agent-gated (unauthed POST -> 401)"
+} else {
+    Bad ("/api/agents/<id>/logs unauthed POST returned code=" + $logCode + " (expected 401 - route missing or not agent-gated)")
+}
+
+# The super_admin command-enqueue route (POST /api/agents/<id>/commands) must
+# EXIST and reject an unauthed POST with 401 (no session) - proving it's present
+# and session-gated, not a 404. A logged-in super_admin then gets 400/404 on a
+# bad type / unknown agent; unauthed can never reach that logic.
+$cmdCode = $null
+try {
+    $cf = Invoke-WebRequest "http://127.0.0.1:3000/api/agents/smoke-test/commands" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
+    $cmdCode = [int]$cf.StatusCode
+} catch {
+    if ($_.Exception.Response) { try { $cmdCode = [int]$_.Exception.Response.StatusCode } catch {} }
+}
+if ($cmdCode -eq 401) {
+    Ok "/api/agents/<id>/commands exists and is session-gated (unauthed POST -> 401)"
+} else {
+    Bad ("/api/agents/<id>/commands unauthed POST returned code=" + $cmdCode + " (expected 401 - route missing or not gated)")
+}
+
 $root = Http "http://127.0.0.1:3000/" 12 -NoRedirect
 if ($root.Code -ge 300 -and $root.Code -lt 400) { Ok ("NetVault / redirects (" + $root.Code + " -> " + $root.Loc + ")") }
 elseif ($root.Code -eq 200) { Inf "NetVault / returned 200 (no redirect)" }
@@ -396,12 +430,18 @@ else {
     if ($script:PgExit -eq 0) { Ok ("app_settings present (" + $aset + " keys)") } else { Bad "app_settings unreadable" }
     # agent_registry — NocVault Agents Phase 2 hub control plane (netvault 1.24.0).
     # ROLE-SCOPED: the netvault app role must be able to SELECT each of the 4 tables.
+    # agent_commands (Phase 4a poll-carried command channel) is included below —
+    # it must exist (fresh installs) AND be role-SELECTable for the fleet page.
     $agOk = $true; $agBad = @()
-    foreach ($t in @('agents','agent_enrollment_tokens','agent_modules','agent_health')) {
+    foreach ($t in @('agents','agent_enrollment_tokens','agent_modules','agent_health','agent_commands')) {
         $p = Pg "netvault" "SELECT has_table_privilege('netvault','$t','SELECT');"
         if ($p -ne "t") { $agOk = $false; $agBad += ($t + "=" + $p) }
     }
-    if ($agOk) { Ok "netvault role can SELECT all agent_registry tables (agents, agent_enrollment_tokens, agent_modules, agent_health)" } else { Bad ("netvault role cannot SELECT agent_registry tables: " + ($agBad -join ', ')) }
+    if ($agOk) { Ok "netvault role can SELECT all agent_registry tables (agents, agent_enrollment_tokens, agent_modules, agent_health, agent_commands)" } else { Bad ("netvault role cannot SELECT agent_registry tables: " + ($agBad -join ', ')) }
+    # Phase 4a: the log return-path columns on `agents` must be present (added via
+    # idempotent ALTER; a get_logs command stashes its tail here for the GET to read).
+    $llc = Pg "netvault" "SELECT has_column_privilege('netvault','agents','last_logs','SELECT');"
+    if ($llc -eq "t") { Ok "agents.last_logs column present (Phase 4a log return path)" } else { Bad ("agents.last_logs column missing/unreadable (got '" + $llc + "')") }
 
     Write-Host "  --- DDIVault (uuid-ossp fix) ---" -ForegroundColor DarkGray
     $ext = Pg "ddivault" "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='uuid-ossp');"
