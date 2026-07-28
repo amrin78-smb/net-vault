@@ -19,6 +19,7 @@ POST /api/admin/eol-seed/sync [auth] [db,external] — pull central signed EOL f
 GET /api/agents/install.ps1 [public] [none] — PowerShell agent installer, hub origin baked in (resolveOrigin); public (remote runs `irm` pre-credential)
 GET /api/agents/bundle [public] [none] — agent bundle manifest {files:[]} walked from on-disk agent/ dir (excludes deps/state/keys/tests); 503 if unavailable; public
 GET /api/agents/bundle/[...path] [public] [none] — serve ONE agent file's bytes; path-traversal confined to agent/ (403 escape, 404 missing/excluded); public
+GET /api/agents/update-manifest [public] [none] — serve the committed, offline-signed self-update manifest {version,files:[{path,sha256}],sig} from agent/update-manifest.json; 503 if missing/unparseable (fresh install advertises no update); public (Phase 3 Workstream B)
 POST /api/agents/enroll-tokens [auth] [db] — mint one-time enrollment token + install one-liner (super_admin)
 POST /api/agents/enroll [public] [db] — token-authed (NO session): agent redeems token+host facts → agent_id, signed identity, module policy. Intentionally public write; NO checkWriteAllowed (token-gated infra)
 POST /api/agents/[id]/heartbeat [agent-auth] [db] — agent-authed (requireAgentAuth, JWT sub must == [id]): liveness + health sample

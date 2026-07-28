@@ -1,24 +1,35 @@
 'use strict';
 /**
- * scripts/sign-agent.js — release signing tool for the unified agent self-update.
+ * scripts/sign-agent.js — offline release signer for the unified agent self-update.
  *
- * Given a built bundle file + the Ed25519 PRIVATE signing key, it computes the
- * bundle's sha256, signs `version + '|' + sha256` (the exact string core/updater.js
- * verifies), and prints the update manifest JSON:
+ * Walks the agent directory, builds a per-file sha256 manifest of every RUNTIME
+ * file (applying the SAME exclude set as the hub's bundle route), signs a canonical
+ * string over that file list with the Ed25519 PRIVATE signing key, and writes the
+ * signed update manifest that the hub serves at /api/agents/update-manifest and that
+ * core/updater.js verifies:
  *
- *     { "version": "...", "url": "...", "sha256": "<hex>", "sig": "<base64>" }
+ *     {
+ *       "version": "1.2.0",
+ *       "files": [ { "path": "core/hub.js", "sha256": "<hex>" }, ... ],
+ *       "sig": "<base64>"
+ *     }
  *
- * The `sig` is a base64 Ed25519 signature; core/updater.js's verifyManifest()
- * checks it against the embedded AGENT_UPDATE_PUBLIC_KEY. The download `url` is
- * where the hub will serve the bundle bytes (Phase 2); pass it in or fill it later.
+ *   - `files` is sorted ascending by `path`; `path` is a forward-slash relative
+ *     path under the agent dir (e.g. "core/hub.js", "nocvault-agent.js",
+ *     "package.json"). This list MUST equal the file list the hub's bundle route
+ *     serves (/api/agents/bundle), because the agent downloads each file from
+ *     /api/agents/bundle/<path> and verifies its sha256 against this manifest.
+ *   - **Canonical signed string** (the signer signs the UTF-8 bytes of this,
+ *     verbatim): `version + '\n' + files.map(f => f.path + ':' + f.sha256).join('\n')`
+ *   - `sig` is a base64 Ed25519 signature made with `crypto.sign(null, data, key)`
+ *     (null digest); core/updater.js checks it against the embedded public key.
  *
  * ── Usage ─────────────────────────────────────────────────────────────────────
  *   node scripts/sign-agent.js \
- *     --bundle path/to/agent-bundle.tar.gz \
- *     --version 1.1.0 \
- *     --url https://<hub>/agent/bundle/1.1.0.tar.gz \
- *     [--key path/to/agent-signing-key.pem]   (or env AGENT_SIGNING_KEY)
- *     [--out manifest.json]                    (defaults to stdout)
+ *     --version 1.2.0 \
+ *     --key keys/agent-signing-key.pem            (or env AGENT_SIGNING_KEY)
+ *     [--dir <agentdir>]                          (defaults to this script's ..)
+ *     [--out <path>]                              (defaults to <agentdir>/update-manifest.json)
  *
  * The private key is read from --key or the AGENT_SIGNING_KEY env var (a PKCS#8
  * PEM path). It is NEVER hardcoded and NEVER committed.
@@ -31,16 +42,81 @@
  *   - The printed base64 is the spki-DER PUBLIC key — paste it into
  *     core/updater.js's AGENT_UPDATE_PUBLIC_KEY constant (replacing the placeholder).
  *   - agent-signing-key.pem is the PKCS#8 PRIVATE key — store it OFFLINE on the
- *     release box only.
+ *     release box only (e.g. under agent/keys/, which is git-ignored and excluded).
  *
  * ── .gitignore note ───────────────────────────────────────────────────────────
  *   The private signing key must NEVER be committed. Add patterns like
- *   `agent-signing-key.pem` / `*-signing-key.pem` to .gitignore. If a private key
- *   is ever committed by accident, treat it as compromised: rotate it (new keypair,
- *   new embedded public key, re-sign releases) — do not just delete the file.
+ *   `agent-signing-key.pem` / `*-signing-key.pem` / `keys/` to .gitignore. If a
+ *   private key is ever committed by accident, treat it as compromised: rotate it
+ *   (new keypair, new embedded public key, re-sign releases) — not just delete it.
  */
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path');
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EXCLUDE SET — MUST STAY BYTE-FOR-BYTE IN LOCKSTEP WITH
+// netvault/lib/agentBundle.ts's isExcludedBundlePath(). The manifest's file list
+// MUST equal the bundle route's served file list (the agent downloads each file
+// from /api/agents/bundle/<path>); if these two exclude sets ever drift, a signed
+// file won't be servable (or a served file won't be signed) and self-update breaks.
+// Any edit here requires the same edit there, and vice versa.
+// `relPath` is forward-slash relative to the agent dir.
+function isExcludedBundlePath(relPath) {
+  const rel = relPath.replace(/\\/g, '/');
+  const segments = rel.split('/').filter(Boolean);
+  if (!segments.length) return true;
+  const base = segments[segments.length - 1].toLowerCase();
+
+  // Whole-directory excludes (any depth for node_modules + the signing key dir;
+  // top-level test/ and the self-update staging/rollback dirs).
+  if (segments.includes('node_modules')) return true;
+  if (segments.includes('keys')) return true;
+  if (segments[0] === 'test') return true;
+  if (segments[0] === 'pending' || segments[0] === 'backup') return true;
+
+  // Local runtime state / secrets — never part of a fresh bundle.
+  if (base === 'config.json' || base === 'hub-identity.json' || base === 'buffer.json') return true;
+  if (base === 'pending-update.bundle') return true;
+  // The runtime signed manifest is served by its own route + is what we PRODUCE
+  // here — it must never list itself. Same for the updater's apply-marker.
+  if (base === 'update-manifest.json') return true;
+  if (base === '.update-confirm.json') return true;
+  if (base === '.gitignore') return true;
+  // The installer script is served separately (baked) — not a runtime file.
+  if (base === 'install.ps1') return true;
+  if (base.endsWith('.log')) return true;
+  // Private keys of any kind (covers scripts/*.key too).
+  if (base.endsWith('.pem') || base.endsWith('.key')) return true;
+
+  return false;
+}
+
+// Recursively list the servable agent files as forward-slash relative paths, with
+// the blocklist applied. Mirrors listBundleFiles() in lib/agentBundle.ts.
+function listBundleFiles(agentDir) {
+  const out = [];
+  const walk = (absDir, relDir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const rel = relDir ? `${relDir}/${e.name}` : e.name;
+      if (isExcludedBundlePath(rel)) continue;
+      if (e.isDirectory()) {
+        walk(path.join(absDir, e.name), rel);
+      } else if (e.isFile()) {
+        out.push(rel);
+      }
+    }
+  };
+  walk(agentDir, '');
+  out.sort();
+  return out;
+}
 
 function parseArgs(argv) {
   const out = {};
@@ -62,38 +138,39 @@ function parseArgs(argv) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  const bundlePath = args.bundle;
   const version = args.version;
-  const url = args.url || '';
   const keyPath = args.key || process.env.AGENT_SIGNING_KEY;
-  const outPath = args.out;
+  // Default agent dir = this script's parent (scripts/ -> agent root).
+  const agentDir = path.resolve(args.dir || path.join(__dirname, '..'));
+  const outPath = args.out || path.join(agentDir, 'update-manifest.json');
 
-  if (!bundlePath || !version || !keyPath) {
+  if (!version || !keyPath) {
     console.error(
-      'Usage: node scripts/sign-agent.js --bundle <file> --version <x.y.z> ' +
-        '[--url <bundle-url>] [--key <privkey.pem> | env AGENT_SIGNING_KEY] [--out manifest.json]'
+      'Usage: node scripts/sign-agent.js --version <x.y.z> ' +
+        '--key <privkey.pem> (or env AGENT_SIGNING_KEY) [--dir <agentdir>] [--out <path>]'
     );
     process.exit(1);
     return;
   }
 
-  const bundle = fs.readFileSync(bundlePath);
-  const sha256 = crypto.createHash('sha256').update(bundle).digest('hex');
+  // Build files:[{path, sha256}] for every runtime file, sorted ascending by path.
+  const relPaths = listBundleFiles(agentDir);
+  const files = relPaths.map((rel) => {
+    const buf = fs.readFileSync(path.join(agentDir, rel));
+    return { path: rel, sha256: crypto.createHash('sha256').update(buf).digest('hex') };
+  });
 
-  // Sign the EXACT string core/updater.js verifies: `version + '|' + sha256`.
+  // Canonical signed string — pinned by the manifest contract; the agent-side
+  // verifier reconstructs and verifies exactly this:
+  //   version + '\n' + files.map(f => f.path + ':' + f.sha256).join('\n')
+  const canonical = version + '\n' + files.map((f) => f.path + ':' + f.sha256).join('\n');
+
   const privateKey = crypto.createPrivateKey(fs.readFileSync(keyPath, 'utf8'));
-  const data = Buffer.from(version + '|' + sha256, 'utf8');
-  const sig = crypto.sign(null, data, privateKey).toString('base64'); // Ed25519 -> null digest
+  const sig = crypto.sign(null, Buffer.from(canonical, 'utf8'), privateKey).toString('base64'); // Ed25519 -> null digest
 
-  const manifest = { version, url, sha256, sig };
-  const json = JSON.stringify(manifest, null, 2);
-
-  if (outPath) {
-    fs.writeFileSync(outPath, json + '\n');
-    console.error('Wrote manifest to ' + outPath);
-  } else {
-    process.stdout.write(json + '\n');
-  }
+  const manifest = { version, files, sig };
+  fs.writeFileSync(outPath, JSON.stringify(manifest, null, 2) + '\n');
+  console.error('Wrote signed update manifest (' + files.length + ' files) to ' + outPath);
 }
 
 main();

@@ -43,13 +43,23 @@ export function isExcludedBundlePath(relPath: string): boolean {
   if (!segments.length) return true
   const base = segments[segments.length - 1].toLowerCase()
 
-  // Whole-directory excludes (any depth for node_modules; top-level test/).
+  // Whole-directory excludes (any depth for node_modules + the signing key dir;
+  // top-level test/ and the self-update staging/rollback dirs).
   if (segments.includes('node_modules')) return true
+  if (segments.includes('keys')) return true
   if (segments[0] === 'test') return true
+  // Self-update staging (pending/) and rollback (backup/) trees — pure runtime
+  // scratch written by the updater; never part of a fresh bundle.
+  if (segments[0] === 'pending' || segments[0] === 'backup') return true
 
   // Local runtime state / secrets — never part of a fresh bundle.
   if (base === 'config.json' || base === 'hub-identity.json' || base === 'buffer.json') return true
   if (base === 'pending-update.bundle') return true
+  // The runtime signed manifest is served by its OWN route (/api/agents/update-manifest),
+  // not as a bundle file, and its file list must equal the bundle's served files —
+  // so it must not appear in the bundle itself. Same for the updater's apply-marker.
+  if (base === 'update-manifest.json') return true
+  if (base === '.update-confirm.json') return true
   if (base === '.gitignore') return true
   // The installer script is served separately (baked) — not a runtime file.
   if (base === 'install.ps1') return true

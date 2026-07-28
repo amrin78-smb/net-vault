@@ -1,9 +1,9 @@
 {
   "name": "nocvault-agent",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "main": "nocvault-agent.js",
   "scripts": {
-    "test": "node test/units.test.js && node test/identity.test.js && node test/integration.test.js && node test/hub.test.js"
+    "test": "node test/units.test.js && node test/identity.test.js && node test/integration.test.js && node test/hub.test.js && node test/updater.test.js && node test/apply-update.test.js"
   },
   "dependencies": {
     "ws": "^8.17.0",

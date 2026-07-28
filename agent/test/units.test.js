@@ -13,7 +13,9 @@ const createBuffer = require('../core/buffer');
 const createHealth = require('../core/health');
 const createHeartbeat = require('../core/heartbeat');
 const createTransport = require('../core/transport');
-const createUpdater = require('../core/updater');
+// NOTE: the updater's verifyManifest + consider() and the apply-update swap/rollback
+// now have their own dedicated suites (test/updater.test.js + test/apply-update.test.js),
+// because the signed-manifest CONTRACT changed to multi-file in Phase 3.
 
 let passed = 0;
 function ok(name) { console.log('  PASS', name); passed++; }
@@ -83,25 +85,6 @@ function ok(name) { console.log('  PASS', name); passed++; }
     health: { cpu_pct: 1 }, module_status: { span: 'ok' },
   }, 'heartbeat is the legacy 4 fields + additive module_status');
   ok('heartbeat payload shape');
-})();
-
-// ── updater.verifyManifest: Ed25519 sign/verify, tamper + wrong-key rejected ──
-(() => {
-  const { verifyManifest } = createUpdater;
-  assert.strictEqual(typeof verifyManifest, 'function', 'verifyManifest exported');
-  const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519');
-  const pubPem = publicKey.export({ type: 'spki', format: 'pem' });
-  const version = '2.1.0';
-  const sha256 = crypto.createHash('sha256').update('fake-bundle-bytes').digest('hex');
-  const sig = crypto.sign(null, Buffer.from(version + '|' + sha256), privateKey).toString('base64');
-
-  assert.strictEqual(verifyManifest({ version, url: 'x', sha256, sig }, pubPem), true, 'valid manifest verifies');
-  assert.strictEqual(verifyManifest({ version: '9.9.9', url: 'x', sha256, sig }, pubPem), false, 'tampered version rejected');
-  assert.strictEqual(verifyManifest({ version, url: 'x', sha256: sha256.replace(/.$/, '0'), sig }, pubPem), false, 'tampered sha256 rejected');
-  const other = crypto.generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' });
-  assert.strictEqual(verifyManifest({ version, url: 'x', sha256, sig }, other), false, 'wrong key rejected');
-  assert.strictEqual(verifyManifest({}, pubPem), false, 'empty manifest rejected');
-  ok('updater.verifyManifest Ed25519 gate (valid / tamper / wrong-key / empty)');
 })();
 
 console.log(`\n${passed} unit assertions passed.`);

@@ -1,0 +1,94 @@
+{
+  "version": "2.3.0",
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "a56d002b83140841b3773361b67f33973ce95f77fadb98c3a4121a34aedb2894"
+    },
+    {
+      "path": "config.json.example",
+      "sha256": "8afc6fe00e78a3f5ba83cd90435d77e20d5466a9aa6b8ad8bd7f1642cf4e84ea"
+    },
+    {
+      "path": "core/apply-update.js",
+      "sha256": "6ff3af99b2efe4d846f00920798392706bbdfe26aacc5f603720415b3945e523"
+    },
+    {
+      "path": "core/buffer.js",
+      "sha256": "1e57ff4aa19d868d3113663c361d72c503806f29879fa2284a54ed7f991d288e"
+    },
+    {
+      "path": "core/health.js",
+      "sha256": "ddd4b28207a7e4c47c12eb6e90a090a1182696e9519b2e95e03682ebf755d731"
+    },
+    {
+      "path": "core/heartbeat.js",
+      "sha256": "b6fc25b6cb74d0a7cc429d860a8930f8f51413777425ef784c242d03751be406"
+    },
+    {
+      "path": "core/hub.js",
+      "sha256": "b791529a997d7975d3ae4ae3252c5d6099261e68b1e66d27fd1a6d1ee2805671"
+    },
+    {
+      "path": "core/identity-store.js",
+      "sha256": "f29898ab9dbbb8fe029dd0c3b6b43c3dd824db0554bc12c4fe92c2d4f8210fc1"
+    },
+    {
+      "path": "core/identity.js",
+      "sha256": "8c6d19dec675ac52d9ecea96f498a053f0e4bd723ac86bd563908e5e3c8f399d"
+    },
+    {
+      "path": "core/logger.js",
+      "sha256": "9a17fc87541f2bf90313c4f418eaa9015e7636f4b644d6fde20d84591f9366ea"
+    },
+    {
+      "path": "core/runtime.js",
+      "sha256": "283be20a2a191550f79564445d7ff8dee646dde178772321ffbc78f770ec0a9d"
+    },
+    {
+      "path": "core/transport.js",
+      "sha256": "646596e73418141eaaae5d5d90e1613f179f85dca8f899d2c432e77074265e40"
+    },
+    {
+      "path": "core/updater.js",
+      "sha256": "6e302bc5e1cd9223d6fe26489cdecdb6fce57b8431f70ec1262b6ad30b475351"
+    },
+    {
+      "path": "modules/span/checks.js",
+      "sha256": "96487a6fe6e229285b7f8accbed72bbcf2126ce60d88fea2e6fe26e3b1176c73"
+    },
+    {
+      "path": "modules/span/discovery.js",
+      "sha256": "7e5ab6bf87cb6536a2ab33e58af8fa9c6407cb9b678185f802f15c4e6f1ec35e"
+    },
+    {
+      "path": "modules/span/index.js",
+      "sha256": "8b2b348795b2ed05137ee169030d99e58434e54d5444034adfb19a3926271e70"
+    },
+    {
+      "path": "modules/span/ping.js",
+      "sha256": "3c0478eae9056325ef7750ed0025cfc40a01fd871067e305e95a8dec5f7bd712"
+    },
+    {
+      "path": "modules/span/snmp.js",
+      "sha256": "c515577aafcfc35bbf037e2e116c3002727fc6ee8a5cf84d67d8a74e35bbbac4"
+    },
+    {
+      "path": "nocvault-agent.js",
+      "sha256": "e5fefc5abbc9adde9a183a8755503d77441e26839223aef9bb343f3ffbf28116"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "635972b75409ec5ad28eb580c4bd547c32f9cb1e28894c3239a4c256102adc8d"
+    },
+    {
+      "path": "package.json",
+      "sha256": "17d57819da53f1c388cab0996dde8b64e6bc1e1b49089740d373db75cea5673f"
+    },
+    {
+      "path": "scripts/sign-agent.js",
+      "sha256": "8606a73711f9dc472db60560bf5835c1c46dc951834d208d8c937e29f7266f85"
+    }
+  ],
+  "sig": "DZjJoUv2Mhvn5cVmkVyC+P5k4VzUg/UbFE8Tb+nA/S0hmxk/1jNRJMlVXa01dC9UA3/hYWEaXJu0NJbiwkSCBQ=="
+}

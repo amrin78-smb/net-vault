@@ -3,12 +3,18 @@
  * core/runtime.js — server-push message router.
  *
  * transport.onMessage hands every parsed server message to dispatch(), which
- * handles the core-level control messages (restart, get_logs, signed self-update)
- * and then forwards EVERY message on to each loaded module's onMessage — so the
- * span module still sees config/discover exactly as the legacy agent did
- * (agent.js:113-126), and future modules receive their own pushes the same way.
+ * handles the core-level control messages (restart, get_logs) and then forwards
+ * EVERY message on to each loaded module's onMessage — so the span module still sees
+ * config/discover exactly as the legacy agent did (agent.js:113-126), and future
+ * modules receive their own pushes the same way.
+ *
+ * NOTE (Phase 3, Workstream B): self-update is NO LONGER triggered here. The legacy
+ * span-WS `config.agent_bundle` branch has been retired — signed self-update is now
+ * driven from the HUB control channel (core/hub.js's policy tick calls
+ * updater.consider). The updater is wired into the hub client by nocvault-agent.js,
+ * not into this runtime.
  */
-function createRuntime({ config, transport, logger, updater, modules }) {
+function createRuntime({ config, transport, logger, modules }) {
   function log(...a) {
     if (logger && logger.info) logger.info(...a);
   }
@@ -25,19 +31,6 @@ function createRuntime({ config, transport, logger, updater, modules }) {
     if (msg.type === 'get_logs') {
       transport.send({ type: 'logs', lines: logger.tail(200) });
       return;
-    }
-
-    if (msg.type === 'config') {
-      // Signed multi-file self-update: the server advertises a signed agent
-      // bundle manifest; the updater verifies signature + hashes before applying.
-      if (msg.agent_bundle && updater && updater.consider) {
-        updater.consider(msg.agent_bundle);
-      }
-      // NOTE: we deliberately ignore the legacy single-file msg.agent_sha. The
-      // unified agent is a whole agent/ directory (core/ + modules/ + entrypoint),
-      // so it cannot safely overwrite itself from a single-file agent.js
-      // fingerprint the way the legacy agent did — only the signed-bundle path
-      // (agent_bundle) can update a multi-file agent.
     }
 
     // Forward every message (including config/discover) to each module.

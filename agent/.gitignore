@@ -4,3 +4,9 @@ buffer.json
 hub-identity.json
 pending-update.bundle
 *.log
+# Self-update signing (private key never committed) + runtime staging/rollback state.
+# NOTE: update-manifest.json IS committed (the signed release manifest) — do not ignore it.
+keys/
+pending/
+backup/
+.update-confirm.json

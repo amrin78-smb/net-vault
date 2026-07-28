@@ -17,8 +17,35 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.2.0';
+const VERSION = '2.3.0';
 
+// ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
+// This gate MUST execute BEFORE requiring any core module a pending update could
+// replace: if a freshly-swapped build has a load-time error in a core module, the
+// process crashes during that require. Were the gate AFTER the requires, the crash
+// would beat the confirm-attempt bump and the crash-loop rollback would never fire
+// (a brick). Running the gate first means a broken module crashes AFTER the counter
+// is bumped, so it self-heals (rolls back once attempts >= 3). Only core/apply-update
+// (Node built-ins only) loads before the gate; we log via a bare console because
+// core/logger.js is itself replaceable and must not load before the gate either.
+const { applyPendingIfAny, checkConfirmOnStart, commitUpdate } = require('./core/apply-update');
+const bootLog = {
+  info: (...a) => console.log('[Agent]', ...a),
+  error: (...a) => console.error('[Agent]', ...a),
+};
+const applied = applyPendingIfAny(__dirname, bootLog);
+if (applied.applied) {
+  bootLog.info('Self-update applied -> restarting into new build');
+  process.exit(0);
+}
+const confirm = checkConfirmOnStart(__dirname, bootLog);
+if (confirm.rolledBack) {
+  bootLog.error('New build failed to start; rolled back to the previous version - restarting');
+  process.exit(0);
+}
+
+// Core modules — required AFTER the self-update gate, so a just-swapped broken build
+// crashes here (after the confirm counter is bumped) and can still roll back.
 const createLogger = require('./core/logger');
 const createIdentityStore = require('./core/identity-store');
 const createIdentity = require('./core/identity');
@@ -37,6 +64,7 @@ const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^\uFEFF/
 
 // ── Core singletons ───────────────────────────────────────────
 const logger = createLogger('Agent');
+
 // The ONE shared identity store (Phase 3). Both the span identity (below) and the
 // hub client consult it, so the span data path can present the hub-issued JWT.
 // load() up front so a JWT-mode agent with a persisted identity can present it on the
@@ -82,7 +110,10 @@ const health = createHealth({
   getBufferDepth: () => buffer.depth(),
 });
 
-const updater = createUpdater({ config, currentDir: __dirname, logger });
+// The updater VERIFIES + STAGES a signed bundle (core/updater.js); the actual swap
+// happens on the next start via applyPendingIfAny above. It is driven from the HUB
+// control channel (see hub.start below), not the retired span-WS path.
+const updater = createUpdater({ currentDir: __dirname, logger, currentVersion: VERSION });
 
 const heartbeat = createHeartbeat({
   send,
@@ -105,7 +136,9 @@ transport = createTransport({
   logger,
 });
 
-runtime = createRuntime({ config, transport, logger, updater, modules: [span] });
+// The updater is NOT wired into the runtime anymore — self-update is driven from the
+// hub channel (passed into createHubClient below), not the span-WS message router.
+runtime = createRuntime({ config, transport, logger, modules: [span] });
 
 // ── Crash safety — exit so NSSM restarts on the new process (suite convention) ─
 process.on('uncaughtException', (err) => {
@@ -136,6 +169,9 @@ if (config.hubUrl && config.enrollToken) {
     // Phase 3: the hub client shares the SAME store the span identity reads, so its
     // enrolled/refreshed JWT (and the span ingest URL) drive the data-path auth.
     store,
+    // Phase 3 Workstream B: self-update is driven from the hub control channel — the
+    // policy tick fetches the signed manifest and calls updater.consider().
+    updater,
   });
   // Sequencing: in JWT-mode (no apiKey) the span transport DEFERS its dial until the
   // identity is ready (isReady()==false) — so starting the hub here (before
@@ -150,3 +186,8 @@ span.start();
 heartbeat.start();
 transport.start();
 logger.info(`NocVault Agent v${VERSION} started`);
+
+// The new build has started healthy — commit the self-update: clear the confirm
+// marker + backup/ so future boots don't count/roll back a good build. No-op when
+// this boot did not just apply an update.
+if (confirm.confirming) commitUpdate(__dirname);

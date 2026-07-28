@@ -283,6 +283,26 @@ if ($abn.Code -eq 200 -and $abn.Content) {
     Bad ("/api/agents/bundle FAILED (code=" + $abn.Code + ") - agent\ dir not present at NetVault standalone runtime root")
 }
 
+# Phase 3 Workstream B: the signed self-update manifest. PUBLIC (the agent fetches
+# it pre-credential on its policy tick), served from the committed
+# agent\update-manifest.json produced offline by scripts/sign-agent.js. A fresh
+# install with no committed/signed manifest legitimately 503s (advertises no
+# update) - but the repo ships a signed one, so a real deploy must serve 200 with
+# a body carrying version + files + sig.
+$aum = Http "http://127.0.0.1:3000/api/agents/update-manifest" 12
+if ($aum.Code -eq 200 -and $aum.Content) {
+    $man = $null; try { $man = ($aum.Content | ConvertFrom-Json) } catch {}
+    if ($man -and $man.version -and $man.files -and $man.sig) {
+        Ok ("/api/agents/update-manifest 200 (v" + $man.version + ", " + @($man.files).Count + " signed file(s))")
+    } else {
+        Bad "/api/agents/update-manifest returned 200 but body is missing version/files/sig - manifest malformed"
+    }
+} elseif ($aum.Code -eq 503) {
+    Bad "/api/agents/update-manifest 503 - no signed agent\update-manifest.json committed (run scripts/sign-agent.js; the repo must ship one)"
+} else {
+    Bad ("/api/agents/update-manifest FAILED (code=" + $aum.Code + ") - route missing or agent\ dir not at NetVault standalone runtime root")
+}
+
 # Phase 3 A5: the agent identity-refresh route must EXIST and be agent-gated. A
 # POST with no Bearer token returns 401 (requireAgentAuth) - proving the route
 # is present AND locked down, not a 404 (route missing) or 405 (wrong method).

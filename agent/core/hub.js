@@ -133,6 +133,10 @@ function createHubClient(opts) {
     getModuleStatus,
     getBufferDepth,
     logger,
+    // Phase 3 Workstream B: the signed-self-update driver. The hub channel now owns
+    // self-update — on the policy tick we fetch the signed manifest and hand it to
+    // updater.consider(); absent an updater this is simply skipped.
+    updater,
     // Testability: override the heartbeat cadence (default 30s) and identity path.
     intervalMs = 30000,
     policyIntervalMs = 300000, // ~5 min
@@ -311,6 +315,13 @@ function createHubClient(opts) {
     } catch (e) {
       logErr('refresh loop error:', e.message);
     }
+    // B4: piggy-back the signed self-update check on the policy tick. Best-effort —
+    // a fetch/verify failure only logs; it must NEVER crash the data path.
+    try {
+      await maybeSelfUpdate();
+    } catch (e) {
+      logErr('self-update loop error:', e.message);
+    }
     armPolicy(); // re-arm only after this call settled (no-op if loops stopped)
   }
 
@@ -446,6 +457,38 @@ function createHubClient(opts) {
     } else {
       logErr(`refresh failed (HTTP ${res.statusCode})`);
     }
+  }
+
+  // ── B4: hub-driven signed self-update ───────────────────────────────────────────
+  // On the policy tick, fetch the signed update manifest from the hub and hand it to
+  // the updater, which verifies the Ed25519 signature + each file's sha256 BEFORE
+  // staging anything and only applies (via a restart into apply-on-next-start) on full
+  // success. CONTRACT:
+  //   GET <hubUrl>/api/agents/update-manifest  (public, like the bundle routes)
+  //     -> 200 { version, files:[{path,sha256}], sig }   (a signed manifest)
+  //     -> 404                                            (no update advertised — no-op)
+  // Best-effort: any fetch error only logs (never crashes the data path). Only runs
+  // while the hub channel is active (loopsActive), so it's naturally gated to enrolled
+  // agents. The updater downloads each file from <hubUrl>/api/agents/bundle/<path>.
+  async function maybeSelfUpdate() {
+    if (stopped || !loopsActive) return;
+    if (!updater || typeof updater.consider !== 'function') return;
+    let res;
+    try {
+      res = await httpGetJson(`${hubUrl}/api/agents/update-manifest`);
+    } catch (e) {
+      logErr('update-manifest fetch network error:', e.message);
+      return;
+    }
+    if (res.statusCode === 404) return; // no update advertised — normal
+    if (res.statusCode !== 200 || !res.body) {
+      logErr(`update-manifest unexpected response (HTTP ${res.statusCode})`);
+      return;
+    }
+    // consider() is fully self-guarding: it verifies the signature before any download
+    // or write, skips if already on this version, and aborts (discarding pending/) on
+    // any per-file mismatch. On full success it stages + restarts the process.
+    await updater.consider(res.body, { bundleBaseUrl: `${hubUrl}/api/agents/bundle` });
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────
