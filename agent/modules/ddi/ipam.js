@@ -17,6 +17,7 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const crypto = require('crypto');
 
 const SCAN_PS_TIMEOUT = parseInt(process.env.SCAN_PS_TIMEOUT_MS || '40000', 10);
 
@@ -41,10 +42,19 @@ function generateHostIPs(network, prefix) {
 // Write a PS script to a temp file and run it (async, non-blocking). Returns stdout or null.
 function runPsScript(scriptContent, timeoutMs, tag) {
   return new Promise((resolve) => {
-    const tmpFile = path.join(os.tmpdir(), `nvagent_ddi_scan_${process.pid}_${tag}.ps1`);
+    // Key the temp name on pid + monotonic time + random bytes (not just pid+tag): two
+    // concurrent ddi_scan runs would otherwise pick the SAME filename and one would delete
+    // or overwrite the other's in-flight script.
+    const tmpFile = path.join(
+      os.tmpdir(),
+      `nvagent_ddi_scan_${process.pid}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}_${tag}.ps1`
+    );
+    // Cleanup runs on EVERY exit path (write failure, callback, timeout) — the file never leaks.
+    const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch (_e) { /* best-effort */ } };
     try {
       fs.writeFileSync(tmpFile, scriptContent, 'utf8');
     } catch (_e) {
+      cleanup();
       return resolve(null);
     }
     execFile(
@@ -52,7 +62,7 @@ function runPsScript(scriptContent, timeoutMs, tag) {
       ['-NonInteractive', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tmpFile],
       { encoding: 'utf8', timeout: timeoutMs || SCAN_PS_TIMEOUT, maxBuffer: 1024 * 1024 * 8, windowsHide: true },
       (err, stdout) => {
-        try { fs.unlinkSync(tmpFile); } catch (_e) { /* best-effort */ }
+        cleanup();
         resolve(err && !stdout ? null : (stdout || '').trim());
       }
     );

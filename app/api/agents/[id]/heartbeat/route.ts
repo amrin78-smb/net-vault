@@ -55,9 +55,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // this agent's pending commands — the UPDATE … RETURNING flips them to
     // 'delivered' and hands them back in the SAME statement, so a command is
     // carried exactly once (a concurrent beat can't re-read a still-pending row).
+    // A `restart` has no return ack — the agent process.exit(0)s under NSSM and
+    // never reports back — so DELIVERING it IS its completion: flip restart rows
+    // straight to 'done'. `get_logs` still goes to 'delivered' (it acks later by
+    // POSTing its tail to /logs). Both are still returned this tick regardless.
     const cmds = await query(
       `UPDATE agent_commands
-          SET status = 'delivered', delivered_at = NOW()
+          SET delivered_at = NOW(),
+              done_at = CASE WHEN type = 'restart' THEN NOW() ELSE done_at END,
+              status  = CASE WHEN type = 'restart' THEN 'done' ELSE 'delivered' END
         WHERE agent_id = $1 AND status = 'pending'
       RETURNING id, type, args`,
       [id]
@@ -67,6 +73,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       type: c.type,
       args: c.args ?? {},
     }))
+
+    // Opportunistic bound on agent_commands growth (mirrors the agent_health
+    // prune above): drop THIS agent's already-handled command rows older than 7
+    // days. Runs after the claim so it can never remove a row this tick returned.
+    await query(
+      `DELETE FROM agent_commands
+         WHERE agent_id = $1
+           AND status IN ('done', 'delivered')
+           AND COALESCE(done_at, delivered_at) < NOW() - interval '7 days'`,
+      [id]
+    )
 
     return NextResponse.json({ ok: true, commands })
   } catch {

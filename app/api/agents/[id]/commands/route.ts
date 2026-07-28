@@ -27,9 +27,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: `Unsupported command type: ${type || '(none)'}` }, { status: 400 })
     }
 
-    // Confirm the agent exists before queuing (the FK would also reject an
-    // unknown id, but a clean 404 is friendlier than a 500).
-    const exists = await query('SELECT id FROM agents WHERE id = $1', [id])
+    // Confirm the agent exists AND is not revoked before queuing (the FK would
+    // also reject an unknown id, but a clean 404 is friendlier than a 500). A
+    // revoked agent is rejected at requireAgentAuth, so a command queued for it
+    // would never deliver and would just accumulate — treat it as not found.
+    const exists = await query('SELECT id FROM agents WHERE id = $1 AND revoked_at IS NULL', [id])
     if (!exists.rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const res = await query(

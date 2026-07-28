@@ -17,7 +17,7 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.5.0';
+const VERSION = '2.5.1';
 
 // ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
 // This gate MUST execute BEFORE requiring any core module a pending update could
@@ -142,6 +142,32 @@ const moduleStatus = () => {
   return s;
 };
 
+// FIX 3 helper: a VALID, unexpired hub-issued JWT from the shared store (mirrors
+// core/identity.js's validHubIdentity). ddi's data plane authenticates DDIVault with THIS
+// hub JWT — never an apiKey (DDIVault would reject SpanVault's apiKey → endless reconnect).
+function validHubJwt() {
+  const id = typeof store.get === 'function' ? store.get() : null;
+  if (!id || !id.jwt) return null;
+  if (id.expires_at) {
+    const t = Date.parse(id.expires_at);
+    if (!isNaN(t) && Date.now() >= t) return null; // expired hub identity
+  }
+  return id;
+}
+
+// Is this agent hub-enrolled (JWT-mode)? Either it is configured to enroll (hubUrl +
+// enrollToken → the hub channel provides/refreshes the JWT) or it already holds a persisted
+// hub identity. An apiKey-mode / unenrolled agent is NOT hub-enrolled, so ddi stays off there
+// (FIX 3): ddi requires a hub JWT, and presenting an apiKey to DDIVault would loop forever.
+function hubEnrolled() {
+  if (config.hubUrl && config.enrollToken) return true;
+  return !!validHubJwt();
+}
+
+// FIX 4: fire the "assumed co-located ddi ingest" warning at most once (resolveDdiIngest is
+// called on every isReady()/dial, so it must not log on every tick).
+let ddiIngestAssumedWarned = false;
+
 // Resolve WHERE the ddi transport dials. Resolution order:
 //   1. explicit config.modules.ddi.ingest (or config.ddi.ingest) — full override;
 //   2. JWT-mode: the SAME host the hub advertised for the span ingest, but the ddi port
@@ -158,6 +184,19 @@ function resolveDdiIngest(cfg, ident) {
     if (spanIngest) {
       const u = new URL(spanIngest);
       u.port = String(port);
+      // FIX 4: the ddi ingest host was ASSUMED co-located with SpanVault (we swapped only the
+      // port onto the hub-advertised span ingest host — there was no explicit
+      // config.modules.ddi.ingest and no per-module hub ingest map). In a SPLIT deployment
+      // (DDIVault on a different host) this points at the wrong box → a silent ddi reconnect
+      // loop; log it once so that failure is diagnosable. Resolution logic itself is unchanged.
+      if (!ddiIngestAssumedWarned) {
+        ddiIngestAssumedWarned = true;
+        logger.info(
+          `[ddi] WARNING: DDIVault ingest host assumed co-located with SpanVault (${u.hostname}:${port}) — ` +
+          'derived by port-swap on the span ingest. If DDIVault runs on a DIFFERENT host, set ' +
+          'config.modules.ddi.ingest to avoid a silent reconnect loop.'
+        );
+      }
       return u.toString();
     }
   } catch (_e) { /* fall through */ }
@@ -170,21 +209,36 @@ function resolveDdiIngest(cfg, ident) {
 }
 
 // A thin identity adapter for the ddi transport: reuse the shared hub identity (its JWT
-// `aud` already covers every assigned module) and only OVERRIDE where to dial. isReady()
-// also gates on a resolvable ddi ingest so the transport never falls back to the span port.
+// `aud` already covers every assigned module) and only OVERRIDE where to dial.
+// FIX 3: isReady() requires a VALID HUB JWT specifically — NOT the base identity's isReady(),
+// which is also true in apiKey-mode. Were it to fall back to the apiKey, the ddi transport
+// would present SpanVault's apiKey to the DDIVault ingest, DDIVault would reject it, and the
+// socket would reconnect forever. So the ddi plane dials only once a hub JWT exists (and a
+// ddi ingest resolves, so it never falls back to the span port). getAuthHeader presents that
+// hub JWT (ident.getAuthHeader is already JWT-first, so it returns the JWT once isReady gates).
 function makeDdiIdentity(cfg, ident) {
   return {
     getAuthHeader: () => ident.getAuthHeader(),
-    isReady: () => {
-      const base = typeof ident.isReady === 'function' ? ident.isReady() : true;
-      return base && !!resolveDdiIngest(cfg, ident);
-    },
+    isReady: () => !!validHubJwt() && !!resolveDdiIngest(cfg, ident),
     getIngest: () => resolveDdiIngest(cfg, ident),
     onChange: (cb) => (typeof ident.onChange === 'function' ? ident.onChange(cb) : () => {}),
   };
 }
 
 // ── Health / updater / heartbeat (built by sibling agents; wired here) ─────────
+// FIX 1: PER-DATA-PLANE health. Each data-plane heartbeat must report ONLY its own module's
+// device count (and its own offline-buffer depth), so SpanVault's heartbeat isn't inflated by
+// ddi's devices and DDIVault's isn't polluted by span's. The span heartbeat uses spanHealth
+// (span devices + span buffer); the ddi heartbeat uses its own ddiHealth (built alongside the
+// ddi buffer in the ddi block below). Separate instances each keep their own cpu/mem/disk
+// sampler. ONLY the hub fleet heartbeat gets the COMBINED view (`health` below).
+const spanHealth = createHealth({
+  getDeviceCount: () => span.deviceCount(),
+  getBufferDepth: () => buffer.depth(),
+});
+
+// Combined (span + ddi) health — used ONLY by the hub fleet heartbeat (core/hub.js), whose
+// module_status/health intentionally reflects EVERY module this agent runs. Left as-is.
 const health = createHealth({
   getDeviceCount: () => span.deviceCount() + (ddi ? ddi.deviceCount() : 0),
   getBufferDepth: () => buffer.depth(),
@@ -197,10 +251,11 @@ const updater = createUpdater({ currentDir: __dirname, logger, currentVersion: V
 
 const heartbeat = createHeartbeat({
   send,
-  health,
+  health: spanHealth, // FIX 1: span plane reports span devices only
   version: VERSION,
   hostname,
   getModuleStatus: moduleStatus,
+  logger, // FIX 2: so a throwing accessor is logged + skipped, never crashes the agent
 });
 
 // ── Transport + runtime (mutually referenced; see wiring note above) ───────────
@@ -228,11 +283,22 @@ runtime = createRuntime({ config, transport, logger, modules: [span] });
 // get_logs and the ddi_config/ddi_scan pushes on the DDIVault socket are handled), and its
 // OWN heartbeat on the DDIVault data plane. The span path is completely untouched.
 let ddiHeartbeat = null;
-if (ddi) {
+// FIX 3: ddi is JWT-mode ONLY. Stand up the ddi data plane ONLY when the agent is
+// hub-enrolled — otherwise (apiKey-mode / not enrolled) there is no hub JWT to present to
+// DDIVault and dialing would present SpanVault's apiKey → DDIVault rejects it → endless
+// reconnect. When ddi is enabled but the agent isn't hub-enrolled, we do NOT start the ddi
+// transport and warn clearly that ddi requires hub enrollment (hubUrl + enrollToken).
+if (ddi && hubEnrolled()) {
   const ddiIdentity = makeDdiIdentity(config, identity);
   const ddiDir = path.join(__dirname, 'ddi-data');
   try { fs.mkdirSync(ddiDir, { recursive: true }); } catch (_e) { /* best-effort */ }
   const ddiBuffer = createBuffer({ dir: ddiDir, max: 500, logger });
+  // FIX 1: the ddi plane's OWN health — ddi devices + ddi buffer only, so DDIVault's
+  // heartbeat is never polluted with span's device count (and vice versa).
+  const ddiHealth = createHealth({
+    getDeviceCount: () => ddi.deviceCount(),
+    getBufferDepth: () => ddiBuffer.depth(),
+  });
   let ddiRuntime = null;
   ddiTransport = createTransport({
     config,
@@ -242,14 +308,41 @@ if (ddi) {
     onOpen: () => { if (ddiHeartbeat) ddiHeartbeat.sendNow(); },
     logger,
   });
-  ddiRuntime = createRuntime({ config, transport: ddiTransport, logger, modules: [ddi] });
+  // FIX 5: a RESTRICTED router for the ddi socket — NOT the full createRuntime. A push on the
+  // DDIVault ingest must never carry cross-app control: `restart` (its process.exit would kill
+  // the whole agent incl. span) and `get_logs` (ships the SHARED logger ring, which contains
+  // span's logs, to DDIVault) stay on the span-WS runtime + the hub command channel only. This
+  // thin dispatch forwards ddi_config/ddi_scan (and any other push) to the ddi module and does
+  // NOT handle restart/get_logs.
+  ddiRuntime = {
+    dispatch: (msg) => {
+      if (!msg || typeof msg !== 'object') return;
+      if (msg.type === 'restart' || msg.type === 'get_logs') {
+        logger.info(`[ddi] ignoring '${msg.type}' from the DDIVault ingest — lifecycle/log control is span-WS + hub only`);
+        return;
+      }
+      try {
+        if (ddi.onMessage) ddi.onMessage(msg);
+      } catch (e) {
+        logger.error('[ddi] onMessage error:', e && e.message ? e.message : e);
+      }
+    },
+  };
   ddiHeartbeat = createHeartbeat({
     send: ddiSend,
-    health,
+    health: ddiHealth, // FIX 1: ddi plane reports ddi devices only
     version: VERSION,
     hostname,
     getModuleStatus: () => ({ [ddi.name]: ddi.status() }),
+    logger, // FIX 2
   });
+} else if (ddi) {
+  // ddi enabled but NOT hub-enrolled — do not start its transport (FIX 3).
+  logger.error(
+    '[ddi] module enabled but the agent is NOT hub-enrolled — ddi data plane NOT started. ' +
+    'ddi requires hub enrollment (set config.hubUrl + config.enrollToken); an apiKey cannot ' +
+    'authenticate to the DDIVault ingest.'
+  );
 }
 
 // ── Crash safety — exit so NSSM restarts on the new process (suite convention) ─
@@ -299,7 +392,9 @@ heartbeat.start();
 transport.start();
 // ddi (Phase 4b): start its module + dedicated DDIVault-ingest transport/heartbeat too.
 // Its transport gates its own dial on identity readiness (same JWT-mode defer as span).
-if (ddi) {
+// Guarded on ddiTransport (built only when ddi is enabled AND the agent is hub-enrolled —
+// FIX 3), so an enabled-but-unenrolled ddi never dials with an apiKey.
+if (ddiTransport) {
   ddi.start();
   ddiHeartbeat.start();
   ddiTransport.start();

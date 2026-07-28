@@ -1,5 +1,5 @@
 {
-  "version": "2.5.0",
+  "version": "2.5.1",
   "files": [
     {
       "path": "README.md",
@@ -23,11 +23,11 @@
     },
     {
       "path": "core/heartbeat.js",
-      "sha256": "b6fc25b6cb74d0a7cc429d860a8930f8f51413777425ef784c242d03751be406"
+      "sha256": "1ce4c1918fb91f9cfea57a6a9fb6bf22092686fa8ee4f7104928ff576bb8924b"
     },
     {
       "path": "core/hub.js",
-      "sha256": "ed0a2975bf8a111d50ffc245dbad3056948fe823692c1e0d16f4ea3866fd051b"
+      "sha256": "7664a77073c59ef570a29779167a864b0ac8b9baccb379ee96b90ffc0344b249"
     },
     {
       "path": "core/identity-store.js",
@@ -59,15 +59,15 @@
     },
     {
       "path": "modules/ddi/index.js",
-      "sha256": "bab8c549bef4fcce89a707b15ae9a40e9b291f7188ba816bf55beaba2bd2926c"
+      "sha256": "7f85a3df9e643e67bff2f5e3ca29644942935515478f1f1dce51734f3f5bc651"
     },
     {
       "path": "modules/ddi/ipam.js",
-      "sha256": "21e3aae6ce59e512948de234583ea1767dc558d932f35d85eeb5eeaadd34ece9"
+      "sha256": "bea5e0614fdf4821400706f3b40d8d6e20890432e9c48440a450f03f89f36015"
     },
     {
       "path": "modules/ddi/winrm.js",
-      "sha256": "c4b3fbd548492c396ff314d1bc28ac94c977dded9765d13e4892016fda703f94"
+      "sha256": "55080fe86e47bc6511d7de734820ae7a4d55d80fbb22722c3824be59caae45a5"
     },
     {
       "path": "modules/span/checks.js",
@@ -91,7 +91,7 @@
     },
     {
       "path": "nocvault-agent.js",
-      "sha256": "d344c09ebcaf300c23b572e40a2eea1a9f40fb0da52536ebc72c498605bae107"
+      "sha256": "dc873f03ee6a2f9dc6ecee21658ddd2e1533ebe7de62ac7852447acab769e3fe"
     },
     {
       "path": "package-lock.json",
@@ -99,12 +99,12 @@
     },
     {
       "path": "package.json",
-      "sha256": "1e075445102aece20e56a6d6a8633328c338eb8d8b1ddc428f98ac0c2de1c493"
+      "sha256": "307514dfae7eb4ccf0cc4b692797ad8c3b588ea07505ec64822a2449efe192fb"
     },
     {
       "path": "scripts/sign-agent.js",
       "sha256": "8606a73711f9dc472db60560bf5835c1c46dc951834d208d8c937e29f7266f85"
     }
   ],
-  "sig": "/120037BslmWxxsQrndTHnrhSWZbX+V3lSVuW+A8ozauAwPqvD3dtXgKuocEe8W7VpLxI+LmIBFCH4JLO/J7AQ=="
+  "sig": "nyWDKvH9ToiZoe9aD71+a29fHMJni7Iw6UYv5yoiZrNPGmaD5/h0shOcbg+L1MeofMgQNUoJMxm7+qpDKN5uAQ=="
 }

@@ -12,6 +12,9 @@
  * `node test/ddi.test.js` — exits non-zero on failure.
  */
 const assert = require('assert');
+// Fire the staggered initial poll immediately (no random start delay) so the tests can
+// observe results within their short sleeps. Production defaults to a ~3s stagger cap.
+process.env.DDI_STAGGER_MS = '0';
 const createDdiModule = require('../modules/ddi');
 
 let passed = 0;
@@ -47,7 +50,15 @@ function makeWinrm(throwOn) {
   };
 }
 
-const dhcplogStub = { readEvents: () => [{ event_id: 10, event_type: 'Assign', event_time: '2026-07-28T10:00:00.000Z' }] };
+// Records the args of each readEvents call so a test can assert the module no longer passes
+// a strict advancing since-cursor (FIX 4: re-read today+yesterday, rely on writer dedup).
+const dhcplogStub = {
+  calls: [],
+  readEvents(...args) {
+    this.calls.push(args);
+    return [{ event_id: 10, event_type: 'Assign', event_time: '2026-07-28T10:00:00.000Z' }];
+  },
+};
 const ipamStub = { scanCidr: async (cidr) => [{ ip: '10.0.0.1', alive: true, ping_ms: 2 }, { ip: '10.0.0.2', alive: false, ping_ms: null }] };
 
 // Build a module with captured sends + stubbed collectors.
@@ -87,15 +98,23 @@ const FAST = {
 
 // ── dhcp-role server: emits exactly the DHCP kinds, none of the DNS kinds ──────
 (async () => {
-  const { mod, sent } = build();
+  const evCalls = [];
+  const evStub = { readEvents: (...args) => { evCalls.push(args); return [{ event_id: 10, event_type: 'Assign', event_time: '2026-07-28T10:00:00.000Z' }]; } };
+  const { mod, sent } = build({ dhcplog: evStub });
   mod.onMessage({
     type: 'ddi_config',
-    servers: [{ server_id: 1, hostname: 'dhcp1', ip_address: '10.0.0.10/24', role: 'dhcp', auth_mode: 'kerberos' }],
+    servers: [{ server_id: 1, hostname: 'dhcp1', ip_address: '10.0.0.10/24', role: 'dhcp', auth_mode: 'kerberos', dhcp_log_path: '\\\\srv\\logs' }],
     subnets: [],
     settings: FAST,
   });
   await sleep(120); // let the immediate poll fire per kind
   mod.stop();
+
+  // FIX 4: dhcp_events must NOT pass a strict advancing since-cursor — it re-reads the
+  // today+yesterday window each poll and relies on the server's ON CONFLICT dedup.
+  assert.ok(evCalls.length >= 1, 'readEvents was called');
+  assert.strictEqual(evCalls[0][0], '\\\\srv\\logs', 'readEvents gets the per-server dhcp_log_path');
+  assert.strictEqual(evCalls[0][1], undefined, 'readEvents gets NO since-cursor (re-read window, writer dedups)');
 
   const results = sent.filter((m) => m.type === 'ddi_result');
   const kinds = results.map((m) => m.kind).sort();

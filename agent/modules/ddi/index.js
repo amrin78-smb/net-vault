@@ -58,14 +58,53 @@ function createDdiModule(ctx) {
   let servers = [];
   let subnets = [];
   let settings = {};
-  const pollTimers = new Map(); // key `${server_id}:${kind}` → interval handle
-  const lastEventTs = new Map(); // server_id → last dhcp_events event_time seen (incremental)
+  const pollTimers = new Map(); // key `${server_id}:${kind}` → setTimeout handle
+  const inFlight = new Set(); // keys whose prior poll hasn't settled yet (re-entrancy guard)
   const serverErrors = new Map(); // `${server_id}:${kind}` → last error message
+  const scansInFlight = new Set(); // subnet_id (string) → an ICMP sweep is running
+  // Bumped on every applyConfig/stop so an in-flight self-rescheduling tick from an OLD
+  // generation cannot resurrect a timer after its config was torn down.
+  let schedulerEpoch = 0;
 
   const num = (v, d) => {
     const n = parseInt(v, 10);
     return isNaN(n) || n <= 0 ? d : n;
   };
+  // Like num but allows an explicit 0 (used for the initial-stagger cap, which tests set to 0).
+  const numOrZero = (v, d) => {
+    const n = parseInt(v, 10);
+    return isNaN(n) || n < 0 ? d : n;
+  };
+
+  // ── Concurrency cap ─────────────────────────────────────────
+  // Bound the number of concurrent collections (each spawns 1-2 powershell.exe children)
+  // across the WHOLE module, so a config with many servers can't fork unbounded PS processes.
+  const MAX_CONCURRENT = num(process.env.DDI_MAX_CONCURRENT, 5);
+  let activeSlots = 0;
+  const slotWaiters = [];
+  function acquireSlot() {
+    return new Promise((resolve) => {
+      if (activeSlots < MAX_CONCURRENT) { activeSlots++; resolve(); }
+      else slotWaiters.push(resolve);
+    });
+  }
+  function releaseSlot() {
+    const next = slotWaiters.shift();
+    if (next) next(); // hand the held slot straight to the next waiter (count unchanged)
+    else activeSlots--;
+  }
+
+  // Reschedule cadence with a small POSITIVE jitter so identical intervals across servers
+  // don't re-align into a synchronized poll storm. Positive-only → never faster than configured.
+  function rescheduleDelay(intervalMs) {
+    return intervalMs + Math.round(intervalMs * 0.1 * Math.random());
+  }
+  // Initial per-timer stagger so every server/kind doesn't fire at t=0 (thundering herd).
+  // Capped by DDI_STAGGER_MS (default 3s) and never larger than the interval itself.
+  function initialDelay(intervalMs) {
+    const cap = Math.min(intervalMs, numOrZero(process.env.DDI_STAGGER_MS, 3000));
+    return Math.floor(Math.random() * cap);
+  }
 
   // Which kinds run for a server, and how often (from settings, with sane defaults).
   // roles: which server.role values the kind applies to ('both' always matches).
@@ -103,29 +142,49 @@ function createDdiModule(ctx) {
     settings = msg.settings || {};
     logger.info(`[ddi] config received: ${servers.length} server(s), ${subnets.length} subnet(s)`);
     // Clear OLD timers before rescheduling so a re-pushed config never leaves a stale
-    // interval running for a removed/renamed server (same discipline as the span module).
-    for (const t of pollTimers.values()) clearInterval(t);
+    // timer running for a removed/renamed server (same discipline as the span module).
+    // Bumping the epoch also neutralizes any tick already mid-flight from the old config.
+    schedulerEpoch++;
+    for (const t of pollTimers.values()) clearTimeout(t);
     pollTimers.clear();
+    inFlight.clear();
     serverErrors.clear();
     for (const server of servers) scheduleServer(server);
   }
 
   function scheduleServer(server) {
     if (!server || server.server_id == null) return;
+    const epoch = schedulerEpoch; // captured; a tick only reschedules while its epoch is current
     for (const spec of KIND_SPEC) {
       if (!roleMatches(spec.roles, server.role)) continue;
       const intervalMs = spec.interval(settings) * 1000;
       const key = `${server.server_id}:${spec.kind}`;
-      const run = () => pollKind(server, spec.kind);
-      run(); // fire immediately, then on the interval
-      const t = setInterval(run, intervalMs);
-      pollTimers.set(key, t);
+
+      // Self-rescheduling tick: the NEXT run is armed only after the CURRENT one settles, so a
+      // slow poll can never stack / spawn overlapping powershell.exe children (re-entrancy).
+      const tick = async () => {
+        if (!inFlight.has(key)) {
+          inFlight.add(key);
+          try {
+            await pollKind(server, spec.kind);
+          } finally {
+            inFlight.delete(key);
+          }
+        }
+        if (epoch === schedulerEpoch) {
+          pollTimers.set(key, setTimeout(tick, rescheduleDelay(intervalMs)));
+        }
+      };
+
+      // Staggered initial fire (not all at t=0), then self-reschedule on the interval.
+      pollTimers.set(key, setTimeout(tick, initialDelay(intervalMs)));
     }
   }
 
   // Run one collection and ship a ddi_result. Never rejects — catches everything.
   async function pollKind(server, kind) {
     const key = `${server.server_id}:${kind}`;
+    await acquireSlot(); // cap concurrent PS-spawning collections across the whole module
     try {
       const data = await collect(kind, server);
       send({ type: 'ddi_result', server_id: server.server_id, kind, data: data == null ? [] : data });
@@ -134,6 +193,8 @@ function createDdiModule(ctx) {
       const m = e && e.message ? e.message : String(e);
       serverErrors.set(key, m);
       logger.error(`[ddi] ${kind} failed for server ${server.server_id} (${server.hostname || server.ip_address}): ${m}`);
+    } finally {
+      releaseSlot();
     }
   }
 
@@ -156,14 +217,12 @@ function createDdiModule(ctx) {
       case 'reservations':
         return winrm.getDhcpReservations(ip, null, auth);
       case 'dhcp_events': {
-        const rows = dhcplog.readEvents(server.dhcp_log_path, lastEventTs.get(server.server_id));
-        // Advance the incremental cursor to the newest event we just read.
-        for (const r of rows) {
-          if (r.event_time && (!lastEventTs.get(server.server_id) || r.event_time > lastEventTs.get(server.server_id))) {
-            lastEventTs.set(server.server_id, r.event_time);
-          }
-        }
-        return rows;
+        // NO advancing cursor. readEvents already spans today+yesterday; we re-read that
+        // whole window every poll and let the DDIVault writer's `ON CONFLICT DO NOTHING`
+        // dedup collapse the overlap. A strict advancing cursor would permanently LOSE any
+        // events carried in a WS frame that got dropped in transit; bandwidth is cheap and
+        // the writer already dedups, so re-sending is the safe choice.
+        return dhcplog.readEvents(server.dhcp_log_path);
       }
       case 'dns_zones': {
         // Fold DNS records INTO the zones frame — writeDnsZones consumes
@@ -190,6 +249,14 @@ function createDdiModule(ctx) {
   async function runScan(msg) {
     const subnetId = msg.subnet_id;
     const cidr = msg.cidr;
+    // Guard: don't let a duplicate ddi_scan for the SAME subnet run concurrently with one
+    // already in progress (they'd race over PS children / temp scripts and waste the box).
+    const scanKey = String(subnetId);
+    if (scansInFlight.has(scanKey)) {
+      logger.info(`[ddi] scan for subnet ${subnetId} already running — skipping duplicate request`);
+      return;
+    }
+    scansInFlight.add(scanKey);
     try {
       const data = await ipam.scanCidr(cidr);
       send({ type: 'ddi_scan_result', subnet_id: subnetId, data: data || [] });
@@ -198,6 +265,8 @@ function createDdiModule(ctx) {
       const m = e && e.message ? e.message : String(e);
       logger.error(`[ddi] scan failed for ${cidr}: ${m}`);
       send({ type: 'ddi_scan_result', subnet_id: subnetId, data: [], error: m.slice(0, 300) });
+    } finally {
+      scansInFlight.delete(scanKey);
     }
   }
 
@@ -209,8 +278,10 @@ function createDdiModule(ctx) {
     start() {},
 
     stop() {
-      for (const t of pollTimers.values()) clearInterval(t);
+      schedulerEpoch++; // neutralize any in-flight tick so it won't reschedule after stop
+      for (const t of pollTimers.values()) clearTimeout(t);
       pollTimers.clear();
+      inFlight.clear();
     },
 
     // 'ok' when every recent poll succeeded; 'degraded:<n>' when N server/kind polls are

@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.29.1': [
+    'Phase 4 bug-sweep hardening (agent 2.5.1). The DDIVault agent module no longer places WinRM credentials on the process command line (they went via a temp script + env var now), caps how many collection processes run at once and never lets a slow poll stack, and re-reads DHCP events each cycle so a dropped frame can\'t silently lose events.',
+    'Fixed a heartbeat regression: a span+ddi agent now reports each app ITS OWN device count (SpanVault\'s agent view was being inflated by DDIVault\'s servers, and vice-versa). The DDIVault module is also now gated to hub-enrolled agents only (a legacy key-based agent can\'t misfire the ddi data path).',
+    'Robustness: the agent\'s heartbeat is now guarded so a module error can never crash the agent; hub commands are de-duplicated agent-side; and the agent_commands queue is pruned (was accumulating rows forever). The suite installer sets the DDIVault agent-WS env so the ingest starts on the trusted-LAN default.',
+  ],
   '1.29.0': [
     'NocVault Agents — Phase 4b: the unified agent gains a DDIVault (ddi) collection module, so one agent can now collect for both SpanVault and DDIVault at a remote site. When an agent is assigned the ddi module it runs DDIVault\'s DHCP/DNS/IPAM edge collection (WinRM + DHCP-log + ICMP) locally and ships raw results to DDIVault\'s new agent ingest — the hub just wires the identity + the ingest port (ddi now maps to 3011, no longer a placeholder). (Agent 2.5.0.)',
     'A span+ddi agent uses one hub-issued identity but a separate data-plane connection per app (SpanVault and DDIVault are different ingest endpoints); the ddi module and its collection are additive — a span-only agent is unchanged. The DDIVault-side ingest, assignment UI, and installer wiring ship as DDIVault 1.24.0.',

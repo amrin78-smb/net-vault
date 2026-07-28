@@ -230,7 +230,7 @@ function CopyBox({ label, value, mono }: { label: string; value: string; mono?: 
 }
 
 // ── Fleet row (parent, expandable) + its detail panel ──────────────────────────
-function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, onRestart, onFetchLogs, busy }: {
+function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, onRestart, onFetchLogs, busy, logsBusy }: {
   agent: Agent
   expanded: boolean
   onToggleExpand: () => void
@@ -239,6 +239,7 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
   onRestart: () => void
   onFetchLogs: () => void
   busy: boolean
+  logsBusy: boolean
 }) {
   const revoked = agent.status === 'revoked'
   const cellMuted: React.CSSProperties = revoked ? { opacity: 0.6 } : {}
@@ -363,11 +364,11 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
                 </button>
                 <button
                   className="btn btn-secondary"
-                  disabled={busy || revoked}
+                  disabled={busy || revoked || logsBusy}
                   onClick={onFetchLogs}
                   style={{ justifyContent: 'center' }}
                 >
-                  Fetch logs
+                  {logsBusy ? 'Fetching…' : 'Fetch logs'}
                 </button>
                 {agent.status === 'offline' && !revoked && (
                   <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-warn-fg)', lineHeight: 1.4 }}>
@@ -416,6 +417,12 @@ export default function AgentsPage() {
   const [logsState, setLogsState] = useState<'polling' | 'done' | 'timeout' | 'error'>('polling')
   const [logsLines, setLogsLines] = useState<string[] | null>(null)
   const pollRef = useRef<string | null>(null)  // active poll's agent id (stale-closure guard)
+  // Busy guard for the Fetch-logs action (mirrors busyId for Restart/Revoke): the
+  // ref makes a rapid second click a synchronous no-op (state re-render can lag a
+  // double-click), the state drives the button's disabled UI. Without this, each
+  // click queued another get_logs command.
+  const fetchLogsBusyRef = useRef<string | null>(null)
+  const [logsBusyId, setLogsBusyId] = useState<string | null>(null)
 
   // Add-agent modal + enrollment
   const [showAdd, setShowAdd] = useState(false)
@@ -567,49 +574,62 @@ export default function AgentsPage() {
   }
 
   async function fetchLogs(agent: Agent) {
+    // In-flight guard: a fetch already running (this agent or another) makes a
+    // repeated click a no-op, so we never queue duplicate get_logs commands.
+    if (fetchLogsBusyRef.current) return
+    fetchLogsBusyRef.current = agent.id
+    setLogsBusyId(agent.id)
+
     pollRef.current = agent.id
     setLogsAgent(agent)
     setLogsLines(null)
     setLogsState('polling')
 
-    // Baseline the currently-stored tail so we can tell a NEW answer from the
-    // one left over from a previous get_logs (ts changes when the agent replies).
-    let baselineTs: string | null = null
     try {
-      const b = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/logs`)
-      if (b.ok) { const bd = await b.json(); baselineTs = bd?.ts ?? null }
-    } catch { /* baseline is best-effort */ }
-
-    // Queue the get_logs command (carried to the agent on its next heartbeat).
-    try {
-      const res = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/commands`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'get_logs' }),
-      })
-      if (!res.ok) throw new Error()
-    } catch {
-      if (pollRef.current === agent.id) setLogsState('error')
-      return
-    }
-
-    // Poll the GET ~every 2s for ~12s waiting for the agent to POST its tail back.
-    for (let i = 0; i < 6; i++) {
-      await new Promise(r => setTimeout(r, 2000))
-      if (pollRef.current !== agent.id) return  // modal closed / switched agent
+      // Baseline the currently-stored tail so we can tell a NEW answer from the
+      // one left over from a previous get_logs (ts changes when the agent replies).
+      let baselineTs: string | null = null
       try {
-        const r = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/logs`)
-        if (r.ok) {
-          const d = await r.json()
-          if (d?.ts && d.ts !== baselineTs) {
-            setLogsLines(Array.isArray(d.lines) ? d.lines : [])
-            setLogsState('done')
-            return
+        const b = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/logs`)
+        if (b.ok) { const bd = await b.json(); baselineTs = bd?.ts ?? null }
+      } catch { /* baseline is best-effort */ }
+
+      // Queue the get_logs command (carried to the agent on its next heartbeat).
+      try {
+        const res = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/commands`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'get_logs' }),
+        })
+        if (!res.ok) throw new Error()
+      } catch {
+        if (pollRef.current === agent.id) setLogsState('error')
+        return
+      }
+
+      // Poll the GET ~every 2s for ~12s waiting for the agent to POST its tail back.
+      for (let i = 0; i < 6; i++) {
+        await new Promise(r => setTimeout(r, 2000))
+        if (pollRef.current !== agent.id) return  // modal closed / switched agent
+        try {
+          const r = await fetch(`/api/agents/${encodeURIComponent(agent.id)}/logs`)
+          if (r.ok) {
+            const d = await r.json()
+            if (d?.ts && d.ts !== baselineTs) {
+              setLogsLines(Array.isArray(d.lines) ? d.lines : [])
+              setLogsState('done')
+              return
+            }
           }
-        }
-      } catch { /* keep polling */ }
+        } catch { /* keep polling */ }
+      }
+      if (pollRef.current === agent.id) setLogsState('timeout')
+    } finally {
+      // Clear the in-flight guard however this attempt ended (done/timeout/error/
+      // switched), so a later Fetch-logs click is allowed again.
+      if (fetchLogsBusyRef.current === agent.id) fetchLogsBusyRef.current = null
+      setLogsBusyId(prev => (prev === agent.id ? null : prev))
     }
-    if (pollRef.current === agent.id) setLogsState('timeout')
   }
 
   function closeLogs() {
@@ -718,6 +738,7 @@ export default function AgentsPage() {
                     onRestart={() => restartAgent(a)}
                     onFetchLogs={() => fetchLogs(a)}
                     busy={busyId === a.id}
+                    logsBusy={logsBusyId === a.id}
                   />
                 ))}
               </tbody>

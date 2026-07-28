@@ -166,6 +166,23 @@ function createHubClient(opts) {
   let lastPolicy = null;
   let stopped = false;
 
+  // FIX 6: at-most-once command execution defence-in-depth. The hub marks each command
+  // 'delivered' when it hands it back, but that persistence can fail AFTER the agent already
+  // returned 200 for the heartbeat — so the hub may redeliver the SAME cmd.id on the next
+  // tick. Track a small bounded set of recently-handled ids and skip any duplicate, so a
+  // redelivered restart/get_logs isn't executed twice. Bounded (FIFO) so it can't grow.
+  const handledCmdIds = new Set();
+  const handledCmdOrder = [];
+  const HANDLED_CMD_MAX = 100;
+  function markCmdHandled(id) {
+    if (handledCmdIds.has(id)) return;
+    handledCmdIds.add(id);
+    handledCmdOrder.push(id);
+    if (handledCmdOrder.length > HANDLED_CMD_MAX) {
+      handledCmdIds.delete(handledCmdOrder.shift());
+    }
+  }
+
   // Pull the span module's ingest WS URL out of an enroll/policy modules[] list so the
   // transport (via the store) knows WHERE to dial in JWT-mode. Accepts app==='span'
   // or 'spanvault'; returns null if the span module isn't present / carries no ingest.
@@ -369,6 +386,17 @@ function createHubClient(opts) {
   async function handleCommand(cmd) {
     // Guard a null / typeless command (defensive — the hub shouldn't send one).
     if (!cmd || !cmd.type) return;
+    // FIX 6: skip a redelivered command (same id already handled this run) so a hub that
+    // failed to persist 'delivered' after we returned 200 can't make us execute it twice.
+    // Mark BEFORE executing so a duplicate in the same batch is also suppressed. Commands
+    // with no id can't be deduped — fall through and handle them as before.
+    if (cmd.id != null) {
+      if (handledCmdIds.has(cmd.id)) {
+        log(`duplicate command (id=${cmd.id}, type=${cmd.type}) — already handled, skipping`);
+        return;
+      }
+      markCmdHandled(cmd.id);
+    }
     try {
       if (cmd.type === 'restart') {
         log(`restart command received (id=${cmd.id}) — exiting; the service manager will restart`);

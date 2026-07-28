@@ -754,7 +754,7 @@ $$;
     Write-OK "DDIVault schemas applied and cross-DB grants set"
 
     # Create .env.local in root AND frontend
-    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_WS_PORT=3011`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
+    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_WS_PORT=3011`nDDI_WS_ALLOW_PLAINTEXT=1`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $DDIFrontendDir = "$DDIAppDir\frontend"
     $ddiEnv | Out-File -FilePath "$DDIAppDir\.env.local" -Encoding UTF8 -NoNewline
     $ddiEnv | Out-File -FilePath "$DDIFrontendDir\.env.local" -Encoding UTF8 -NoNewline
@@ -780,7 +780,7 @@ $$;
     & $NssmExe remove DDIVault-API confirm 2>$null
     & $NssmExe install DDIVault-API "C:\Program Files\nodejs\node.exe" "$DDIAppDir\api\server.js"
     & $NssmExe set DDIVault-API AppDirectory        $DDIAppDir
-    & $NssmExe set DDIVault-API AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_WS_PORT=3011`nDDI_APP_URL=http://${ServerIP}:3006`nDDI_APP_PORT=3006`nSERVER_IP=$ServerIP`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    & $NssmExe set DDIVault-API AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_WS_PORT=3011`nDDI_WS_ALLOW_PLAINTEXT=1`nDDI_APP_URL=http://${ServerIP}:3006`nDDI_APP_PORT=3006`nSERVER_IP=$ServerIP`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set DDIVault-API DependOnService     $PgSvcName
     & $NssmExe set DDIVault-API DisplayName         "DDIVault - API"
     & $NssmExe set DDIVault-API Start               SERVICE_AUTO_START

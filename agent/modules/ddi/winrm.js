@@ -27,6 +27,10 @@
  *   winrm_https: boolean
  */
 const { execFile } = require('child_process');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const crypto = require('crypto');
 
 const PS_TIMEOUT = parseInt(process.env.PS_TIMEOUT_MS || '30000', 10);
 // DNS zone collection on servers with many zones (100+) takes far longer than a standard
@@ -48,6 +52,9 @@ function runPS(serverIp, script, auth, returnRaw, timeoutMs) {
   return new Promise((resolve) => {
     const ip = cleanIp(serverIp);
     if (!ip) return resolve(returnRaw ? '' : null);
+    // Defense in depth: single-quote-escape the IP before it is interpolated into any PS
+    // literal (matches how user/pass are already escaped). cleanIp already strips CIDR.
+    const safeIp = ip.replace(/'/g, "''");
 
     const mode = (auth && auth.auth_mode) || 'kerberos';
     const user = (auth && auth.ps_username) || '';
@@ -58,41 +65,80 @@ function runPS(serverIp, script, auth, returnRaw, timeoutMs) {
     const portOpt = port && port !== 5985 ? ` -Port ${port}` : '';
     const httpsOpt = useHttps ? ' -UseSSL' : '';
 
+    const timeout = timeoutMs || PS_TIMEOUT;
+    // Shared result handler — parse JSON (or return raw). NEVER rejects; null on failure.
+    const done = (err, stdout) => {
+      const raw = (stdout || '').trim();
+      if (err && !raw) return resolve(returnRaw ? '' : null);
+      if (!raw) return resolve(returnRaw ? '' : null);
+      if (returnRaw) return resolve(raw);
+      try {
+        return resolve(JSON.parse(raw));
+      } catch (_e) {
+        return resolve(null);
+      }
+    };
+
+    if (mode === 'credential') {
+      if (!user || !pass) return resolve(returnRaw ? '' : null);
+      const safeUser = user.replace(/'/g, "''");
+      // CREDENTIAL PATH — the decrypted password must NEVER touch the powershell.exe command
+      // line (world-readable via Win32_Process.CommandLine) nor the script body. Instead the
+      // credential-consuming script is written to a temp .ps1 and run with -File, and the
+      // password is handed to the child ONLY through the per-child PSPASS env var, read inside
+      // the script as $env:PSPASS. This mirrors the sibling ipam.js -File approach.
+      const scriptBody =
+        `$ErrorActionPreference = 'Stop'; ` +
+        `$secPass = ConvertTo-SecureString $env:PSPASS -AsPlainText -Force; ` +
+        `$cred = New-Object System.Management.Automation.PSCredential('${safeUser}', $secPass); ` +
+        `try { Invoke-Command -ComputerName '${safeIp}'${portOpt}${httpsOpt} -Credential $cred -ScriptBlock { ${script} } } ` +
+        `catch { Write-Error $_.Exception.Message; exit 1 }`;
+      const tmpFile = path.join(
+        os.tmpdir(),
+        `nvagent_ddi_cred_${process.pid}_${Date.now()}_${crypto.randomBytes(4).toString('hex')}.ps1`
+      );
+      const cleanup = () => { try { fs.unlinkSync(tmpFile); } catch (_e) { /* best-effort */ } };
+      try {
+        fs.writeFileSync(tmpFile, scriptBody, 'utf8');
+      } catch (_e) {
+        cleanup();
+        return resolve(returnRaw ? '' : null);
+      }
+      return execFile(
+        'powershell.exe',
+        ['-NonInteractive', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', tmpFile],
+        {
+          encoding: 'utf8',
+          timeout,
+          maxBuffer: MAX_BUFFER,
+          windowsHide: true,
+          // Per-child env — the password lives here, not on argv. Never logged.
+          env: { ...process.env, PSPASS: pass },
+        },
+        (err, stdout) => {
+          cleanup(); // delete the temp .ps1 whether the child succeeded, failed, or timed out
+          done(err, stdout);
+        }
+      );
+    }
+
+    // kerberos / local — NO secret is interpolated, so the -Command form is safe here.
     let psCmd;
     if (mode === 'local') {
       // Run directly on this machine — only when the agent host IS the target server.
       psCmd = `try { ${script} } catch { Write-Error $_.Exception.Message; exit 1 }`;
-    } else if (mode === 'credential') {
-      if (!user || !pass) return resolve(returnRaw ? '' : null);
-      const safePass = pass.replace(/'/g, "''");
-      const safeUser = user.replace(/'/g, "''");
-      psCmd =
-        `$secPass = ConvertTo-SecureString '${safePass}' -AsPlainText -Force; ` +
-        `$cred = New-Object System.Management.Automation.PSCredential('${safeUser}', $secPass); ` +
-        `try { Invoke-Command -ComputerName '${ip}'${portOpt}${httpsOpt} -Credential $cred -ScriptBlock { ${script} } } ` +
-        `catch { Write-Error $_.Exception.Message; exit 1 }`;
     } else {
       // kerberos — current Windows identity (the agent's service account).
       psCmd =
-        `try { Invoke-Command -ComputerName '${ip}'${portOpt}${httpsOpt} -ScriptBlock { ${script} } } ` +
+        `try { Invoke-Command -ComputerName '${safeIp}'${portOpt}${httpsOpt} -ScriptBlock { ${script} } } ` +
         `catch { Write-Error $_.Exception.Message; exit 1 }`;
     }
 
     execFile(
       'powershell.exe',
       ['-NonInteractive', '-NoProfile', '-Command', psCmd],
-      { encoding: 'utf8', timeout: timeoutMs || PS_TIMEOUT, maxBuffer: MAX_BUFFER, windowsHide: true },
-      (err, stdout) => {
-        const raw = (stdout || '').trim();
-        if (err && !raw) return resolve(returnRaw ? '' : null);
-        if (!raw) return resolve(returnRaw ? '' : null);
-        if (returnRaw) return resolve(raw);
-        try {
-          return resolve(JSON.parse(raw));
-        } catch (_e) {
-          return resolve(null);
-        }
-      }
+      { encoding: 'utf8', timeout, maxBuffer: MAX_BUFFER, windowsHide: true },
+      done
     );
   });
 }
@@ -134,14 +180,16 @@ async function getDhcpLeases(serverIp, auth) {
 
 // scopeId optional — when null/omitted, returns reservations across ALL scopes.
 async function getDhcpReservations(serverIp, scopeId, auth) {
-  const script = scopeId
-    ? `Get-DhcpServerv4Reservation -ScopeId '${scopeId}' | Select-Object ScopeId,IPAddress,ClientId,Name,Description,Type | ConvertTo-Json -Depth 5 -Compress`
+  const sid = scopeId == null ? null : String(scopeId).replace(/'/g, "''");
+  const script = sid
+    ? `Get-DhcpServerv4Reservation -ScopeId '${sid}' | Select-Object ScopeId,IPAddress,ClientId,Name,Description,Type | ConvertTo-Json -Depth 5 -Compress`
     : `$scopes = Get-DhcpServerv4Scope | Select-Object -ExpandProperty ScopeId; $all = foreach ($s in $scopes) { Get-DhcpServerv4Reservation -ScopeId $s -ErrorAction SilentlyContinue | Select-Object ScopeId,IPAddress,ClientId,Name,Description,Type }; $all | ConvertTo-Json -Depth 5 -Compress`;
   return asArray(await runPS(serverIp, script, auth));
 }
 
 async function getDhcpScopeOptions(serverIp, auth, scopeId) {
-  const script = `Get-DhcpServerv4OptionValue -ScopeId '${scopeId}' -ErrorAction SilentlyContinue | ForEach-Object { [PSCustomObject]@{ OptionId = $_.OptionId; Name = $_.Name; Value = ($_.Value -join ', ') } } | ConvertTo-Json -Compress`;
+  const sid = String(scopeId).replace(/'/g, "''");
+  const script = `Get-DhcpServerv4OptionValue -ScopeId '${sid}' -ErrorAction SilentlyContinue | ForEach-Object { [PSCustomObject]@{ OptionId = $_.OptionId; Name = $_.Name; Value = ($_.Value -join ', ') } } | ConvertTo-Json -Compress`;
   return asArray(await runPS(cleanIp(serverIp), script, auth));
 }
 
