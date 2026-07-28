@@ -18,7 +18,8 @@ core/
   health.js      CPU/mem/disk/uptime/device/buffer sampler
   updater.js     SIGNED (Ed25519) multi-file self-update — verify-before-apply, fail closed
   runtime.js     server-push router: restart / get_logs / signed-update, forwards rest to modules
-  identity.js    auth (apiKey today; interface ready for Phase-2 issued identity)
+  identity.js    span-path auth seam: hub JWT when enrolled, else legacy apiKey
+  identity-store.js  the ONE shared hub-identity store (hub.js + identity.js consult it)
   logger.js      console + in-memory ring (feeds get_logs)
 modules/
   span/          the SpanVault edge workload (ping, SNMP plan+legacy, service checks, discovery)
@@ -36,12 +37,28 @@ module.exports = createModule(ctx) => ({ name, start(), stop(), status(), onMess
 // (a streaming send path — sendStream — is reserved for LogVault's high-volume module, Phase 4)
 ```
 
-## Config (`config.json`, gitignored)
+## Config (`config.json`, gitignored) — TWO MODES
+
+**apiKey-mode (legacy, unchanged):**
 ```json
 { "serverUrl": "http://SERVER_IP:3008", "apiKey": "…", "wsPort": 3010 }
 ```
-`hubUrl` + `enrollToken` are **optional** — set both to opt into the Phase 2 hub
-control channel (see below); omit them and the agent runs exactly as Phase 1.
+The agent dials SpanVault directly and presents `Bearer <apiKey>`, exactly as Phase 1.
+
+**JWT-mode (Phase 3):**
+```json
+{ "hubUrl": "http://SERVER_IP:3000", "enrollToken": "…" }
+```
+With `hubUrl` + `enrollToken` and **no** `apiKey`, the agent enrolls with the NetVault
+hub, then presents its hub-issued **JWT** on the span data path and dials the
+hub-provided span **ingest** URL. The shared identity store (`core/identity-store.js`)
+holds `{ agent_id, jwt, expires_at, ingest }`; the span transport **defers** its dial
+until the identity is ready, and **reconnects** when the JWT is refreshed/rotated
+(the Bearer header is fixed at connect). `hubUrl` + `enrollToken` are BOTH required for
+JWT-mode.
+
+Setting `apiKey` **and** `hubUrl`+`enrollToken` together keeps `apiKey` on the data path
+and runs the hub channel as an additive side-channel (the Phase 2 opt-in).
 
 ## Hub control channel (Phase 2)
 An **opt-in** side-channel to the NetVault hub, enabled only when BOTH `hubUrl` and
@@ -51,9 +68,16 @@ the existing WebSocket to SpanVault. **Data flows to the apps, never to the hub.
 
 - **Enroll once.** On first start (no stored identity) the agent POSTs `enrollToken`
   to `<hubUrl>/api/agents/enroll` and receives a signed identity (`{ agent_id, jwt,
-  expires_at }`), persisted to `agent/hub-identity.json` (gitignored). On later starts
-  the stored identity is loaded and enrollment is skipped. Enrollment failures
-  (401/network) retry with backoff and never crash the data path.
+  expires_at }`) plus the span module's **ingest** URL; both are persisted (via the
+  shared store) to `agent/hub-identity.json` (gitignored) as
+  `{ agent_id, jwt, expires_at, ingest }`. On later starts the stored identity is
+  loaded and enrollment is skipped. Enrollment failures (401/network) retry with
+  backoff and never crash the data path.
+- **Identity refresh (Phase 3).** On the policy tick, once < 1/3 of the JWT's TTL
+  remains, the agent POSTs `<hubUrl>/api/agents/<agent_id>/refresh` (Bearer the current
+  JWT) and stores the returned `{ jwt, expires_at }` — which reconnects the span
+  transport with the new token. A refresh `401` (revoked) stops the loops, same
+  no-spin rule as the heartbeat.
 - **Fleet heartbeat.** Once enrolled, every 30s the agent POSTs a heartbeat
   (`{ version, health, module_status, buffer_depth }`, `Authorization: Bearer <jwt>`)
   so the launcher Agents page is populated. A `401` (revoked/expired identity) stops

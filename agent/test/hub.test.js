@@ -93,6 +93,13 @@ async function testHappyPath() {
     if (req.method === 'GET' && req.url === '/api/agents/agt_test/policy') {
       return reply(200, { modules: [{ app: 'span', enabled: true, config: {}, ingest: 'ws://x:3010/' }] });
     }
+    if (req.method === 'POST' && req.url === '/api/agents/agt_test/refresh') {
+      // Phase 3 A5: identity refresh. The mock jwt ('fake.jwt') isn't decodable, so
+      // shouldRefresh() assumes a 30-day TTL and fires on the immediate policy tick;
+      // answer it (same jwt so the Bearer-fake.jwt assertions hold, far-out expiry so
+      // it then quiesces) — this also covers the refresh round-trip end-to-end.
+      return reply(200, { jwt: 'fake.jwt', expires_at: new Date(Date.now() + 30 * 24 * 3600e3).toISOString() });
+    }
     reply(404, { error: 'not found' });
   });
 

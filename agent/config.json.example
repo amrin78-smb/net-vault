@@ -2,6 +2,10 @@
   "serverUrl": "http://SERVER_IP:3008",
   "apiKey": "REPLACE_WITH_AGENT_API_KEY",
   "wsPort": 3010,
-  "hubUrl": "http://SERVER_IP:3000",
-  "enrollToken": ""
+
+  "_modes": "TWO CONFIG SHAPES — pick ONE. (1) LEGACY apiKey-mode (the three keys above): serverUrl + apiKey + wsPort; the agent dials SpanVault directly and presents Bearer <apiKey>, exactly as before. (2) JWT-mode: hubUrl + enrollToken and NO apiKey (see _jwtModeExample); the agent enrolls with the NetVault hub, presents its hub-issued JWT to SpanVault, and dials the hub-provided span ingest URL. hubUrl AND enrollToken are BOTH REQUIRED for JWT-mode. (Adding hubUrl+enrollToken alongside apiKey keeps apiKey on the data path and runs the hub channel as an additive side-channel — the Phase 2 opt-in.)",
+  "_jwtModeExample": {
+    "hubUrl": "http://SERVER_IP:3000",
+    "enrollToken": "REPLACE_WITH_ENROLL_TOKEN"
+  }
 }

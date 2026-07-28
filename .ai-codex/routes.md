@@ -22,11 +22,12 @@ GET /api/agents/bundle/[...path] [public] [none] — serve ONE agent file's byte
 POST /api/agents/enroll-tokens [auth] [db] — mint one-time enrollment token + install one-liner (super_admin)
 POST /api/agents/enroll [public] [db] — token-authed (NO session): agent redeems token+host facts → agent_id, signed identity, module policy. Intentionally public write; NO checkWriteAllowed (token-gated infra)
 POST /api/agents/[id]/heartbeat [agent-auth] [db] — agent-authed (requireAgentAuth, JWT sub must == [id]): liveness + health sample
+POST /api/agents/[id]/refresh [agent-auth] [db] — agent-authed (sub must == [id]): re-issue identity from CURRENT enabled modules, bump last_seen_at, return {jwt,expires_at}; revoked agent → 401 (stop). Default TTL 7d
 GET /api/agents/[id]/policy [agent-auth] [db] — agent-authed (sub must == [id]): module assignment + config + data-plane ingest URLs
 GET /api/agents [auth] [db] — fleet list, agents+site+modules+latest buffer_depth, derived status (super_admin)
 GET /api/agents/[id] [auth] [db] — agent detail + last ~20 health rows (super_admin)
 PATCH /api/agents/[id] [auth] [db] — update name/site_id + upsert/toggle modules (super_admin)
-POST /api/agents/[id]/revoke [auth] [db] — set revoked_at, status='revoked' (super_admin)
+POST /api/agents/[id]/revoke [auth] [db] — set revoked_at, status='revoked' (super_admin); then best-effort fans out an active-kick to each covered app's data plane (Phase 3: SpanVault only, POST 127.0.0.1:3009/api/internal/agents/disconnect, non-fatal) so a LIVE session drops now, not just on next connect
 
 ## audit
 GET /api/audit/device/[id] [auth] [db] — device audit log, site-scoped

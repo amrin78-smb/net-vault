@@ -17,9 +17,10 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.1.1';
+const VERSION = '2.2.0';
 
 const createLogger = require('./core/logger');
+const createIdentityStore = require('./core/identity-store');
 const createIdentity = require('./core/identity');
 const createBuffer = require('./core/buffer');
 const createTransport = require('./core/transport');
@@ -36,7 +37,14 @@ const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^\uFEFF/
 
 // ── Core singletons ───────────────────────────────────────────
 const logger = createLogger('Agent');
-const identity = createIdentity(config);
+// The ONE shared identity store (Phase 3). Both the span identity (below) and the
+// hub client consult it, so the span data path can present the hub-issued JWT.
+// load() up front so a JWT-mode agent with a persisted identity can present it on the
+// very FIRST dial (no defer); an apiKey-mode agent simply finds nothing and uses its
+// apiKey exactly as Phase 1.
+const store = createIdentityStore({ logger });
+store.load();
+const identity = createIdentity(config, store);
 const buffer = createBuffer({ dir: __dirname, max: 500, logger });
 
 const hostname = os.hostname();
@@ -125,7 +133,15 @@ if (config.hubUrl && config.enrollToken) {
     getModuleStatus: () => ({ [span.name]: span.status() }),
     getBufferDepth: () => buffer.depth(),
     logger,
+    // Phase 3: the hub client shares the SAME store the span identity reads, so its
+    // enrolled/refreshed JWT (and the span ingest URL) drive the data-path auth.
+    store,
   });
+  // Sequencing: in JWT-mode (no apiKey) the span transport DEFERS its dial until the
+  // identity is ready (isReady()==false) — so starting the hub here (before
+  // transport.start() below) kicks off enroll/load; store.set()/store.load() then
+  // wakes the transport. In apiKey-mode the transport is ready immediately and this
+  // hub channel stays a purely additive side-channel exactly as Phase 2.
   hub.start();
 }
 

@@ -72,10 +72,15 @@ interface AgentTokenClaims {
 
 // Sign a durable agent identity. `modules` become the token audience; the agent
 // presents this to each assigned app's ingest endpoint.
+//
+// Default TTL is 7 days: now that agents refresh their identity before expiry
+// (POST /api/agents/[id]/refresh, Phase 3 A5), a shorter TTL shrinks the window
+// a revoked-but-unexpired token stays usable between reconnects. Callers may
+// still override `ttlDays`.
 export function issueAgentIdentity(
   agentId: string,
   modules: string[],
-  ttlDays = 30
+  ttlDays = 7
 ): AgentIdentity {
   const iat = Math.floor(Date.now() / 1000)
   const exp = iat + ttlDays * 24 * 60 * 60

@@ -28,11 +28,11 @@
  * Identity is persisted at agent/hub-identity.json ({ agent_id, jwt, expires_at });
  * present on start => enrollment is skipped.
  */
-const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const http = require('http');
 const https = require('https');
+const createIdentityStore = require('./identity-store');
 
 // Persist the issued identity next to the agent (agent/hub-identity.json). The
 // entrypoint lives one level up from core/, matching config.json's location.
@@ -137,6 +137,11 @@ function createHubClient(opts) {
     intervalMs = 30000,
     policyIntervalMs = 300000, // ~5 min
     identityPath = DEFAULT_IDENTITY_PATH,
+    // The SHARED identity store both hub.js and the span identity consult (Phase 3).
+    // The entrypoint passes the one it also wired into core/identity.js so the span
+    // transport can present this JWT; tests that drive hub.js alone pass none and get
+    // a private store over identityPath (same file, same atomic write as before).
+    store = createIdentityStore({ identityPath, logger }),
   } = opts || {};
 
   const hubUrl = config.hubUrl && String(config.hubUrl).replace(/\/+$/, ''); // trim trailing /
@@ -149,9 +154,51 @@ function createHubClient(opts) {
     if (logger && logger.error) logger.error('[hub]', ...a);
   }
 
-  let identity = null; // { agent_id, jwt, expires_at }
   let lastPolicy = null;
   let stopped = false;
+
+  // Pull the span module's ingest WS URL out of an enroll/policy modules[] list so the
+  // transport (via the store) knows WHERE to dial in JWT-mode. Accepts app==='span'
+  // or 'spanvault'; returns null if the span module isn't present / carries no ingest.
+  function extractSpanIngest(modules) {
+    if (!Array.isArray(modules)) return null;
+    for (const m of modules) {
+      if (!m) continue;
+      const app = String(m.app || m.name || '').toLowerCase();
+      if ((app === 'span' || app === 'spanvault') && m.ingest) return m.ingest;
+    }
+    return null;
+  }
+
+  // Decode a JWT's payload (base64url middle segment) WITHOUT verifying — used only to
+  // read iat/exp so we can size the refresh window as a fraction of the real TTL.
+  function jwtClaims(jwt) {
+    try {
+      const seg = String(jwt).split('.')[1];
+      if (!seg) return null;
+      const json = Buffer.from(seg.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf8');
+      return JSON.parse(json);
+    } catch (_e) {
+      return null;
+    }
+  }
+
+  // Refresh once less than 1/3 of the TTL remains (per the Phase 3 plan). TTL is taken
+  // from the JWT's own exp-iat when decodable, else a 30-day assumption (the hub's
+  // issue default). An already-expired identity returns true (a last-ditch refresh).
+  function shouldRefresh(id) {
+    if (!id || !id.expires_at) return false;
+    const exp = Date.parse(id.expires_at);
+    if (isNaN(exp)) return false;
+    const remaining = exp - Date.now();
+    if (remaining <= 0) return true;
+    let ttlMs = 30 * 24 * 3600 * 1000;
+    const claims = jwtClaims(id.jwt);
+    if (claims && claims.exp && claims.iat && claims.exp > claims.iat) {
+      ttlMs = (claims.exp - claims.iat) * 1000;
+    }
+    return remaining < ttlMs / 3;
+  }
 
   let heartbeatTimer = null;
   let policyTimer = null;
@@ -168,37 +215,9 @@ function createHubClient(opts) {
     return Math.round(base * (0.8 + Math.random() * 0.4));
   }
 
-  function loadIdentity() {
-    try {
-      if (fs.existsSync(identityPath)) {
-        const parsed = JSON.parse(fs.readFileSync(identityPath, 'utf8').replace(/^\uFEFF/, ''));
-        if (parsed && parsed.agent_id && parsed.jwt) return parsed;
-      }
-    } catch (e) {
-      logErr('could not read stored identity:', e.message);
-    }
-    return null;
-  }
-
-  function persistIdentity(id) {
-    // Atomic write: a crash mid-write must not corrupt hub-identity.json. Write to
-    // a sibling .tmp then rename over the target (atomic on the same volume).
-    const tmpPath = identityPath + '.tmp';
-    try {
-      fs.writeFileSync(
-        tmpPath,
-        JSON.stringify({ agent_id: id.agent_id, jwt: id.jwt, expires_at: id.expires_at }, null, 2)
-      );
-      fs.renameSync(tmpPath, identityPath);
-    } catch (e) {
-      logErr('could not persist identity:', e.message);
-      try {
-        fs.unlinkSync(tmpPath);
-      } catch (_e) {
-        /* best-effort cleanup of the temp file */
-      }
-    }
-  }
+  // Identity load/persist + the atomic tmp+rename now live in the shared store
+  // (core/identity-store.js); hub.js reads via store.get() and writes via store.set(),
+  // storing the span ingest URL alongside the identity so the transport can dial it.
 
   // ── Enrollment ───────────────────────────────────────────────────────────────
   async function enroll() {
@@ -218,14 +237,17 @@ function createHubClient(opts) {
       return scheduleEnrollRetry(`enroll network error: ${e.message}`);
     }
     if (res.statusCode === 200 && res.body && res.body.agent_id && res.body.identity) {
-      identity = {
+      // Persist via the shared store, INCLUDING the span ingest URL the hub handed
+      // back in modules[] — so the span transport (via the store) knows where to dial
+      // in JWT-mode. store.set() emits a change, which wakes a deferred transport.
+      store.set({
         agent_id: res.body.agent_id,
         jwt: res.body.identity.jwt,
         expires_at: res.body.identity.expires_at,
-      };
-      persistIdentity(identity);
+        ingest: extractSpanIngest(res.body.modules),
+      });
       enrollAttempts = 0;
-      log(`enrolled as ${identity.agent_id} — identity persisted`);
+      log(`enrolled as ${res.body.agent_id} — identity persisted`);
       startLoops();
       return;
     }
@@ -280,11 +302,20 @@ function createHubClient(opts) {
     } catch (e) {
       logErr('policy loop error:', e.message);
     }
+    // A5: piggy-back the JWT refresh check on the policy tick. Refresh renews the
+    // data-path credential before the TTL expires so the span session doesn't die at
+    // 30 days; on success store.set() fires onChange → the transport reconnects with
+    // the new token; on 401 identityRejected() stops the loops (no spin).
+    try {
+      await maybeRefresh();
+    } catch (e) {
+      logErr('refresh loop error:', e.message);
+    }
     armPolicy(); // re-arm only after this call settled (no-op if loops stopped)
   }
 
   function startLoops() {
-    if (stopped || !identity || loopsActive) return;
+    if (stopped || !store.get() || loopsActive) return;
     loopsActive = true;
     runHeartbeat(); // send one promptly so the fleet page populates fast, then re-arm
     runPolicy(); // one immediate poll, then on the slow cadence
@@ -305,24 +336,14 @@ function createHubClient(opts) {
     // Move the dead identity aside so a RESTART with a fresh enrollToken can
     // re-enroll instead of reloading the revoked JWT forever. We do NOT re-enroll
     // within THIS run (loops stay stopped above) — only a restart retries, so the
-    // "no spin" property is preserved.
-    try {
-      if (fs.existsSync(identityPath)) {
-        const rejectedPath = identityPath + '.rejected';
-        try {
-          fs.renameSync(identityPath, rejectedPath);
-        } catch (_e) {
-          // Rename failed (e.g. a stale .rejected in the way) — fall back to delete.
-          fs.unlinkSync(identityPath);
-        }
-      }
-    } catch (e) {
-      logErr('could not clear rejected identity file:', e.message);
-    }
+    // "no spin" property is preserved. store.reject() also emits a change so a
+    // JWT-mode span transport drops the now-credential-less socket.
+    store.reject();
   }
 
   async function sendHeartbeat() {
-    if (stopped || !identity) return;
+    const id = store.get();
+    if (stopped || !id) return;
     let res;
     try {
       // Build the body INSIDE the try: an injected accessor (health.build /
@@ -335,9 +356,9 @@ function createHubClient(opts) {
         buffer_depth: typeof getBufferDepth === 'function' ? getBufferDepth() : 0,
       };
       res = await httpPostJson(
-        `${hubUrl}/api/agents/${identity.agent_id}/heartbeat`,
+        `${hubUrl}/api/agents/${id.agent_id}/heartbeat`,
         body,
-        { Authorization: `Bearer ${identity.jwt}` }
+        { Authorization: `Bearer ${id.jwt}` }
       );
     } catch (e) {
       // Network error — best-effort, keep the interval and try again next tick.
@@ -354,11 +375,12 @@ function createHubClient(opts) {
   }
 
   async function pollPolicy() {
-    if (stopped || !identity) return;
+    const id = store.get();
+    if (stopped || !id) return;
     let res;
     try {
-      res = await httpGetJson(`${hubUrl}/api/agents/${identity.agent_id}/policy`, {
-        Authorization: `Bearer ${identity.jwt}`,
+      res = await httpGetJson(`${hubUrl}/api/agents/${id.agent_id}/policy`, {
+        Authorization: `Bearer ${id.jwt}`,
       });
     } catch (e) {
       logErr('policy poll network error:', e.message);
@@ -372,9 +394,57 @@ function createHubClient(opts) {
       // Phase 2: store + log only. Do NOT apply policy to modules yet — the span
       // module's real work config still arrives over the app WS.
       lastPolicy = res.body;
+      // A4d: if the policy re-advertises the span ingest URL and it changed, update
+      // the store (preserving the current JWT) so the transport re-dials the new
+      // ingest on the resulting onChange. No change → no store write → no churn.
+      const ingest = extractSpanIngest(res.body.modules);
+      const cur = store.get();
+      if (ingest && cur && ingest !== cur.ingest) {
+        store.set({ agent_id: cur.agent_id, jwt: cur.jwt, expires_at: cur.expires_at, ingest });
+        log(`span ingest URL updated from policy: ${ingest}`);
+      }
       log(`policy fetched (${res.body.modules.length} module(s)) — stored, not applied`);
     } else {
       logErr(`policy poll unexpected response (HTTP ${res.statusCode})`);
+    }
+  }
+
+  // ── A5: identity refresh (renew the JWT before it expires) ──────────────────────
+  // CONTRACT: POST <hubUrl>/api/agents/<agent_id>/refresh (Authorization: Bearer <jwt>)
+  //   -> 200 { jwt, expires_at }   (issues a fresh identity)
+  //   -> 401                       (revoked/expired) — stop, same no-spin rule as HB.
+  // On success we store.set() the new token (preserving agent_id + ingest), which fires
+  // onChange so the span transport reconnects to present it.
+  async function maybeRefresh() {
+    const id = store.get();
+    if (stopped || !loopsActive || !id) return;
+    if (!shouldRefresh(id)) return;
+    let res;
+    try {
+      res = await httpPostJson(
+        `${hubUrl}/api/agents/${id.agent_id}/refresh`,
+        {},
+        { Authorization: `Bearer ${id.jwt}` }
+      );
+    } catch (e) {
+      // Network error — best-effort; the token still has >0 TTL, retry next tick.
+      logErr('refresh network error:', e.message);
+      return;
+    }
+    if (res.statusCode === 401) {
+      identityRejected();
+      return;
+    }
+    if (res.statusCode === 200 && res.body && res.body.jwt) {
+      store.set({
+        agent_id: id.agent_id,
+        jwt: res.body.jwt,
+        expires_at: res.body.expires_at,
+        ingest: id.ingest,
+      });
+      log(`identity refreshed — new expiry ${res.body.expires_at || '?'}`);
+    } else {
+      logErr(`refresh failed (HTTP ${res.statusCode})`);
     }
   }
 
@@ -386,9 +456,9 @@ function createHubClient(opts) {
         return;
       }
       stopped = false;
-      identity = loadIdentity();
-      if (identity) {
-        log(`using stored identity ${identity.agent_id} — skipping enrollment`);
+      const loaded = store.load();
+      if (loaded) {
+        log(`using stored identity ${loaded.agent_id} — skipping enrollment`);
         startLoops();
       } else {
         log('no stored identity — enrolling with hub');
@@ -412,8 +482,10 @@ function createHubClient(opts) {
       }
     },
     // Exposed for tests/introspection (not used by the entrypoint).
-    _getIdentity: () => identity,
+    _getIdentity: () => store.get(),
     _getPolicy: () => lastPolicy,
+    _maybeRefresh: () => maybeRefresh(),
+    _getStore: () => store,
   };
 }
 

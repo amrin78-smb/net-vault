@@ -283,6 +283,22 @@ if ($abn.Code -eq 200 -and $abn.Content) {
     Bad ("/api/agents/bundle FAILED (code=" + $abn.Code + ") - agent\ dir not present at NetVault standalone runtime root")
 }
 
+# Phase 3 A5: the agent identity-refresh route must EXIST and be agent-gated. A
+# POST with no Bearer token returns 401 (requireAgentAuth) - proving the route
+# is present AND locked down, not a 404 (route missing) or 405 (wrong method).
+$refCode = $null
+try {
+    $rf = Invoke-WebRequest "http://127.0.0.1:3000/api/agents/smoke-test/refresh" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
+    $refCode = [int]$rf.StatusCode
+} catch {
+    if ($_.Exception.Response) { try { $refCode = [int]$_.Exception.Response.StatusCode } catch {} }
+}
+if ($refCode -eq 401) {
+    Ok "/api/agents/<id>/refresh exists and is agent-gated (unauthed POST -> 401)"
+} else {
+    Bad ("/api/agents/<id>/refresh unauthed POST returned code=" + $refCode + " (expected 401 - route missing or not agent-gated)")
+}
+
 $root = Http "http://127.0.0.1:3000/" 12 -NoRedirect
 if ($root.Code -ge 300 -and $root.Code -lt 400) { Ok ("NetVault / redirects (" + $root.Code + " -> " + $root.Loc + ")") }
 elseif ($root.Code -eq 200) { Inf "NetVault / returned 200 (no redirect)" }
