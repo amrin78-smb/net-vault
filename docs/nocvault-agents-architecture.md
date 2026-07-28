@@ -290,8 +290,9 @@ So the shared core needs a **streaming module contract**, not only the periodic-
 | **5 — LogVault module** | Edge syslog receiver + Windows Event Log + disk spool + gzipped raw streaming (`sendStream`), to the same federated shape. Highest value, most work; exercises the streaming contract reserved in Phase 1. | ⬜ |
 | **Cross-cutting** (ongoing, not a phase) | mTLS / pinned `wss` over WAN; offline/degraded fleet alerting; `agent_health` retention (✅ 7-day prune shipped in the bug-sweep). | — |
 
-*(Detailed plans: `nocvault-agents-phase1-plan.md` (historical) · **`nocvault-agents-phase3-plan.md`** (the
-identity-reconciliation + signed-self-update plan, ready to build).)*
+*(Detailed plans: `nocvault-agents-phase1-plan.md` (historical) · `nocvault-agents-phase3-plan.md` (identity
+reconciliation + signed self-update, **shipped**) · **`nocvault-agents-phase4-plan.md`** (DDIVault module +
+slim SpanVault; splits into 4a slim-SpanVault+hub-lifecycle and 4b the large DDIVault edge module).)*
 
 ---
 
