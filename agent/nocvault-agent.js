@@ -17,7 +17,7 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.5.2';
+const VERSION = '2.5.3';
 
 // ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
 // This gate MUST execute BEFORE requiring any core module a pending update could
@@ -138,7 +138,12 @@ if (ddiEnabled) {
 // only when enabled, so the SpanVault heartbeat and the launcher Agents page both reflect it.
 const moduleStatus = () => {
   const s = { [span.name]: span.status() };
-  if (ddi) s[ddi.name] = ddi.status();
+  // Report ddi.status() only when its data plane actually came up. When ddi is enabled but
+  // its transport was NOT started (apiKey-mode / not hub-enrolled → ddiTransport stays null),
+  // the plane is inert; reporting ddi.status() ('ok') would make a dead plane look healthy on
+  // the span-WS + hub heartbeats. Surface a distinct status instead. (ddiTransport is a `let`
+  // assigned later in startup; this closure reads it at heartbeat time, by when it is set.)
+  if (ddi) s[ddi.name] = ddiTransport ? ddi.status() : 'disabled:not-enrolled';
   return s;
 };
 

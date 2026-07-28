@@ -34,6 +34,16 @@
  * The private key is read from --key or the AGENT_SIGNING_KEY env var (a PKCS#8
  * PEM path). It is NEVER hardcoded and NEVER committed.
  *
+ * ── Pre-sign smoke test (RELEASE DISCIPLINE — do this BEFORE signing) ───────────
+ * Before signing a release, smoke-test that the self-update bootstrap actually LOADS:
+ *     node -e "require('./core/apply-update')"   # the pre-gate self-update loader parses
+ *     node --check nocvault-agent.js              # the entrypoint parses
+ * Rationale: core/apply-update.js is the ONE file that runs BEFORE the crash-loop rollback
+ * gate (see the "RUNS FIRST" note in nocvault-agent.js). A validly-signed but load-broken
+ * apply-update (or an entrypoint that can't parse) would install, fail at load before the
+ * confirm-counter/rollback logic can fire, and NOT self-heal — a brick. A signature only
+ * attests integrity, not that the build runs; this check is what catches a load-time break.
+ *
  * ── Generating the keypair (run ONCE, offline; keep the private key off every repo)
  *   node -e "const c=require('crypto');const{publicKey,privateKey}=c.generateKeyPairSync('ed25519');\
  *   require('fs').writeFileSync('agent-signing-key.pem',privateKey.export({type:'pkcs8',format:'pem'}));\

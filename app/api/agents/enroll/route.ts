@@ -59,9 +59,17 @@ export async function POST(req: NextRequest) {
         configs?: Record<string, unknown>
       }
       // Drop any unknown/typo'd slug before it can be stored (whitelist).
-      const modules: string[] = Array.isArray(preset.modules)
-        ? preset.modules.filter(isKnownModule)
-        : []
+      const rawModules: unknown[] = Array.isArray(preset.modules) ? preset.modules : []
+      const modules: string[] = rawModules.filter(isKnownModule)
+      // Backstop for the same guard enforced at mint time (enroll-tokens): if the
+      // preset carried a non-empty module set but NONE are known, refuse rather than
+      // creating a green-but-inert agent with an empty aud. Throwing here rolls the
+      // whole tx back — no orphan agent, and the token burn is undone (stays usable).
+      if (rawModules.length > 0 && modules.length === 0) {
+        const err = new Error('No valid modules') as Error & { code?: string }
+        err.code = 'NO_VALID_MODULES'
+        throw err
+      }
       const siteId = typeof preset.site_id === 'number' ? preset.site_id : null
       const name = (typeof hostname === 'string' && hostname.trim()) || agentId
 
@@ -123,8 +131,12 @@ export async function POST(req: NextRequest) {
       modules: modOut,
     })
   } catch (e) {
-    if (e && typeof e === 'object' && (e as { code?: string }).code === 'INVALID_TOKEN') {
+    const code = e && typeof e === 'object' ? (e as { code?: string }).code : undefined
+    if (code === 'INVALID_TOKEN') {
       return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 })
+    }
+    if (code === 'NO_VALID_MODULES') {
+      return NextResponse.json({ error: 'No valid modules (known: span, ddi)' }, { status: 400 })
     }
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }

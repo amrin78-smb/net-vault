@@ -242,6 +242,10 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
 }) {
   const revoked = agent.status === 'revoked'
   const cellMuted: React.CSSProperties = revoked ? { opacity: 0.6 } : {}
+  // Only modules whose slug normalizes to a known key are renderable. Drive BOTH
+  // the "none" placeholder and the chip render off this, so an agent whose modules
+  // ALL carry an unknown/legacy slug shows "none" rather than a blank cell/panel.
+  const visibleModules = agent.modules.filter(m => normalizeApp(m.app))
   return (
     <>
       <tr
@@ -272,11 +276,11 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
         {/* Modules */}
         <td>
           <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-            {agent.modules.length === 0
+            {visibleModules.length === 0
               ? <span style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)' }}>none</span>
-              : agent.modules.map(m => {
-                  const k = normalizeApp(m.app)
-                  return k ? <ModuleChip key={m.app} appKey={k} enabled={m.enabled} /> : null
+              : visibleModules.map(m => {
+                  const k = normalizeApp(m.app)!
+                  return <ModuleChip key={m.app} appKey={k} enabled={m.enabled} />
                 })}
           </div>
         </td>
@@ -332,11 +336,10 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
                 <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 8 }}>
                   Modules
                 </div>
-                {agent.modules.length === 0
+                {visibleModules.length === 0
                   ? <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>No modules assigned.</div>
-                  : agent.modules.map(m => {
-                      const k = normalizeApp(m.app)
-                      if (!k) return null
+                  : visibleModules.map(m => {
+                      const k = normalizeApp(m.app)!
                       const meta = moduleMeta(k)
                       return (
                         <div key={m.app} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0' }}>

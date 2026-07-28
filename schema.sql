@@ -314,7 +314,7 @@ CREATE TABLE IF NOT EXISTS agent_enrollment_tokens (
 
 CREATE TABLE IF NOT EXISTS agent_modules (
     agent_id      TEXT REFERENCES agents(id) ON DELETE CASCADE,
-    app           TEXT NOT NULL,                -- module slug; SHORT form is canonical ('span'/'log'/'ddi'), long form ('spanvault'/'logvault'/'ddivault') also accepted
+    app           TEXT NOT NULL,                -- module slug; SHORT form is canonical ('span'/'ddi'), long form ('spanvault'/'ddivault') also accepted
     enabled       BOOLEAN NOT NULL DEFAULT TRUE,
     config        JSONB NOT NULL DEFAULT '{}',  -- module work-plan
     PRIMARY KEY (agent_id, app)
@@ -327,7 +327,7 @@ CREATE TABLE IF NOT EXISTS agent_health (       -- small rolling history for the
     cpu_pct       REAL,
     mem_pct       REAL,
     buffer_depth  INT,
-    module_status JSONB                          -- {logvault:'ok', ddivault:'auth_error', …}
+    module_status JSONB                          -- {spanvault:'ok', ddivault:'auth_error', …}
 );
 CREATE INDEX IF NOT EXISTS idx_agent_health_agent_ts ON agent_health(agent_id, ts DESC);
 

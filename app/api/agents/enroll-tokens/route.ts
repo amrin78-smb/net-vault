@@ -20,9 +20,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     // Whitelist known module slugs (both forms) — silently drop anything else so
     // a typo'd/arbitrary slug can't be baked into the preset.
-    const modules: string[] = Array.isArray(body.modules)
-      ? body.modules.filter(isKnownModule)
-      : []
+    const rawModules: unknown[] = Array.isArray(body.modules) ? body.modules : []
+    const modules: string[] = rawModules.filter(isKnownModule)
+    // Loud, not silent: if the admin sent a non-empty module set but NONE survived
+    // the whitelist (a typo, or a now-removed slug like 'log'), reject at mint time
+    // rather than baking an empty preset that would enrol a green-but-inert agent
+    // with an empty JWT aud. An intentionally-empty preset (raw was empty) is fine.
+    if (rawModules.length > 0 && modules.length === 0) {
+      return NextResponse.json({ error: 'No valid modules (known: span, ddi)' }, { status: 400 })
+    }
     const siteId = typeof body.site_id === 'number' ? body.site_id : null
     const note = typeof body.note === 'string' ? body.note : null
 

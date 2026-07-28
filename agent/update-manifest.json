@@ -1,5 +1,5 @@
 {
-  "version": "2.5.2",
+  "version": "2.5.3",
   "files": [
     {
       "path": "README.md",
@@ -47,7 +47,7 @@
     },
     {
       "path": "core/transport.js",
-      "sha256": "646596e73418141eaaae5d5d90e1613f179f85dca8f899d2c432e77074265e40"
+      "sha256": "ac717e52e899225b4152035a52a164f56e86cfcbd0beae7e1b998e5b9d848364"
     },
     {
       "path": "core/updater.js",
@@ -59,11 +59,11 @@
     },
     {
       "path": "modules/ddi/index.js",
-      "sha256": "7f85a3df9e643e67bff2f5e3ca29644942935515478f1f1dce51734f3f5bc651"
+      "sha256": "aec050272135da7200cb9901cd3420410e4f47cef17e841b61a9007dbdf920bc"
     },
     {
       "path": "modules/ddi/ipam.js",
-      "sha256": "bea5e0614fdf4821400706f3b40d8d6e20890432e9c48440a450f03f89f36015"
+      "sha256": "42615d212d91e8894b8c56e3870653e3f930539ea783b60b6027a6bf01e21be4"
     },
     {
       "path": "modules/ddi/winrm.js",
@@ -91,7 +91,7 @@
     },
     {
       "path": "nocvault-agent.js",
-      "sha256": "23543bc372f911b0eb63bcd5c4119d8cc2d948b0dc818c722beb5ddf0f853915"
+      "sha256": "d2c52d50e4ea990e4ad628577947f3488bda53e5c6270fcf99fc25d88c40c450"
     },
     {
       "path": "package-lock.json",
@@ -99,12 +99,12 @@
     },
     {
       "path": "package.json",
-      "sha256": "e454bb24d5b49af32e58c247eb0abbbb494c12d9273a2ffb216d815b78887b83"
+      "sha256": "1ed84c5378b1d73f8904367a97ff552e3258d1b17560b1fc900d5017689b74b6"
     },
     {
       "path": "scripts/sign-agent.js",
-      "sha256": "8606a73711f9dc472db60560bf5835c1c46dc951834d208d8c937e29f7266f85"
+      "sha256": "0bc9cafbd4975b0213f802fed65c394c1b7a0ab5588d0bf0db2b457eb461796e"
     }
   ],
-  "sig": "GwlfEk2ZL6283Xz+SmIQYRBDobUHkLxi4f2y8nRUf3LWTrr3/BQV5wudOv7UGqvwxgm5SygJ9EM8tesooWQ5Bw=="
+  "sig": "RqiuVRaIke4A7PToXiyBhUQRGlPLBa/XiWBWXg8VezhUro9Abi4lqxjieFQsZxRWZlOGhTGiHDApXPh5c403Dw=="
 }

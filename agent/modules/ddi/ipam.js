@@ -73,8 +73,15 @@ function runPsScript(scriptContent, timeoutMs, tag) {
  * Ping sweep of a list of IPs using PS5 background jobs (batched + concurrent, as the
  * source). Returns an array of { ip, alive, ping_ms } — `ping_ms` matches the field
  * DDIVault's writeScanResult reads. Never throws.
+ *
+ * `gate` (optional) is the caller's concurrency semaphore ({ acquire:()=>Promise,
+ * release:()=>void }). When supplied, EACH batch's powershell.exe spawn is bracketed by
+ * gate.acquire()/gate.release() so scan-spawned children share the SAME module-wide cap as
+ * the pollers (index.js's acquireSlot/releaseSlot) — otherwise N concurrent "scan all
+ * subnets" pushes could fork far more powershell.exe than MAX_CONCURRENT allows (a process
+ * storm on the edge host). Omitted (unit tests / standalone use) → ungated, as before.
  */
-async function pingSweep(ips) {
+async function pingSweep(ips, gate) {
   const results = [];
   if (!ips.length) return results;
   const BATCH = 50;
@@ -83,6 +90,18 @@ async function pingSweep(ips) {
   for (let i = 0; i < ips.length; i += BATCH) batches.push(ips.slice(i, i + BATCH));
 
   const runBatch = async (batch, idx) => {
+    // Hold a module-wide slot for the whole batch spawn so this scan's powershell.exe
+    // children are counted against the same cap as the pollers. Released in finally on
+    // every path (spawn failure, timeout, parse). No-op when no gate was provided.
+    if (gate && typeof gate.acquire === 'function') await gate.acquire();
+    try {
+      return await runBatchInner(batch, idx);
+    } finally {
+      if (gate && typeof gate.release === 'function') gate.release();
+    }
+  };
+
+  const runBatchInner = async (batch, idx) => {
     const ipArray = batch.map((ip) => `'${ip}'`).join(',');
     const script = `
 $ips = @(${ipArray})
@@ -133,13 +152,15 @@ foreach ($job in $jobs) {
 }
 
 // Parse "10.0.0.0/24" → sweep → raw rows. Never throws — returns [] on a bad CIDR.
-async function scanCidr(cidr) {
+// `gate` (optional) is forwarded to pingSweep so each batch's powershell spawn is bounded
+// by the caller's module-wide concurrency semaphore (see pingSweep).
+async function scanCidr(cidr, gate) {
   const [network, prefixStr] = String(cidr || '').trim().split('/');
   const prefix = parseInt(prefixStr, 10);
   if (!network || isNaN(prefix)) return [];
   const ips = generateHostIPs(network, prefix);
   if (!ips.length) return [];
-  return pingSweep(ips);
+  return pingSweep(ips, gate);
 }
 
 module.exports = { scanCidr, pingSweep, generateHostIPs };

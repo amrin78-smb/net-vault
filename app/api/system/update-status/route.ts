@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.29.3': [
+    'Final bug-sweep hardening (agent 2.5.3) — a two-reviewer adversarial pass over the whole agent stack found no brick/crash/regression; these are the low-severity items it did surface, all fixed. The DDIVault agent\'s on-demand subnet scan now counts against the same collection-process cap as the pollers, so a "scan all subnets" action can no longer storm an edge host with PowerShell processes.',
+    'Agent robustness: a reconfigure can no longer briefly double-poll one server; the result-buffer flush is now exception-guarded so a bad payload or mid-flush socket error can\'t crash the agent; and an enabled-but-not-yet-enrolled DDIVault plane now reports "disabled:not-enrolled" instead of falsely showing healthy.',
+    'Fleet page: an agent carrying only an unknown/legacy module slug now shows "none" instead of a blank Modules cell, and stays visible in the detail panel. Enrolling an agent whose module preset contains no valid modules is now rejected loudly (400) instead of silently creating an online-but-inert agent.',
+    'Housekeeping: corrected the codebase index (agent identity token TTL is 7 days) and dropped stale LogVault examples from schema comments; added a pre-release smoke-test note to the agent signer so a load-broken self-update build is caught before signing.',
+  ],
   '1.29.2': [
     'Cleanup — the NocVault Agents initiative is now considered complete at SpanVault + DDIVault. A LogVault agent module was scoped in detail and deliberately DEFERRED: unlike SNMP/WinRM (which genuinely need a local collector to reach isolated segments), syslog is already push-based, so the "remote site can\'t reach central LogVault" case is solved by standard syslog relays (rsyslog/nxlog) pointed at LogVault. The agent\'s unique value (Windows Event Log, store-and-forward, one unified agent per site) didn\'t justify the largest/riskiest build without a concrete need.',
     'Removed the leftover LogVault agent-module placeholders accordingly: the Agents fleet page no longer offers a "LogVault" module when enrolling an agent (only SpanVault + DDIVault), and PORT_MAP / the module allow-list drop the log entry. No functional agent behaviour changes — the log module never existed. The reasoning + the full considered design are preserved in docs/nocvault-agents-phase5-plan.md. (Agent 2.5.2.)',

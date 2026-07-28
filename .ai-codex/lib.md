@@ -6,7 +6,7 @@ agentIdentity.ts
   PORT_MAP — const module→data-plane ingest port map (spanvault/span:3010, ddivault/ddi:3011 — both real live ingest ports; LogVault agent module was deferred, no log entry)
   KNOWN_MODULE_SLUGS — const ReadonlySet of accepted module slugs (both forms; = Object.keys(PORT_MAP))
   isKnownModule(app) — type-guard: true iff app is a string in KNOWN_MODULE_SLUGS (rejects typo'd/arbitrary slugs before storage)
-  issueAgentIdentity(agentId, modules, ttlDays=30) — sign hub JWT {sub,typ:'agent',aud:modules} with NEXTAUTH_SECRET → {jwt, expires_at}
+  issueAgentIdentity(agentId, modules, ttlDays=7) — sign hub JWT {sub,typ:'agent',aud:modules} with NEXTAUTH_SECRET → {jwt, expires_at}
   verifyAgentIdentity(token) — verify sig + typ==='agent' + expiry → {agentId, modules} | null
   hashToken(token) — sha256 hex (stored form of enrollment tokens)
   newEnrollToken() — 'enr_' + 24 random bytes hex

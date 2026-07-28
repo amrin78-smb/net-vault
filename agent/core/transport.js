@@ -72,7 +72,17 @@ function createTransport({ config, identity, buffer, onMessage, onOpen, logger }
 
   function send(msg) {
     if (isOpen()) {
-      ws.send(JSON.stringify(msg));
+      // Defensive: a non-serializable value (e.g. a BigInt in a result) or a mid-flight
+      // socket error would otherwise throw synchronously → the entrypoint's
+      // uncaughtException → process.exit(1). Catch it: drop a heartbeat (stale-worthless),
+      // re-buffer a real result so it retries on the next connection. Success path unchanged.
+      try {
+        ws.send(JSON.stringify(msg));
+      } catch (e) {
+        logErr('send failed:', e && e.message);
+        if (msg && msg.type === 'heartbeat') return;
+        buffer.push(msg);
+      }
     } else {
       // Heartbeats are worthless once stale — only buffer real results.
       if (msg && msg.type === 'heartbeat') return;
@@ -118,9 +128,17 @@ function createTransport({ config, identity, buffer, onMessage, onOpen, logger }
       }
       if (buffer.depth() > 0) {
         const results = buffer.all();
-        ws.send(JSON.stringify({ type: 'batch', results }));
-        log(`Flushed ${results.length} buffered result(s)`);
-        buffer.clear();
+        // Defensive: a non-serializable buffered value or a socket error mid-flush would
+        // otherwise throw synchronously out of this 'open' handler → uncaughtException →
+        // process.exit(1). Catch it and KEEP the buffer (do not clear) so the results are
+        // retried on the next open rather than lost. Success path unchanged.
+        try {
+          ws.send(JSON.stringify({ type: 'batch', results }));
+          log(`Flushed ${results.length} buffered result(s)`);
+          buffer.clear();
+        } catch (e) {
+          logErr('Buffer flush failed — keeping buffered results for retry:', e && e.message);
+        }
       }
     });
 

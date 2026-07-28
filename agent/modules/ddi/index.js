@@ -147,7 +147,11 @@ function createDdiModule(ctx) {
     schedulerEpoch++;
     for (const t of pollTimers.values()) clearTimeout(t);
     pollTimers.clear();
-    inFlight.clear();
+    // NOTE: do NOT blanket-clear inFlight here. An OLD-generation tick may still be awaiting
+    // pollKind; its `finally { inFlight.delete(flightKey) }` would then delete a NEW tick's
+    // guard entry, briefly allowing a duplicate concurrent poll for the same server:kind.
+    // inFlight keys are epoch-scoped (see scheduleServer) so old and new generations can't
+    // collide, and each old tick drains its own key when it settles.
     serverErrors.clear();
     for (const server of servers) scheduleServer(server);
   }
@@ -158,26 +162,30 @@ function createDdiModule(ctx) {
     for (const spec of KIND_SPEC) {
       if (!roleMatches(spec.roles, server.role)) continue;
       const intervalMs = spec.interval(settings) * 1000;
-      const key = `${server.server_id}:${spec.kind}`;
+      const timerKey = `${server.server_id}:${spec.kind}`;
+      // The re-entrancy guard key is scoped to THIS generation's epoch, so an old-generation
+      // tick's finally-delete can never remove a new generation's guard entry (which would let
+      // a duplicate concurrent poll slip through after a reconfigure — see applyConfig).
+      const flightKey = `${epoch}:${server.server_id}:${spec.kind}`;
 
       // Self-rescheduling tick: the NEXT run is armed only after the CURRENT one settles, so a
       // slow poll can never stack / spawn overlapping powershell.exe children (re-entrancy).
       const tick = async () => {
-        if (!inFlight.has(key)) {
-          inFlight.add(key);
+        if (!inFlight.has(flightKey)) {
+          inFlight.add(flightKey);
           try {
             await pollKind(server, spec.kind);
           } finally {
-            inFlight.delete(key);
+            inFlight.delete(flightKey);
           }
         }
         if (epoch === schedulerEpoch) {
-          pollTimers.set(key, setTimeout(tick, rescheduleDelay(intervalMs)));
+          pollTimers.set(timerKey, setTimeout(tick, rescheduleDelay(intervalMs)));
         }
       };
 
       // Staggered initial fire (not all at t=0), then self-reschedule on the interval.
-      pollTimers.set(key, setTimeout(tick, initialDelay(intervalMs)));
+      pollTimers.set(timerKey, setTimeout(tick, initialDelay(intervalMs)));
     }
   }
 
@@ -258,7 +266,11 @@ function createDdiModule(ctx) {
     }
     scansInFlight.add(scanKey);
     try {
-      const data = await ipam.scanCidr(cidr);
+      // Route the scan's powershell.exe spawns through the SAME module-wide semaphore the
+      // pollers use, so a "scan all subnets" push (many concurrent ddi_scan) can't fork more
+      // powershell children than MAX_CONCURRENT — each batch acquires/releases a slot. The
+      // per-subnet scansInFlight dedup above still prevents a duplicate sweep of one subnet.
+      const data = await ipam.scanCidr(cidr, { acquire: acquireSlot, release: releaseSlot });
       send({ type: 'ddi_scan_result', subnet_id: subnetId, data: data || [] });
       logger.info(`[ddi] scan ${cidr} → ${(data || []).length} host result(s)`);
     } catch (e) {
