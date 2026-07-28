@@ -5,20 +5,17 @@ import { query } from '@/lib/db'
 
 // Data-plane ingest ports per module. The agent opens a direct wss tunnel to
 // each assigned app on these ports (the hub only carries control traffic).
-// spanvault:3010 (Phase 1) and ddivault:3011 (Phase 4b) are real, live ingest
-// ports. logvault is still a PLACEHOLDER (its agent ws listener doesn't exist
-// yet — TBD in Phase 4c) and mirrors the app's current HTTP port so the shape is
-// present for the frontend + agent-client to build against. Both long
-// ('spanvault') and short ('span') slugs resolve, since either may appear in an
-// enrollment preset.
+// spanvault:3010 (Phase 1) and ddivault:3011 (Phase 4b) are the live ingest ports.
+// Both long ('spanvault') and short ('span') slugs resolve, since either may appear
+// in an enrollment preset. (A LogVault agent module was considered and DEFERRED —
+// see docs/nocvault-agents-phase5-plan.md — so there is no `log`/`logvault` module.)
 export const PORT_MAP: Record<string, number> = {
   spanvault: 3010, span: 3010, // real (SpanVault Phase 1)
   ddivault: 3011,  ddi: 3011,  // real (DDIVault Phase 4b)
-  logvault: 3004,  log: 3004,  // PLACEHOLDER — LogVault agent ws port TBD
 }
 
 // Allow-set of module slugs an agent may be assigned. Both the short canonical
-// form ('span'/'log'/'ddi') and the long form ('spanvault'/'logvault'/'ddivault')
+// form ('span'/'ddi') and the long form ('spanvault'/'ddivault')
 // are accepted — either may appear in an enrollment preset — and derived straight
 // from PORT_MAP so the two never drift. Any other value is rejected before it can
 // be written to agent_modules.app (guards against a typo'd/arbitrary slug).

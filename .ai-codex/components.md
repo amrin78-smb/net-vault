@@ -25,7 +25,7 @@ Breadcrumb  crumbs — page breadcrumb trail, default export [components/Breadcr
 ## app/(app)/agents/ (page-local, module-level — not exported/shared)
 These live in `app/(app)/agents/page.tsx`, defined at module scope (not inside the page component). Page-specific, so not promoted to `components/`; listed here for discoverability.
 StatusPill  status — colored status pill+dot for an agent (online/degraded/offline/revoked), token-driven tints
-ModuleChip  appKey, enabled — colored module chip (log=info/blue, ddi=purple, span=success/green); muted+dashed when disabled
+ModuleChip  appKey, enabled — colored module chip (ddi=purple, span=success/green); muted+dashed when disabled
 ToggleSwitch  on, busy, onChange — small crimson on/off switch (used for per-module enable/disable)
 CopyBox  label, value, mono — labeled value box with copy-to-clipboard button (one-time token + install command)
 AgentRow  agent, expanded, onToggleExpand, onToggleModule, onRevoke, busy — fleet table row + expandable detail panel (host facts, module toggles, revoke)

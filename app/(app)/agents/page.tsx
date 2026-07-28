@@ -28,18 +28,17 @@ type Site = { id: number; site: string; region?: string; country?: string }
 type EnrollToken = { token: string; expires_at: string | null; install_command: string }
 
 // ── Module registry ───────────────────────────────────────────────────────────
-// Canonical short keys (log/ddi/span) drive the chip tints AND the values sent to
-// the enroll + PATCH routes. normalizeApp() folds either short ('log') or long
-// ('logvault') forms from the API into a canonical key so the UI is robust to both.
-type ModuleKey = 'log' | 'ddi' | 'span'
+// Canonical short keys (ddi/span) drive the chip tints AND the values sent to the
+// enroll + PATCH routes. normalizeApp() folds either short ('ddi') or long
+// ('ddivault') forms from the API into a canonical key so the UI is robust to both.
+// (A LogVault agent module was considered and deferred — no `log` module exists.)
+type ModuleKey = 'ddi' | 'span'
 const MODULES: { key: ModuleKey; label: string; app: string; bg: string; fg: string }[] = [
-  { key: 'log',  label: 'LogVault',  app: 'logvault',  bg: 'var(--tint-info)',    fg: 'var(--tint-info-fg)' },
   { key: 'ddi',  label: 'DDIVault',  app: 'ddivault',  bg: 'var(--tint-purple)',  fg: 'var(--tint-purple-fg)' },
   { key: 'span', label: 'SpanVault', app: 'spanvault', bg: 'var(--tint-success)', fg: 'var(--tint-success-fg)' },
 ]
 function normalizeApp(app: string): ModuleKey | null {
   const a = (app || '').toLowerCase()
-  if (a.includes('log')) return 'log'
   if (a.includes('ddi')) return 'ddi'
   if (a.includes('span')) return 'span'
   return null
@@ -427,7 +426,7 @@ export default function AgentsPage() {
   // Add-agent modal + enrollment
   const [showAdd, setShowAdd] = useState(false)
   const [formSite, setFormSite] = useState<string>('')
-  const [formModules, setFormModules] = useState<Set<ModuleKey>>(new Set<ModuleKey>(['log', 'ddi', 'span']))
+  const [formModules, setFormModules] = useState<Set<ModuleKey>>(new Set<ModuleKey>(['ddi', 'span']))
   const [formNote, setFormNote] = useState('')
   const [generating, setGenerating] = useState(false)
   const [token, setToken] = useState<EnrollToken | null>(null)
@@ -458,7 +457,7 @@ export default function AgentsPage() {
 
   function resetForm() {
     setFormSite('')
-    setFormModules(new Set<ModuleKey>(['log', 'ddi', 'span']))
+    setFormModules(new Set<ModuleKey>(['ddi', 'span']))
     setFormNote('')
     setToken(null)
     setFormError('')

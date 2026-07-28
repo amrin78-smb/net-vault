@@ -4,10 +4,10 @@ The unified remote agent for the NocVault suite. A thin, dial-back collector: it
 outbound WebSocket to the server, runs only the collection **modules** it's assigned, buffers
 results to disk while offline, and ships **raw** (all parsing stays central).
 
-This is **Phase 1** of the design in [`../docs/nocvault-agents-architecture.md`] — the reusable
-**core** extracted from SpanVault's agent, with the SpanVault workload as the first module. The hub
-control plane (enrollment, fleet management, launcher page) and the DDIVault/LogVault modules are
-later phases.
+The design lives in [`../docs/nocvault-agents-architecture.md`]. The reusable **core** was extracted
+from SpanVault's agent (the first module); the hub control plane (enrollment, fleet, launcher) and the
+**DDIVault** module shipped in later phases. (A LogVault module was considered and **deferred** — see
+`../docs/nocvault-agents-phase5-plan.md` — so the agent has `span` and `ddi` modules only.)
 
 ## Layout
 ```
@@ -23,6 +23,7 @@ core/
   logger.js      console + in-memory ring (feeds get_logs)
 modules/
   span/          the SpanVault edge workload (ping, SNMP plan+legacy, service checks, discovery)
+  ddi/           the DDIVault edge workload (WinRM DHCP/DNS, DHCP-log reader, ICMP IPAM scan)
 nocvault-agent.js  entrypoint: reads config.json, wires the core + modules, starts
 install.ps1        NSSM installer (NocVault-Agent service)
 scripts/sign-agent.js  release signing CLI (Ed25519; private key stays offline)
@@ -34,7 +35,6 @@ module.exports = createModule(ctx) => ({ name, start(), stop(), status(), onMess
 // ctx = { config, send(msg), logger, hostname, version }
 //   send(msg)       buffered-offline result path (periodic modules: span, ddi)
 //   onMessage(msg)  every server push the core doesn't own is forwarded here
-// (a streaming send path — sendStream — is reserved for LogVault's high-volume module, Phase 4)
 ```
 
 ## Config (`config.json`, gitignored) — TWO MODES

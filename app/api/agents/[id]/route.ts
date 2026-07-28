@@ -125,7 +125,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       for (const m of body.modules) {
         if (!isKnownModule(m?.app)) continue
         // Only overwrite `enabled` when the caller actually sent it — mirroring
-        // the `config` handling below — so a body like {app:'log'} (no enabled)
+        // the `config` handling below — so a body like {app:'ddi'} (no enabled)
         // does NOT silently re-enable a module an admin had disabled.
         const hasEnabled = Object.prototype.hasOwnProperty.call(m, 'enabled')
         const enabled = hasEnabled && typeof m.enabled === 'boolean' ? m.enabled : true

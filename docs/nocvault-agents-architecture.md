@@ -1,7 +1,7 @@
 # NocVault Suite Agents — Architecture & Hub Design
 
-> **Status:** Phases 1–2 **shipped** (netvault 1.25.0 / agent 2.1.1) · end-state = **federated control plane** (§6) · Phase 3+ per §7
-> **Scope:** LogVault · DDIVault · SpanVault · **Hub:** NetVault (:3000) · **Reuses:** the existing SpanVault remote-agent framework.
+> **Status:** Phases 1–4 **shipped** — SpanVault + DDIVault modules live (netvault 1.29.x / agent 2.5.x). **Phase 5 (LogVault module) is DEFERRED** — the initiative is considered complete at **span + ddi**. End-state = **federated control plane** (§6).
+> **Scope (shipped):** SpanVault · DDIVault · **Hub:** NetVault (:3000). **The LogVault agent was considered & deferred** (§8 + `nocvault-agents-phase5-plan.md`) — syslog is push-based, so standard relays cover it. **Reuses:** the existing SpanVault remote-agent framework.
 > Rendered design doc (light/dark, diagram, UI mock): `https://claude.ai/code/artifact/ab6234a7-857c-40b4-9912-b73d082b8ceb`
 
 Extend the SpanVault remote-agent model to LogVault and DDIVault — as a **single unified NocVault Agent**
@@ -287,7 +287,7 @@ So the shared core needs a **streaming module contract**, not only the periodic-
 | **2** | Hub control plane: `agent_registry` schema, enrollment/fleet API, launcher Agents page, hub-signed identity — **plus** hub bundle distribution (served installer + multi-file agent bundle) and the 4-way adversarial bug-sweep hardening. | ✅ **Shipped** — netvault 1.25.0 / agent 2.1.1 |
 | **3 — Identity reconciliation (the keystone, §6)** | SpanVault **accepts the hub JWT** on its data-plane WS (**accept-both** with the legacy `apiKey`); link hub `agent_id` ↔ SpanVault's agent record so one physical agent = one entry; hub applies module on/off. **Finish signed self-update** — sign the now-served bundle + verify-before-apply on the agent (Phase 1 left it verify-and-stage). | ⬜ **Next** |
 | **4 — DDIVault module + slim SpanVault page** | Build the DDIVault edge module (WinRM/scan, edge Kerberos) **to the federated contract from day one** — thin domain-config panel, no standalone console. In parallel: slim SpanVault's page to the span-config panel keyed by hub id, retire its apiKey minting + duplicate lifecycle, and give the hub restart / log-fetch. Proves the federated pattern with a 2nd module. | ⬜ |
-| **5 — LogVault module** | Edge syslog receiver + Windows Event Log + disk spool + gzipped raw streaming (`sendStream`), to the same federated shape. Highest value, most work; exercises the streaming contract reserved in Phase 1. | ⬜ |
+| **5 — LogVault module** | Edge syslog receiver + Windows Event Log + gzipped raw streaming. **DEFERRED (2026-07-28)** — syslog is already push-based, so standard rsyslog/nxlog relays solve the reachability case; the agent's unique value (Event Log, store-and-forward, one unified agent) didn't justify the largest/riskiest build without a concrete need. Considered-and-deferred record: `nocvault-agents-phase5-plan.md`. | ⛔ deferred |
 | **Cross-cutting** (ongoing, not a phase) | mTLS / pinned `wss` over WAN; offline/degraded fleet alerting; `agent_health` retention (✅ 7-day prune shipped in the bug-sweep). | — |
 
 *(Detailed plans: `nocvault-agents-phase1-plan.md` (historical) · `nocvault-agents-phase3-plan.md` (identity
@@ -307,7 +307,7 @@ slim SpanVault; splits into 4a slim-SpanVault+hub-lifecycle and 4b the large DDI
 | Unified agent vs per-app | **Unified** (shipped). | One service / tunnel / upgrade per site vs three; the bigger core refactor is done. |
 | Data tunnel: per-app vs hub-relayed | **Per-app direct** (shipped). | Relaying is simpler to firewall but makes NetVault carry LogVault's volume — a bottleneck & SPOF. |
 | Which app first (module) | **DDIVault** (Phase 4), after reconciliation (Phase 3). | Closest to SpanVault's model; LogVault is higher-value but more build. |
-| LogVault: forward-raw vs parse-at-edge | **Forward-raw.** | Consistent central parsing + thin agents; parse-at-edge offloads the central box but couples agents to parser versions. |
+| LogVault: forward-raw vs parse-at-edge | **Moot — LogVault agent deferred** (would have been forward-raw). | The module was not built; standard syslog relays cover the reachability case (see the phase5 plan). |
 
 **Still open** (revisit at the relevant phase):
 

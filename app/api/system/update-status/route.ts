@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.29.2': [
+    'Cleanup — the NocVault Agents initiative is now considered complete at SpanVault + DDIVault. A LogVault agent module was scoped in detail and deliberately DEFERRED: unlike SNMP/WinRM (which genuinely need a local collector to reach isolated segments), syslog is already push-based, so the "remote site can\'t reach central LogVault" case is solved by standard syslog relays (rsyslog/nxlog) pointed at LogVault. The agent\'s unique value (Windows Event Log, store-and-forward, one unified agent per site) didn\'t justify the largest/riskiest build without a concrete need.',
+    'Removed the leftover LogVault agent-module placeholders accordingly: the Agents fleet page no longer offers a "LogVault" module when enrolling an agent (only SpanVault + DDIVault), and PORT_MAP / the module allow-list drop the log entry. No functional agent behaviour changes — the log module never existed. The reasoning + the full considered design are preserved in docs/nocvault-agents-phase5-plan.md. (Agent 2.5.2.)',
+  ],
   '1.29.1': [
     'Phase 4 bug-sweep hardening (agent 2.5.1). The DDIVault agent module no longer places WinRM credentials on the process command line (they went via a temp script + env var now), caps how many collection processes run at once and never lets a slow poll stack, and re-reads DHCP events each cycle so a dropped frame can\'t silently lose events.',
     'Fixed a heartbeat regression: a span+ddi agent now reports each app ITS OWN device count (SpanVault\'s agent view was being inflated by DDIVault\'s servers, and vice-versa). The DDIVault module is also now gated to hub-enrolled agents only (a legacy key-based agent can\'t misfire the ddi data path).',

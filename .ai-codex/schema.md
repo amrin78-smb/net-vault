@@ -45,9 +45,9 @@ agent_commands (Phase 4a)  id(PK, BIGSERIAL) | agent_id(TEXT, NOT NULL) — FK -
 
 agent_enrollment_tokens  token_hash(TEXT, PK — sha256 hex of the one-time token, never the raw token) | created_by(INT, no FK) | created_at(TIMESTAMPTZ, DEFAULT NOW()) | expires_at(TIMESTAMPTZ, NOT NULL) | preset(JSONB, NOT NULL, DEFAULT '{}' — {site_id, modules:[…]} applied on redeem) | used_at(TIMESTAMPTZ) | used_by(TEXT) — FK -> agents(id) ON DELETE SET NULL | note(TEXT)
 
-agent_modules  agent_id(TEXT, PK part) — FK -> agents(id) ON DELETE CASCADE | app(TEXT, NOT NULL, PK part — 'logvault'|'ddivault'|'spanvault') | enabled(BOOLEAN, NOT NULL, DEFAULT TRUE) | config(JSONB, NOT NULL, DEFAULT '{}' — per-module work-plan)
+agent_modules  agent_id(TEXT, PK part) — FK -> agents(id) ON DELETE CASCADE | app(TEXT, NOT NULL, PK part — 'ddivault'|'spanvault'; short 'ddi'/'span' also accepted) | enabled(BOOLEAN, NOT NULL, DEFAULT TRUE) | config(JSONB, NOT NULL, DEFAULT '{}' — per-module work-plan)
 
-agent_health  id(PK, BIGSERIAL) | agent_id(TEXT) — FK -> agents(id) ON DELETE CASCADE | ts(TIMESTAMPTZ, NOT NULL, DEFAULT NOW()) | cpu_pct(REAL) | mem_pct(REAL) | buffer_depth(INT) | module_status(JSONB — {logvault:'ok', ddivault:'auth_error', …}) — idx idx_agent_health_agent_ts on (agent_id, ts DESC)
+agent_health  id(PK, BIGSERIAL) | agent_id(TEXT) — FK -> agents(id) ON DELETE CASCADE | ts(TIMESTAMPTZ, NOT NULL, DEFAULT NOW()) | cpu_pct(REAL) | mem_pct(REAL) | buffer_depth(INT) | module_status(JSONB — {ddivault:'ok', spanvault:'auth_error', …}) — idx idx_agent_health_agent_ts on (agent_id, ts DESC)
 
 Grants: the `netvault` app role + `nocvault_readonly` are covered by the tail blanket grants (GRANT ALL / GRANT SELECT ON ALL TABLES); an explicit `DO $$` block right after the table defs grants SELECT on the 5 tables (agents, agent_enrollment_tokens, agent_modules, agent_health, agent_commands) to `claude_readonly` (which has no blanket grant in schema.sql). These tables hold NO secret columns (token_hash is a hash, cert_fpr a fingerprint, agent_commands is queued instruction type+args), so no *_public exclusion view is needed. Verified in installer/Test-NocVault-Suite.ps1 via role-scoped has_table_privilege('netvault',…).
 

@@ -36,11 +36,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-// Fan the revoke out to the data planes the agent's modules cover. Phase 3 only
-// SpanVault has a live data plane (its ws-server + loopback disconnect route) —
-// DDIVault/LogVault ingest endpoints don't exist yet, so we only kick span here;
-// add ddi/log fan-out when those data planes ship (Phase 4/5). Whole thing is
-// best-effort: any error is logged and swallowed so revoke still returns success.
+// Fan the revoke out to the data planes the agent's modules cover. SpanVault gets
+// an active kick here (its ws-server + loopback disconnect route). DDIVault's data
+// plane exists (Phase 4b) but currently relies on its ingest's connect-time
+// revocation cross-check to refuse a revoked agent on reconnect — an active
+// DDIVault live-session kick is a KIV follow-up, not wired here yet. (There is no
+// LogVault module — that agent was deferred.) Best-effort: any error is logged and
+// swallowed so revoke still returns success.
 async function fanOutRevoke(id: string): Promise<void> {
   try {
     const mods = await query(
