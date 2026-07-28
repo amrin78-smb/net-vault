@@ -21,7 +21,7 @@ type Agent = {
   agent_version: string | null
   last_seen_at: string | null
   modules: AgentModule[]
-  buffer_depth: number
+  buffer_depth: number | null
 }
 type Site = { id: number; site: string; region?: string; country?: string }
 // POST /api/agents/enroll-tokens → { token, expires_at, install_command }
@@ -74,6 +74,22 @@ function relTime(iso: string | null): string {
   const mo = Math.round(d / 30)
   if (mo < 12) return `${mo}mo ago`
   return `${Math.round(mo / 12)}y ago`
+}
+
+// Forward-looking sibling of relTime, for future timestamps (e.g. token expiry).
+function relTimeFuture(iso: string | null): string {
+  if (!iso) return 'soon'
+  const t = new Date(iso).getTime()
+  if (isNaN(t)) return '—'
+  const s = Math.round((t - Date.now()) / 1000)
+  if (s <= 0) return 'now'
+  if (s < 90) return 'in <1 minute'
+  const m = Math.round(s / 60)
+  if (m < 60) return `in ~${m} minutes`
+  const h = Math.round(m / 60)
+  if (h < 24) return `in ~${h} hours`
+  const d = Math.round(h / 24)
+  return `in ~${d} days`
 }
 
 // ── module-level subcomponents (never define inside the page component) ────────
@@ -147,12 +163,43 @@ function ToggleSwitch({ on, busy, onChange }: { on: boolean; busy?: boolean; onC
 
 function CopyBox({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const [copied, setCopied] = useState(false)
-  async function copy() {
+  const [failed, setFailed] = useState(false)
+  // Fallback for non-secure contexts (plain HTTP on a LAN IP), where
+  // navigator.clipboard is undefined/rejects. Returns true on success.
+  function legacyCopy(text: string): boolean {
     try {
-      await navigator.clipboard.writeText(value)
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.setAttribute('readonly', '')
+      ta.style.position = 'fixed'
+      ta.style.top = '-9999px'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      ta.setSelectionRange(0, text.length)
+      const ok = document.execCommand('copy')
+      document.body.removeChild(ta)
+      return ok
+    } catch {
+      return false
+    }
+  }
+  async function copy() {
+    setFailed(false)
+    let ok = false
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value)
+        ok = true
+      }
+    } catch { /* fall through to legacy path */ }
+    if (!ok) ok = legacyCopy(value)
+    if (ok) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1600)
-    } catch { /* clipboard unavailable — user can select manually */ }
+    } else {
+      setFailed(true)
+    }
   }
   return (
     <div style={{ marginBottom: 14 }}>
@@ -169,8 +216,13 @@ function CopyBox({ label, value, mono }: { label: string; value: string; mono?: 
         }}>
           {value}
         </div>
-        <button className="btn btn-secondary" onClick={copy} style={{ flexShrink: 0 }}>
-          {copied ? 'Copied!' : 'Copy'}
+        <button
+          className="btn btn-secondary"
+          onClick={copy}
+          style={{ flexShrink: 0, whiteSpace: 'nowrap', color: failed ? 'var(--tint-danger-fg)' : undefined }}
+          title={failed ? 'Copy failed — select the text and copy manually' : undefined}
+        >
+          {copied ? 'Copied!' : failed ? 'Copy failed — select manually' : 'Copy'}
         </button>
       </div>
     </div>
@@ -234,13 +286,13 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, b
         <td style={{ color: 'var(--text-secondary)', ...cellMuted }}>{relTime(agent.last_seen_at)}</td>
         {/* Buffer depth */}
         <td style={{
-          fontVariantNumeric: 'tabular-nums', fontWeight: agent.buffer_depth > 0 ? 700 : 400,
-          color: agent.buffer_depth > 0 ? 'var(--tint-warn-fg)' : 'var(--text-muted)',
+          fontVariantNumeric: 'tabular-nums', fontWeight: (agent.buffer_depth ?? 0) > 0 ? 700 : 400,
+          color: (agent.buffer_depth ?? 0) > 0 ? 'var(--tint-warn-fg)' : 'var(--text-muted)',
         }}>
-          {agent.buffer_depth > 0
+          {(agent.buffer_depth ?? 0) > 0
             ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--yellow)' }} />
-                {agent.buffer_depth.toLocaleString()}
+                {(agent.buffer_depth ?? 0).toLocaleString()}
               </span>
             : '0'}
         </td>
@@ -267,8 +319,8 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, b
                   <dt style={{ color: 'var(--text-muted)' }}>Last seen</dt>
                   <dd style={{ margin: 0, color: 'var(--text-primary)' }}>{relTime(agent.last_seen_at)}</dd>
                   <dt style={{ color: 'var(--text-muted)' }}>Buffer depth</dt>
-                  <dd style={{ margin: 0, color: agent.buffer_depth > 0 ? 'var(--tint-warn-fg)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                    {agent.buffer_depth.toLocaleString()}
+                  <dd style={{ margin: 0, color: (agent.buffer_depth ?? 0) > 0 ? 'var(--tint-warn-fg)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                    {(agent.buffer_depth ?? 0).toLocaleString()}
                   </dd>
                 </dl>
               </div>
@@ -479,6 +531,7 @@ export default function AgentsPage() {
   const online = agents.filter(a => a.status === 'online').length
   const offline = agents.filter(a => a.status === 'offline').length
   const degraded = agents.filter(a => a.status === 'degraded').length
+  const revoked = agents.filter(a => a.status === 'revoked').length
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -498,6 +551,7 @@ export default function AgentsPage() {
           {' · '}<span style={{ color: 'var(--tint-success-fg)', fontWeight: 600 }}>{online} online</span>
           {degraded > 0 && <>{' · '}<span style={{ color: 'var(--tint-warn-fg)', fontWeight: 600 }}>{degraded} degraded</span></>}
           {' · '}<span style={{ color: offline > 0 ? 'var(--tint-danger-fg)' : 'var(--text-muted)', fontWeight: 600 }}>{offline} offline</span>
+          {revoked > 0 && <>{' · '}<span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{revoked} revoked</span></>}
         </div>
       )}
 
@@ -643,7 +697,7 @@ export default function AgentsPage() {
                     <div style={{ fontSize: 'var(--text-base)', lineHeight: 1.45 }}>
                       This token is shown <strong>once</strong>. Copy it now — it can&apos;t be retrieved again.
                       {token.expires_at
-                        ? <> It expires <strong>{relTime(token.expires_at).replace(' ago', '')}</strong> from enrollment ({new Date(token.expires_at).toLocaleString()}).</>
+                        ? <> It expires <strong>{relTimeFuture(token.expires_at)}</strong> ({new Date(token.expires_at).toLocaleString()}).</>
                         : <> It expires in <strong>~60 minutes</strong>.</>}
                     </div>
                   </div>

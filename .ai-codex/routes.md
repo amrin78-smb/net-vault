@@ -16,6 +16,9 @@ POST /api/admin/eol-seed [auth] [db] — add a seed catalog entry
 POST /api/admin/eol-seed/sync [auth] [db,external] — pull central signed EOL feed into eol_seed
 
 ## agents (NocVault Agents Phase 2 — hub control plane)
+GET /api/agents/install.ps1 [public] [none] — PowerShell agent installer, hub origin baked in (resolveOrigin); public (remote runs `irm` pre-credential)
+GET /api/agents/bundle [public] [none] — agent bundle manifest {files:[]} walked from on-disk agent/ dir (excludes deps/state/keys/tests); 503 if unavailable; public
+GET /api/agents/bundle/[...path] [public] [none] — serve ONE agent file's bytes; path-traversal confined to agent/ (403 escape, 404 missing/excluded); public
 POST /api/agents/enroll-tokens [auth] [db] — mint one-time enrollment token + install one-liner (super_admin)
 POST /api/agents/enroll [public] [db] — token-authed (NO session): agent redeems token+host facts → agent_id, signed identity, module policy. Intentionally public write; NO checkWriteAllowed (token-gated infra)
 POST /api/agents/[id]/heartbeat [agent-auth] [db] — agent-authed (requireAgentAuth, JWT sub must == [id]): liveness + health sample

@@ -17,7 +17,7 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.0.0';
+const VERSION = '2.1.1';
 
 const createLogger = require('./core/logger');
 const createIdentity = require('./core/identity');

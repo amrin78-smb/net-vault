@@ -42,6 +42,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       [id, cpu, mem, bufferDepth, moduleStatus ? JSON.stringify(moduleStatus) : null]
     )
 
+    // Opportunistic bound on agent_health growth: prune THIS agent's rows older
+    // than 7 days. Runs AFTER the liveness UPDATE + health INSERT above so a
+    // prune error can never lose the heartbeat that already committed.
+    await query(
+      `DELETE FROM agent_health WHERE agent_id = $1 AND ts < NOW() - interval '7 days'`,
+      [id]
+    )
+
     return NextResponse.json({ ok: true })
   } catch {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

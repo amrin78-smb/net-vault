@@ -63,9 +63,22 @@ function requestJson(method, url, headers, bodyObj) {
       opts.headers['Content-Type'] = 'application/json';
       opts.headers['Content-Length'] = Buffer.byteLength(payload);
     }
+    let settled = false;
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      fn(arg);
+    };
     const req = lib.request(opts, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
+      // A mid-response connection reset emits 'error' on the response stream; with
+      // no listener that would bubble to process-level uncaughtException (which the
+      // entrypoint answers with process.exit(1) — killing the span data path).
+      res.on('error', (e) => {
+        req.destroy();
+        finish(reject, e);
+      });
       res.on('end', () => {
         const raw = Buffer.concat(chunks).toString('utf8');
         let body = null;
@@ -74,10 +87,17 @@ function requestJson(method, url, headers, bodyObj) {
         } catch (_e) {
           body = null; // non-JSON body — leave null, caller only needs the code
         }
-        resolve({ statusCode: res.statusCode, body });
+        finish(resolve, { statusCode: res.statusCode, body });
       });
     });
-    req.on('error', reject);
+    // A black-hole hub (accepts TCP, never responds) must not hang forever — that
+    // would leak a socket/FD every interval and could eventually starve the span
+    // transport. 15s is well under the 30s heartbeat cadence.
+    req.setTimeout(15000, () => req.destroy(new Error('hub request timeout')));
+    req.on('error', (e) => {
+      req.destroy();
+      finish(reject, e);
+    });
     if (payload != null) req.write(payload);
     req.end();
   });
@@ -137,6 +157,9 @@ function createHubClient(opts) {
   let policyTimer = null;
   let enrollTimer = null;
   let enrollAttempts = 0;
+  // Guards the self-scheduling loops: a tick re-arms only while this is true, so a
+  // 401 (identityRejected) or stop() halts both loops without any further spin.
+  let loopsActive = false;
 
   // Same backoff spirit as core/transport.js: 10s * 1.5^n, capped at 120s, with
   // 0.8–1.2 jitter so a fleet doesn't retry enrollment in lockstep.
@@ -158,13 +181,22 @@ function createHubClient(opts) {
   }
 
   function persistIdentity(id) {
+    // Atomic write: a crash mid-write must not corrupt hub-identity.json. Write to
+    // a sibling .tmp then rename over the target (atomic on the same volume).
+    const tmpPath = identityPath + '.tmp';
     try {
       fs.writeFileSync(
-        identityPath,
+        tmpPath,
         JSON.stringify({ agent_id: id.agent_id, jwt: id.jwt, expires_at: id.expires_at }, null, 2)
       );
+      fs.renameSync(tmpPath, identityPath);
     } catch (e) {
       logErr('could not persist identity:', e.message);
+      try {
+        fs.unlinkSync(tmpPath);
+      } catch (_e) {
+        /* best-effort cleanup of the temp file */
+      }
     }
   }
 
@@ -217,37 +249,91 @@ function createHubClient(opts) {
   }
 
   // ── Heartbeat + policy loops (only once enrolled) ──────────────────────────────
+  // Self-scheduling setTimeout instead of setInterval: each tick re-arms the next
+  // ONLY after the previous call settles, so a slow or black-hole hub can never
+  // stack overlapping in-flight requests (which would leak sockets/FDs and could
+  // eventually starve the span transport). Cadences (intervalMs / policyIntervalMs)
+  // are preserved. stop() / identityRejected() flip loopsActive off + clear timers.
+  function armHeartbeat() {
+    if (stopped || !loopsActive) return;
+    if (heartbeatTimer) clearTimeout(heartbeatTimer);
+    heartbeatTimer = setTimeout(runHeartbeat, intervalMs);
+  }
+  async function runHeartbeat() {
+    heartbeatTimer = null;
+    try {
+      await sendHeartbeat();
+    } catch (e) {
+      logErr('heartbeat loop error:', e.message);
+    }
+    armHeartbeat(); // re-arm only after this call settled (no-op if loops stopped)
+  }
+  function armPolicy() {
+    if (stopped || !loopsActive) return;
+    if (policyTimer) clearTimeout(policyTimer);
+    policyTimer = setTimeout(runPolicy, policyIntervalMs);
+  }
+  async function runPolicy() {
+    policyTimer = null;
+    try {
+      await pollPolicy();
+    } catch (e) {
+      logErr('policy loop error:', e.message);
+    }
+    armPolicy(); // re-arm only after this call settled (no-op if loops stopped)
+  }
+
   function startLoops() {
-    if (stopped || !identity) return;
-    sendHeartbeat(); // send one promptly so the fleet page populates fast
-    if (!heartbeatTimer) heartbeatTimer = setInterval(sendHeartbeat, intervalMs);
-    pollPolicy(); // one immediate poll, then on the slow cadence
-    if (!policyTimer) policyTimer = setInterval(pollPolicy, policyIntervalMs);
+    if (stopped || !identity || loopsActive) return;
+    loopsActive = true;
+    runHeartbeat(); // send one promptly so the fleet page populates fast, then re-arm
+    runPolicy(); // one immediate poll, then on the slow cadence
   }
 
   // A rejected identity (revoked/expired) must stop the loops WITHOUT spinning.
   function identityRejected() {
     logErr('hub identity rejected — agent may have been revoked; stopping hub heartbeats');
+    loopsActive = false; // any in-flight tick will NOT re-arm once it settles
     if (heartbeatTimer) {
-      clearInterval(heartbeatTimer);
+      clearTimeout(heartbeatTimer);
       heartbeatTimer = null;
     }
     if (policyTimer) {
-      clearInterval(policyTimer);
+      clearTimeout(policyTimer);
       policyTimer = null;
+    }
+    // Move the dead identity aside so a RESTART with a fresh enrollToken can
+    // re-enroll instead of reloading the revoked JWT forever. We do NOT re-enroll
+    // within THIS run (loops stay stopped above) — only a restart retries, so the
+    // "no spin" property is preserved.
+    try {
+      if (fs.existsSync(identityPath)) {
+        const rejectedPath = identityPath + '.rejected';
+        try {
+          fs.renameSync(identityPath, rejectedPath);
+        } catch (_e) {
+          // Rename failed (e.g. a stale .rejected in the way) — fall back to delete.
+          fs.unlinkSync(identityPath);
+        }
+      }
+    } catch (e) {
+      logErr('could not clear rejected identity file:', e.message);
     }
   }
 
   async function sendHeartbeat() {
     if (stopped || !identity) return;
-    const body = {
-      version,
-      health: health && typeof health.build === 'function' ? health.build() : {},
-      module_status: typeof getModuleStatus === 'function' ? getModuleStatus() : {},
-      buffer_depth: typeof getBufferDepth === 'function' ? getBufferDepth() : 0,
-    };
     let res;
     try {
+      // Build the body INSIDE the try: an injected accessor (health.build /
+      // getModuleStatus / getBufferDepth) that throws must be caught locally and
+      // logged, never escape as an unhandled rejection out of the hub client.
+      const body = {
+        version,
+        health: health && typeof health.build === 'function' ? health.build() : {},
+        module_status: typeof getModuleStatus === 'function' ? getModuleStatus() : {},
+        buffer_depth: typeof getBufferDepth === 'function' ? getBufferDepth() : 0,
+      };
       res = await httpPostJson(
         `${hubUrl}/api/agents/${identity.agent_id}/heartbeat`,
         body,
@@ -311,12 +397,13 @@ function createHubClient(opts) {
     },
     stop() {
       stopped = true;
+      loopsActive = false;
       if (heartbeatTimer) {
-        clearInterval(heartbeatTimer);
+        clearTimeout(heartbeatTimer);
         heartbeatTimer = null;
       }
       if (policyTimer) {
-        clearInterval(policyTimer);
+        clearTimeout(policyTimer);
         policyTimer = null;
       }
       if (enrollTimer) {

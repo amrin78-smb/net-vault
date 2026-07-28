@@ -16,6 +16,18 @@ export const PORT_MAP: Record<string, number> = {
   ddivault: 3006,  ddi: 3006,  // PLACEHOLDER — DDIVault agent ws port TBD
 }
 
+// Allow-set of module slugs an agent may be assigned. Both the short canonical
+// form ('span'/'log'/'ddi') and the long form ('spanvault'/'logvault'/'ddivault')
+// are accepted — either may appear in an enrollment preset — and derived straight
+// from PORT_MAP so the two never drift. Any other value is rejected before it can
+// be written to agent_modules.app (guards against a typo'd/arbitrary slug).
+export const KNOWN_MODULE_SLUGS: ReadonlySet<string> = new Set(Object.keys(PORT_MAP))
+
+// Type-guard: true only for a string that is a known module slug.
+export function isKnownModule(app: unknown): app is string {
+  return typeof app === 'string' && KNOWN_MODULE_SLUGS.has(app)
+}
+
 // Derive the data-plane ingest URL for a module from the CURRENT request host
 // (so it follows whatever hostname the agent reached the hub through — same
 // host-resolution shape as lib/publicUrl.resolveOrigin). ws over http, wss over

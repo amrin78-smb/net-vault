@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
-import { newEnrollToken, hashToken } from '@/lib/agentIdentity'
+import { newEnrollToken, hashToken, isKnownModule } from '@/lib/agentIdentity'
 import { resolveOrigin } from '@/lib/publicUrl'
 
 export const dynamic = 'force-dynamic'
@@ -18,8 +18,10 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}))
+    // Whitelist known module slugs (both forms) — silently drop anything else so
+    // a typo'd/arbitrary slug can't be baked into the preset.
     const modules: string[] = Array.isArray(body.modules)
-      ? body.modules.filter((m: unknown) => typeof m === 'string')
+      ? body.modules.filter(isKnownModule)
       : []
     const siteId = typeof body.site_id === 'number' ? body.site_id : null
     const note = typeof body.note === 'string' ? body.note : null

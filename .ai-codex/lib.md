@@ -4,6 +4,8 @@ agentIdentity.ts
   AgentIdentity (type) — { jwt, expires_at }
   AgentAuth (type) — { agentId, modules }
   PORT_MAP — const module→data-plane ingest port map (spanvault/span:3010 real; logvault/log:3004 + ddivault/ddi:3006 PLACEHOLDER, ws ports TBD Phase 3/4)
+  KNOWN_MODULE_SLUGS — const ReadonlySet of accepted module slugs (both forms; = Object.keys(PORT_MAP))
+  isKnownModule(app) — type-guard: true iff app is a string in KNOWN_MODULE_SLUGS (rejects typo'd/arbitrary slugs before storage)
   issueAgentIdentity(agentId, modules, ttlDays=30) — sign hub JWT {sub,typ:'agent',aud:modules} with NEXTAUTH_SECRET → {jwt, expires_at}
   verifyAgentIdentity(token) — verify sig + typ==='agent' + expiry → {agentId, modules} | null
   hashToken(token) — sha256 hex (stored form of enrollment tokens)
@@ -11,6 +13,11 @@ agentIdentity.ts
   newAgentId() — 'agt_' + 9 random bytes hex
   deriveIngest(app, req) — build ws(s)://<request-host>:<port>/ for a module, or null for unknown slug
   requireAgentAuth(req) — Bearer-JWT gate: verify sig AND confirm agents row exists & revoked_at IS NULL → {agentId, modules} | null (rejects valid JWT of a revoked agent)
+
+agentBundle.ts
+  resolveAgentDir() — locate on-disk agent/ dir (cwd/agent, then ../../agent for standalone build); null if none
+  isExcludedBundlePath(relPath) — blocklist guard (deps/state/keys/logs/tests/install.ps1) shared by manifest + per-file server
+  listBundleFiles(agentDir) — recursively list servable agent files as sorted fwd-slash relative paths
 
 appAccess.ts
   ALL_APPS — const list of the 4 suite app slugs

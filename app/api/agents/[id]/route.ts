@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
+import { isKnownModule } from '@/lib/agentIdentity'
 
 export const dynamic = 'force-dynamic'
 
@@ -98,6 +99,17 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const siteIdProvided = Object.prototype.hasOwnProperty.call(body, 'site_id')
     const siteId = typeof body.site_id === 'number' ? body.site_id : null
 
+    // Whitelist module slugs up front — reject an unknown slug with 400 (this
+    // route's stricter validation style) BEFORE any DB write, so a partial
+    // update can't land.
+    if (Array.isArray(body.modules)) {
+      for (const m of body.modules) {
+        if (m && typeof m.app === 'string' && !isKnownModule(m.app)) {
+          return NextResponse.json({ error: `Unknown module slug: ${m.app}` }, { status: 400 })
+        }
+      }
+    }
+
     // COALESCE keeps the existing value when the field is absent; site_id is
     // explicitly settable to NULL when the caller sends site_id:null.
     await query(
@@ -111,17 +123,21 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (Array.isArray(body.modules)) {
       for (const m of body.modules) {
-        if (!m || typeof m.app !== 'string') continue
-        const enabled = typeof m.enabled === 'boolean' ? m.enabled : true
+        if (!isKnownModule(m?.app)) continue
+        // Only overwrite `enabled` when the caller actually sent it — mirroring
+        // the `config` handling below — so a body like {app:'log'} (no enabled)
+        // does NOT silently re-enable a module an admin had disabled.
+        const hasEnabled = Object.prototype.hasOwnProperty.call(m, 'enabled')
+        const enabled = hasEnabled && typeof m.enabled === 'boolean' ? m.enabled : true
         const hasConfig = Object.prototype.hasOwnProperty.call(m, 'config')
         const config = hasConfig && m.config && typeof m.config === 'object' ? m.config : {}
         await query(
           `INSERT INTO agent_modules (agent_id, app, enabled, config)
            VALUES ($1, $2, $3, $4)
            ON CONFLICT (agent_id, app) DO UPDATE SET
-             enabled = EXCLUDED.enabled,
+             enabled = CASE WHEN $6 THEN EXCLUDED.enabled ELSE agent_modules.enabled END,
              config  = CASE WHEN $5 THEN EXCLUDED.config ELSE agent_modules.config END`,
-          [id, m.app, enabled, JSON.stringify(config), hasConfig]
+          [id, m.app, enabled, JSON.stringify(config), hasConfig, hasEnabled]
         )
       }
     }

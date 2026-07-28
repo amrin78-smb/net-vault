@@ -3,9 +3,15 @@
  * Hub control-channel test: drives core/hub.js directly against a fake hub
  * (a local Node http server) — no whole-agent boot, no external deps.
  *
- * Proves: (1) enrollment POSTs the right body and persists the issued identity to
- * the temp identity path; (2) the agent then heartbeats with a valid Bearer token
- * and the correct body shape. Uses a short heartbeat interval so it finishes fast.
+ * Proves:
+ *   (1) HAPPY PATH — enrollment POSTs the right body and persists the issued
+ *       identity to a temp path; the agent then heartbeats with a valid Bearer
+ *       token and the correct body shape.
+ *   (2) 401-STOPS-HEARTBEAT — a 401 on heartbeat halts the heartbeat/policy loops
+ *       WITHOUT re-enrolling and WITHOUT spinning (no repeated calls after the
+ *       401), and moves the dead identity file aside so a restart can re-enroll.
+ *   (3) ENROLL-BACKOFF — an enroll network error backs off on a timer instead of
+ *       tight-looping, and never throws out of the hub (data path stays safe).
  *
  * `node test/hub.test.js` — exits non-zero on failure.
  */
@@ -14,84 +20,86 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const http = require('http');
+const net = require('net');
 
 const createHubClient = require('../core/hub');
 
-// Temp identity path so we never touch a real agent/hub-identity.json.
-const IDENTITY_PATH = path.join(os.tmpdir(), `hub-identity-test-${process.pid}.json`);
-
-let server = null;
-let hub = null;
-const cleanup = () => {
+const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+const okc = (n) => console.log('  PASS', n);
+const rmIfExists = (p) => {
   try {
-    if (hub) hub.stop();
-  } catch (_e) {}
-  try {
-    if (server) server.close();
-  } catch (_e) {}
-  try {
-    fs.unlinkSync(IDENTITY_PATH);
+    fs.unlinkSync(p);
   } catch (_e) {}
 };
-const fail = (m) => {
-  console.error('  FAIL', m);
-  cleanup();
-  process.exit(1);
-};
 
-// State the assertions read.
-let enrollBody = null;
-let heartbeatBody = null;
-let heartbeatAuth = null;
-
-function readJsonBody(req, cb) {
-  const chunks = [];
-  req.on('data', (c) => chunks.push(c));
-  req.on('end', () => {
-    let body = null;
-    try {
-      body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-    } catch (_e) {}
-    cb(body);
-  });
+// A logger whose error() lines are captured (so tests can assert on backoff
+// messages) — never prints tokens itself; the hub is what must avoid logging them.
+function capturingLogger() {
+  const errors = [];
+  return {
+    logger: {
+      info() {},
+      error(...a) {
+        errors.push(a.join(' '));
+      },
+    },
+    errors,
+  };
 }
 
-server = http.createServer((req, res) => {
-  const reply = (code, obj) => {
-    res.writeHead(code, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(obj));
+// ── Test 1: happy path (enroll → persist → heartbeat) ──────────────────────────
+async function testHappyPath() {
+  const IDENTITY_PATH = path.join(os.tmpdir(), `hub-identity-happy-${process.pid}.json`);
+  rmIfExists(IDENTITY_PATH);
+
+  let enrollBody = null;
+  let heartbeatBody = null;
+  let heartbeatAuth = null;
+
+  const readJsonBody = (req, cb) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      let body = null;
+      try {
+        body = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+      } catch (_e) {}
+      cb(body);
+    });
   };
 
-  if (req.method === 'POST' && req.url === '/api/agents/enroll') {
-    return readJsonBody(req, (body) => {
-      enrollBody = body;
-      reply(200, {
-        agent_id: 'agt_test',
-        identity: { jwt: 'fake.jwt', expires_at: new Date(Date.now() + 3600e3).toISOString() },
-        modules: [{ app: 'span', enabled: true, config: {}, ingest: 'ws://x:3010/' }],
+  const server = http.createServer((req, res) => {
+    const reply = (code, obj) => {
+      res.writeHead(code, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(obj));
+    };
+    if (req.method === 'POST' && req.url === '/api/agents/enroll') {
+      return readJsonBody(req, (body) => {
+        enrollBody = body;
+        reply(200, {
+          agent_id: 'agt_test',
+          identity: { jwt: 'fake.jwt', expires_at: new Date(Date.now() + 3600e3).toISOString() },
+          modules: [{ app: 'span', enabled: true, config: {}, ingest: 'ws://x:3010/' }],
+        });
       });
-    });
-  }
+    }
+    if (req.method === 'POST' && req.url === '/api/agents/agt_test/heartbeat') {
+      heartbeatAuth = req.headers.authorization;
+      return readJsonBody(req, (body) => {
+        heartbeatBody = body;
+        reply(200, { ok: true });
+      });
+    }
+    if (req.method === 'GET' && req.url === '/api/agents/agt_test/policy') {
+      return reply(200, { modules: [{ app: 'span', enabled: true, config: {}, ingest: 'ws://x:3010/' }] });
+    }
+    reply(404, { error: 'not found' });
+  });
 
-  if (req.method === 'POST' && req.url === '/api/agents/agt_test/heartbeat') {
-    heartbeatAuth = req.headers.authorization;
-    return readJsonBody(req, (body) => {
-      heartbeatBody = body;
-      reply(200, { ok: true });
-    });
-  }
-
-  if (req.method === 'GET' && req.url === '/api/agents/agt_test/policy') {
-    return reply(200, { modules: [{ app: 'span', enabled: true, config: {}, ingest: 'ws://x:3010/' }] });
-  }
-
-  reply(404, { error: 'not found' });
-});
-
-server.listen(0, '127.0.0.1', () => {
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
   const port = server.address().port;
 
-  hub = createHubClient({
+  const hub = createHubClient({
     config: { hubUrl: `http://127.0.0.1:${port}`, enrollToken: 'enroll-tok-123' },
     health: { build: () => ({ cpu_pct: 1, mem_pct: 2, disk_pct: 3 }) },
     version: '2.0.0',
@@ -105,17 +113,11 @@ server.listen(0, '127.0.0.1', () => {
   });
 
   hub.start();
+  await delay(1500); // enroll + at least one heartbeat
 
-  // Give it time to enroll + emit at least one heartbeat.
-  setTimeout(() => {
-    let passed = 0;
-    const okc = (n) => {
-      console.log('  PASS', n);
-      passed++;
-    };
-
+  try {
     // (1) Enrollment body.
-    if (!enrollBody) return fail('hub never called POST /api/agents/enroll');
+    assert.ok(enrollBody, 'hub never called POST /api/agents/enroll');
     assert.strictEqual(enrollBody.token, 'enroll-tok-123', 'enroll body carries the token');
     assert.strictEqual(enrollBody.hostname, 'test-host', 'enroll body has hostname');
     assert.strictEqual(typeof enrollBody.os, 'string', 'enroll body has os string');
@@ -133,7 +135,7 @@ server.listen(0, '127.0.0.1', () => {
     okc('identity persisted (agent_id/jwt/expires_at)');
 
     // (3) At least one valid heartbeat received.
-    if (!heartbeatBody) return fail('no heartbeat received by the fake hub');
+    assert.ok(heartbeatBody, 'no heartbeat received by the fake hub');
     assert.strictEqual(heartbeatAuth, 'Bearer fake.jwt', 'heartbeat carries Bearer fake.jwt');
     assert.deepStrictEqual(
       Object.keys(heartbeatBody).sort(),
@@ -145,12 +147,164 @@ server.listen(0, '127.0.0.1', () => {
     assert.strictEqual(heartbeatBody.buffer_depth, 7, 'heartbeat.buffer_depth');
     assert.strictEqual(typeof heartbeatBody.health, 'object', 'heartbeat.health is an object');
     okc('valid heartbeat (Bearer jwt + body shape)');
+  } finally {
+    try { hub.stop(); } catch (_e) {}
+    try { server.close(); } catch (_e) {}
+    rmIfExists(IDENTITY_PATH);
+  }
+}
 
-    console.log(`\n${passed} hub assertions passed.`);
-    cleanup();
-    process.exit(0);
-  }, 1500);
+// ── Test 2: a 401 on heartbeat STOPS heartbeats — no re-enroll, no spin ─────────
+async function test401StopsHeartbeat() {
+  const IDENTITY_PATH = path.join(os.tmpdir(), `hub-identity-401-${process.pid}.json`);
+  rmIfExists(IDENTITY_PATH);
+  rmIfExists(IDENTITY_PATH + '.rejected');
+
+  let enrollCount = 0;
+  let heartbeatCount = 0;
+
+  const server = http.createServer((req, res) => {
+    const reply = (code, obj) => {
+      res.writeHead(code, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(obj));
+    };
+    if (req.method === 'POST' && req.url === '/api/agents/enroll') {
+      enrollCount++;
+      const chunks = [];
+      req.on('data', (c) => chunks.push(c));
+      req.on('end', () =>
+        reply(200, {
+          agent_id: 'agt_401',
+          identity: { jwt: 'fake.jwt', expires_at: new Date(Date.now() + 3600e3).toISOString() },
+          modules: [],
+        })
+      );
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/api/agents/agt_401/heartbeat') {
+      heartbeatCount++;
+      req.resume();
+      return reply(401, { error: 'revoked' }); // identity rejected on every heartbeat
+    }
+    if (req.method === 'GET' && req.url === '/api/agents/agt_401/policy') {
+      return reply(200, { modules: [] });
+    }
+    reply(404, { error: 'not found' });
+  });
+
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const hub = createHubClient({
+    config: { hubUrl: `http://127.0.0.1:${port}`, enrollToken: 'tok-401' },
+    health: { build: () => ({}) },
+    version: '2.0.0',
+    hostname: 'test-host',
+    getModuleStatus: () => ({ span: 'ok' }),
+    getBufferDepth: () => 0,
+    logger: { info() {}, error() {} },
+    intervalMs: 120, // if it spun, we'd see many heartbeats within the wait window
+    policyIntervalMs: 100000,
+    identityPath: IDENTITY_PATH,
+  });
+
+  hub.start();
+  await delay(900); // >> 6 heartbeat intervals — a spin would rack up calls
+  const heartbeatsAfterSettle = heartbeatCount;
+  await delay(400); // second window: prove the count does NOT keep climbing
+
+  try {
+    assert.strictEqual(enrollCount, 1, 'enrolled exactly once — a 401 must NOT re-enroll in-run');
+    assert.strictEqual(
+      heartbeatCount,
+      1,
+      `401 must stop heartbeats after the first (no spin) — saw ${heartbeatCount}`
+    );
+    assert.strictEqual(heartbeatCount, heartbeatsAfterSettle, 'no further heartbeats after the 401 settled');
+    okc('401 on heartbeat stops the loop (no re-enroll, no spin)');
+
+    // FIX 6: the dead identity is moved aside so a RESTART with a fresh token can re-enroll.
+    assert.ok(!fs.existsSync(IDENTITY_PATH), 'rejected identity file removed from the live path');
+    assert.ok(fs.existsSync(IDENTITY_PATH + '.rejected'), 'rejected identity moved to .rejected');
+    okc('rejected identity moved aside (restart can re-enroll)');
+  } finally {
+    try { hub.stop(); } catch (_e) {}
+    try { server.close(); } catch (_e) {}
+    rmIfExists(IDENTITY_PATH);
+    rmIfExists(IDENTITY_PATH + '.rejected');
+  }
+}
+
+// ── Test 3: an enroll network error backs off — no tight loop, no throw ─────────
+async function testEnrollBackoff() {
+  const IDENTITY_PATH = path.join(os.tmpdir(), `hub-identity-backoff-${process.pid}.json`);
+  rmIfExists(IDENTITY_PATH);
+
+  // Grab a definitely-closed port (bind then release) so enroll gets ECONNREFUSED.
+  const probe = net.createServer();
+  await new Promise((r) => probe.listen(0, '127.0.0.1', r));
+  const deadPort = probe.address().port;
+  await new Promise((r) => probe.close(r));
+
+  const { logger, errors } = capturingLogger();
+
+  const hub = createHubClient({
+    config: { hubUrl: `http://127.0.0.1:${deadPort}`, enrollToken: 'tok-backoff' },
+    health: { build: () => ({}) },
+    version: '2.0.0',
+    hostname: 'test-host',
+    getModuleStatus: () => ({}),
+    getBufferDepth: () => 0,
+    logger,
+    intervalMs: 120,
+    policyIntervalMs: 100000,
+    identityPath: IDENTITY_PATH,
+  });
+
+  // start() must not throw synchronously even though the hub is unreachable.
+  assert.doesNotThrow(() => hub.start(), 'hub.start() must not throw on an unreachable hub');
+
+  await delay(900); // first backoff is ~8-12s, so at most ONE attempt lands in this window
+
+  try {
+    const backoffLogs = errors.filter((l) => /enroll network error/.test(l) && /retrying in/.test(l));
+    assert.ok(backoffLogs.length >= 1, 'enroll network error is logged and a retry is scheduled');
+    // Tight-loop guard: within ~0.9s only the first attempt should have fired (backoff >> window).
+    assert.ok(
+      backoffLogs.length <= 2,
+      `enroll must back off, not tight-loop — saw ${backoffLogs.length} attempts in 0.9s`
+    );
+    assert.ok(/\(attempt 1\)/.test(backoffLogs[0]), 'first retry is scheduled as attempt 1 (backoff)');
+    // No identity should have been written on a failed enroll.
+    assert.ok(!fs.existsSync(IDENTITY_PATH), 'no identity persisted when enroll never succeeds');
+    okc('enroll network error backs off (no tight loop, no throw)');
+  } finally {
+    try { hub.stop(); } catch (_e) {} // cancels the pending enroll-retry timer
+    rmIfExists(IDENTITY_PATH);
+  }
+}
+
+// ── Runner ─────────────────────────────────────────────────────────────────────
+(async () => {
+  await testHappyPath();
+  await test401StopsHeartbeat();
+  await testEnrollBackoff();
+  console.log('\nAll hub tests passed.');
+  process.exit(0);
+})().catch((e) => {
+  console.error('  FAIL', e && e.stack ? e.stack : e);
+  process.exit(1);
 });
 
-process.on('uncaughtException', (e) => fail('uncaught: ' + e.message));
-setTimeout(() => fail('overall timeout'), 8000).unref();
+process.on('uncaughtException', (e) => {
+  console.error('  FAIL uncaught:', e && e.stack ? e.stack : e);
+  process.exit(1);
+});
+process.on('unhandledRejection', (e) => {
+  console.error('  FAIL unhandledRejection:', e && e.stack ? e.stack : e);
+  process.exit(1);
+});
+setTimeout(() => {
+  console.error('  FAIL overall timeout');
+  process.exit(1);
+}, 15000).unref();

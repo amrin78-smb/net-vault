@@ -259,6 +259,30 @@ if ($set.Code -eq 200) { Ok ("/api/settings 200 (" + $set.Ms + "ms)") } else { W
 $lvs = Http "http://127.0.0.1:3004/api/stats" 12
 if ($lvs.Code -eq 200) { Ok ("LogVault /api/stats 200 (" + $lvs.Ms + "ms)") } else { Wn ("LogVault /api/stats code=" + $lvs.Code) }
 
+# NocVault Agent bootstrap (Phase 2 hub-served bundle). The minted install
+# one-liner does `irm <hub>/api/agents/install.ps1`, which in turn pulls the
+# agent files from /api/agents/bundle. Both are PUBLIC (no session). These 503
+# (never 200) if the on-disk agent\ dir isn't present at the standalone runtime
+# root - the exact failure mode that would make a minted install command 404.
+$aps = Http "http://127.0.0.1:3000/api/agents/install.ps1" 12
+if ($aps.Code -eq 200 -and $aps.Content -match 'param\(' -and $aps.Content -match 'NocVault-Agent') {
+    Ok ("/api/agents/install.ps1 serves the installer (200, " + $aps.Ms + "ms)")
+} else {
+    Bad ("/api/agents/install.ps1 FAILED (code=" + $aps.Code + ") - agent installer not served (minted install one-liner would 404)")
+}
+$abn = Http "http://127.0.0.1:3000/api/agents/bundle" 12
+if ($abn.Code -eq 200 -and $abn.Content) {
+    $files = $null; try { $files = ($abn.Content | ConvertFrom-Json).files } catch {}
+    if ($files -and @($files).Count -ge 1) {
+        Ok ("/api/agents/bundle manifest 200 (" + @($files).Count + " agent file(s))")
+        if (-not ($files -contains 'nocvault-agent.js')) { Wn "agent bundle manifest missing nocvault-agent.js" }
+    } else {
+        Bad "/api/agents/bundle returned 200 but an empty/unparseable files list - agent\ dir may be missing at runtime root"
+    }
+} else {
+    Bad ("/api/agents/bundle FAILED (code=" + $abn.Code + ") - agent\ dir not present at NetVault standalone runtime root")
+}
+
 $root = Http "http://127.0.0.1:3000/" 12 -NoRedirect
 if ($root.Code -ge 300 -and $root.Code -lt 400) { Ok ("NetVault / redirects (" + $root.Code + " -> " + $root.Loc + ")") }
 elseif ($root.Code -eq 200) { Inf "NetVault / returned 200 (no redirect)" }

@@ -314,7 +314,7 @@ CREATE TABLE IF NOT EXISTS agent_enrollment_tokens (
 
 CREATE TABLE IF NOT EXISTS agent_modules (
     agent_id      TEXT REFERENCES agents(id) ON DELETE CASCADE,
-    app           TEXT NOT NULL,                -- 'logvault' | 'ddivault' | 'spanvault'
+    app           TEXT NOT NULL,                -- module slug; SHORT form is canonical ('span'/'log'/'ddi'), long form ('spanvault'/'logvault'/'ddivault') also accepted
     enabled       BOOLEAN NOT NULL DEFAULT TRUE,
     config        JSONB NOT NULL DEFAULT '{}',  -- module work-plan
     PRIMARY KEY (agent_id, app)
