@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.29.0': [
+    'NocVault Agents — Phase 4b: the unified agent gains a DDIVault (ddi) collection module, so one agent can now collect for both SpanVault and DDIVault at a remote site. When an agent is assigned the ddi module it runs DDIVault\'s DHCP/DNS/IPAM edge collection (WinRM + DHCP-log + ICMP) locally and ships raw results to DDIVault\'s new agent ingest — the hub just wires the identity + the ingest port (ddi now maps to 3011, no longer a placeholder). (Agent 2.5.0.)',
+    'A span+ddi agent uses one hub-issued identity but a separate data-plane connection per app (SpanVault and DDIVault are different ingest endpoints); the ddi module and its collection are additive — a span-only agent is unchanged. The DDIVault-side ingest, assignment UI, and installer wiring ship as DDIVault 1.24.0.',
+    'This completes Phase 4 (4a hub Restart/Logs + slim SpanVault; 4b the DDIVault module). Note: DDIVault\'s WinRM edge collection can only be fully validated against a real Windows DHCP/DNS + AD domain, so it is shipped for on-box validation.',
+  ],
   '1.28.0': [
     'NocVault Agents — Phase 4a: the hub Agents (fleet) page can now Restart a hub-enrolled agent and Fetch its recent logs, remotely. Because the hub reaches agents over a periodic check-in (not a live connection), a Restart or Fetch-logs is queued and the agent carries it out on its next check-in (~30s); the fleet page shows the returned log tail once it arrives, and warns if the agent is offline (the action stays queued until it reconnects).',
     'Under the hood: a new agent_commands queue + POST /api/agents/[id]/commands (super_admin) enqueues a restart/get_logs; the agent heartbeat response now carries any pending commands (claimed exactly-once); the agent runs them and, for logs, POSTs its tail back to a new agent-authed POST /api/agents/[id]/logs (the hub has no socket to receive a push), which the fleet page reads via GET /api/agents/[id]/logs. (Agent 2.4.0.)',

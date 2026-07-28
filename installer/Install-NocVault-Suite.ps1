@@ -715,7 +715,12 @@ if ($InstallDDIVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL ON SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT CONNECT ON DATABASE netvault TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT USAGE ON SCHEMA public TO ddivault_user;"
-    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON sites, countries TO ddivault_user;"
+    # `agents` added (Phase 4b): DDIVault's agent-WS ingest does
+    # `SELECT 1 FROM agents WHERE id=$1 AND revoked_at IS NULL` against the netvault
+    # DB on every agent connect to honour hub revocation. Without this SELECT the
+    # ingest fails closed and no agent can connect. Uses the SAME narrow ddivault_user
+    # netvault-read role that already reads sites/countries.
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT SELECT ON sites, countries, agents TO ddivault_user;"
 
     # Reassign ownership of all app objects from postgres to ddivault_user. The schema
     # is applied as the postgres superuser, but the updater (and future migrations)
@@ -749,7 +754,7 @@ $$;
     Write-OK "DDIVault schemas applied and cross-DB grants set"
 
     # Create .env.local in root AND frontend
-    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
+    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_WS_PORT=3011`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $DDIFrontendDir = "$DDIAppDir\frontend"
     $ddiEnv | Out-File -FilePath "$DDIAppDir\.env.local" -Encoding UTF8 -NoNewline
     $ddiEnv | Out-File -FilePath "$DDIFrontendDir\.env.local" -Encoding UTF8 -NoNewline
@@ -775,7 +780,7 @@ $$;
     & $NssmExe remove DDIVault-API confirm 2>$null
     & $NssmExe install DDIVault-API "C:\Program Files\nodejs\node.exe" "$DDIAppDir\api\server.js"
     & $NssmExe set DDIVault-API AppDirectory        $DDIAppDir
-    & $NssmExe set DDIVault-API AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_URL=http://${ServerIP}:3006`nDDI_APP_PORT=3006`nSERVER_IP=$ServerIP`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    & $NssmExe set DDIVault-API AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_WS_PORT=3011`nDDI_APP_URL=http://${ServerIP}:3006`nDDI_APP_PORT=3006`nSERVER_IP=$ServerIP`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set DDIVault-API DependOnService     $PgSvcName
     & $NssmExe set DDIVault-API DisplayName         "DDIVault - API"
     & $NssmExe set DDIVault-API Start               SERVICE_AUTO_START
@@ -822,6 +827,11 @@ $$;
 
     New-NetFirewallRule -DisplayName "NocVault DDIVault 3006" -Direction Inbound -Protocol TCP -LocalPort 3006 -Action Allow -ErrorAction SilentlyContinue | Out-Null
     Write-OK "Firewall rule added: port 3006"
+    # Port 3011 (DDI_WS_PORT) — the agent-WS ingest, bound to all interfaces inside the
+    # existing DDIVault-API process (no separate NSSM service). The REST API (3007) stays
+    # loopback; this is the only DDIVault port besides the App (3006) that must be inbound.
+    New-NetFirewallRule -DisplayName "NocVault DDIVault WS 3011" -Direction Inbound -Protocol TCP -LocalPort 3011 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Write-OK "Firewall rule added: port 3011 (agent WS ingest)"
 }
 
 # ================================================================

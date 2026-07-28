@@ -17,7 +17,7 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.4.0';
+const VERSION = '2.5.0';
 
 // ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
 // This gate MUST execute BEFORE requiring any core module a pending update could
@@ -104,9 +104,89 @@ const spanCtx = {
 };
 const span = createSpanModule(spanCtx);
 
+// ── ddi module (Phase 4b) — loaded IN ADDITION to span when enabled ────────────
+// A module is enabled when present in config.modules (an object key, or an array entry).
+// span is always on; ddi is opt-in via config so a span-only agent is unaffected.
+function moduleEnabled(name) {
+  const m = config.modules;
+  if (!m) return false;
+  if (Array.isArray(m)) return m.includes(name);
+  const v = m[name];
+  return v === true || (v && typeof v === 'object' && v.enabled !== false);
+}
+const ddiEnabled = moduleEnabled('ddi') || moduleEnabled('ddivault');
+
+// MULTI-INGEST: span ships to the SpanVault ingest (spanvault:3010) and ddi to the
+// DDIVault ingest (ddivault:3011) — DIFFERENT app-WS endpoints. The core transport dials
+// exactly ONE ingest URL, so each module gets its OWN transport (built below). `ddiSend`
+// is a forward indirection into that transport, wired like the span `send` above.
+let ddiTransport = null;
+const ddiSend = (m) => { if (ddiTransport) ddiTransport.send(m); };
+let ddi = null;
+if (ddiEnabled) {
+  const createDdiModule = require('./modules/ddi');
+  ddi = createDdiModule({
+    config: (config.modules && config.modules.ddi) || {},
+    send: ddiSend,
+    logger,
+    hostname,
+    version: VERSION,
+  });
+}
+
+// Combined module-status map for the heartbeats (core span-WS + hub fleet). Includes ddi
+// only when enabled, so the SpanVault heartbeat and the launcher Agents page both reflect it.
+const moduleStatus = () => {
+  const s = { [span.name]: span.status() };
+  if (ddi) s[ddi.name] = ddi.status();
+  return s;
+};
+
+// Resolve WHERE the ddi transport dials. Resolution order:
+//   1. explicit config.modules.ddi.ingest (or config.ddi.ingest) — full override;
+//   2. JWT-mode: the SAME host the hub advertised for the span ingest, but the ddi port
+//      (co-located suite is the common case; the hub does not yet advertise a per-module
+//      ingest map — see the report's multi-ingest note);
+//   3. apiKey-mode / fallback: config.serverUrl's host + the ddi port.
+// Returns null when nothing resolves (the transport then defers its dial).
+function resolveDdiIngest(cfg, ident) {
+  const modCfg = (cfg.modules && cfg.modules.ddi) || cfg.ddi || {};
+  if (modCfg.ingest) return modCfg.ingest;
+  const port = modCfg.wsPort || 3011;
+  try {
+    const spanIngest = typeof ident.getIngest === 'function' ? ident.getIngest() : null;
+    if (spanIngest) {
+      const u = new URL(spanIngest);
+      u.port = String(port);
+      return u.toString();
+    }
+  } catch (_e) { /* fall through */ }
+  try {
+    const host = new URL(cfg.serverUrl).hostname;
+    const scheme = /^https/i.test(cfg.serverUrl) ? 'wss' : 'ws';
+    return `${scheme}://${host}:${port}/`;
+  } catch (_e) { /* no usable serverUrl */ }
+  return null;
+}
+
+// A thin identity adapter for the ddi transport: reuse the shared hub identity (its JWT
+// `aud` already covers every assigned module) and only OVERRIDE where to dial. isReady()
+// also gates on a resolvable ddi ingest so the transport never falls back to the span port.
+function makeDdiIdentity(cfg, ident) {
+  return {
+    getAuthHeader: () => ident.getAuthHeader(),
+    isReady: () => {
+      const base = typeof ident.isReady === 'function' ? ident.isReady() : true;
+      return base && !!resolveDdiIngest(cfg, ident);
+    },
+    getIngest: () => resolveDdiIngest(cfg, ident),
+    onChange: (cb) => (typeof ident.onChange === 'function' ? ident.onChange(cb) : () => {}),
+  };
+}
+
 // ── Health / updater / heartbeat (built by sibling agents; wired here) ─────────
 const health = createHealth({
-  getDeviceCount: () => span.deviceCount(),
+  getDeviceCount: () => span.deviceCount() + (ddi ? ddi.deviceCount() : 0),
   getBufferDepth: () => buffer.depth(),
 });
 
@@ -120,7 +200,7 @@ const heartbeat = createHeartbeat({
   health,
   version: VERSION,
   hostname,
-  getModuleStatus: () => ({ [span.name]: span.status() }),
+  getModuleStatus: moduleStatus,
 });
 
 // ── Transport + runtime (mutually referenced; see wiring note above) ───────────
@@ -139,6 +219,38 @@ transport = createTransport({
 // The updater is NOT wired into the runtime anymore — self-update is driven from the
 // hub channel (passed into createHubClient below), not the span-WS message router.
 runtime = createRuntime({ config, transport, logger, modules: [span] });
+
+// ── ddi transport (Phase 4b) — a SECOND app-ingest tunnel ──────────────────────
+// When ddi is enabled, stand up a dedicated transport dialing the DDIVault ingest
+// (port 3011), reusing the shared hub identity/JWT via the ddi identity adapter (which
+// only overrides WHERE to dial). It has its OWN offline buffer (agent/ddi-data/buffer.json
+// — the core buffer uses a fixed file name per dir), its OWN runtime router (so restart/
+// get_logs and the ddi_config/ddi_scan pushes on the DDIVault socket are handled), and its
+// OWN heartbeat on the DDIVault data plane. The span path is completely untouched.
+let ddiHeartbeat = null;
+if (ddi) {
+  const ddiIdentity = makeDdiIdentity(config, identity);
+  const ddiDir = path.join(__dirname, 'ddi-data');
+  try { fs.mkdirSync(ddiDir, { recursive: true }); } catch (_e) { /* best-effort */ }
+  const ddiBuffer = createBuffer({ dir: ddiDir, max: 500, logger });
+  let ddiRuntime = null;
+  ddiTransport = createTransport({
+    config,
+    identity: ddiIdentity,
+    buffer: ddiBuffer,
+    onMessage: (msg) => ddiRuntime.dispatch(msg),
+    onOpen: () => { if (ddiHeartbeat) ddiHeartbeat.sendNow(); },
+    logger,
+  });
+  ddiRuntime = createRuntime({ config, transport: ddiTransport, logger, modules: [ddi] });
+  ddiHeartbeat = createHeartbeat({
+    send: ddiSend,
+    health,
+    version: VERSION,
+    hostname,
+    getModuleStatus: () => ({ [ddi.name]: ddi.status() }),
+  });
+}
 
 // ── Crash safety — exit so NSSM restarts on the new process (suite convention) ─
 process.on('uncaughtException', (err) => {
@@ -163,7 +275,7 @@ if (config.hubUrl && config.enrollToken) {
     health,
     version: VERSION,
     hostname: os.hostname(),
-    getModuleStatus: () => ({ [span.name]: span.status() }),
+    getModuleStatus: moduleStatus,
     getBufferDepth: () => buffer.depth(),
     logger,
     // Phase 3: the hub client shares the SAME store the span identity reads, so its
@@ -185,6 +297,14 @@ if (config.hubUrl && config.enrollToken) {
 span.start();
 heartbeat.start();
 transport.start();
+// ddi (Phase 4b): start its module + dedicated DDIVault-ingest transport/heartbeat too.
+// Its transport gates its own dial on identity readiness (same JWT-mode defer as span).
+if (ddi) {
+  ddi.start();
+  ddiHeartbeat.start();
+  ddiTransport.start();
+  logger.info(`[ddi] module enabled — data plane → ${resolveDdiIngest(config, identity) || '(ingest URL pending)'}`);
+}
 logger.info(`NocVault Agent v${VERSION} started`);
 
 // The new build has started healthy — commit the self-update: clear the confirm

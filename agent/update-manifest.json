@@ -1,5 +1,5 @@
 {
-  "version": "2.4.0",
+  "version": "2.5.0",
   "files": [
     {
       "path": "README.md",
@@ -54,6 +54,22 @@
       "sha256": "6e302bc5e1cd9223d6fe26489cdecdb6fce57b8431f70ec1262b6ad30b475351"
     },
     {
+      "path": "modules/ddi/dhcplog.js",
+      "sha256": "1f35c5c375007db8900d7e1c2f2b8e8a3f3baa4677c7dad877bdec65b9a66fa5"
+    },
+    {
+      "path": "modules/ddi/index.js",
+      "sha256": "bab8c549bef4fcce89a707b15ae9a40e9b291f7188ba816bf55beaba2bd2926c"
+    },
+    {
+      "path": "modules/ddi/ipam.js",
+      "sha256": "21e3aae6ce59e512948de234583ea1767dc558d932f35d85eeb5eeaadd34ece9"
+    },
+    {
+      "path": "modules/ddi/winrm.js",
+      "sha256": "c4b3fbd548492c396ff314d1bc28ac94c977dded9765d13e4892016fda703f94"
+    },
+    {
       "path": "modules/span/checks.js",
       "sha256": "96487a6fe6e229285b7f8accbed72bbcf2126ce60d88fea2e6fe26e3b1176c73"
     },
@@ -75,7 +91,7 @@
     },
     {
       "path": "nocvault-agent.js",
-      "sha256": "db64bcacbccbc5b49013bcc11dba56809627f216492b268831aea500f24a2898"
+      "sha256": "d344c09ebcaf300c23b572e40a2eea1a9f40fb0da52536ebc72c498605bae107"
     },
     {
       "path": "package-lock.json",
@@ -83,12 +99,12 @@
     },
     {
       "path": "package.json",
-      "sha256": "3ced52ab04f8c1266348b843335d7b9c63019046cf8db441bcb6f99bb95d3bf7"
+      "sha256": "1e075445102aece20e56a6d6a8633328c338eb8d8b1ddc428f98ac0c2de1c493"
     },
     {
       "path": "scripts/sign-agent.js",
       "sha256": "8606a73711f9dc472db60560bf5835c1c46dc951834d208d8c937e29f7266f85"
     }
   ],
-  "sig": "pzbAw1nyDPi3CX4/ek08SkBCLds5FpWMS7PrkmgCX031RcNc8NrhhppccSgn6+PqWLzLXEGg1WP8yaPWFE6yBw=="
+  "sig": "/120037BslmWxxsQrndTHnrhSWZbX+V3lSVuW+A8ozauAwPqvD3dtXgKuocEe8W7VpLxI+LmIBFCH4JLO/J7AQ=="
 }

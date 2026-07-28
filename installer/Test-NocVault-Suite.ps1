@@ -198,7 +198,7 @@ else { Bad "LogVault-API has no SERVER_IP in NSSM env or .env.local - LogVault i
 Section "3. Ports Listening"
 $tcpPorts = @{
     3000 = "NetVault / Hub (public)"; 3004 = "LogVault-App (public)"; 3005 = "LogVault-API (internal)";
-    3006 = "DDIVault-App (public)";   3007 = "DDIVault-API (internal)";
+    3006 = "DDIVault-App (public)";   3007 = "DDIVault-API (internal)"; 3011 = "DDIVault WS (agent ingest, public)";
     3008 = "SpanVault-App (public)";  3009 = "SpanVault-API (internal)"; 3010 = "SpanVault WS (internal)";
     5432 = "PostgreSQL (internal)"
 }
@@ -453,6 +453,14 @@ else {
         if ($p -ne "t") { $ddOk = $false; $ddBad += ($t + "=" + $p) }
     }
     if ($ddOk) { Ok "ddivault_user can SELECT all DDIVault core tables" } else { Bad ("ddivault_user cannot SELECT DDIVault core tables: " + ($ddBad -join ', ')) }
+    # Phase 4b: the agent data plane. ddi_agents (per-agent registry, no credential -
+    # agents auth via hub-signed JWT) and ddi_servers.agent_hub_id (the column that
+    # binds a monitored server to a remote agent) must both exist, or agent-collected
+    # data has nowhere to land.
+    $ddAg = Pg "ddivault" "SELECT to_regclass('public.ddi_agents') IS NOT NULL;"
+    if ($ddAg -eq "t") { Ok "ddivault.ddi_agents table exists (Phase 4b agent registry)" } else { Bad ("ddivault.ddi_agents table MISSING (got '" + $ddAg + "')") }
+    $ddHub = Pg "ddivault" "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ddi_servers' AND column_name='agent_hub_id');"
+    if ($ddHub -eq "t") { Ok "ddivault.ddi_servers.agent_hub_id column exists (Phase 4b)" } else { Bad ("ddivault.ddi_servers.agent_hub_id column MISSING (got '" + $ddHub + "')") }
 
     Write-Host "  --- SpanVault (map shapes + connection waypoints) ---" -ForegroundColor DarkGray
     # ROLE-SCOPED: assert the spanvault_user app role can SELECT each object/column.
@@ -524,6 +532,12 @@ else {
     $ddSites = Pg "netvault" "SELECT has_table_privilege('ddivault_user','sites','SELECT');"
     if ($script:PgExit -eq 0 -and $ddSites -eq "t") { Ok "ddivault_user has SELECT on netvault.sites" }
     else { Bad ("ddivault_user missing SELECT on netvault.sites (got '" + $ddSites + "')") }
+    # Phase 4b: DDIVault's agent-WS ingest reads netvault.agents (revocation check) via
+    # the SAME narrow ddivault_user role. Without this SELECT every agent connect fails
+    # closed. (SpanVault uses the broader `netvault` role which already has full SELECT.)
+    $ddAgents = Pg "netvault" "SELECT has_table_privilege('ddivault_user','agents','SELECT');"
+    if ($script:PgExit -eq 0 -and $ddAgents -eq "t") { Ok "ddivault_user has SELECT on netvault.agents (Phase 4b agent-revocation check)" }
+    else { Bad ("ddivault_user missing SELECT on netvault.agents (got '" + $ddAgents + "') -- agent WS ingest fails closed") }
 
     # nocvault_readonly (the Hub's cross-DB read role) must be able to read a
     # representative object in each suite DB. NOTE (2026-07 security fix): two of
