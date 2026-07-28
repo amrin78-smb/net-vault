@@ -275,6 +275,76 @@ INSERT INTO app_settings (key, value) VALUES ('install_date',   NOW()::date::tex
 INSERT INTO app_settings (key, value) VALUES ('license_key',    '')                                  ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('license_status', 'trial')                             ON CONFLICT (key) DO NOTHING;
 
+-- ── Agent registry (NocVault Agents Phase 2 — hub control plane) ──
+-- The hub owns the canonical fleet registry; the data plane never touches
+-- these tables. `agents` MUST be created before the tables that reference it.
+-- NOTE: agents.site_id is a PLAIN INT soft-reference to sites.id (resolve via
+-- join at read time) — deliberately NOT a hard FK, to avoid fresh-install DDL
+-- ordering coupling to the sites table. These tables hold no secret columns
+-- (token_hash is a sha256 hash, cert_fpr a fingerprint), so they are readable
+-- by the diagnostic readonly roles with no column exclusion.
+CREATE TABLE IF NOT EXISTS agents (
+    id            TEXT PRIMARY KEY,             -- agt_… (opaque)
+    name          TEXT NOT NULL,
+    hostname      TEXT,
+    os            TEXT,
+    local_ip      TEXT,
+    site_id       INT,                          -- soft ref → sites.id (no FK)
+    status        TEXT NOT NULL DEFAULT 'pending', -- pending|online|degraded|offline|revoked
+    agent_version TEXT,
+    cert_fpr      TEXT,                          -- pinned identity fingerprint
+    enrolled_at   TIMESTAMPTZ,
+    last_seen_at  TIMESTAMPTZ,
+    created_by    INT,
+    revoked_at    TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS agent_enrollment_tokens (
+    token_hash    TEXT PRIMARY KEY,             -- sha256 hash of the one-time token, never the token
+    created_by    INT,
+    created_at    TIMESTAMPTZ DEFAULT NOW(),
+    expires_at    TIMESTAMPTZ NOT NULL,
+    preset        JSONB NOT NULL DEFAULT '{}',  -- {site_id, modules:[…]} applied on redeem
+    used_at       TIMESTAMPTZ,
+    used_by       TEXT REFERENCES agents(id) ON DELETE SET NULL,
+    note          TEXT
+);
+
+CREATE TABLE IF NOT EXISTS agent_modules (
+    agent_id      TEXT REFERENCES agents(id) ON DELETE CASCADE,
+    app           TEXT NOT NULL,                -- 'logvault' | 'ddivault' | 'spanvault'
+    enabled       BOOLEAN NOT NULL DEFAULT TRUE,
+    config        JSONB NOT NULL DEFAULT '{}',  -- module work-plan
+    PRIMARY KEY (agent_id, app)
+);
+
+CREATE TABLE IF NOT EXISTS agent_health (       -- small rolling history for the fleet view
+    id            BIGSERIAL PRIMARY KEY,
+    agent_id      TEXT REFERENCES agents(id) ON DELETE CASCADE,
+    ts            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    cpu_pct       REAL,
+    mem_pct       REAL,
+    buffer_depth  INT,
+    module_status JSONB                          -- {logvault:'ok', ddivault:'auth_error', …}
+);
+CREATE INDEX IF NOT EXISTS idx_agent_health_agent_ts ON agent_health(agent_id, ts DESC);
+
+-- Grant the diagnostic read role explicitly. The netvault app role and
+-- nocvault_readonly are covered by the blanket grants in the Permissions
+-- block at the tail (GRANT ALL / GRANT SELECT ON ALL TABLES), but
+-- claude_readonly has no blanket grant there — only per-table REVOKEs on the
+-- secret tables — so it needs an explicit SELECT here. No-op if the role is
+-- absent (standalone / non-diagnostic installs).
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'claude_readonly') THEN
+        GRANT SELECT ON agents, agent_enrollment_tokens, agent_modules, agent_health TO claude_readonly;
+    END IF;
+END
+$$;
+
 -- ── Safe migrations for existing installs ────────────────────────
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS purchase_vendor_id      INTEGER REFERENCES vendors(id);
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS ma_vendor_id            INTEGER REFERENCES vendors(id);

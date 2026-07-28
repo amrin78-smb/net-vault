@@ -1,5 +1,6 @@
 node_modules/
 config.json
 buffer.json
+hub-identity.json
 pending-update.bundle
 *.log

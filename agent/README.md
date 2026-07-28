@@ -40,6 +40,29 @@ module.exports = createModule(ctx) => ({ name, start(), stop(), status(), onMess
 ```json
 { "serverUrl": "http://SERVER_IP:3008", "apiKey": "…", "wsPort": 3010 }
 ```
+`hubUrl` + `enrollToken` are **optional** — set both to opt into the Phase 2 hub
+control channel (see below); omit them and the agent runs exactly as Phase 1.
+
+## Hub control channel (Phase 2)
+An **opt-in** side-channel to the NetVault hub, enabled only when BOTH `hubUrl` and
+`enrollToken` are set in `config.json`. It is purely additive — it does NOT touch the
+app-WS data path: the span module still gets its device config and ships results over
+the existing WebSocket to SpanVault. **Data flows to the apps, never to the hub.**
+
+- **Enroll once.** On first start (no stored identity) the agent POSTs `enrollToken`
+  to `<hubUrl>/api/agents/enroll` and receives a signed identity (`{ agent_id, jwt,
+  expires_at }`), persisted to `agent/hub-identity.json` (gitignored). On later starts
+  the stored identity is loaded and enrollment is skipped. Enrollment failures
+  (401/network) retry with backoff and never crash the data path.
+- **Fleet heartbeat.** Once enrolled, every 30s the agent POSTs a heartbeat
+  (`{ version, health, module_status, buffer_depth }`, `Authorization: Bearer <jwt>`)
+  so the launcher Agents page is populated. A `401` (revoked/expired identity) stops
+  the heartbeats and logs clearly — it does not spin.
+- **Policy poll (not applied).** Every ~5 min the agent GETs its policy and stores/logs
+  it. In Phase 2 the policy is **not** applied to modules — the span module's real work
+  config still comes from the app WS.
+
+To reset a hub identity (e.g. after re-enrolling), delete `agent/hub-identity.json`.
 
 ## Test
 ```

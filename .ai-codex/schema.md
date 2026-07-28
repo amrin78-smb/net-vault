@@ -36,6 +36,19 @@ eol_recommendations  id(PK,SERIAL) | device_id(INTEGER, soft FK -> devices(id) "
 
 app_settings  key(TEXT, PK) | value(TEXT) — seeded rows: app_name, app_subtitle, app_logo_url, app_primary_color, app_navy_color, idle_timeout_minutes, install_date, license_key, license_status
 
+## agent_registry (NocVault Agents Phase 2 — hub control plane, netvault 1.24.0)
+Hub-owned canonical fleet registry; the data plane never touches these tables. `agents` is created FIRST (before the tables that reference it). Placed in schema.sql right after the app_settings seed block, before the safe-migration ALTERs.
+
+agents  id(TEXT, PK — agt_… opaque) | name(TEXT, NOT NULL) | hostname(TEXT) | os(TEXT) | local_ip(TEXT) | site_id(INT — **soft ref to sites.id, NO FK** by design, resolved via LEFT JOIN at read time) | status(TEXT, NOT NULL, DEFAULT 'pending' — pending/online/degraded/offline/revoked; the API derives display status live, this column is the persisted hint) | agent_version(TEXT) | cert_fpr(TEXT — pinned identity fingerprint) | enrolled_at(TIMESTAMPTZ) | last_seen_at(TIMESTAMPTZ) | created_by(INT, no FK) | revoked_at(TIMESTAMPTZ) | created_at(TIMESTAMPTZ, NOT NULL, DEFAULT NOW()) | updated_at(TIMESTAMPTZ, NOT NULL, DEFAULT NOW())
+
+agent_enrollment_tokens  token_hash(TEXT, PK — sha256 hex of the one-time token, never the raw token) | created_by(INT, no FK) | created_at(TIMESTAMPTZ, DEFAULT NOW()) | expires_at(TIMESTAMPTZ, NOT NULL) | preset(JSONB, NOT NULL, DEFAULT '{}' — {site_id, modules:[…]} applied on redeem) | used_at(TIMESTAMPTZ) | used_by(TEXT) — FK -> agents(id) ON DELETE SET NULL | note(TEXT)
+
+agent_modules  agent_id(TEXT, PK part) — FK -> agents(id) ON DELETE CASCADE | app(TEXT, NOT NULL, PK part — 'logvault'|'ddivault'|'spanvault') | enabled(BOOLEAN, NOT NULL, DEFAULT TRUE) | config(JSONB, NOT NULL, DEFAULT '{}' — per-module work-plan)
+
+agent_health  id(PK, BIGSERIAL) | agent_id(TEXT) — FK -> agents(id) ON DELETE CASCADE | ts(TIMESTAMPTZ, NOT NULL, DEFAULT NOW()) | cpu_pct(REAL) | mem_pct(REAL) | buffer_depth(INT) | module_status(JSONB — {logvault:'ok', ddivault:'auth_error', …}) — idx idx_agent_health_agent_ts on (agent_id, ts DESC)
+
+Grants: the `netvault` app role + `nocvault_readonly` are covered by the tail blanket grants (GRANT ALL / GRANT SELECT ON ALL TABLES); an explicit `DO $$` block right after the table defs grants SELECT on the 4 tables to `claude_readonly` (which has no blanket grant in schema.sql). These tables hold NO secret columns (token_hash is a hash, cert_fpr a fingerprint), so no *_public exclusion view is needed. Verified in installer/Test-NocVault-Suite.ps1 via role-scoped has_table_privilege('netvault',…) on all 4 tables.
+
 ## View: v_devices_flat
 Denormalized read view joining devices + brands + device_types + sites + countries + regions + vendors (3x: purchase/ma/support), created AFTER the safe-migration ALTERs so every selected column (mgmt_*, support_*, os_*, etc.) is guaranteed to exist first; read by lib/compliance.ts, lib/healthScore.ts, and device-listing API routes as the single flattened device query surface.
 

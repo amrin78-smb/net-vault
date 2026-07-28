@@ -22,6 +22,14 @@ Breadcrumb  crumbs — page breadcrumb trail, default export [components/Breadcr
 (c) Spinner  size, color — small inline loading spinner [components/ui.tsx]
 (c) useEscape  cb — hook (not a component): fires cb on Escape keydown [components/ui.tsx]
 
+## app/(app)/agents/ (page-local, module-level — not exported/shared)
+These live in `app/(app)/agents/page.tsx`, defined at module scope (not inside the page component). Page-specific, so not promoted to `components/`; listed here for discoverability.
+StatusPill  status — colored status pill+dot for an agent (online/degraded/offline/revoked), token-driven tints
+ModuleChip  appKey, enabled — colored module chip (log=info/blue, ddi=purple, span=success/green); muted+dashed when disabled
+ToggleSwitch  on, busy, onChange — small crimson on/off switch (used for per-module enable/disable)
+CopyBox  label, value, mono — labeled value box with copy-to-clipboard button (one-time token + install command)
+AgentRow  agent, expanded, onToggleExpand, onToggleModule, onRevoke, busy — fleet table row + expandable detail panel (host facts, module toggles, revoke)
+
 ## app/components/
 Real, actively-imported second location — not dead code: UpdateNotifier and UpdateFailureBanner are imported by app/(app)/layout.tsx (the main app shell, every app page) and app/(auth)/launcher/page.tsx. Both are suite-standard top-bar banners about the update mechanism itself, not route-colocated glue for a single route — treat this as a small, deliberate exception to the components/ convention rather than a parallel pattern to keep extending.
 (c) UpdateNotifier  (none) — polls /api/system/update-status every 6h, shows dismissible "update available" bar linking to Settings → Updates, default export [app/components/UpdateNotifier.tsx]

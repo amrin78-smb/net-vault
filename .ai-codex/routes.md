@@ -15,6 +15,16 @@ GET /api/admin/eol-seed [auth] [db] — list/search/group EOL seed catalog (supe
 POST /api/admin/eol-seed [auth] [db] — add a seed catalog entry
 POST /api/admin/eol-seed/sync [auth] [db,external] — pull central signed EOL feed into eol_seed
 
+## agents (NocVault Agents Phase 2 — hub control plane)
+POST /api/agents/enroll-tokens [auth] [db] — mint one-time enrollment token + install one-liner (super_admin)
+POST /api/agents/enroll [public] [db] — token-authed (NO session): agent redeems token+host facts → agent_id, signed identity, module policy. Intentionally public write; NO checkWriteAllowed (token-gated infra)
+POST /api/agents/[id]/heartbeat [agent-auth] [db] — agent-authed (requireAgentAuth, JWT sub must == [id]): liveness + health sample
+GET /api/agents/[id]/policy [agent-auth] [db] — agent-authed (sub must == [id]): module assignment + config + data-plane ingest URLs
+GET /api/agents [auth] [db] — fleet list, agents+site+modules+latest buffer_depth, derived status (super_admin)
+GET /api/agents/[id] [auth] [db] — agent detail + last ~20 health rows (super_admin)
+PATCH /api/agents/[id] [auth] [db] — update name/site_id + upsert/toggle modules (super_admin)
+POST /api/agents/[id]/revoke [auth] [db] — set revoked_at, status='revoked' (super_admin)
+
 ## audit
 GET /api/audit/device/[id] [auth] [db] — device audit log, site-scoped
 GET /api/audit [auth] [db] — recent-activity feed (?limit=) or full paginated audit log (admin)

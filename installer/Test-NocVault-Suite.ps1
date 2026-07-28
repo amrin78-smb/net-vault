@@ -334,6 +334,14 @@ else {
     if ($script:PgExit -eq 0 -and $uapps -eq "t") { Ok "user_apps table present (per-user app access)" } else { Bad ("user_apps table missing/unreadable (got '" + $uapps + "')") }
     $aset = Pg "netvault" "SELECT count(*) FROM app_settings;"
     if ($script:PgExit -eq 0) { Ok ("app_settings present (" + $aset + " keys)") } else { Bad "app_settings unreadable" }
+    # agent_registry — NocVault Agents Phase 2 hub control plane (netvault 1.24.0).
+    # ROLE-SCOPED: the netvault app role must be able to SELECT each of the 4 tables.
+    $agOk = $true; $agBad = @()
+    foreach ($t in @('agents','agent_enrollment_tokens','agent_modules','agent_health')) {
+        $p = Pg "netvault" "SELECT has_table_privilege('netvault','$t','SELECT');"
+        if ($p -ne "t") { $agOk = $false; $agBad += ($t + "=" + $p) }
+    }
+    if ($agOk) { Ok "netvault role can SELECT all agent_registry tables (agents, agent_enrollment_tokens, agent_modules, agent_health)" } else { Bad ("netvault role cannot SELECT agent_registry tables: " + ($agBad -join ', ')) }
 
     Write-Host "  --- DDIVault (uuid-ossp fix) ---" -ForegroundColor DarkGray
     $ext = Pg "ddivault" "SELECT EXISTS(SELECT 1 FROM pg_extension WHERE extname='uuid-ossp');"

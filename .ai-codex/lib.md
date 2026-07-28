@@ -1,5 +1,17 @@
 # NetVault lib/ Exports
 
+agentIdentity.ts
+  AgentIdentity (type) — { jwt, expires_at }
+  AgentAuth (type) — { agentId, modules }
+  PORT_MAP — const module→data-plane ingest port map (spanvault/span:3010 real; logvault/log:3004 + ddivault/ddi:3006 PLACEHOLDER, ws ports TBD Phase 3/4)
+  issueAgentIdentity(agentId, modules, ttlDays=30) — sign hub JWT {sub,typ:'agent',aud:modules} with NEXTAUTH_SECRET → {jwt, expires_at}
+  verifyAgentIdentity(token) — verify sig + typ==='agent' + expiry → {agentId, modules} | null
+  hashToken(token) — sha256 hex (stored form of enrollment tokens)
+  newEnrollToken() — 'enr_' + 24 random bytes hex
+  newAgentId() — 'agt_' + 9 random bytes hex
+  deriveIngest(app, req) — build ws(s)://<request-host>:<port>/ for a module, or null for unknown slug
+  requireAgentAuth(req) — Bearer-JWT gate: verify sig AND confirm agents row exists & revoked_at IS NULL → {agentId, modules} | null (rejects valid JWT of a revoked agent)
+
 appAccess.ts
   ALL_APPS — const list of the 4 suite app slugs
   getUserApps(userId, role) — resolve apps a user can access (fail-closed on DB error)

@@ -108,6 +108,27 @@ process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled rejection:', reason && reason.stack ? reason.stack : reason);
 });
 
+// ── Hub control channel (Phase 2) — OPT-IN, purely additive ────────────────────
+// When BOTH config.hubUrl and config.enrollToken are set, the agent enrolls once
+// with the NetVault hub for a signed identity, then fleet-heartbeats to it so the
+// launcher Agents page is populated. This is a SIDE-CHANNEL: it never touches the
+// app-WS data path above — the span module still gets its config and ships results
+// over the transport to SpanVault. Absent either field, this block is skipped and
+// the agent behaves exactly as Phase 1 (no hub channel).
+if (config.hubUrl && config.enrollToken) {
+  const createHubClient = require('./core/hub');
+  const hub = createHubClient({
+    config,
+    health,
+    version: VERSION,
+    hostname: os.hostname(),
+    getModuleStatus: () => ({ [span.name]: span.status() }),
+    getBufferDepth: () => buffer.depth(),
+    logger,
+  });
+  hub.start();
+}
+
 // ── Start ─────────────────────────────────────────────────────
 span.start();
 heartbeat.start();

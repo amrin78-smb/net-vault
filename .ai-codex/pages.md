@@ -31,6 +31,9 @@ client /eol — EolPage — hardware EOL by site + software OS-EOL tracking (tab
 client /compliance — CompliancePage — risk/compliance score + data completeness dashboard
 client /audit — AuditPage — audit log table with action/user/date filters
 
+## Pages — (app) route group / Agents
+client /agents — AgentsPage — NocVault agent fleet management (super_admin only): fleet table (status/modules/version/last-seen/buffer), expandable per-agent detail with module enable/disable toggles + revoke, and an "Add agent" modal that mints a one-time enrollment token (POST /api/agents/enroll-tokens). Nav item gated `superAdminOnly` in layout.tsx; renders an inline "Access restricted" card for non-super_admins.
+
 ## Pages — (app) route group / Settings
 client /settings — SettingsPage — admin tabs: general, users, sites, license, updates, about
 server /settings/license — SettingsLicenseRedirect — redirects to /settings?tab=license (suite deep-link)
