@@ -489,27 +489,42 @@ Write-OK "NetVault service registered"
 New-NetFirewallRule -DisplayName "NocVault NetVault 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -ErrorAction SilentlyContinue | Out-Null
 Write-OK "Firewall rule added: port 3000"
 
+# Register a recurring maintenance task as Local SYSTEM via the well-known SID
+# (S-1-5-18) with an explicit principal, instead of the bare `-RunLevel Highest`
+# form that baked the ambient account name into the task XML's <UserId>. That name
+# had to resolve to a SID at registration, which fails with ERROR_NONE_MAPPED ("No
+# mapping between account names and security IDs was done") under a SYSTEM/localized/
+# fresh-install context on some boxes. A fixed SID needs no lookup (works anywhere),
+# ServiceAccount runs unattended, and it's NON-FATAL so a task hiccup can't abort an
+# otherwise-successful install.
+function Register-MaintenanceTask([string]$Name, $Action, $Trigger, [string]$When) {
+    try {
+        $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+        Register-ScheduledTask -TaskName $Name -Action $Action -Trigger $Trigger -Principal $principal -Force | Out-Null
+        Write-OK "Scheduled task '$Name' registered ($When)"
+    } catch {
+        Write-Warn "Could not register scheduled task '$Name' ($When) - non-fatal: $($_.Exception.Message)"
+    }
+}
+
 # Daily fleet health-snapshot job (feeds health_score_history trend).
 # Posts to NetVault with the shared CRON_SECRET as a Bearer token.
 $nvSnapAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
 $nvSnapTrigger = New-ScheduledTaskTrigger -Daily -At "00:00"
-Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $nvSnapAction -Trigger $nvSnapTrigger -RunLevel Highest -Force | Out-Null
-Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
+Register-MaintenanceTask "NetVault-HealthSnapshot" $nvSnapAction $nvSnapTrigger "daily 00:00"
 
 # Daily EOL/EOS enrichment (matches devices against eol_seed, writes EOL/EOS dates;
 # status-change recommendations stay human-gated). Mirrors Update-NetVault.ps1.
 $nvEolAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
 $nvEolTrigger = New-ScheduledTaskTrigger -Daily -At "01:00"
-Register-ScheduledTask -TaskName "NetVault-EnrichEol" -Action $nvEolAction -Trigger $nvEolTrigger -RunLevel Highest -Force | Out-Null
-Write-OK "Scheduled task 'NetVault-EnrichEol' registered (daily 01:00)"
+Register-MaintenanceTask "NetVault-EnrichEol" $nvEolAction $nvEolTrigger "daily 01:00"
 
 # Weekly EOL feed sync (pulls the central signed seed into eol_seed; runs just ahead
 # of Sunday's 01:00 enrichment so it applies the fresh seed; soft-skips when the
 # feed is unreachable so offline/air-gapped installs keep the bundled seed floor).
 $nvSyncAction  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
 $nvSyncTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "00:15"
-Register-ScheduledTask -TaskName "NetVault-SyncEol" -Action $nvSyncAction -Trigger $nvSyncTrigger -RunLevel Highest -Force | Out-Null
-Write-OK "Scheduled task 'NetVault-SyncEol' registered (weekly Sun 00:15)"
+Register-MaintenanceTask "NetVault-SyncEol" $nvSyncAction $nvSyncTrigger "weekly Sun 00:15"
 
 # ================================================================
 # STEP 9 — LogVault

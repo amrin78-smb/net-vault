@@ -836,14 +836,35 @@ try {
     }
     Write-OK "NetVault service is running (health check passed)"
 
+    # Register a recurring maintenance task robustly. The bare `-RunLevel Highest`
+    # form (no explicit principal) baked the AMBIENT account name into the task
+    # XML's <UserId>, and Windows had to resolve that name -> SID at registration.
+    # Under the in-app updater's SYSTEM context on some boxes (edition/locale/
+    # fresh-install state) that resolution failed with "No mapping between account
+    # names and security IDs was done" (ERROR_NONE_MAPPED) - and because this runs
+    # AFTER the health check passed, it escalated an already-healthy update into a
+    # CRITICAL failure + rollback. Pinning the well-known SID S-1-5-18 (Local
+    # SYSTEM) needs no name lookup, so it works in ANY context/locale, and
+    # ServiceAccount means the task runs unattended. NON-FATAL: the update is
+    # already up and healthy here, so a task-registration hiccup only warns - it
+    # must never fail the update or trigger a rollback.
+    function Register-MaintenanceTask([string]$Name, $Action, $Trigger, [string]$When) {
+        try {
+            $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+            Register-ScheduledTask -TaskName $Name -Action $Action -Trigger $Trigger -Principal $principal -Force | Out-Null
+            Write-OK "Scheduled task '$Name' registered ($When)"
+        } catch {
+            Write-Warn "Could not register scheduled task '$Name' ($When) - non-fatal, the update is healthy: $($_.Exception.Message)"
+        }
+    }
+
     Write-Step "Registering daily health-snapshot task"
     $cronLine = Get-Content "$AppDir\.env" | Where-Object { $_ -match '^CRON_SECRET=' } | Select-Object -First 1
     $CronSecret = if ($cronLine) { $cronLine.Substring('CRON_SECRET='.Length) } else { '' }
     if ($CronSecret) {
         $action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
         $trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
-        Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
-        Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
+        Register-MaintenanceTask "NetVault-HealthSnapshot" $action $trigger "daily 00:00"
         # No immediate baseline snapshot here - the daily scheduled task above takes
         # it tonight. Skipping it keeps the update from blocking on a post-deploy curl.
     } else {
@@ -854,8 +875,7 @@ try {
     if ($CronSecret) {
         $eolAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
         $eolTrigger = New-ScheduledTaskTrigger -Daily -At "01:00"
-        Register-ScheduledTask -TaskName "NetVault-EnrichEol" -Action $eolAction -Trigger $eolTrigger -RunLevel Highest -Force | Out-Null
-        Write-OK "Scheduled task 'NetVault-EnrichEol' registered (daily 01:00)"
+        Register-MaintenanceTask "NetVault-EnrichEol" $eolAction $eolTrigger "daily 01:00"
         # No immediate enrichment run here - the daily scheduled task above runs it
         # tonight, and the EOL Intelligence page has a manual "Run enrichment now"
         # button for on-demand use. Skipping it shortens the update and avoids loading
@@ -872,8 +892,7 @@ try {
         # (verifies the feed signature first); offline/air-gapped installs no-op safely
         # (it returns a soft skip and the bundled seed floor remains in place).
         $syncTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "00:15"
-        Register-ScheduledTask -TaskName "NetVault-SyncEol" -Action $syncAction -Trigger $syncTrigger -RunLevel Highest -Force | Out-Null
-        Write-OK "Scheduled task 'NetVault-SyncEol' registered (weekly Sun 00:15)"
+        Register-MaintenanceTask "NetVault-SyncEol" $syncAction $syncTrigger "weekly Sun 00:15"
     } else {
         Write-Warn "CRON_SECRET not found in .env - skipping EOL feed-sync task"
     }

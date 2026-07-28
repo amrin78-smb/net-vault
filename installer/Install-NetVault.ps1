@@ -354,8 +354,19 @@ if ($svc -and $svc.Status -eq 'Running') {
 Write-Step "Registering daily health-snapshot task"
 $action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$AppPort/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
 $trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
-Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $action -Trigger $trigger -RunLevel Highest -Force | Out-Null
-Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
+try {
+    # Explicit Local SYSTEM principal via the well-known SID (S-1-5-18) instead of a
+    # bare -RunLevel Highest: the bare form baked the ambient account name into the
+    # task XML's <UserId>, which can fail name->SID resolution with ERROR_NONE_MAPPED
+    # ("No mapping between account names and security IDs") under a SYSTEM/localized
+    # context. A fixed SID needs no lookup (works anywhere); non-fatal so a task
+    # hiccup can't abort the install.
+    $snapPrincipal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+    Register-ScheduledTask -TaskName "NetVault-HealthSnapshot" -Action $action -Trigger $trigger -Principal $snapPrincipal -Force | Out-Null
+    Write-OK "Scheduled task 'NetVault-HealthSnapshot' registered (daily 00:00)"
+} catch {
+    Write-Warn "Could not register scheduled task 'NetVault-HealthSnapshot' (daily 00:00) - non-fatal: $($_.Exception.Message)"
+}
 # Immediate baseline snapshot so the trend has a starting point
 Write-Step "Taking baseline health snapshot"
 try {
