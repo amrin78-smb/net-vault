@@ -1,7 +1,12 @@
 # Phase 1 — `nocvault-agent-core` (extract + SpanVault migration + signed update)
 
 > Companion to `nocvault-agents-architecture.md`. This is the detailed scope for **Phase 1 only**.
-> **Status:** Draft plan · **Depends on:** nothing · **Unblocks:** Phase 2 (hub control plane), Phase 3/4 (modules).
+> **Status: ✅ SHIPPED** (agent 2.0.0; Phase 2 shipped after it at netvault 1.25.0 / agent 2.1.1). This doc is
+> now a **historical record** of the Phase 1 plan. The **current forward roadmap lives in
+> `nocvault-agents-architecture.md` §7–§8**, revised around the **federated control plane** end-state (§6) —
+> which reframes the later phases: a new **Phase 3 = identity reconciliation** (SpanVault trusts the hub JWT;
+> collapse the two agent registries into one) is inserted before the DDIVault (now Phase 4) and LogVault (now
+> Phase 5) modules. Read that first; the notes below describe Phase 1 as originally planned and delivered.
 
 ---
 
