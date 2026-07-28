@@ -1,0 +1,13 @@
+{
+  "name": "nocvault-agent",
+  "version": "2.0.0",
+  "main": "nocvault-agent.js",
+  "scripts": {
+    "test": "node test/units.test.js && node test/integration.test.js"
+  },
+  "dependencies": {
+    "ws": "^8.17.0",
+    "ping": "^0.4.4",
+    "net-snmp": "^3.11.2"
+  }
+}
