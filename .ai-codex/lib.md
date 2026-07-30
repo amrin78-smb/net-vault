@@ -91,6 +91,11 @@ publicUrl.ts
   resolveOrigin(req, port, legacyFallback) — derive request origin (host/proto) for cross-app SSO redirect targets
   SIBLING_PORTS — const port map for logvault/ddivault/spanvault
 
+rateLimit.ts
+  RateLimitResult (type) — { limited, retryAfterSec }
+  checkRateLimit(key, {maxAttempts, windowMs}) — in-memory per-key fixed-window rate limiter; fails open on any error. First use: POST /api/agents/enroll
+  getClientIp(req) — best-effort source IP from x-forwarded-for/x-real-ip (rate-limit/logging only, not an auth signal)
+
 suiteDb.ts
   SuiteDb (type) — 'netvault' | 'logvault' | 'ddivault' | 'spanvault'
   suiteReadConfigured() — whether cross-DB readonly credentials are set [SENSITIVE]

@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.29.4': [
+    'Security fix: an adversarial audit of the Agents subsystem found the public, unauthenticated POST /api/agents/enroll (token-authed, no session) had NO rate limiting or lockout — an attacker could hammer it to brute-force the sha256-hashed one-time enrollment token or simply DoS it with junk requests. It now enforces a per-source-IP limit (10 attempts / 10 minutes, in-memory fixed window, 429 + Retry-After beyond that) before touching the DB or burning a token. Fails open by design — a bug in the limiter itself can never block a legitimate enrollment.',
+    'Corrected two stale claims in docs/nocvault-agents-architecture.md left over from an earlier phase: the signed self-update work (Ed25519-signed release manifest, verify-before-download, crash-safe staged apply with automatic rollback) was marked "Next" in the phasing table and "leaning: sign in Phase 3" in the open-decisions table, but has actually been fully shipped since 1.27.0 / agent 2.3.0. No code change — the doc now matches the already-shipped behavior.',
+  ],
   '1.29.3': [
     'Final bug-sweep hardening (agent 2.5.3) — a two-reviewer adversarial pass over the whole agent stack found no brick/crash/regression; these are the low-severity items it did surface, all fixed. The DDIVault agent\'s on-demand subnet scan now counts against the same collection-process cap as the pollers, so a "scan all subnets" action can no longer storm an edge host with PowerShell processes.',
     'Agent robustness: a reconfigure can no longer briefly double-poll one server; the result-buffer flush is now exception-guarded so a bad payload or mid-flush socket error can\'t crash the agent; and an enabled-but-not-yet-enrolled DDIVault plane now reports "disabled:not-enrolled" instead of falsely showing healthy.',

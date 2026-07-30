@@ -7,8 +7,18 @@ import {
   deriveIngest,
   isKnownModule,
 } from '@/lib/agentIdentity'
+import { checkRateLimit, getClientIp } from '@/lib/rateLimit'
 
 export const dynamic = 'force-dynamic'
+
+// Per-source-IP throttle for this PUBLIC, unauthenticated route (see the POST
+// comment below) — nothing else in front of it stops a client from hammering
+// it to brute-force a valid token or just to DoS it with junk. 10 attempts per
+// 10-minute window is generous for a real admin-driven install (one enroll per
+// agent host, occasionally retried) while making a brute-force sweep of the
+// sha256-hashed token space impractically slow. Tune via the constants below
+// if real-world install patterns need more headroom.
+const ENROLL_RATE_LIMIT = { maxAttempts: 10, windowMs: 10 * 60 * 1000 }
 
 // POST /api/agents/enroll — PUBLIC, token-authed (NO session). An agent redeems
 // a one-time enrollment token + host facts and receives a durable agent id, a
@@ -21,6 +31,18 @@ export const dynamic = 'force-dynamic'
 // user-facing write routes use — enrollment is token-gated infrastructure
 // provisioning, not licensed application data entry.
 export async function POST(req: NextRequest) {
+  // Rate-limit BEFORE touching the DB/token — see lib/rateLimit.ts. Fails open
+  // (checkRateLimit never throws; a limiter bug must never block a legitimate
+  // enrollment), so this can only ever add a 429, never cause a false one.
+  const ip = getClientIp(req)
+  const rl = checkRateLimit(`agents-enroll:${ip}`, ENROLL_RATE_LIMIT)
+  if (rl.limited) {
+    return NextResponse.json(
+      { error: 'Too many enrollment attempts — try again later' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSec) } }
+    )
+  }
+
   try {
     const body = await req.json().catch(() => ({}))
     const { token, hostname, os, agent_version, local_ip } = body || {}
