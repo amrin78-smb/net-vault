@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.30.1': [
+    'Fixed the agent self-update, which could never have worked on any installation. Agents check a cryptographic signature over the exact bytes of every file before installing an update — but the files were being published from the server with Windows line endings while the signature was produced against Unix line endings, so every text file failed its integrity check. Agents were dutifully downloading each new version, detecting the mismatch, discarding it, and retrying forever; the fleet simply never updated.',
+    'The agent files are now pinned to one line-ending format everywhere, so what the server publishes is byte-for-byte what was signed. No change to the signing scheme or to the agent itself — the integrity check was working exactly as designed and was correctly refusing files that did not match.',
+    'Found on the production hub while updating an agent to 2.6.0: its log showed "sha256 mismatch for README.md" on every attempt, and that one file alone differed by 104 line endings.',
+  ],
   '1.30.0': [
     'The module toggles on the Agents page now actually reconfigure a running agent (agent 2.6.0). Until now they only changed a row in the hub\'s own records: the agent decided which modules to run once, at startup, from its local config file, and never revisited it — so switching DDIVault on for an already-installed agent appeared to work and did nothing. The agent now compares the hub\'s module list against what it is running on each policy check, updates its own config and restarts itself to pick up the change. Expect a brief reconnect (a few seconds) after you change a toggle; buffered data is not lost.',
     'Deliberate safety limits: a policy that enables NO modules is ignored rather than applied, because an empty or truncated response would otherwise silently shut down every data plane on the agent — stopping an agent is what Revoke is for. The agent also reconfigures at most once per run, so a bad policy can never put it into a restart loop.',

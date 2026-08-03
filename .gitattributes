@@ -1,0 +1,16 @@
+# ⛔ The agent bundle MUST check out byte-for-byte identical on every machine.
+#
+# `agent/` is served verbatim to remote agents by /api/agents/bundle/*, and each
+# file's sha256 is Ed25519-signed into agent/update-manifest.json on a developer
+# machine. Git's default eol conversion breaks that contract: the manifest is
+# signed against LF bytes, Windows checks the same files out as CRLF, and every
+# text file then hashes differently — so the agent verifies the signature, starts
+# downloading, and aborts with "sha256 mismatch". That is not a corner case; it
+# meant the signed self-update could never succeed on ANY install (found on the
+# production hub 2026-08-03, where README.md alone differed by 104 CRLF pairs).
+#
+# `text eol=lf` pins the working tree to LF everywhere while keeping these files
+# diffable as text. Every file in the bundle is text (.js/.json/.md/.example) —
+# if a genuinely binary file is ever added under agent/, exclude it here with
+# `-text` rather than relaxing this rule.
+agent/** text eol=lf
