@@ -27,7 +27,7 @@
     },
     {
       "path": "core/hub.js",
-      "sha256": "882af7dae1ce452fd0040fcb6b881b9b43447045de1f91eba280b4ff1e40840f"
+      "sha256": "55cfac25af5422cd2714374d6ffecda7e8c2994107ddbbfe588116a2567a3681"
     },
     {
       "path": "core/identity-store.js",
@@ -103,8 +103,8 @@
     },
     {
       "path": "scripts/sign-agent.js",
-      "sha256": "0bc9cafbd4975b0213f802fed65c394c1b7a0ab5588d0bf0db2b457eb461796e"
+      "sha256": "edd8d877a9224f8013e7c080d560390b6f88d85de04250d1e1701467437e3ffb"
     }
   ],
-  "sig": "toQFD/lUhKaerkQeaF/UuMnx9cEZuxdDU72dGuNFRP6b/fdpwhM1yI1IkL3qkEvUwIopvDy4uS9GJ5olLo8fDA=="
+  "sig": "swyDb90LrRZHzkTY9622vtNZsb+ekoW9AB8Gurgg8J+kpEhjUfDef94PDIEDOR2fYIQP8roowQqPe3S8WeXWBA=="
 }

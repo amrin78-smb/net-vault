@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.30.4': [
+    'Hardened the agent release process against the line-ending problem fixed in 1.30.1. The signing tool now refuses to sign a file with the wrong line endings, instead of quietly producing a signature no agent can ever verify. The original bug was reintroduced within hours by an editing tool silently rewriting one file — exactly the kind of mistake nobody catches by eye — so the tool now fails loudly and names the offending file.',
+  ],
   '1.30.3': [
     'Revoking an agent now immediately disconnects its DDIVault session as well as its SpanVault one. Previously DDIVault only refused a revoked agent the next time it reconnected, so an agent that stayed connected could keep sending DHCP/DNS/IPAM data after being revoked — potentially indefinitely, since a healthy agent has no reason to reconnect. Each app is contacted independently, so one being unavailable no longer skips the other.',
     'Agents on split deployments now learn where DDIVault is from the hub instead of assuming it sits on the same server as SpanVault (agent 2.6.1). The hub already published this address per module; the agent ignored it and guessed by changing the port on the SpanVault address, which is wrong — and fails silently, as an endless reconnect — whenever the two apps are on different hosts. An explicitly configured address still takes priority.',

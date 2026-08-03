@@ -163,10 +163,29 @@ function main() {
     return;
   }
 
+  // Built from char codes so this file itself can never be mangled by an editor
+  // rewriting its line endings.
+  const CRLF = Buffer.from([13, 10]);
   // Build files:[{path, sha256}] for every runtime file, sorted ascending by path.
   const relPaths = listBundleFiles(agentDir);
   const files = relPaths.map((rel) => {
     const buf = fs.readFileSync(path.join(agentDir, rel));
+    // ⛔ Refuse to sign a CRLF file. .gitattributes pins agent/** to LF, so CRLF in
+    // the working tree means signing bytes git will NEVER serve: the hub publishes
+    // the LF blob, every agent fails its per-file sha256 check, and the self-update
+    // dies silently with the only evidence in the agent's own log. That shipped once
+    // (fixed in 1.30.1/1.30.2) and was reintroduced within hours by an editing tool
+    // that rewrote a file in Windows text mode. Fail loudly rather than rely on
+    // anyone remembering.
+    if (buf.includes(CRLF)) {
+      console.error(
+        'REFUSING TO SIGN: ' + rel + ' contains CRLF line endings.\n' +
+        '  agent/** is pinned to LF by .gitattributes, so the hub serves the LF\n' +
+        '  version and every agent would reject this bundle on its sha256 check.\n' +
+        '  Convert the file to LF and re-run.'
+      );
+      process.exit(1);
+    }
     return { path: rel, sha256: crypto.createHash('sha256').update(buf).digest('hex') };
   });
 
