@@ -36,13 +36,13 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-// Fan the revoke out to the data planes the agent's modules cover. SpanVault gets
-// an active kick here (its ws-server + loopback disconnect route). DDIVault's data
-// plane exists (Phase 4b) but currently relies on its ingest's connect-time
-// revocation cross-check to refuse a revoked agent on reconnect — an active
-// DDIVault live-session kick is a KIV follow-up, not wired here yet. (There is no
-// LogVault module — that agent was deferred.) Best-effort: any error is logged and
-// swallowed so revoke still returns success.
+// Fan the revoke out to the data planes the agent's modules cover. BOTH SpanVault
+// and DDIVault now get an active kick over their own loopback route, so a revoked
+// agent's live socket is closed immediately rather than only being refused on its
+// next connect — without the kick a healthy agent could keep streaming results on
+// an already-open socket indefinitely. (There is no LogVault module — that agent
+// was deferred.) Best-effort: every failure is logged and swallowed so revoke
+// still returns success, and each target is tried independently.
 async function fanOutRevoke(id: string): Promise<void> {
   try {
     const mods = await query(
@@ -54,19 +54,35 @@ async function fanOutRevoke(id: string): Promise<void> {
       mods.rows.map((r: { app: string }) => (r.app === 'span' ? 'spanvault' : r.app))
     )
 
-    if (apps.has('spanvault')) {
-      // 127.0.0.1, NOT localhost — localhost resolves to ::1 (IPv6) first on
-      // Windows and the app listens IPv4-only, stalling ~1s per probe (CLAUDE.md).
-      const base = process.env.SPANVAULT_INTERNAL_URL || 'http://127.0.0.1:3009'
+    // 127.0.0.1, NOT localhost — localhost resolves to ::1 (IPv6) first on
+    // Windows and the app listens IPv4-only, stalling ~1s per probe (CLAUDE.md).
+    // Each satellite exposes its own loopback kick route; the paths differ
+    // because each app named its own internal namespace.
+    const targets: Array<{ app: string; url: string }> = [
+      {
+        app: 'spanvault',
+        url: `${process.env.SPANVAULT_INTERNAL_URL || 'http://127.0.0.1:3009'}/api/internal/agents/disconnect`,
+      },
+      {
+        app: 'ddivault',
+        url: `${process.env.DDIVAULT_INTERNAL_URL || 'http://127.0.0.1:3007'}/api/internal/ddi-agents/disconnect`,
+      },
+    ]
+
+    for (const t of targets) {
+      if (!apps.has(t.app)) continue
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 2000) // short timeout
       try {
-        await fetch(`${base}/api/internal/agents/disconnect`, {
+        await fetch(t.url, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ hub_agent_id: id }),
           signal: controller.signal,
         })
+      } catch (e) {
+        // Per-target, so one satellite being down can't skip the others.
+        console.error(`revoke active-kick to ${t.app} failed (non-fatal):`, e)
       } finally {
         clearTimeout(timer)
       }

@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.30.3': [
+    'Revoking an agent now immediately disconnects its DDIVault session as well as its SpanVault one. Previously DDIVault only refused a revoked agent the next time it reconnected, so an agent that stayed connected could keep sending DHCP/DNS/IPAM data after being revoked — potentially indefinitely, since a healthy agent has no reason to reconnect. Each app is contacted independently, so one being unavailable no longer skips the other.',
+    'Agents on split deployments now learn where DDIVault is from the hub instead of assuming it sits on the same server as SpanVault (agent 2.6.1). The hub already published this address per module; the agent ignored it and guessed by changing the port on the SpanVault address, which is wrong — and fails silently, as an endless reconnect — whenever the two apps are on different hosts. An explicitly configured address still takes priority.',
+    'Suite installer: pinned the install paths to their real capitalisation, matching what all four per-app updaters already do. Only affects re-running the suite installer over an existing install whose folder capitalisation differs from the default.',
+  ],
   '1.30.2': [
     'The updater now checks, on every run, that the agent files it publishes are byte-for-byte what the update signature covers, and repairs them automatically if not. 1.30.1 stopped the problem recurring but could not fix a server that already had the wrong bytes on disk — the repair needs an extra step that a normal update does not perform. Without this, an existing installation would keep serving files that fail their integrity check and its agents would never update, with the only evidence buried in the agent\'s own log.',
     'If the files still do not match after the repair, the update now says so plainly rather than reporting success — that would mean genuine corruption rather than a formatting difference.',

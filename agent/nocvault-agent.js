@@ -17,7 +17,7 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.6.0';
+const VERSION = '2.6.1';
 
 // ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
 // This gate MUST execute BEFORE requiring any core module a pending update could
@@ -173,6 +173,11 @@ function hubEnrolled() {
 // called on every isReady()/dial, so it must not log on every tick).
 let ddiIngestAssumedWarned = false;
 
+// { <slug>: ingestUrl } most recently advertised by the hub (enroll + every policy
+// tick). Read at DIAL time by resolveDdiIngest, so a changed ingest takes effect on
+// the next reconnect rather than needing a restart.
+let hubModuleIngests = {};
+
 // Resolve WHERE the ddi transport dials. Resolution order:
 //   1. explicit config.modules.ddi.ingest (or config.ddi.ingest) — full override;
 //   2. JWT-mode: the SAME host the hub advertised for the span ingest, but the ddi port
@@ -182,7 +187,11 @@ let ddiIngestAssumedWarned = false;
 // Returns null when nothing resolves (the transport then defers its dial).
 function resolveDdiIngest(cfg, ident) {
   const modCfg = (cfg.modules && cfg.modules.ddi) || cfg.ddi || {};
-  if (modCfg.ingest) return modCfg.ingest;
+  if (modCfg.ingest) return modCfg.ingest; // explicit operator override wins
+  // The hub advertises a per-module ingest URL in its enroll/policy response. Use
+  // it — it is authoritative and, unlike the port-swap fallback below, correct when
+  // DDIVault and SpanVault live on DIFFERENT hosts.
+  if (hubModuleIngests.ddi) return hubModuleIngests.ddi;
   const port = modCfg.wsPort || 3011;
   try {
     const spanIngest = typeof ident.getIngest === 'function' ? ident.getIngest() : null;
@@ -446,6 +455,9 @@ if (config.hubUrl && config.enrollToken) {
     updater,
     // Phase 5: apply the hub's module policy (see applyPolicyModules above).
     onPolicyModules: applyPolicyModules,
+    // Phase 5: per-module ingest URLs, so ddi dials where the HUB says DDIVault is
+    // rather than port-swapping onto the span host.
+    onModuleIngests: (m) => { hubModuleIngests = m || {}; },
   });
   // Sequencing: in JWT-mode (no apiKey) the span transport DEFERS its dial until the
   // identity is ready (isReady()==false) — so starting the hub here (before

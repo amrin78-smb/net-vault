@@ -142,6 +142,10 @@ function createHubClient(opts) {
     // config.json and the restart, so this file stays transport-only. Optional —
     // omitted in tests and by any caller that doesn't want policy applied.
     onPolicyModules,
+    // Phase 5: called with { <slug>: ingestUrl } from the hub's enroll/policy
+    // response, so each module dials the ingest the HUB advertises instead of
+    // inferring it. Optional.
+    onModuleIngests,
     // Phase 4a: injectable process exit for the hub-carried `restart` command. The hub
     // has no server→agent socket, so a restart arrives in a heartbeat response and is
     // executed here (process.exit(0) → NSSM restarts). Overridable so tests can assert
@@ -199,6 +203,22 @@ function createHubClient(opts) {
     if (a === 'spanvault') return 'span';
     if (a === 'ddivault') return 'ddi';
     return a;
+  }
+
+  // Build { <short slug>: ingest } from an enroll/policy modules[] list. The hub
+  // already advertises a per-module ingest URL (lib/agentIdentity.ts deriveIngest),
+  // so a module never has to GUESS where its app listens. Before this the ddi plane
+  // port-swapped 3011 onto the span ingest host, which silently dials the wrong box
+  // whenever DDIVault and SpanVault are not co-located.
+  function extractModuleIngests(modules) {
+    const out = {};
+    if (!Array.isArray(modules)) return out;
+    for (const m of modules) {
+      if (!m || !m.ingest) continue;
+      const slug = normalizeModuleSlug(m.app || m.name);
+      if (slug) out[slug] = m.ingest;
+    }
+    return out;
   }
 
   function extractSpanIngest(modules) {
@@ -287,6 +307,16 @@ function createHubClient(opts) {
         expires_at: res.body.identity.expires_at,
         ingest: extractSpanIngest(res.body.modules),
       });
+      // Non-span modules get their ingest the same way, on the very first contact —
+      // otherwise a freshly enrolled ddi plane would have to guess (or wait out a
+      // policy tick) before it could dial.
+      if (typeof onModuleIngests === 'function') {
+        try {
+          onModuleIngests(extractModuleIngests(res.body.modules));
+        } catch (e) {
+          logErr('module-ingest apply failed:', e && e.message ? e.message : e);
+        }
+      }
       enrollAttempts = 0;
       log(`enrolled as ${res.body.agent_id} — identity persisted`);
       startLoops();
@@ -511,6 +541,13 @@ function createHubClient(opts) {
       // A4d: if the policy re-advertises the span ingest URL and it changed, update
       // the store (preserving the current JWT) so the transport re-dials the new
       // ingest on the resulting onChange. No change → no store write → no churn.
+      if (typeof onModuleIngests === 'function') {
+        try {
+          onModuleIngests(extractModuleIngests(res.body.modules));
+        } catch (e) {
+          logErr('module-ingest apply failed:', e && e.message ? e.message : e);
+        }
+      }
       const ingest = extractSpanIngest(res.body.modules);
       const cur = store.get();
       if (ingest && cur && ingest !== cur.ingest) {

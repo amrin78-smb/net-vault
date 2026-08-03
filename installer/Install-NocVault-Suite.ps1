@@ -90,7 +90,32 @@ Write-Host "  |   Network Intelligence Suite              |" -ForegroundColor Wh
 Write-Host "  +============================================+" -ForegroundColor White
 Write-Host ""
 
+# Resolve a path to its TRUE on-disk casing. Windows paths are case-insensitive but
+# Node/Next are not: `next build` bakes the directory it was invoked with into the
+# standalone output, so reaching the same folder through a differently-cased path
+# (C:\apps\... vs C:\Apps\...) on a later run can trace against a root the previous
+# build never used. All four per-app updaters pin this; the suite installer did not,
+# so an idempotent RE-RUN over an existing, mis-cased install could hit exactly that.
+# Same helper as Update-NetVault.ps1, verbatim.
+function Get-TrueCasePath([string]$p) {
+    try {
+        $di = New-Object System.IO.DirectoryInfo([System.IO.Path]::GetFullPath($p))
+        $parts = @()
+        while ($null -ne $di.Parent) {
+            $m = $di.Parent.GetFileSystemInfos($di.Name)
+            if ($m.Count -eq 0) { return [System.IO.Path]::GetFullPath($p) }
+            $parts = ,($m[0].Name) + $parts; $di = $di.Parent
+        }
+        $root = $di.Name; if (-not $root.EndsWith('\')) { $root += '\' }
+        return $root + ($parts -join '\')
+    } catch { return $p }
+}
+
 # ── Paths ─────────────────────────────────────────────────────────
+# Pin the install root to its real casing FIRST, so every path derived below
+# inherits it. On a fresh install the folder may not exist yet — the helper then
+# just returns the normalized full path, which is the same thing.
+$InstallDir     = Get-TrueCasePath $InstallDir
 $ScriptDir      = $PSScriptRoot
 $DepsDir        = "$ScriptDir\dependencies"
 $NVDir          = "$InstallDir\NetVault"
@@ -101,6 +126,12 @@ $NVAppDir       = "$NVDir\app"
 $LVAppDir       = "$LVDir\app"
 $DDIAppDir      = "$DDIDir\app"
 $SVAppDir       = "$SVDir\app"
+# Re-resolve each app dir too: on a RE-RUN these already exist, and the mis-casing
+# this guards against can be in the app folder itself, not just the install root.
+$NVAppDir       = Get-TrueCasePath $NVAppDir
+$LVAppDir       = Get-TrueCasePath $LVAppDir
+$DDIAppDir      = Get-TrueCasePath $DDIAppDir
+$SVAppDir       = Get-TrueCasePath $SVAppDir
 $PgBin          = "C:\Program Files\PostgreSQL\16\bin"
 $NssmZip        = "$DepsDir\nssm-2.24.zip"
 $NssmDir        = "$NVDir\nssm"
