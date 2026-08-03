@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.30.2': [
+    'The updater now checks, on every run, that the agent files it publishes are byte-for-byte what the update signature covers, and repairs them automatically if not. 1.30.1 stopped the problem recurring but could not fix a server that already had the wrong bytes on disk — the repair needs an extra step that a normal update does not perform. Without this, an existing installation would keep serving files that fail their integrity check and its agents would never update, with the only evidence buried in the agent\'s own log.',
+    'If the files still do not match after the repair, the update now says so plainly rather than reporting success — that would mean genuine corruption rather than a formatting difference.',
+  ],
   '1.30.1': [
     'Fixed the agent self-update, which could never have worked on any installation. Agents check a cryptographic signature over the exact bytes of every file before installing an update — but the files were being published from the server with Windows line endings while the signature was produced against Unix line endings, so every text file failed its integrity check. Agents were dutifully downloading each new version, detecting the mismatch, discarding it, and retrying forever; the fleet simply never updated.',
     'The agent files are now pinned to one line-ending format everywhere, so what the server publishes is byte-for-byte what was signed. No change to the signing scheme or to the agent itself — the integrity check was working exactly as designed and was correctly refusing files that did not match.',

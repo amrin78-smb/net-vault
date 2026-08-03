@@ -603,6 +603,55 @@ try {
     Write-Host "==> HEAD now: $headRef" -ForegroundColor Cyan
     Write-OK "Git reset and clean done"
 
+    # ── Agent bundle byte-integrity (self-heal) ────────────────────────────────
+    # The hub serves agent/ verbatim to remote agents, and each file's sha256 is
+    # Ed25519-signed into agent/update-manifest.json. If the working tree differs
+    # from those bytes by even one line ending, every agent verifies the signature,
+    # downloads, fails the per-file sha256 check and discards the update — forever,
+    # with the only evidence in the AGENT's log. That is exactly what happened
+    # before .gitattributes pinned agent/ to LF (production, 2026-08-03).
+    #
+    # `git reset --hard` does NOT fix an existing checkout when only the ATTRIBUTES
+    # changed: the blobs are identical, so git considers the files up to date and
+    # leaves the converted bytes in place. Dropping them from the index and
+    # resetting forces a re-checkout under the current attributes. Idempotent and
+    # cheap (~26 files), and it only runs when a mismatch is actually detected.
+    try {
+        $manifestPath = Join-Path $AppDir 'agent\update-manifest.json'
+        if (Test-Path $manifestPath) {
+            $mf = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            $mismatch = $false
+            foreach ($f in $mf.files) {
+                $fp = Join-Path (Join-Path $AppDir 'agent') ($f.path -replace '/', '\')
+                if (-not (Test-Path -LiteralPath $fp)) { $mismatch = $true; break }
+                $hex = ([BitConverter]::ToString($sha.ComputeHash([System.IO.File]::ReadAllBytes($fp))) -replace '-', '').ToLower()
+                if ($hex -ne $f.sha256.ToLower()) { $mismatch = $true; break }
+            }
+            if ($mismatch) {
+                Write-Warn "Agent bundle bytes differ from the signed manifest - renormalizing the checkout"
+                $null = & git rm --cached -r --quiet agent 2>&1
+                $null = & git reset --hard HEAD 2>&1
+                # Re-verify so a REAL corruption is reported instead of assumed fixed.
+                $still = $false
+                foreach ($f in $mf.files) {
+                    $fp = Join-Path (Join-Path $AppDir 'agent') ($f.path -replace '/', '\')
+                    if (-not (Test-Path -LiteralPath $fp)) { $still = $true; break }
+                    $hex = ([BitConverter]::ToString($sha.ComputeHash([System.IO.File]::ReadAllBytes($fp))) -replace '-', '').ToLower()
+                    if ($hex -ne $f.sha256.ToLower()) { $still = $true; break }
+                }
+                if ($still) { Write-Warn "Agent bundle STILL differs from the signed manifest - remote agents will not self-update" }
+                else { Write-OK "Agent bundle now matches the signed manifest" }
+            } else {
+                Write-OK "Agent bundle matches the signed manifest"
+            }
+        }
+    } catch {
+        # Never fatal: a failure here only affects remote-agent self-update, and the
+        # hub itself must still come up.
+        Write-Warn "Could not verify the agent bundle against its manifest: $($_.Exception.Message)"
+    }
+
     # Capture the version we're now attempting to move to (item 5) - the main
     # flow's post-build health check compares against THIS, so a health check
     # that merely gets a 200 from a stale/relaunched OLD build (see the NSSM
