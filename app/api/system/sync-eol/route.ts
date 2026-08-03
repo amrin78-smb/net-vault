@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { requireEol } from '@/lib/entitlements'
 import { syncFromFeed } from '@/lib/eolFeed'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 /**
  * POST /api/system/sync-eol — pull the central NocVault EOL feed into the local
@@ -26,10 +27,8 @@ import { syncFromFeed } from '@/lib/eolFeed'
  * (lib/eolSeed.ts) remains in place untouched.
  */
 export async function POST(req: NextRequest) {
-  // 1) Cron secret path.
-  const secret = process.env.CRON_SECRET
-  const provided = req.headers.get('authorization') || ''
-  const cronOk = !!secret && provided === `Bearer ${secret}`
+  // 1) Cron secret path (constant-time — see lib/cronAuth.ts).
+  const cronOk = isCronAuthorized(req)
 
   // 2) Session path (only checked when the cron secret didn't match).
   if (!cronOk) {

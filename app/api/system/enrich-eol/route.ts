@@ -4,6 +4,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { requireEol } from '@/lib/entitlements'
 import { query } from '@/lib/db'
 import { ensureEolSchema, runEnrichment } from '@/lib/eolEnrich'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 /**
  * POST /api/system/enrich-eol — start an EOL enrichment BACKGROUND job.
@@ -24,10 +25,8 @@ import { ensureEolSchema, runEnrichment } from '@/lib/eolEnrich'
  * Response: { ok: true, jobId: number, status: 'running', reused?: boolean }
  */
 export async function POST(req: NextRequest) {
-  // 1) Cron secret path.
-  const secret = process.env.CRON_SECRET
-  const provided = req.headers.get('authorization') || ''
-  const cronOk = !!secret && provided === `Bearer ${secret}`
+  // 1) Cron secret path (constant-time — see lib/cronAuth.ts).
+  const cronOk = isCronAuthorized(req)
 
   // 2) Session path (only checked when the cron secret didn't match).
   if (!cronOk) {

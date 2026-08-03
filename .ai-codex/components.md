@@ -5,7 +5,7 @@ StatusBadge  status — colored badge for device_status (Active/Decommed/Faulty/
 LifecycleBadge  status — colored badge for lifecycle_status (EOL/EOS vs Supported) [components/Badges.tsx]
 RoleBadge  role — colored badge for user role (super_admin/admin/site_admin/viewer) [components/Badges.tsx]
 Breadcrumb  crumbs — page breadcrumb trail, default export [components/Breadcrumb.tsx]
-(c) DeviceForm  initialData, deviceId — full add/edit device form (identity, network, location, lifecycle, procurement, support contract, software), default export [components/DeviceForm.tsx]
+(c) DeviceForm  initialData, deviceId — full add/edit device form (identity, network, location, lifecycle, procurement, support contract, software), default export [components/DeviceForm.tsx]. "Technical debt" is a READ-ONLY derived display computed via calcTechnicalDebt() — never an input; the write routes ignore any client-supplied value.
   (internal, module-level, not exported) Field  label, required, span, children — labeled form field wrapper
   (internal, module-level, not exported) Section  title, children — card-wrapped form section w/ grid
 (c) GlobalSearch  (none) — navy-bar omnibox search across devices/sites/circuits w/ keyboard nav (/, arrows, Enter, Esc), default export [components/GlobalSearch.tsx]

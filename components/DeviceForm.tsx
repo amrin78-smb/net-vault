@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useToast } from '@/app/providers'
+import { calcTechnicalDebt } from '@/lib/techDebt'
 
 type Lookups = {
   regions: string[]; sites: { site: string; country: string; region: string }[]
@@ -88,6 +89,17 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
 
 
   const inp = { className: 'input' }
+
+  // Technical debt is DERIVED, never stored from user input: both POST /api/devices
+  // and PUT /api/devices/[id] overwrite it with calcTechnicalDebt(...) and ignore
+  // body.technical_debt. It used to render as a free-text input, so anything typed
+  // here was silently discarded on every save. Show the same computed value the
+  // server will write, recalculated live as the three inputs change — mirroring the
+  // submit-time swap of 'Others' for the typed device type.
+  const effectiveDeviceType = form.device_type === 'Others'
+    ? ((form as any).device_type_other || '')
+    : form.device_type
+  const derivedTechDebt = calcTechnicalDebt(form.lifecycle_status, form.device_status, effectiveDeviceType)
 
   return (
     <div style={{ padding: '24px 28px', maxWidth: '900px' }}>
@@ -175,7 +187,16 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
           )}
           {!isSiteAdmin && (
             <Field label="Technical debt">
-              <input {...inp} value={form.technical_debt} onChange={e => set('technical_debt', e.target.value)} />
+              <div
+                className="input"
+                style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-primary)', color: derivedTechDebt === null ? 'var(--text-muted)' : 'var(--text-primary)' }}
+              >
+                {derivedTechDebt === null ? '—' : derivedTechDebt.toLocaleString()}
+              </div>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 0' }}>
+                Calculated from lifecycle status, device status and device type. Set only for an
+                Active device at EOL / EOS.
+              </p>
             </Field>
           )}
           <Field label="Remark" span>

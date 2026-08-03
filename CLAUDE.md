@@ -478,7 +478,7 @@ The seed catalog is fed two ways:
 strips curated noise words (Catalyst, NGFW, FlexNetwork, ProCurve, …) + Cisco PID prefixes
 (WS-C, AIR-AP), preserves model-defining lines (SonicWave, AirEngine). **This function is a
 CONTRACT — it must stay byte-identical to `nocvault-eol/lib/match-normalize.ts`; any change
-updates BOTH repos in lockstep** (currently `NORMALIZER_VERSION = 3`). `syncFromFeed`
+updates BOTH repos in lockstep** (currently `NORMALIZER_VERSION = 4`). `syncFromFeed`
 self-heals via `recomputeSeedKeys()`: re-derives every `eol_seed` row's normalized key +
 aliases with the current normalizer and collapses merged duplicates before applying the feed.
 

@@ -30,6 +30,9 @@ compliance.ts
   ComplianceResult (type) — overall compliance computation shape
   computeCompliance(activeBase) — weighted risk/compliance + data-completeness scores from device checks
 
+cronAuth.ts
+  isCronAuthorized(req) — constant-time check of the `Authorization: Bearer $CRON_SECRET` header used by the Windows scheduled-task endpoints; fails closed when CRON_SECRET is unset [SENSITIVE]
+
 db.ts
   query(text, params) — run pooled SQL query, releases client after
   withTransaction(fn) — run fn atomically inside BEGIN/COMMIT/ROLLBACK on one connection
@@ -103,7 +106,7 @@ suiteDb.ts
   queryOne(db, sql, params) — scalar convenience wrapper over queryDb (first row or null) [SENSITIVE]
 
 techDebt.ts
-  calcTechnicalDebt(lifecycleStatus, deviceStatus, deviceType) — estimate $ replacement cost for an active EOL device
+  calcTechnicalDebt(lifecycleStatus, deviceStatus, deviceType) — estimate $ replacement cost for an active EOL device. DERIVED ONLY: both device write routes call this and ignore any client-supplied technical_debt; DeviceForm renders it read-only from the same function.
 
 theme.ts
   Theme (type) — 'light' | 'dark'

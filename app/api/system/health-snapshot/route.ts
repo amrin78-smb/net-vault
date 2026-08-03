@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { query } from '@/lib/db'
 import { computeHealthScore } from '@/lib/healthScore'
+import { isCronAuthorized } from '@/lib/cronAuth'
 
 // Ensure the history table exists. Self-heals on existing installs that never
 // re-ran schema.sql, so the daily snapshot works without a manual migration.
@@ -27,9 +28,7 @@ async function ensureTable() {
  * Computes the global fleet health score, persists it, and prunes >90 days.
  */
 export async function POST(req: NextRequest) {
-  const secret = process.env.CRON_SECRET
-  const provided = req.headers.get('authorization') || ''
-  if (!secret || provided !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

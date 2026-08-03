@@ -324,7 +324,19 @@ export function normalizeForMatch(
   }
   // Strip common Cisco product-ID prefixes so a PID matches the friendly name
   // (WS-C3750X / AIR-AP1242 -> 3750X / 1242).
-  s = s.replace(/\b(ws-c|air-cap|air-ap|air-)/g, '')
+  //
+  // The lookahead is load-bearing: it requires a DIGIT within the next few
+  // characters, which is what distinguishes a Cisco PID from an ordinary product
+  // name that happens to start with the same letters. Cisco PIDs are always
+  // <prefix><short letter code><digits> — AIR-AP3802I, AIR-CAP1702I, AIR-CT2504,
+  // AIR-ANT2544, WS-C2960X — so all of those still strip exactly as before.
+  // Without the guard the rule was unanchored to vendor and would also eat the
+  // prefix of any non-Cisco model spelled with a hyphen ('air-fiber-5XHD',
+  // 'air-max-M5', 'air-cube', 'ws-comm-…'), collapsing it to a key that can
+  // false-match a genuine Cisco seed row. No live device or feed row hits that
+  // path today (checked: 82 devices / 317 feed strings, all Cisco) — this closes
+  // it before a Ubiquiti-style inventory arrives.
+  s = s.replace(/\b(?:ws-c|air-cap|air-ap|air-)(?=[a-z]{0,4}\d)/g, '')
 
   // Strip trailing region/series suffixes.
   let suffixChanged = true
