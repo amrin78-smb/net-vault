@@ -148,3 +148,79 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
+
+// Tell each satellite app to drop its local row for this agent, so deleting from
+// the hub doesn't leave an orphan behind on SpanVault/DDIVault. Mirrors
+// fanOutRevoke() in ./revoke/route.ts (127.0.0.1, short timeout, best-effort) —
+// a satellite being down must not block the hub-side delete, and an orphaned
+// satellite row is harmless anyway: with no hub row left, its connect-time
+// revocation cross-check fails closed and the agent can never reconnect.
+async function fanOutForget(id: string): Promise<void> {
+  const targets: Array<{ app: string; base: string }> = [
+    { app: 'spanvault', base: process.env.SPANVAULT_INTERNAL_URL || 'http://127.0.0.1:3009' },
+  ]
+  try {
+    const mods = await query(
+      'SELECT app FROM agent_modules WHERE agent_id = $1',
+      [id]
+    )
+    const apps = new Set(
+      mods.rows.map((r: { app: string }) => (r.app === 'span' ? 'spanvault' : r.app))
+    )
+    for (const t of targets) {
+      if (!apps.has(t.app)) continue
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), 2000)
+      try {
+        await fetch(`${t.base}/api/internal/agents/forget`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ hub_agent_id: id }),
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timer)
+      }
+    }
+  } catch (e) {
+    console.error('delete forget fan-out failed (non-fatal):', e)
+  }
+}
+
+// DELETE /api/agents/[id] — permanently remove a REVOKED agent from the fleet.
+//
+// Revoke-before-delete is enforced deliberately: deleting a live agent would only
+// remove the registry row while the agent kept running, and it would re-provision
+// itself on its next connect (the satellite ingests auto-provision on a valid
+// JWT). Revoking first invalidates the identity suite-wide, so delete becomes a
+// genuine removal rather than a row that grows back.
+export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await getServerSession(authOptions)
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const user = session.user as { role: string }
+  if (user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const { id } = await params
+  try {
+    const row = await query('SELECT id, revoked_at FROM agents WHERE id = $1', [id])
+    if (!row.rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!row.rows[0].revoked_at) {
+      return NextResponse.json(
+        { error: 'Revoke this agent before deleting it — a live agent would re-enrol itself.' },
+        { status: 409 }
+      )
+    }
+
+    await fanOutForget(id)
+
+    // agent_modules / agent_health / agent_commands all carry
+    // "REFERENCES agents(id) ON DELETE CASCADE" (schema.sql), so this one delete
+    // clears the whole registry entry. Note fanOutForget() above reads
+    // agent_modules and must therefore run BEFORE this.
+    await query('DELETE FROM agents WHERE id = $1', [id])
+
+    return NextResponse.json({ ok: true })
+  } catch (e) {
+    console.error('agent delete failed:', e)
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  }
+}

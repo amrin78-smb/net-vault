@@ -229,12 +229,13 @@ function CopyBox({ label, value, mono }: { label: string; value: string; mono?: 
 }
 
 // ── Fleet row (parent, expandable) + its detail panel ──────────────────────────
-function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, onRestart, onFetchLogs, busy, logsBusy }: {
+function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, onDelete, onRestart, onFetchLogs, busy, logsBusy }: {
   agent: Agent
   expanded: boolean
   onToggleExpand: () => void
   onToggleModule: (appKey: ModuleKey) => void
   onRevoke: () => void
+  onDelete: () => void
   onRestart: () => void
   onFetchLogs: () => void
   busy: boolean
@@ -388,6 +389,24 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
                 <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.4 }}>
                   Revoking refuses this agent&apos;s tunnels suite-wide on its next connect.
                 </div>
+                {/* Delete is offered only once revoked: a live agent would simply
+                    re-provision itself on its next connect. */}
+                {revoked && (
+                  <>
+                    <button
+                      className="btn btn-danger"
+                      disabled={busy}
+                      onClick={onDelete}
+                      style={{ justifyContent: 'center', marginTop: 4 }}
+                    >
+                      {busy ? <Spinner size={13} /> : 'Delete agent'}
+                    </button>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                      Permanently removes this agent from the fleet and from the apps it
+                      reported to. The agent software on the remote host is not uninstalled.
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </td>
@@ -542,6 +561,30 @@ export default function AgentsPage() {
       await loadAgents()
     } catch {
       showToast('Failed to revoke agent', 'error')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function deleteAgent(agent: Agent) {
+    const ok = await confirm({
+      title: 'Delete agent?',
+      message: `Permanently remove "${agent.name}" from the fleet, and from the apps it reported to. This does not uninstall the agent software on the remote host — if that host is still running the agent, uninstall it there too, or it will keep trying to connect and being refused.`,
+      confirmLabel: 'Delete agent',
+      danger: true,
+    })
+    if (!ok) return
+    setBusyId(agent.id)
+    try {
+      const res = await fetch(`/api/agents/${encodeURIComponent(agent.id)}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || '')
+      }
+      showToast(`Agent "${agent.name}" deleted`)
+      await loadAgents()
+    } catch (e) {
+      showToast(e instanceof Error && e.message ? e.message : 'Failed to delete agent', 'error')
     } finally {
       setBusyId(null)
     }
@@ -737,6 +780,7 @@ export default function AgentsPage() {
                     onToggleExpand={() => setExpandedId(id => id === a.id ? null : a.id)}
                     onToggleModule={(k) => toggleModule(a, k)}
                     onRevoke={() => revokeAgent(a)}
+                    onDelete={() => deleteAgent(a)}
                     onRestart={() => restartAgent(a)}
                     onFetchLogs={() => fetchLogs(a)}
                     busy={busyId === a.id}

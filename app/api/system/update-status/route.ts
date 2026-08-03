@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.29.7': [
+    'You can now permanently delete an agent from the fleet. A revoked agent previously stayed in the list forever with no way to remove it. Expand a revoked agent and use "Delete agent" — it clears the agent from the hub AND from the apps it reported to (SpanVault), so no leftover entry is stranded behind.',
+    'Delete is deliberately offered only AFTER an agent is revoked. Deleting a still-live agent would not really remove it: the agent keeps running and re-registers itself the next time it connects, so the entry would silently reappear. Revoking first invalidates its identity across the suite, which makes the delete stick. Deleting an agent does NOT uninstall the agent software on the remote host — if that host is still running it, uninstall it there too or it will keep trying to connect and being refused.',
+    'Deleting an agent is now done from NetVault only, since NetVault owns agent identity. SpanVault\'s own Delete button is disabled for hub-managed agents (with a note pointing here), the same way Restart and Fetch logs already were. Legacy agents that were never enrolled through the hub are unaffected and are still deleted from SpanVault.',
+  ],
   '1.29.6': [
     'Fixed: the modules you pick when enrolling an agent never actually reached the agent. The enrollment recorded them on the hub (so the Agents page showed, for example, both DDIVault and SpanVault enabled with working toggles), but the installer wrote a config file containing only the hub URL and the enrollment token — and the agent decides which modules to load from that file alone. So a DDIVault-enabled agent only ever ran SpanVault collection, reported only SpanVault in its health, and never connected to DDIVault, leaving DDIVault\'s Remote Agents page permanently empty with no error anywhere.',
     'The minted install command now carries the chosen modules through to the agent\'s config, so enrolling an agent with DDIVault selected genuinely starts its DDIVault collection. EXISTING agents are unaffected until re-installed with a freshly minted command — their config file is already written.',
