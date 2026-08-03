@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
-import { isKnownModule } from '@/lib/agentIdentity'
+import { isKnownModule, toAppSlug } from '@/lib/agentIdentity'
 
 export const dynamic = 'force-dynamic'
 
@@ -156,28 +156,45 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // satellite row is harmless anyway: with no hub row left, its connect-time
 // revocation cross-check fails closed and the agent can never reconnect.
 async function fanOutForget(id: string): Promise<void> {
-  const targets: Array<{ app: string; base: string }> = [
-    { app: 'spanvault', base: process.env.SPANVAULT_INTERNAL_URL || 'http://127.0.0.1:3009' },
+  // Every satellite the agent reported to must forget it, or deleting here strands
+  // a row there that can never reconnect. Paths differ because each app named its
+  // own internal namespace. (Revoke fans out to both too — these must stay in step;
+  // ddivault was missing here while present there, which is exactly the kind of
+  // half-wired pair that goes unnoticed.)
+  const targets: Array<{ app: string; base: string; path: string }> = [
+    {
+      app: 'spanvault',
+      base: process.env.SPANVAULT_INTERNAL_URL || 'http://127.0.0.1:3009',
+      path: '/api/internal/agents/forget',
+    },
+    {
+      app: 'ddivault',
+      base: process.env.DDIVAULT_INTERNAL_URL || 'http://127.0.0.1:3007',
+      path: '/api/internal/ddi-agents/forget',
+    },
   ]
   try {
     const mods = await query(
       'SELECT app FROM agent_modules WHERE agent_id = $1',
       [id]
     )
-    const apps = new Set(
-      mods.rows.map((r: { app: string }) => (r.app === 'span' ? 'spanvault' : r.app))
-    )
+    // Normalize to APP names — agent_modules.app stores the SHORT form in practice
+    // ('span','ddi'), so matching it against 'ddivault' without this is always false.
+    const apps = new Set(mods.rows.map((r: { app: string }) => toAppSlug(r.app)))
     for (const t of targets) {
       if (!apps.has(t.app)) continue
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), 2000)
       try {
-        await fetch(`${t.base}/api/internal/agents/forget`, {
+        await fetch(`${t.base}${t.path}`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ hub_agent_id: id }),
           signal: controller.signal,
         })
+      } catch (e) {
+        // Per-target, so one satellite being down can't skip the others.
+        console.error(`delete forget to ${t.app} failed (non-fatal):`, e)
       } finally {
         clearTimeout(timer)
       }

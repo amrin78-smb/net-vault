@@ -1,5 +1,5 @@
 {
-  "version": "2.6.1",
+  "version": "2.6.2",
   "files": [
     {
       "path": "README.md",
@@ -91,20 +91,20 @@
     },
     {
       "path": "nocvault-agent.js",
-      "sha256": "a79dc2188154b90818490b5abc5d54de98d728417c6438f8b5bf272500d5f969"
+      "sha256": "1478bcc54a72c9fd1250e854c47e7f9b150884caffea9b4500b13c6e9270e7ca"
     },
     {
       "path": "package-lock.json",
-      "sha256": "45e0d4640e732e7750441077c4c9678798e29e0d79f50233781ffd81c1a79dc0"
+      "sha256": "33c21b77b4d9e71a9bd7fca5ecca08f1585236f647793dbcf5fbc52c92094458"
     },
     {
       "path": "package.json",
-      "sha256": "8d3684397172762783adc7a15b3d1bec4aeb29d9eea9b1f49b4b1ad8d62fc72a"
+      "sha256": "a56cb7d3b18bc03e30cb643c272223b0102e3e027e3e18aa0037d90e22b0d8c4"
     },
     {
       "path": "scripts/sign-agent.js",
       "sha256": "edd8d877a9224f8013e7c080d560390b6f88d85de04250d1e1701467437e3ffb"
     }
   ],
-  "sig": "swyDb90LrRZHzkTY9622vtNZsb+ekoW9AB8Gurgg8J+kpEhjUfDef94PDIEDOR2fYIQP8roowQqPe3S8WeXWBA=="
+  "sig": "pA0A12tZwisjX1cdg0Ao7Ql0dsqNp9qvPwWajhzTHwViGKHpeJmzmGEme9JyLn5Q/XL3mrwcFs/LeYt61O6GBg=="
 }

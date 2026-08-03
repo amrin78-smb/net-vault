@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
+import { toAppSlug } from '@/lib/agentIdentity'
 
 export const dynamic = 'force-dynamic'
 
@@ -49,10 +50,11 @@ async function fanOutRevoke(id: string): Promise<void> {
       'SELECT app FROM agent_modules WHERE agent_id = $1 AND enabled = true',
       [id]
     )
-    // Normalize slugs (span/spanvault → spanvault) and de-dupe.
-    const apps = new Set(
-      mods.rows.map((r: { app: string }) => (r.app === 'span' ? 'spanvault' : r.app))
-    )
+    // Normalize to APP names before matching. agent_modules.app stores the SHORT
+    // form in practice ('span','ddi'), so mapping only span left this set holding
+    // 'ddi' while the target below tested 'ddivault' — the DDIVault kick was dead
+    // code from the moment it was added. Shared helper so both fan-outs agree.
+    const apps = new Set(mods.rows.map((r: { app: string }) => toAppSlug(r.app)))
 
     // 127.0.0.1, NOT localhost — localhost resolves to ::1 (IPv6) first on
     // Windows and the app listens IPv4-only, stalling ~1s per probe (CLAUDE.md).

@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.30.5': [
+    'Bug sweep of today\'s agent work. The DDIVault half of the revoke fan-out added in 1.30.3 never actually ran: agents record their modules under the short names ("span", "ddi") but the code checked for the long name, so the test was always false. DDIVault was therefore still only refusing a revoked agent on its next connect. Fixed with a single shared conversion both the revoke and delete paths use, so they cannot disagree again.',
+    'Deleting an agent now also removes it from DDIVault, which was missed when delete was added — it only told SpanVault, leaving DDIVault showing a Remote Agent that no longer exists and could never reconnect. Any DHCP/DNS servers assigned to that agent are released back to central polling rather than being left owned by a deleted agent and collected by nobody.',
+    'Split deployments: 1.30.3 said agents now learn where DDIVault is from the hub. That was only half true — the hub derived the address from its OWN address, so it replaced one assumption (DDIVault sits with SpanVault) with another (DDIVault sits with the hub). Correct on a normal single-server install, still wrong if DDIVault has its own server. You can now set DDIVAULT_PUBLIC_HOST / SPANVAULT_PUBLIC_HOST to state the real address; leaving them unset behaves exactly as before.',
+  ],
   '1.30.4': [
     'Hardened the agent release process against the line-ending problem fixed in 1.30.1. The signing tool now refuses to sign a file with the wrong line endings, instead of quietly producing a signature no agent can ever verify. The original bug was reintroduced within hours by an editing tool silently rewriting one file — exactly the kind of mistake nobody catches by eye — so the tool now fails loudly and names the offending file.',
   ],

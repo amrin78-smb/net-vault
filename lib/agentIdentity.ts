@@ -26,6 +26,19 @@ export function isKnownModule(app: unknown): app is string {
   return typeof app === 'string' && KNOWN_MODULE_SLUGS.has(app)
 }
 
+// Map any accepted spelling of a module slug to the APP name ('spanvault' /
+// 'ddivault'). agent_modules.app stores whichever form the enrollment preset used
+// — in practice the SHORT one ('span','ddi') — so anything matching a module
+// against an app name must normalize first. Both revoke and delete fan-outs did
+// this for span only, leaving `apps.has('ddivault')` permanently false and the
+// DDIVault half of each fan-out silently dead. One helper so they cannot drift.
+export function toAppSlug(app: string): string {
+  const a = String(app || '').toLowerCase().trim()
+  if (a === 'span') return 'spanvault'
+  if (a === 'ddi') return 'ddivault'
+  return a
+}
+
 // Derive the data-plane ingest URL for a module from the CURRENT request host
 // (so it follows whatever hostname the agent reached the hub through — same
 // host-resolution shape as lib/publicUrl.resolveOrigin). ws over http, wss over
@@ -33,7 +46,18 @@ export function isKnownModule(app: unknown): app is string {
 export function deriveIngest(app: string, req: NextRequest): string | null {
   const port = PORT_MAP[app]
   if (!port) return null
-  const rawHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || ''
+
+  // Split deployments: the request host is the HUB's host, which is only the right
+  // answer when the satellite is co-located with it. Deriving from the request
+  // merely moves the assumption (it used to be "co-located with SpanVault"); it
+  // does not remove it. An operator running a satellite on its own box sets
+  // SPANVAULT_PUBLIC_HOST / DDIVAULT_PUBLIC_HOST and the agent is told the truth.
+  // Unset — the overwhelmingly common single-server install — behaves exactly as
+  // before, so this is additive.
+  const overrideEnv = toAppSlug(app) === 'ddivault' ? 'DDIVAULT_PUBLIC_HOST' : 'SPANVAULT_PUBLIC_HOST'
+  const override = (process.env[overrideEnv] || '').trim()
+
+  const rawHost = override || req.headers.get('x-forwarded-host') || req.headers.get('host') || ''
   const host = rawHost.split(':')[0].trim()
   if (!host) return null
   const proto = (req.headers.get('x-forwarded-proto') || req.nextUrl.protocol.replace(':', '') || 'http')

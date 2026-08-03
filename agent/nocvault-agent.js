@@ -17,7 +17,7 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.6.1';
+const VERSION = '2.6.2';
 
 // ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
 // This gate MUST execute BEFORE requiring any core module a pending update could
@@ -397,7 +397,7 @@ function applyPolicyModules(desired) {
   if (same) return;
 
   try {
-    const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^﻿/, ''));
+    const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^\uFEFF/, ''));
     // Preserve any per-module settings already in config.json; only add/remove the
     // module keys themselves. An array-form `modules` is normalized to an object.
     const prev = raw.modules;
