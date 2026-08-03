@@ -408,12 +408,107 @@ async function testHubCommands() {
   }
 }
 
+// ── (5) POLICY-APPLY — the hub's module toggles reach the agent ────────────────
+// Before this, the policy tick stored the module list and did nothing with it, so
+// a toggle on the fleet page changed nothing on the agent. Asserts the callback
+// receives NORMALIZED short slugs (the hub stores either spelling), and that an
+// all-disabled / empty policy is IGNORED rather than applied — applying it would
+// silently shut down every data plane on the agent.
+async function testPolicyApply() {
+  const IDENTITY_PATH = path.join(os.tmpdir(), `hub-identity-policy-${process.pid}.json`);
+  rmIfExists(IDENTITY_PATH);
+  // Same tiny body reader the other cases declare locally (each test owns its server).
+  const readJsonBody = (req, cb) => {
+    const chunks = [];
+    req.on('data', (c) => chunks.push(c));
+    req.on('end', () => {
+      let body = null;
+      try { body = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch (_e) {}
+      cb(body);
+    });
+  };
+  let policyHits = 0;
+  const server = http.createServer((req, res) => {
+    const reply = (code, obj) => {
+      res.writeHead(code, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(obj));
+    };
+    if (req.method === 'POST' && req.url === '/api/agents/enroll') {
+      return readJsonBody(req, () =>
+        reply(200, {
+          agent_id: 'agt_pol',
+          identity: { jwt: 'fake.jwt', expires_at: new Date(Date.now() + 30 * 86400000).toISOString() },
+          modules: [{ app: 'span', enabled: true, config: {}, ingest: 'ws://x:3010/' }],
+        }));
+    }
+    if (req.method === 'POST' && req.url === '/api/agents/agt_pol/refresh') {
+      // shouldRefresh() can fire on the immediate policy tick (the mock jwt isn't
+      // decodable); answer it so it quiesces instead of retrying every tick.
+      return reply(200, { jwt: 'fake.jwt', expires_at: new Date(Date.now() + 30 * 86400000).toISOString() });
+    }
+    if (req.method === 'POST' && req.url === '/api/agents/agt_pol/heartbeat') {
+      return readJsonBody(req, () => reply(200, { ok: true, commands: [] }));
+    }
+    if (req.method === 'GET' && req.url === '/api/agents/agt_pol/policy') {
+      policyHits++;
+      // First tick: long-form slugs + a disabled module. Later ticks: nothing enabled.
+      const modules = policyHits === 1
+        ? [{ app: 'spanvault', enabled: true }, { app: 'ddivault', enabled: true }, { app: 'other', enabled: false }]
+        : [{ app: 'spanvault', enabled: false }];
+      return reply(200, { modules });
+    }
+    reply(404, { error: 'not found' });
+  });
+
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const port = server.address().port;
+
+  const applied = [];
+  const hub = createHubClient({
+    config: { hubUrl: `http://127.0.0.1:${port}`, enrollToken: 'tok-pol' },
+    health: { build: () => ({}) },
+    version: '2.0.0',
+    hostname: 'test-host',
+    getModuleStatus: () => ({ span: 'ok' }),
+    getBufferDepth: () => 0,
+    logger: { info() {}, error: (...a) => { if (process.env.DBG) console.log('ERR:', ...a); }, tail: () => [] },
+    exit: () => {},
+    intervalMs: 100000,   // keep heartbeats out of the way
+    policyIntervalMs: 250,
+    identityPath: IDENTITY_PATH,
+    onPolicyModules: (mods) => applied.push(mods),
+  });
+
+  hub.start();
+  await delay(900); // enroll + at least two policy ticks
+
+  try {
+    assert.ok(applied.length >= 1, `onPolicyModules called on a policy tick (policyHits=${policyHits}, applied=${applied.length})`);
+    assert.deepStrictEqual(
+      [...applied[0]].sort(), ['ddi', 'span'],
+      `enabled modules normalized to short slugs, disabled ones dropped — got ${JSON.stringify(applied[0])}`
+    );
+    okc('policy tick hands the enabled module set to the agent (normalized, disabled dropped)');
+
+    assert.strictEqual(
+      applied.length, 1,
+      `a policy with nothing enabled must be IGNORED, not applied — callback fired ${applied.length}x`
+    );
+    okc('an all-disabled policy is ignored (never silently stops every data plane)');
+  } finally {
+    hub.stop();
+    server.close();
+    rmIfExists(IDENTITY_PATH);
+  }
+}
+
 // ── Runner ─────────────────────────────────────────────────────────────────────
 (async () => {
   await testHappyPath();
   await test401StopsHeartbeat();
   await testEnrollBackoff();
   await testHubCommands();
+  await testPolicyApply();
   console.log('\nAll hub tests passed.');
   process.exit(0);
 })().catch((e) => {

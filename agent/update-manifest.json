@@ -1,5 +1,5 @@
 {
-  "version": "2.5.3",
+  "version": "2.6.0",
   "files": [
     {
       "path": "README.md",
@@ -27,7 +27,7 @@
     },
     {
       "path": "core/hub.js",
-      "sha256": "7664a77073c59ef570a29779167a864b0ac8b9baccb379ee96b90ffc0344b249"
+      "sha256": "a7d6120e22223dcf0a905a678b7ce5d2e0f737c9839c1c87c281fdc7cf67d20b"
     },
     {
       "path": "core/identity-store.js",
@@ -91,20 +91,20 @@
     },
     {
       "path": "nocvault-agent.js",
-      "sha256": "d2c52d50e4ea990e4ad628577947f3488bda53e5c6270fcf99fc25d88c40c450"
+      "sha256": "0a5aa11334cd7f3a1eda8969b454172e56d2f653e3dfbe74d7f91c7520302553"
     },
     {
       "path": "package-lock.json",
-      "sha256": "635972b75409ec5ad28eb580c4bd547c32f9cb1e28894c3239a4c256102adc8d"
+      "sha256": "49c70aa0e9fe79d82f8ddf9fb24cfe60bbbd8f6e92623595168d1096644647cf"
     },
     {
       "path": "package.json",
-      "sha256": "1ed84c5378b1d73f8904367a97ff552e3258d1b17560b1fc900d5017689b74b6"
+      "sha256": "e3e24d257d08a5fd005234ad07bc5528a1144f5fe67dea290fa81870c124d1d4"
     },
     {
       "path": "scripts/sign-agent.js",
       "sha256": "0bc9cafbd4975b0213f802fed65c394c1b7a0ab5588d0bf0db2b457eb461796e"
     }
   ],
-  "sig": "RqiuVRaIke4A7PToXiyBhUQRGlPLBa/XiWBWXg8VezhUro9Abi4lqxjieFQsZxRWZlOGhTGiHDApXPh5c403Dw=="
+  "sig": "5WP5fJrLXWsgMRPHvpk+KybeqBpAJBrJvrDqSgL2qaaHTQN00BUotHpSFb4d1nxmPOKn/dtXo40afo9EBjeBDQ=="
 }

@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.30.0': [
+    'The module toggles on the Agents page now actually reconfigure a running agent (agent 2.6.0). Until now they only changed a row in the hub\'s own records: the agent decided which modules to run once, at startup, from its local config file, and never revisited it — so switching DDIVault on for an already-installed agent appeared to work and did nothing. The agent now compares the hub\'s module list against what it is running on each policy check, updates its own config and restarts itself to pick up the change. Expect a brief reconnect (a few seconds) after you change a toggle; buffered data is not lost.',
+    'Deliberate safety limits: a policy that enables NO modules is ignored rather than applied, because an empty or truncated response would otherwise silently shut down every data plane on the agent — stopping an agent is what Revoke is for. The agent also reconfigures at most once per run, so a bad policy can never put it into a restart loop.',
+    'The agent version must be updated on the remote host for this to take effect (2.6.0). Agents still on an older build keep the previous behaviour — the toggle continues to have no effect on them.',
+  ],
   '1.29.7': [
     'You can now permanently delete an agent from the fleet. A revoked agent previously stayed in the list forever with no way to remove it. Expand a revoked agent and use "Delete agent" — it clears the agent from the hub AND from the apps it reported to (SpanVault), so no leftover entry is stranded behind.',
     'Delete is deliberately offered only AFTER an agent is revoked. Deleting a still-live agent would not really remove it: the agent keeps running and re-registers itself the next time it connects, so the entry would silently reappear. Revoking first invalidates its identity across the suite, which makes the delete stick. Deleting an agent does NOT uninstall the agent software on the remote host — if that host is still running it, uninstall it there too or it will keep trying to connect and being refused.',

@@ -17,7 +17,7 @@ const os = require('os');
 
 // Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
 // server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.5.3';
+const VERSION = '2.6.0';
 
 // ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
 // This gate MUST execute BEFORE requiring any core module a pending update could
@@ -359,6 +359,68 @@ process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled rejection:', reason && reason.stack ? reason.stack : reason);
 });
 
+// ── Applying hub policy: module set reconciliation ─────────────────────────────
+// Which modules this agent runs is decided ONCE, at startup, from config.json —
+// modules, their transports and their buffers are all built during module load.
+// So "apply the hub's policy" means: rewrite config.json to match, then restart
+// and let the normal startup path build the new set. That is the same
+// restart-to-apply approach the self-updater already uses, and NSSM brings the
+// service straight back.
+//
+// Before this, toggling a module on the hub's fleet page changed nothing on the
+// agent — the toggle looked functional but only ever moved a row in the hub's own
+// table (found on the first real deployment, 2026-08-03).
+let policyApplyArmed = true;
+
+function applyPolicyModules(desired) {
+  if (!policyApplyArmed) return; // one reconfigure per process — never a restart loop
+
+  // The runtime ALWAYS loads span (it is not conditional in this file), so span can
+  // never be the thing that differs — force it into the desired set or a hub that
+  // has span disabled would diff forever and restart on every policy tick.
+  const want = new Set(desired);
+  want.add('span');
+
+  const have = new Set(['span']);
+  if (ddi) have.add('ddi');
+
+  const same = want.size === have.size && [...want].every((m) => have.has(m));
+  if (same) return;
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8').replace(/^﻿/, ''));
+    // Preserve any per-module settings already in config.json; only add/remove the
+    // module keys themselves. An array-form `modules` is normalized to an object.
+    const prev = raw.modules;
+    const prevObj = {};
+    if (Array.isArray(prev)) { for (const k of prev) prevObj[String(k)] = { enabled: true }; }
+    else if (prev && typeof prev === 'object') { Object.assign(prevObj, prev); }
+
+    const next = {};
+    for (const slug of want) {
+      const existing = prevObj[slug];
+      next[slug] = (existing && typeof existing === 'object') ? { ...existing, enabled: true } : { enabled: true };
+    }
+    raw.modules = next;
+
+    // Atomic write — a torn config.json would leave the agent unable to start at all.
+    const tmp = CONFIG_PATH + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(raw, null, 2), 'utf8');
+    fs.renameSync(tmp, CONFIG_PATH);
+  } catch (e) {
+    logger.error('[policy] could not rewrite config.json — module set unchanged:', e && e.message ? e.message : e);
+    return;
+  }
+
+  policyApplyArmed = false;
+  logger.info(
+    `[policy] module set changed by the hub: [${[...have].sort().join(', ')}] -> ` +
+    `[${[...want].sort().join(', ')}] — config updated, restarting to apply`
+  );
+  // Small delay so the log line is flushed before the process goes away.
+  setTimeout(() => process.exit(0), 1000);
+}
+
 // ── Hub control channel (Phase 2) — OPT-IN, purely additive ────────────────────
 // When BOTH config.hubUrl and config.enrollToken are set, the agent enrolls once
 // with the NetVault hub for a signed identity, then fleet-heartbeats to it so the
@@ -382,6 +444,8 @@ if (config.hubUrl && config.enrollToken) {
     // Phase 3 Workstream B: self-update is driven from the hub control channel — the
     // policy tick fetches the signed manifest and calls updater.consider().
     updater,
+    // Phase 5: apply the hub's module policy (see applyPolicyModules above).
+    onPolicyModules: applyPolicyModules,
   });
   // Sequencing: in JWT-mode (no apiKey) the span transport DEFERS its dial until the
   // identity is ready (isReady()==false) — so starting the hub here (before

@@ -137,6 +137,11 @@ function createHubClient(opts) {
     // self-update — on the policy tick we fetch the signed manifest and hand it to
     // updater.consider(); absent an updater this is simply skipped.
     updater,
+    // Phase 5: called on every successful policy poll with the hub's ENABLED module
+    // slugs (normalized short form, e.g. ['span','ddi']). The entrypoint owns
+    // config.json and the restart, so this file stays transport-only. Optional —
+    // omitted in tests and by any caller that doesn't want policy applied.
+    onPolicyModules,
     // Phase 4a: injectable process exit for the hub-carried `restart` command. The hub
     // has no server→agent socket, so a restart arrives in a heartbeat response and is
     // executed here (process.exit(0) → NSSM restarts). Overridable so tests can assert
@@ -186,6 +191,16 @@ function createHubClient(opts) {
   // Pull the span module's ingest WS URL out of an enroll/policy modules[] list so the
   // transport (via the store) knows WHERE to dial in JWT-mode. Accepts app==='span'
   // or 'spanvault'; returns null if the span module isn't present / carries no ingest.
+  // 'spanvault' -> 'span', 'ddivault' -> 'ddi'; already-short slugs pass through.
+  // Keeps policy comparison stable regardless of which spelling the hub stored.
+  function normalizeModuleSlug(app) {
+    const a = String(app || '').toLowerCase().trim();
+    if (!a) return null;
+    if (a === 'spanvault') return 'span';
+    if (a === 'ddivault') return 'ddi';
+    return a;
+  }
+
   function extractSpanIngest(modules) {
     if (!Array.isArray(modules)) return null;
     for (const m of modules) {
@@ -489,8 +504,9 @@ function createHubClient(opts) {
       return;
     }
     if (res.statusCode === 200 && res.body && Array.isArray(res.body.modules)) {
-      // Phase 2: store + log only. Do NOT apply policy to modules yet — the span
-      // module's real work config still arrives over the app WS.
+      // The span module's real WORK config still arrives over the app WS — the hub
+      // owns only which MODULES run (see onPolicyModules below); it does not push
+      // per-device work plans.
       lastPolicy = res.body;
       // A4d: if the policy re-advertises the span ingest URL and it changed, update
       // the store (preserving the current JWT) so the transport re-dials the new
@@ -501,7 +517,32 @@ function createHubClient(opts) {
         store.set({ agent_id: cur.agent_id, jwt: cur.jwt, expires_at: cur.expires_at, ingest });
         log(`span ingest URL updated from policy: ${ingest}`);
       }
-      log(`policy fetched (${res.body.modules.length} module(s)) — stored, not applied`);
+      log(`policy fetched (${res.body.modules.length} module(s))`);
+
+      // Hand the ENABLED module set to the entrypoint so a toggle on the hub's
+      // fleet page actually reconfigures this agent. Slugs are normalized to the
+      // short canonical form so 'spanvault'/'ddivault' and 'span'/'ddi' compare
+      // equal — the hub accepts both spellings in an enrollment preset.
+      //
+      // A policy carrying NO enabled modules is ignored rather than applied: that
+      // is indistinguishable from a truncated/again-empty response, and acting on
+      // it would silently disable every data plane on the agent. Turning an agent
+      // off is what Revoke is for.
+      if (typeof onPolicyModules === 'function') {
+        const enabled = res.body.modules
+          .filter((m) => m && m.enabled !== false)
+          .map((m) => normalizeModuleSlug(m.app || m.name))
+          .filter(Boolean);
+        if (enabled.length === 0) {
+          log('policy lists no enabled modules — ignoring (use Revoke to stop an agent)');
+        } else {
+          try {
+            onPolicyModules(enabled);
+          } catch (e) {
+            logErr('policy apply failed:', e && e.message ? e.message : e);
+          }
+        }
+      }
     } else {
       logErr(`policy poll unexpected response (HTTP ${res.statusCode})`);
     }
