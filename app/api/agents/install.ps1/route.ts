@@ -53,6 +53,11 @@ function buildInstallScript(hubOrigin: string): string {
 .PARAMETER WsPort
     WebSocket port the span data path connects to (default 3010).
 
+.PARAMETER Modules
+    Comma-separated module slugs the agent should load, e.g. "span,ddi". Supplied
+    automatically by the hub's minted install command from the enrollment preset.
+    Omit to load span only.
+
 .EXAMPLE
     & ([scriptblock]::Create((irm ${hubOrigin}/api/agents/install.ps1))) -Token "enr_..."
 #>
@@ -62,6 +67,7 @@ param(
   [string]$ServerUrl,
   [string]$ApiKey,
   [int]$WsPort = 3010,
+  [string]$Modules,
   [string]$InstallDir = 'C:\\Apps\\NocVaultAgent'
 )
 
@@ -161,7 +167,23 @@ if ($ServerUrl -and $ApiKey) {
   $cfg.apiKey    = $ApiKey
   $cfg.wsPort    = $WsPort
 }
-$cfgJson = $cfg | ConvertTo-Json
+# -- Modules the agent should LOAD. The hub's enrollment preset only seeds its own
+#    agent_modules rows (what the fleet page shows); the agent reads config.modules
+#    and nothing else, so without this it loads span only and a "ddi enabled" agent
+#    never connects to DDIVault. span is always on in the agent regardless; listing
+#    it here is harmless and keeps config.json self-describing.
+if ($Modules) {
+  $mods = [ordered]@{}
+  foreach ($m in ($Modules -split ',')) {
+    $slug = $m.Trim().ToLower()
+    if ($slug) { $mods[$slug] = @{ enabled = $true } }
+  }
+  if ($mods.Count -gt 0) { $cfg.modules = $mods }
+}
+# -Depth 4 is defensive headroom: the default (2) is enough for the shape above,
+# but a nested per-module config block would serialise as the literal string
+# "System.Collections.Hashtable" once it exceeds the depth.
+$cfgJson = $cfg | ConvertTo-Json -Depth 4
 [System.IO.File]::WriteAllText("$InstallDir\\config.json", $cfgJson, (New-Object System.Text.UTF8Encoding $false))
 
 # -- Dependencies (skip if a bundled node_modules is already present - offline) -

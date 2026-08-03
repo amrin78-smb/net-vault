@@ -16,11 +16,11 @@ POST /api/admin/eol-seed [auth] [db] — add a seed catalog entry
 POST /api/admin/eol-seed/sync [auth] [db,external] — pull central signed EOL feed into eol_seed
 
 ## agents (NocVault Agents Phase 2 — hub control plane)
-GET /api/agents/install.ps1 [public] [none] — PowerShell agent installer, hub origin baked in (resolveOrigin); public (remote runs `irm` pre-credential)
+GET /api/agents/install.ps1 [public] [none] — PowerShell agent installer, hub origin baked in (resolveOrigin); public (remote runs `irm` pre-credential). Takes -Modules "span,ddi" and writes it into the agent's config.json `modules` — the agent loads modules from that file ONLY, so the hub's enrollment preset alone never reaches it (1.29.6)
 GET /api/agents/bundle [public] [none] — agent bundle manifest {files:[]} walked from on-disk agent/ dir (excludes deps/state/keys/tests); 503 if unavailable; public
 GET /api/agents/bundle/[...path] [public] [none] — serve ONE agent file's bytes; path-traversal confined to agent/ (403 escape, 404 missing/excluded); public
 GET /api/agents/update-manifest [public] [none] — serve the committed, offline-signed self-update manifest {version,files:[{path,sha256}],sig} from agent/update-manifest.json; 503 if missing/unparseable (fresh install advertises no update); public (Phase 3 Workstream B)
-POST /api/agents/enroll-tokens [auth] [db] — mint one-time enrollment token + install one-liner (super_admin)
+POST /api/agents/enroll-tokens [auth] [db] — mint one-time enrollment token + install one-liner (super_admin); the one-liner carries -Modules from the preset so the choice reaches the agent's config.json
 POST /api/agents/enroll [public] [db] — token-authed (NO session): agent redeems token+host facts → agent_id, signed identity, module policy. Intentionally public write; NO checkWriteAllowed (token-gated infra); rate-limited 10 attempts/10min per source IP (lib/rateLimit.ts, in-memory fixed-window, fail-open) → 429 + Retry-After beyond that
 POST /api/agents/[id]/heartbeat [agent-auth] [db] — agent-authed (requireAgentAuth, JWT sub must == [id]): liveness + health sample + 7d health prune; then RETURNS {ok:true, commands:[{id,type,args}]} — atomically claims this agent's status='pending' agent_commands (UPDATE…RETURNING → 'delivered'), carrying them back in the poll response exactly once (Phase 4a command channel)
 POST /api/agents/[id]/commands [auth] [db] — enqueue a poll-carried command for the agent (super_admin); body {type} ∈ {restart,get_logs} (else 400), 404 if agent absent; INSERTs a pending agent_commands row → {id,type,status:'pending'}. Hub analog of SpanVault's sendToAgentId (no server→agent socket — delivered via the heartbeat response)

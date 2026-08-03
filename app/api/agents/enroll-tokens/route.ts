@@ -43,7 +43,15 @@ export async function POST(req: NextRequest) {
     )
 
     const origin = resolveOrigin(req, 3000, process.env.NEXTAUTH_URL || 'http://localhost:3000')
-    const install_command = `& ([scriptblock]::Create((irm ${origin}/api/agents/install.ps1))) -Token "${token}"`
+    // Carry the chosen modules into the installer so they reach the agent's
+    // config.json. The preset above only seeds the HUB's agent_modules rows (what
+    // the fleet page displays); the agent decides which modules to actually LOAD
+    // from its own config.json alone (nocvault-agent.js moduleEnabled()). Without
+    // this the two silently disagree: the hub showed "ddi enabled" while the agent
+    // never loaded ddi, so DDIVault's Remote Agents page stayed empty forever and
+    // module_status reported only {span:'ok'}. Slugs are already whitelisted above.
+    const modulesArg = modules.length > 0 ? ` -Modules "${modules.join(',')}"` : ''
+    const install_command = `& ([scriptblock]::Create((irm ${origin}/api/agents/install.ps1))) -Token "${token}"${modulesArg}`
 
     return NextResponse.json({
       token,
