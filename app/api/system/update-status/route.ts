@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.30.7': [
+    'The update panel now still shows this server\'s own commit reference when it cannot reach GitHub to check for updates. That is a purely local fact and was already known, but NetVault dropped it from the response on the offline path — so it disappeared from view exactly when someone investigating a connectivity problem would want it. LogVault, DDIVault and SpanVault all already returned it; NetVault now matches them.',
+  ],
   '1.30.6': [
     'The agent release signing key was rotated (agent 2.6.3). The previous private key existed only on the release machine, outside version control by design, and was lost when that folder was cleaned — leaving no way to sign any future agent update. A new key was generated and is now stored outside every repository so the same accident cannot repeat.',
     'IMPORTANT: an agent installed before this change verifies updates against the OLD key and will correctly REFUSE anything signed with the new one — so it cannot update itself across the rotation and must be re-installed once from the hub (Agents → Add agent). With a single agent that is a one-off; the same rotation across a larger fleet would mean re-installing every agent.',
@@ -682,6 +685,14 @@ export async function GET() {
       return NextResponse.json({
         current_version,
         current_commit: localHash,
+        // `current_hash` is the alias the success path below also returns, and
+        // which LogVault/DDIVault/SpanVault all include on THEIR degraded paths.
+        // NetVault used to omit it here, so a consumer reading current_hash saw
+        // the field simply vanish when the remote was unreachable — even though
+        // this is a purely LOCAL fact that is still perfectly well known. Suite
+        // parity: the degraded response drops only what genuinely needs the
+        // remote (latest_*), never a local one.
+        current_hash: localHash,
         up_to_date: true,
         update_available: false,
         error: 'Could not check for updates',
