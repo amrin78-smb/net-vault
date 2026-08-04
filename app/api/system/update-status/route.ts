@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.30.6': [
+    'The agent release signing key was rotated (agent 2.6.3). The previous private key existed only on the release machine, outside version control by design, and was lost when that folder was cleaned — leaving no way to sign any future agent update. A new key was generated and is now stored outside every repository so the same accident cannot repeat.',
+    'IMPORTANT: an agent installed before this change verifies updates against the OLD key and will correctly REFUSE anything signed with the new one — so it cannot update itself across the rotation and must be re-installed once from the hub (Agents → Add agent). With a single agent that is a one-off; the same rotation across a larger fleet would mean re-installing every agent.',
+    'Also in this agent build: DHCP log event classification was corrected (see the DDIVault notes), and the agent now receives the per-server DHCP log path it always expected but was never sent.',
+  ],
   '1.30.5': [
     'Bug sweep of today\'s agent work. The DDIVault half of the revoke fan-out added in 1.30.3 never actually ran: agents record their modules under the short names ("span", "ddi") but the code checked for the long name, so the test was always false. DDIVault was therefore still only refusing a revoked agent on its next connect. Fixed with a single shared conversion both the revoke and delete paths use, so they cannot disagree again.',
     'Deleting an agent now also removes it from DDIVault, which was missed when delete was added — it only told SpanVault, leaving DDIVault showing a Remote Agent that no longer exists and could never reconnect. Any DHCP/DNS servers assigned to that agent are released back to central polling rather than being left owned by a deleted agent and collected by nobody.',

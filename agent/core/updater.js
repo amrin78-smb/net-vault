@@ -40,8 +40,19 @@ const https = require('https');
 // PRIVATE key stays OFFLINE on the release box and is NEVER committed (see
 // scripts/sign-agent.js). Rotating the release keypair means replacing this
 // constant and re-signing.
+// ROTATED 2026-08-04. The previous private key lived only under agent/keys/
+// (gitignored, never committed — correct) and was lost when that working tree was
+// cleaned, leaving NO way to sign a release. Regenerated and now stored OUTSIDE
+// every repo so a repo clean can't destroy it again.
+//
+// Rotating this constant is a BREAKING change for already-installed agents: an
+// agent running the old build verifies against the OLD key, so it will correctly
+// REFUSE any bundle signed with the new one. Those agents cannot self-update
+// across the rotation and must be re-installed once from the hub installer
+// (which downloads the bundle directly and does not verify a signature). With a
+// single agent in the fleet that was an acceptable trade; at scale it is not.
 const AGENT_UPDATE_PUBLIC_KEY =
-  'MCowBQYDK2VwAyEAWClNq4obh4FUGSeH74Q9a7RJRW+bjEx/i5+2DqLs6zU=';
+  'MCowBQYDK2VwAyEAB1bs89HVlxFvulxUocCEwVlfL2pimPeOEDO9vtYN/aU=';
 
 // Default per-file download timeout (ms) — a black-hole hub must not hang the
 // updater forever (it runs on the hub policy tick).

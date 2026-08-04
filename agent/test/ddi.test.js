@@ -237,6 +237,40 @@ const FAST = {
   ok('ignores unrelated/malformed messages');
 })();
 
+// ── EVENT_MAP covers the ids real DHCP servers actually emit ──────────────────
+// A live 300-line sample from a production DHCP server parsed 68% as 'Unknown',
+// and several mapped ids were plain wrong (30 is a DNS update REQUEST, not a
+// failure). These assertions pin the corrected meanings so the map cannot quietly
+// revert. The SAME map must exist in ddivault/collector/dhcpReader.js — that copy
+// is the contract partner, since both write to one dhcp_events table.
+(() => {
+  const { EVENT_MAP, parseLine } = require('../modules/ddi/dhcplog');
+
+  // ids observed in the live sample, with the counts they appeared at
+  for (const id of [10, 11, 16, 17, 18, 24, 25, 30, 31, 32]) {
+    assert.ok(EVENT_MAP[id], `event id ${id} must be mapped (seen in a real log)`);
+    assert.notStrictEqual(EVENT_MAP[id].type, 'Unknown', `id ${id} must not be Unknown`);
+  }
+
+  // The corrections, asserted explicitly — these were the wrong ones.
+  assert.strictEqual(EVENT_MAP[30].type, 'DNSUpdate',    'id 30 is a DNS update REQUEST, not a failure');
+  assert.strictEqual(EVENT_MAP[31].type, 'DNSFailed',    'id 31 is the real DNS update failure');
+  assert.strictEqual(EVENT_MAP[32].type, 'DNSUpdateOk',  'id 32 is a successful DNS update');
+  assert.strictEqual(EVENT_MAP[13].type, 'AddressInUse', 'id 13 is an address conflict, not a DNS update');
+  assert.strictEqual(EVENT_MAP[14].type, 'PoolExhausted', 'id 14 is scope exhaustion, not a DNS update');
+  assert.strictEqual(EVENT_MAP[16].type, 'LeaseDeleted', 'id 16 is a deleted lease, not a DNS delete');
+  ok('EVENT_MAP covers real-world ids and keeps the corrected meanings');
+
+  // End-to-end through parseLine, in the real CSV shape.
+  const line = '32,08/04/26,10:15:22,DNS Update Successful,10.1.2.3,host1.example.local,001122334455,,0,6,,,,';
+  const ev = parseLine(line);
+  assert.ok(ev, 'a real-shaped line parses');
+  assert.strictEqual(ev.event_id, 32, 'event_id parsed');
+  assert.strictEqual(ev.event_type, 'DNSUpdateOk', 'event_type from the corrected map');
+  assert.ok(ev.event_time && !isNaN(new Date(ev.event_time)), 'event_time is a valid date');
+  ok('parseLine maps a real-shaped line through the corrected map');
+})();
+
 // Give the async IIFEs time to finish, then report.
 setTimeout(() => {
   console.log(`\n${passed} ddi assertions passed.`);

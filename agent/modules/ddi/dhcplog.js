@@ -14,21 +14,49 @@ const path = require('path');
 
 // Map event IDs to human labels and severity (verbatim from dhcpReader.js).
 const EVENT_MAP = {
-  10: { type: 'Assign', severity: 'info' },
-  11: { type: 'Renew', severity: 'info' },
-  12: { type: 'Release', severity: 'info' },
-  13: { type: 'DNSUpdate', severity: 'info' },
-  14: { type: 'DNSUpdate', severity: 'info' },
-  15: { type: 'NACK', severity: 'warning' },
-  16: { type: 'DNSDelete', severity: 'info' },
-  20: { type: 'Expired', severity: 'info' },
-  30: { type: 'DNSFailed', severity: 'warning' },
-  34: { type: 'Conflict', severity: 'critical' },
-  1013: { type: 'ScopeActive', severity: 'info' },
-  1014: { type: 'ScopeInactive', severity: 'warning' },
-  1016: { type: 'ScopeWarning', severity: 'warning' },
-  1020: { type: 'ScopeFull', severity: 'critical' },
-  2019: { type: 'RogueDHCP', severity: 'critical' },
+  // ── Windows DHCP server AUDIT LOG ids (the DhcpSrvLog-<Day>.log files) ──
+  // ⛔ CONTRACT: this map is duplicated in ddivault/collector/dhcpReader.js and
+  // netvault/agent/modules/ddi/dhcplog.js. Central and agent collection write to
+  // the SAME dhcp_events table, so a difference here means the same event is
+  // classified two ways depending on who collected it. Change both together.
+  //
+  // Verified against Microsoft's published id table using a live 300-line sample
+  // (2026-08-04). Several entries were previously WRONG, not merely missing:
+  // id 30 is a DNS update REQUEST but was reported as 'DNSFailed' (64 of 300
+  // lines), while the genuine failures (31/35) fell through to 'Unknown' — so
+  // DNS failures were simultaneously over- and under-counted. 13/14/16/20/34
+  // were mislabelled too, and 68% of the sample parsed as 'Unknown'.
+  0:    { type: 'LogStarted',         severity: 'info' },
+  1:    { type: 'LogStopped',         severity: 'info' },
+  2:    { type: 'LogPaused',          severity: 'warning' },   // low disk space
+  10:   { type: 'Assign',             severity: 'info' },
+  11:   { type: 'Renew',              severity: 'info' },
+  12:   { type: 'Release',            severity: 'info' },
+  13:   { type: 'AddressInUse',       severity: 'warning' },   // conflict seen on the wire
+  14:   { type: 'PoolExhausted',      severity: 'critical' },
+  15:   { type: 'NACK',               severity: 'warning' },   // lease denied
+  16:   { type: 'LeaseDeleted',       severity: 'info' },
+  17:   { type: 'Expired',            severity: 'info' },      // DNS records retained
+  18:   { type: 'Expired',            severity: 'info' },      // DNS records deleted
+  20:   { type: 'BootpAssign',        severity: 'info' },
+  21:   { type: 'BootpAssign',        severity: 'info' },      // dynamic BOOTP
+  22:   { type: 'BootpPoolExhausted', severity: 'critical' },
+  23:   { type: 'BootpDeleted',       severity: 'info' },
+  24:   { type: 'CleanupBegin',       severity: 'info' },
+  25:   { type: 'CleanupStats',       severity: 'info' },
+  30:   { type: 'DNSUpdate',          severity: 'info' },      // request issued
+  31:   { type: 'DNSFailed',          severity: 'warning' },
+  32:   { type: 'DNSUpdateOk',        severity: 'info' },
+  33:   { type: 'PacketDropped',      severity: 'warning' },   // NAP policy
+  34:   { type: 'DNSQueueLimit',      severity: 'warning' },
+  35:   { type: 'DNSFailed',          severity: 'warning' },
+  36:   { type: 'PacketDropped',      severity: 'warning' },   // failover standby
+  // ── Windows EVENT LOG ids (not audit-log) — consumed by extractAlertEvents ──
+  1013: { type: 'ScopeActive',        severity: 'info' },
+  1014: { type: 'ScopeInactive',      severity: 'warning' },
+  1016: { type: 'ScopeWarning',       severity: 'warning' },
+  1020: { type: 'ScopeFull',          severity: 'critical' },
+  2019: { type: 'RogueDHCP',          severity: 'critical' },
 };
 
 // Windows DHCP logs rotate daily: DhcpSrvLog-Mon.log ... DhcpSrvLog-Sun.log.
