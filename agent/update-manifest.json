@@ -67,7 +67,7 @@
     },
     {
       "path": "modules/ddi/winrm.js",
-      "sha256": "55080fe86e47bc6511d7de734820ae7a4d55d80fbb22722c3824be59caae45a5"
+      "sha256": "9f3eb49dbe985dd765221fc823de33ec20eebeaf79ae5e506f28040ea5289da4"
     },
     {
       "path": "modules/span/checks.js",
@@ -106,5 +106,5 @@
       "sha256": "edd8d877a9224f8013e7c080d560390b6f88d85de04250d1e1701467437e3ffb"
     }
   ],
-  "sig": "NofTA/bhHZMz+kOrkOFJ3jVvTshW1gEvwFg80/x3iFHGjSn6MHPxbBCkulqTmAzy8D1W8smuMHRjtYVo2v/uAQ=="
+  "sig": "SxDj9reNHBzLr12WrD0BhzpT4NTl0Bf0ng+jbs0V7+9doXDLrzrYMDy5QfCgH18nXsOPM/8xdtaw5u435pOsCQ=="
 }

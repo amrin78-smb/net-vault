@@ -5,10 +5,19 @@
  *
  * Two deliberate differences from the source (both required to be a good agent citizen,
  * not behaviour changes on the wire):
- *   1. ASYNC: the DDIVault collector shells out with the BLOCKING execSync (fine there —
- *      it is a dedicated background process). Inside the agent that would freeze the WS
- *      event loop (heartbeats, buffer flush) for the whole 30-60s WinRM call, so every
- *      call here uses child_process.execFile (non-blocking, returns a Promise).
+ *   1. ASYNC: every call here uses child_process.execFile (non-blocking, returns a
+ *      Promise) instead of a blocking execSync, which would freeze the WS event loop
+ *      (heartbeats, buffer flush) for the whole 30-60s WinRM call.
+ *      ⚠ This comment used to justify the source's execSync as "fine there — it is a
+ *      dedicated background process". That was WRONG, and it is precisely the assumption
+ *      that kept a serious bug hidden: a frozen event loop also stalls pg's connection
+ *      callbacks and its connectionTimeoutMillis timer, so DDIVault's collector reported
+ *      "Connection terminated due to connection timeout" from a perfectly healthy local
+ *      database — and it was hunted in the connection pool (raising pool max and the
+ *      timeout, neither of which could ever work) for a long time before the real cause
+ *      was found. The source is async too as of ddivault 1.28.0, so this is no longer a
+ *      difference from it. Being a dedicated background process is NOT a licence to
+ *      block: never copy sync I/O back into either side.
  *   2. No cmd.exe: execFile invokes powershell.exe directly (no shell), so the whole PS
  *      command is passed as ONE `-Command` argument — the `\\`/`"` shell-escaping the
  *      source needed for the `-Command "..."` string form is not needed (and the PS
