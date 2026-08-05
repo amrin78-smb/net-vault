@@ -169,7 +169,7 @@ export default function SitesImportModal({ onClose, onImported }: { onClose: () 
                         <td style={{ padding: '7px 12px', color: 'var(--text-secondary)' }}>{r.country || '—'}</td>
                         <td style={{ padding: '7px 12px', color: 'var(--text-secondary)' }}>{r.region || '—'}</td>
                         <td style={{ padding: '7px 12px' }}>
-                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: '600', padding: '2px 8px', borderRadius: '20px', background: badge.bg, color: badge.color, whiteSpace: 'nowrap' as const }}>{badge.label}</span>
+                          <span style={{ fontSize: 'var(--text-xs)', fontWeight: '600', padding: '2px 8px', borderRadius: 'var(--radius-pill)', background: badge.bg, color: badge.color, whiteSpace: 'nowrap' as const }}>{badge.label}</span>
                         </td>
                         <td style={{ padding: '7px 12px', color: 'var(--text-secondary)' }}>{r.fills && r.fills.length ? r.fills.join(', ') : '—'}</td>
                         <td style={{ padding: '7px 12px', color: 'var(--text-muted)' }}>{r.reason || '—'}</td>

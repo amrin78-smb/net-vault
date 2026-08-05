@@ -86,7 +86,7 @@ export default function SitesPage() {
           { label: 'EOL devices', value: totalEol.toLocaleString(), color: 'var(--tint-danger-fg)', bg: 'var(--tint-danger)', border: 'var(--tint-danger-fg)', href: '/devices?lifecycle=EOL+%2F+EOS', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
         ].map(s => (
           <a key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+            <div style={{ background: s.bg, borderRadius: 'var(--radius)', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
@@ -119,7 +119,7 @@ export default function SitesPage() {
             {/* Country header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '10px' }}>
               <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--text-primary)' }}>{group.country}</div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', background: 'var(--surface-subtle)', padding: '2px 8px', borderRadius: '20px' }}>{group.region}</div>
+              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', background: 'var(--surface-subtle)', padding: '2px 8px', borderRadius: 'var(--radius-pill)' }}>{group.region}</div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{group.sites.length} site{group.sites.length > 1 ? 's' : ''}</div>
             </div>
 
@@ -131,7 +131,7 @@ export default function SitesPage() {
                 const eolPct = parseInt(site.total) > 0 ? Math.round(parseInt(site.eol) / parseInt(site.total) * 100) : 0
                 return (
                   <Link key={site.id} href={`/sites/${site.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ background: isDecommed ? 'var(--surface-subtle)' : 'var(--bg-card)', borderRadius: '8px', border: isDecommed ? '1px solid var(--border)' : '1px solid var(--border)', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s', opacity: isDecommed ? 0.7 : 1 }}
+                    <div style={{ background: isDecommed ? 'var(--surface-subtle)' : 'var(--bg-card)', borderRadius: 'var(--radius)', border: isDecommed ? '1px solid var(--border)' : '1px solid var(--border)', padding: '16px 18px', cursor: 'pointer', transition: 'border-color 0.15s', opacity: isDecommed ? 0.7 : 1 }}
                       onMouseEnter={e => (e.currentTarget.style.borderColor = isDecommed ? 'var(--border)' : 'var(--primary)')}
                       onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border)')}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
@@ -139,7 +139,7 @@ export default function SitesPage() {
                           <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--text-primary)' }}>{site.site}</div>
 
                         </div>
-                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: '500', padding: '3px 8px', borderRadius: '20px', background: risk.bg, color: risk.color }}>{isDecommed ? risk.label : `${risk.label} risk`}</span>
+                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: '500', padding: '3px 8px', borderRadius: 'var(--radius-pill)', background: risk.bg, color: risk.color }}>{isDecommed ? risk.label : `${risk.label} risk`}</span>
                       </div>
 
                       {/* Device count row */}
@@ -150,7 +150,7 @@ export default function SitesPage() {
                           { label: 'EOL', value: site.eol, color: 'var(--tint-danger-fg)' },
                           { label: 'Decommed', value: site.decommed, color: 'var(--tint-warn-fg)' },
                         ].map(stat => (
-                          <div key={stat.label} style={{ textAlign: 'center', background: 'var(--surface-subtle)', borderRadius: '6px', padding: '6px 4px' }}>
+                          <div key={stat.label} style={{ textAlign: 'center', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-sm)', padding: '6px 4px' }}>
                             <div style={{ fontSize: 'var(--text-md)', fontWeight: '700', color: stat.color }}>{stat.value}</div>
                             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{stat.label}</div>
                           </div>
@@ -164,8 +164,8 @@ export default function SitesPage() {
                             <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>EOL exposure</span>
                             <span style={{ fontSize: 'var(--text-xs)', color: risk.color, fontWeight: '500' }}>{eolPct}%</span>
                           </div>
-                          <div style={{ height: '4px', background: 'var(--surface-subtle)', borderRadius: '2px', overflow: 'hidden' }}>
-                            <div style={{ width: `${eolPct}%`, height: '100%', borderRadius: '2px', background: risk.color }} />
+                          <div style={{ height: '4px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-pill)', overflow: 'hidden' }}>
+                            <div style={{ width: `${eolPct}%`, height: '100%', borderRadius: 'var(--radius-pill)', background: risk.color }} />
                           </div>
                         </div>
                       )}

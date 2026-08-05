@@ -26,7 +26,7 @@ function MoonIcon() {
 /**
  * Suite-standard sun/moon theme switcher. Lives in the navy top bar of the
  * launcher and the app header, so it uses the navy-bar ghost-button style
- * (38×38, radius 8) and white-on-navy icon coloring rather than the page
+ * (38×38, var(--radius)) and white-on-navy icon coloring rather than the page
  * token colors. Theme persistence + data-theme live in @/lib/theme.
  */
 export default function ThemeToggle() {
@@ -46,7 +46,7 @@ export default function ThemeToggle() {
       title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
       style={{
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: 38, height: 38, borderRadius: 8,
+        width: 38, height: 38, borderRadius: 'var(--radius)',
         background: 'rgba(255,255,255,0.06)',
         border: '1px solid rgba(255,255,255,0.12)',
         color: 'rgba(255,255,255,0.85)', cursor: 'pointer', flexShrink: 0,

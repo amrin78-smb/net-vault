@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.31.0': [
+    'You can now switch the whole interface between rounded and square corners. The control sits in the top bar next to the dark-mode toggle, applies instantly across every page, and switches back just as easily — neither look is temporary or "the real one".',
+    'The choice is remembered per browser and is yours alone: it changes nothing for other users, needs no administrator rights, and is applied before the page draws so there is no flicker on load.',
+    'Elements meant to be round stay round — status dots, avatars and the small colour swatches in chart legends are deliberately unaffected, since squaring those reads as a fault rather than a style.',
+  ],
   '1.30.7': [
     'The update panel now still shows this server\'s own commit reference when it cannot reach GitHub to check for updates. That is a purely local fact and was already known, but NetVault dropped it from the response on the offline path — so it disappeared from view exactly when someone investigating a connectivity problem would want it. LogVault, DDIVault and SpanVault all already returned it; NetVault now matches them.',
   ],

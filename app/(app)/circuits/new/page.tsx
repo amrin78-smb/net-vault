@@ -232,7 +232,7 @@ export default function NewCircuitPage() {
           </Field>
         </Section>
 
-        {error && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '12px 16px', borderRadius: '8px', fontSize: 'var(--text-md)', marginBottom: '16px' }}>{error}</div>}
+        {error && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 'var(--text-md)', marginBottom: '16px' }}>{error}</div>}
         <div style={{ display: 'flex', gap: '10px' }}>
           <button className="btn-primary" type="submit" disabled={saving} style={{ padding: '10px 24px' }}>
             {saving ? 'Saving...' : 'Add circuit'}

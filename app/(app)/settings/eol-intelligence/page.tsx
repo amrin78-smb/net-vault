@@ -140,7 +140,7 @@ async function safeJson<T>(url: string, init?: RequestInit): Promise<T | null> {
 
 const cardStyle: React.CSSProperties = {
   background: 'var(--bg-card)',
-  borderRadius: '10px',
+  borderRadius: 'var(--radius)',
   border: '1px solid var(--border)',
   boxShadow: 'var(--shadow-sm)',
   padding: '20px',
@@ -164,7 +164,7 @@ function ConfidenceBadge({ value }: { value: string }) {
   }
   const s = map[v] || { bg: 'var(--surface-subtle)', fg: 'var(--text-muted)', label: value || '—' }
   return (
-    <span style={{ display: 'inline-block', background: s.bg, color: s.fg, padding: '2px 10px', borderRadius: '999px', fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'capitalize' }}>
+    <span style={{ display: 'inline-block', background: s.bg, color: s.fg, padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'capitalize' }}>
       {s.label}
     </span>
   )
@@ -172,7 +172,7 @@ function ConfidenceBadge({ value }: { value: string }) {
 
 function StatTile({ label, value, accent }: { label: string; value: React.ReactNode; accent?: string }) {
   return (
-    <div style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '14px 16px', minWidth: '120px', flex: '1 1 120px' }}>
+    <div style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', padding: '14px 16px', minWidth: '120px', flex: '1 1 120px' }}>
       <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: accent || 'var(--text-primary)', lineHeight: 1.1 }}>{value}</div>
       <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '4px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{label}</div>
     </div>
@@ -701,7 +701,7 @@ export default function EolIntelligencePage() {
   // Shared seed-row table — used by both an expanded vendor group and the flat
   // search result. Columns + Edit/Delete match the original markup.
   const renderSeedTable = (entries: SeedEntry[]) => (
-    <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
       <table style={{ width: '100%', borderCollapse: 'collapse' }}>
         <thead>
           <tr>
@@ -725,7 +725,7 @@ export default function EolIntelligencePage() {
               </td>
               <td>
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => openEdit(e)}>Edit</button>
+                  <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => openEdit(e)}>Edit</button>
                   <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => void deleteSeed(e)}>Delete</button>
                 </div>
               </td>
@@ -773,7 +773,7 @@ export default function EolIntelligencePage() {
               onClick={() => void syncFeed()}
               disabled={syncing || running}
               title="Pull the latest signed central EOL feed into the local seed catalog (signature-verified; updates the catalog only, not devices)"
-              style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: syncing ? 'wait' : 'pointer', fontWeight: 600, fontSize: 'var(--text-base)' }}
+              style={{ padding: '8px 16px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: syncing ? 'wait' : 'pointer', fontWeight: 600, fontSize: 'var(--text-base)' }}
             >
               {syncing ? <><span style={{ display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</span> Syncing…</> : 'Sync from EOL feed'}
             </button>
@@ -786,7 +786,7 @@ export default function EolIntelligencePage() {
         {!latestLoaded ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
         ) : latestUnavailable ? (
-          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>
+          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>
             Enrichment status is currently unavailable.
           </div>
         ) : (
@@ -815,7 +815,7 @@ export default function EolIntelligencePage() {
                   font: 'inherit',
                   background: 'var(--surface-subtle)',
                   border: '1px solid var(--border-light)',
-                  borderRadius: '8px',
+                  borderRadius: 'var(--radius)',
                   padding: '14px 16px',
                   minWidth: '120px',
                   flex: '1 1 120px',
@@ -828,7 +828,7 @@ export default function EolIntelligencePage() {
             </div>
 
             {jobError && (
-              <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)', marginTop: '14px' }}>
+              <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginTop: '14px' }}>
                 {jobError}
               </div>
             )}
@@ -843,7 +843,7 @@ export default function EolIntelligencePage() {
         {!coverageLoaded ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
         ) : (coverageUnavailable || !coverage) ? (
-          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>EOL coverage is currently unavailable.</div>
+          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>EOL coverage is currently unavailable.</div>
         ) : (() => {
           const inv = coverage.inventory
           const pct = inv.total > 0 ? Math.round((inv.dated / inv.total) * 100) : 0
@@ -852,7 +852,7 @@ export default function EolIntelligencePage() {
           const seedMap = new Map<string, number>()
           coverage.seedByVendor.forEach(s => seedMap.set((s.vendor || '').toLowerCase().trim(), s.count))
           const datelessRows = showAllDateless ? coverage.datelessByBrand : coverage.datelessByBrand.slice(0, 10)
-          const subCard: React.CSSProperties = { background: 'var(--surface-subtle)', border: '1px solid var(--border-light)', borderRadius: '8px', padding: '16px', flex: '1 1 280px', minWidth: '260px' }
+          const subCard: React.CSSProperties = { background: 'var(--surface-subtle)', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', padding: '16px', flex: '1 1 280px', minWidth: '260px' }
           const subTitle: React.CSSProperties = { fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '12px' }
           const isNoBrand = (b: string) => !b || b === '(no brand)'
           return (
@@ -879,8 +879,8 @@ export default function EolIntelligencePage() {
                       </div>
                     </div>
                     <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                      <div><span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '2px', background: 'var(--primary)', marginRight: '6px' }} />{inv.dated.toLocaleString()} dated</div>
-                      <div><span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '2px', background: 'var(--border-light)', marginRight: '6px' }} />{inv.dateless.toLocaleString()} dateless</div>
+                      <div><span style={{ display: 'inline-block', width: '9px', height: '9px', /* intentional: 2px on a 9x9 legend swatch is small RELATIVE TO THE ELEMENT — --radius-sm (6px) would round it into a circle */ borderRadius: '2px', background: 'var(--primary)', marginRight: '6px' }} />{inv.dated.toLocaleString()} dated</div>
+                      <div><span style={{ display: 'inline-block', width: '9px', height: '9px', /* intentional: 2px on a 9x9 legend swatch is small RELATIVE TO THE ELEMENT — --radius-sm (6px) would round it into a circle */ borderRadius: '2px', background: 'var(--border-light)', marginRight: '6px' }} />{inv.dateless.toLocaleString()} dateless</div>
                       <div style={{ color: 'var(--text-muted)', marginTop: '4px' }}>{inv.total.toLocaleString()} devices total</div>
                     </div>
                   </div>
@@ -905,11 +905,11 @@ export default function EolIntelligencePage() {
                           <>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
                               <span style={{ flex: '1 1 auto', fontSize: 'var(--text-sm)', fontWeight: 500, color: noBrand ? 'var(--text-muted)' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.brand || '(no brand)'}</span>
-                              {!noBrand && <span style={{ display: 'inline-block', background: gap.bg, color: gap.fg, padding: '1px 8px', borderRadius: '999px', fontSize: 'var(--text-xs)', fontWeight: 600, flex: '0 0 auto' }}>{gap.label}</span>}
+                              {!noBrand && <span style={{ display: 'inline-block', background: gap.bg, color: gap.fg, padding: '1px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: 600, flex: '0 0 auto' }}>{gap.label}</span>}
                               <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', flex: '0 0 auto' }}>{d.count.toLocaleString()}</span>
                             </div>
-                            <div style={{ height: '6px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
-                              <div style={{ height: '100%', width: `${Math.max(3, (d.count / maxDateless) * 100)}%`, background: 'var(--primary)', borderRadius: '999px' }} />
+                            <div style={{ height: '6px', borderRadius: 'var(--radius-pill)', background: 'var(--border-light)', overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${Math.max(3, (d.count / maxDateless) * 100)}%`, background: 'var(--primary)', borderRadius: 'var(--radius-pill)' }} />
                             </div>
                           </>
                         )
@@ -944,8 +944,8 @@ export default function EolIntelligencePage() {
                           <span style={{ flex: '1 1 auto', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.vendor}</span>
                           <span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', flex: '0 0 auto' }}>{s.count.toLocaleString()}</span>
                         </div>
-                        <div style={{ height: '6px', borderRadius: '999px', background: 'var(--border-light)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${Math.max(3, (s.count / maxSeed) * 100)}%`, background: 'var(--primary)', borderRadius: '999px' }} />
+                        <div style={{ height: '6px', borderRadius: 'var(--radius-pill)', background: 'var(--border-light)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${Math.max(3, (s.count / maxSeed) * 100)}%`, background: 'var(--primary)', borderRadius: 'var(--radius-pill)' }} />
                         </div>
                       </div>
                     ))
@@ -955,8 +955,8 @@ export default function EolIntelligencePage() {
 
               {/* gap legend */}
               <div style={{ display: 'flex', gap: '18px', flexWrap: 'wrap', marginTop: '14px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-                <span><span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '2px', background: 'var(--tint-warn-fg)', marginRight: '6px' }} /><strong style={{ color: 'var(--text-secondary)' }}>Coverage gap</strong> — research &amp; add seed for this brand.</span>
-                <span><span style={{ display: 'inline-block', width: '9px', height: '9px', borderRadius: '2px', background: 'var(--tint-info-fg)', marginRight: '6px' }} /><strong style={{ color: 'var(--text-secondary)' }}>Matching gap</strong> — seed exists, but the normalizer isn&apos;t matching it.</span>
+                <span><span style={{ display: 'inline-block', width: '9px', height: '9px', /* intentional: 2px on a 9x9 legend swatch is small RELATIVE TO THE ELEMENT — --radius-sm (6px) would round it into a circle */ borderRadius: '2px', background: 'var(--tint-warn-fg)', marginRight: '6px' }} /><strong style={{ color: 'var(--text-secondary)' }}>Coverage gap</strong> — research &amp; add seed for this brand.</span>
+                <span><span style={{ display: 'inline-block', width: '9px', height: '9px', /* intentional: 2px on a 9x9 legend swatch is small RELATIVE TO THE ELEMENT — --radius-sm (6px) would round it into a circle */ borderRadius: '2px', background: 'var(--tint-info-fg)', marginRight: '6px' }} /><strong style={{ color: 'var(--text-secondary)' }}>Matching gap</strong> — seed exists, but the normalizer isn&apos;t matching it.</span>
               </div>
             </>
           )
@@ -969,7 +969,7 @@ export default function EolIntelligencePage() {
           <div style={{ ...sectionLabel, marginBottom: 0 }}>Seed management {seedTotal > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>({seedTotal})</span>}</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {datelessSeedCount > 0 && (
-              <button onClick={purgeDateless} title="Remove seed entries that have no EOL/EOS date — they can't enrich devices and create false matches" style={{ padding: '8px 14px', fontSize: 'var(--text-sm)', fontWeight: 600, border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Remove {datelessSeedCount.toLocaleString()} dateless</button>
+              <button onClick={purgeDateless} title="Remove seed entries that have no EOL/EOS date — they can't enrich devices and create false matches" style={{ padding: '8px 14px', fontSize: 'var(--text-sm)', fontWeight: 600, border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Remove {datelessSeedCount.toLocaleString()} dateless</button>
             )}
             <button className="btn-primary" onClick={() => openAdd()} style={{ padding: '8px 16px' }}>+ Add entry</button>
           </div>
@@ -977,7 +977,7 @@ export default function EolIntelligencePage() {
 
         {/* add / edit form */}
         {showForm && (
-          <div ref={formRef} style={{ border: '1px solid var(--border)', borderRadius: '8px', padding: '18px', marginBottom: '18px', background: 'var(--surface-subtle)' }}>
+          <div ref={formRef} style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '18px', marginBottom: '18px', background: 'var(--surface-subtle)' }}>
             <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 600, margin: '0 0 16px', color: 'var(--text-primary)' }}>{editId != null ? 'Edit seed entry' : 'Add seed entry'}</h3>
             <div className="form-grid-compact" style={{ marginBottom: '14px' }}>
               <div>
@@ -1019,7 +1019,7 @@ export default function EolIntelligencePage() {
             </div>
 
             {/* live coverage preview */}
-            <div style={{ border: '1px dashed var(--border)', borderRadius: '8px', padding: '12px 14px', marginBottom: '14px', background: 'var(--bg-card)' }}>
+            <div style={{ border: '1px dashed var(--border)', borderRadius: 'var(--radius)', padding: '12px 14px', marginBottom: '14px', background: 'var(--bg-card)' }}>
               <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px' }}>Coverage preview</div>
               {(!form.vendor.trim() && !form.model_raw.trim()) ? (
                 <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>Type a vendor and model to preview which devices this entry would match.</div>
@@ -1042,7 +1042,7 @@ export default function EolIntelligencePage() {
               )}
             </div>
 
-            {seedFormError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{seedFormError}</div>}
+            {seedFormError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{seedFormError}</div>}
             <div style={{ display: 'flex', gap: '8px' }}>
               <button className="btn-primary" onClick={() => void saveSeed()} disabled={savingSeed}>{savingSeed ? 'Saving…' : editId != null ? 'Save changes' : 'Add entry'}</button>
               <button className="btn-secondary" onClick={closeForm}>Cancel</button>
@@ -1063,7 +1063,7 @@ export default function EolIntelligencePage() {
         {!seedLoaded ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
         ) : seedUnavailable ? (
-          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>
+          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>
             Seed dataset is currently unavailable.
           </div>
         ) : seedSearch.trim() ? (
@@ -1071,7 +1071,7 @@ export default function EolIntelligencePage() {
           (!searchResult || searchResult.loading) ? (
             <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Searching…</div>
           ) : searchResult.unavailable ? (
-            <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>Search is currently unavailable.</div>
+            <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>Search is currently unavailable.</div>
           ) : searchResult.entries.length === 0 ? (
             <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No seed entries match &ldquo;{seedSearch.trim()}&rdquo;.</div>
           ) : (
@@ -1087,7 +1087,7 @@ export default function EolIntelligencePage() {
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No seed entries yet. Add one to start enriching device lifecycle data.</div>
         ) : (
           /* ── VENDOR ACCORDION ── */
-          <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
             {seedGroups.map((g, i) => {
               const open = expandedVendor === g.vendor
               const vp = vendorPages[g.vendor]
@@ -1104,7 +1104,7 @@ export default function EolIntelligencePage() {
                   >
                     <span style={{ display: 'inline-block', width: '10px', color: 'var(--text-muted)', fontSize: 'var(--text-sm)', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>▸</span>
                     <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 'var(--text-md)', flex: '0 0 auto' }}>{g.vendor}</span>
-                    <span style={{ display: 'inline-block', background: 'var(--surface-subtle)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', padding: '1px 9px', borderRadius: '999px', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{g.count.toLocaleString()}</span>
+                    <span style={{ display: 'inline-block', background: 'var(--surface-subtle)', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', padding: '1px 9px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: 600 }}>{g.count.toLocaleString()}</span>
                     <span style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>{g.dated.toLocaleString()} dated · {g.dateless.toLocaleString()} dateless</span>
                   </button>
                   {open && (
@@ -1112,7 +1112,7 @@ export default function EolIntelligencePage() {
                       {(!vp || vp.loading) ? (
                         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>Loading…</div>
                       ) : vp.unavailable ? (
-                        <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>Entries are currently unavailable.</div>
+                        <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>Entries are currently unavailable.</div>
                       ) : vp.entries.length === 0 ? (
                         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No entries for this vendor.</div>
                       ) : (
@@ -1139,11 +1139,11 @@ export default function EolIntelligencePage() {
         {!latestLoaded ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
         ) : latestUnavailable ? (
-          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>Worklist is currently unavailable.</div>
+          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>Worklist is currently unavailable.</div>
         ) : unmatched.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No unmatched models — coverage is complete, or enrichment has not run yet.</div>
         ) : (
-          <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr><th>Model</th><th>Devices</th><th>Note</th><th>Actions</th></tr></thead>
               <tbody>
@@ -1158,7 +1158,7 @@ export default function EolIntelligencePage() {
                     <td><span style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)' }}>{u.count.toLocaleString()}</span></td>
                     <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{u.note || '—'}</td>
                     <td>
-                      <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 500 }} onClick={() => addUnmatchedToSeed(u.model)}>+ Add to seed</button>
+                      <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--primary)', cursor: 'pointer', fontWeight: 500 }} onClick={() => addUnmatchedToSeed(u.model)}>+ Add to seed</button>
                     </td>
                   </tr>
                 ))}
@@ -1182,7 +1182,7 @@ export default function EolIntelligencePage() {
                 <button className="btn-danger" style={{ padding: '6px 12px', fontSize: 'var(--text-sm)' }} onClick={() => void bulkRecommendation('accept_all', 'should_be_eol')}>Mark all as EOL</button>
               </div>
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>These devices are marked Active but vendor confirms EOL date has passed. Review and update status.</p>
-              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead><tr><th>Device Name</th><th>Model</th><th>Current Status</th><th>EOL Date</th><th>Days Overdue</th><th>Confidence</th><th>Source</th><th>Action</th></tr></thead>
                   <tbody>
@@ -1210,7 +1210,7 @@ export default function EolIntelligencePage() {
                         <td>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                             <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => void resolveRecommendation(r, 'accept', 'should_be_eol')}>Mark as EOL</button>
-                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => void resolveRecommendation(r, 'ignore', 'should_be_eol')}>Ignore</button>
+                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => void resolveRecommendation(r, 'ignore', 'should_be_eol')}>Ignore</button>
                           </div>
                         </td>
                       </tr>
@@ -1229,7 +1229,7 @@ export default function EolIntelligencePage() {
                 <button className="btn-primary" style={{ padding: '6px 12px', fontSize: 'var(--text-sm)' }} onClick={() => void bulkRecommendation('accept_all', 'possibly_incorrect')}>Revert all to Active</button>
               </div>
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>These devices are marked EOL/EOS but vendor data shows they are still within support period.</p>
-              <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+              <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead><tr><th>Device Name</th><th>Model</th><th>Vendor Support Until</th><th>Days Remaining</th><th>Confidence</th><th>Source</th><th>Action</th></tr></thead>
                   <tbody>
@@ -1255,8 +1255,8 @@ export default function EolIntelligencePage() {
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--tint-success)', color: 'var(--tint-success-fg)', cursor: 'pointer', fontWeight: 500 }} onClick={() => void resolveRecommendation(r, 'accept', 'possibly_incorrect')}>Revert to Active</button>
-                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => void resolveRecommendation(r, 'ignore', 'possibly_incorrect')}>Ignore</button>
+                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--tint-success)', color: 'var(--tint-success-fg)', cursor: 'pointer', fontWeight: 500 }} onClick={() => void resolveRecommendation(r, 'accept', 'possibly_incorrect')}>Revert to Active</button>
+                            <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => void resolveRecommendation(r, 'ignore', 'possibly_incorrect')}>Ignore</button>
                           </div>
                         </td>
                       </tr>
@@ -1276,11 +1276,11 @@ export default function EolIntelligencePage() {
         {!discLoaded ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
         ) : discUnavailable ? (
-          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)' }}>Discrepancy review is currently unavailable.</div>
+          <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>Discrepancy review is currently unavailable.</div>
         ) : discrepancies.length === 0 ? (
           <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No pending discrepancies. 🎉</div>
         ) : (
-          <div style={{ border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+          <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead><tr><th>Device</th><th>Model</th><th>Manual date</th><th>Seed date</th><th>Difference</th><th>Actions</th></tr></thead>
               <tbody>
@@ -1291,15 +1291,15 @@ export default function EolIntelligencePage() {
                     <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(d.manual_date)}</td>
                     <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{fmtDate(d.seed_date)}</td>
                     <td>
-                      <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--tint-warn-fg)', background: 'var(--tint-warn)', padding: '2px 8px', borderRadius: '999px' }}>
+                      <span style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--tint-warn-fg)', background: 'var(--tint-warn)', padding: '2px 8px', borderRadius: 'var(--radius-pill)' }}>
                         {Math.abs(d.difference_days)} day{Math.abs(d.difference_days) === 1 ? '' : 's'}
                       </span>
                     </td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                        <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--tint-success)', color: 'var(--tint-success-fg)', cursor: 'pointer', fontWeight: 500 }} onClick={() => void resolveDiscrepancy(d.id, 'accept_seed')}>Accept seed date</button>
-                        <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => void resolveDiscrepancy(d.id, 'keep_manual')}>Keep manual</button>
-                        <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => void resolveDiscrepancy(d.id, 'ignore')}>Ignore</button>
+                        <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--tint-success)', color: 'var(--tint-success-fg)', cursor: 'pointer', fontWeight: 500 }} onClick={() => void resolveDiscrepancy(d.id, 'accept_seed')}>Accept seed date</button>
+                        <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => void resolveDiscrepancy(d.id, 'keep_manual')}>Keep manual</button>
+                        <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => void resolveDiscrepancy(d.id, 'ignore')}>Ignore</button>
                       </div>
                     </td>
                   </tr>

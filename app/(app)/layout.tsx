@@ -7,6 +7,7 @@ import IdleTimeout from '@/components/IdleTimeout'
 import UpdateNotifier from '@/app/components/UpdateNotifier'
 import UpdateFailureBanner from '@/app/components/UpdateFailureBanner'
 import ThemeToggle from '@/components/ThemeToggle'
+import CornersToggle from '@/components/CornersToggle'
 import LicenseBanner from '@/components/LicenseBanner'
 
 type Settings = {
@@ -232,6 +233,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   if (status === 'loading') return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+        {/* intentional: 50% — a true circle (loading spinner), never squared */}
         <div style={{ width: 28, height: 28, border: '2.5px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
         <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>Loading…</div>
       </div>
@@ -290,7 +292,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   justifyContent: collapsed ? 'center' : 'flex-start',
                   padding: collapsed ? '10px 0' : '8px 10px',
                   margin: '1px 0',
-                  borderRadius: 8,
+                  borderRadius: 'var(--radius)',
                   background: active ? `${primary}20` : 'transparent',
                   position: 'relative',
                   transition: 'background 0.15s',
@@ -300,15 +302,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   onMouseLeave={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
                 >
                   {/* Active left-bar indicator */}
+                  {/* intentional: decorative 3px accent sliver — the '0 3px 3px 0'
+                      rounded-cap shape IS the indicator; tokenizing would deform it */}
                   {active && (
                     <div style={{
                       position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                      width: 3, height: 20, background: primary, borderRadius: '0 3px 3px 0',
+                      width: 3, height: 20, background: primary, borderRadius: '0 3px 3px 0' /* intentional: 3px decorative active-nav sliver */,
                     }} />
                   )}
                   {/* Colored icon box */}
                   <div style={{
-                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                    width: 28, height: 28, borderRadius: 'var(--radius)', flexShrink: 0,
                     background: active ? ic?.bg : 'rgba(255,255,255,0.07)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: active ? ic?.color : 'rgba(255,255,255,0.4)',
@@ -318,6 +322,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     {ic?.icon}
                     {/* Collapsed alert dot */}
                     {(item as any).showAlertBadge && alertCount > 0 && collapsed && (
+                      /* intentional: 50% — a true circular alert dot */
                       <span style={{
                         position: 'absolute', top: -2, right: -2,
                         width: 9, height: 9, borderRadius: '50%',
@@ -340,7 +345,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <span style={{
                       marginLeft: 'auto',
                       minWidth: 18, height: 18, padding: '0 5px',
-                      borderRadius: 9,
+                      borderRadius: 'var(--radius-pill)',
                       background: 'var(--primary)', color: 'white',
                       fontSize: 'var(--text-xs)', fontWeight: 700,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -365,7 +370,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             margin: '4px 10px',
             padding: collapsed ? '10px 0' : '10px 12px',
             width: 'calc(100% - 20px)',
-            background: 'transparent', border: 'none', borderRadius: 8,
+            background: 'transparent', border: 'none', borderRadius: 'var(--radius)',
             cursor: 'pointer',
             color: 'rgba(255,255,255,0.4)', fontSize: 'var(--text-sm)',
             transition: 'all 0.15s',
@@ -435,7 +440,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 width: '100%', padding: '9px 44px 9px 36px',
                 background: 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 6,
+                borderRadius: 'var(--radius-sm)',
                 color: 'white', fontSize: 'var(--text-base)',
                 outline: 'none', boxSizing: 'border-box',
                 fontFamily: 'inherit',
@@ -452,7 +457,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             />
             <span style={{
               position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-              padding: '2px 7px', borderRadius: 6,
+              padding: '2px 7px', borderRadius: 'var(--radius-sm)',
               background: 'rgba(255,255,255,0.1)',
               color: 'rgba(255,255,255,0.55)',
               fontSize: 'var(--text-sm)', fontWeight: 600, lineHeight: 1,
@@ -464,14 +469,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div style={{ flex: 1 }} />
 
-          {/* Theme toggle + Help ghost icon button */}
+          {/* Corner style + theme toggle + Help ghost icon button.
+              CornersToggle lives here (not in Settings) so every role can reach
+              it — /settings redirects non-admins away. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 6 }}>
+            <CornersToggle />
             <ThemeToggle />
             <a
               href="/compliance"
               title="Help"
               style={{
-                width: 36, height: 36, borderRadius: 9,
+                width: 36, height: 36, borderRadius: 'var(--radius)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
                 transition: 'background 0.15s, color 0.15s',
@@ -493,12 +501,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 display: 'flex', alignItems: 'center', gap: 10,
                 background: showUserMenu ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)',
                 border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 6, padding: '6px 12px 6px 6px',
+                borderRadius: 'var(--radius-sm)', padding: '6px 12px 6px 6px',
                 cursor: 'pointer', transition: 'background 0.15s',
               }}
               onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
               onMouseLeave={e => { if (!showUserMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
             >
+              {/* intentional: 50% — a true circular avatar, never squared */}
               <div style={{
                 width: 34, height: 34, borderRadius: '50%',
                 background: 'var(--primary)',
@@ -530,7 +539,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <div style={{
                 position: 'absolute', top: 'calc(100% + 8px)', right: 0,
                 background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 8, boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                borderRadius: 'var(--radius)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
                 minWidth: 220, overflow: 'hidden', zIndex: 999,
                 animation: 'fadeIn 0.15s ease',
               }}>
@@ -614,7 +623,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Change password</h2>
             <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 20px' }}>Enter your current password and choose a new one.</p>
             {pwSuccess ? (
-              <div style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', padding: '12px 16px', borderRadius: 8, fontSize: 'var(--text-md)', textAlign: 'center' }}>
+              <div style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 'var(--text-md)', textAlign: 'center' }}>
                 Password changed successfully!
               </div>
             ) : (
@@ -634,7 +643,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </div>
                 ))}
                 {pwError && (
-                  <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 6, fontSize: 'var(--text-base)', marginBottom: 14 }}>{pwError}</div>
+                  <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: 14 }}>{pwError}</div>
                 )}
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-primary" onClick={changePassword} disabled={pwSaving} style={{ flex: 1 }}>

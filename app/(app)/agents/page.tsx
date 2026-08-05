@@ -98,11 +98,12 @@ function StatusPill({ status }: { status: AgentStatus }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 6,
-      padding: '3px 10px', borderRadius: 20,
+      padding: '3px 10px', borderRadius: 'var(--radius-pill)',
       background: m.bg, color: m.fg,
       fontSize: 'var(--text-xs)', fontWeight: 600, letterSpacing: '0.02em', whiteSpace: 'nowrap',
     }}>
       <span style={{
+        // intentional: status dot — squaring it would look broken
         width: 7, height: 7, borderRadius: '50%', background: m.dot, flexShrink: 0,
         animation: status === 'online' ? 'pulse 2s ease-in-out infinite' : undefined,
       }} />
@@ -118,7 +119,7 @@ function ModuleChip({ appKey, enabled }: { appKey: ModuleKey; enabled: boolean }
       title={enabled ? `${meta.label} · enabled` : `${meta.label} · disabled`}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
-        padding: '2px 8px', borderRadius: 6,
+        padding: '2px 8px', borderRadius: 'var(--radius-sm)',
         background: enabled ? meta.bg : 'var(--surface-subtle)',
         color: enabled ? meta.fg : 'var(--text-muted)',
         fontSize: 'var(--text-xs)', fontWeight: 600, whiteSpace: 'nowrap',
@@ -127,6 +128,7 @@ function ModuleChip({ appKey, enabled }: { appKey: ModuleKey; enabled: boolean }
       }}
     >
       <span style={{
+        // intentional: module-enabled status dot — squaring it would look broken
         width: 6, height: 6, borderRadius: '50%', flexShrink: 0,
         background: enabled ? 'currentColor' : 'var(--text-muted)',
       }} />
@@ -145,7 +147,7 @@ function ToggleSwitch({ on, busy, onChange }: { on: boolean; busy?: boolean; onC
       onClick={onChange}
       style={{
         position: 'relative', width: 34, height: 19, flexShrink: 0,
-        borderRadius: 20, border: 'none', padding: 0,
+        borderRadius: 'var(--radius-pill)', border: 'none', padding: 0,
         cursor: busy ? 'wait' : 'pointer',
         background: on ? 'var(--primary)' : 'var(--border)',
         transition: 'background 0.15s', opacity: busy ? 0.6 : 1,
@@ -153,6 +155,7 @@ function ToggleSwitch({ on, busy, onChange }: { on: boolean; busy?: boolean; onC
     >
       <span style={{
         position: 'absolute', top: 2, left: on ? 17 : 2,
+        // intentional: toggle-switch thumb — a squared thumb would look broken
         width: 15, height: 15, borderRadius: '50%', background: '#fff',
         boxShadow: '0 1px 2px rgba(0,0,0,0.3)', transition: 'left 0.15s',
       }} />
@@ -298,7 +301,7 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
         }}>
           {(agent.buffer_depth ?? 0) > 0
             ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--yellow)' }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%' /* intentional: buffer-depth status dot — squaring it would look broken */, background: 'var(--yellow)' }} />
                 {(agent.buffer_depth ?? 0).toLocaleString()}
               </span>
             : '0'}

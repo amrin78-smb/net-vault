@@ -139,7 +139,7 @@ function num(v: unknown): string {
 
 function Skeleton() {
   return (
-    <span style={{ display: 'inline-block', width: '38px', height: '15px', borderRadius: '4px', background: 'rgba(255,255,255,0.18)', animation: 'nvShimmer 1.4s ease-in-out infinite' }} />
+    <span style={{ display: 'inline-block', width: '38px', height: '15px', borderRadius: 'var(--radius-sm)', background: 'rgba(255,255,255,0.18)', animation: 'nvShimmer 1.4s ease-in-out infinite' }} />
   )
 }
 
@@ -158,14 +158,14 @@ function fmtUptime(s: number): string {
 
 function ProgressBar({ pct, color }: { pct: number; color: string }) {
   return (
-    <div style={{ height: '8px', background: 'var(--surface-subtle)', borderRadius: '4px', overflow: 'hidden' }}>
-      <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: color, borderRadius: '4px', transition: 'width 0.5s' }} />
+    <div style={{ height: '8px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-pill)', overflow: 'hidden' }}>
+      <div style={{ height: '100%', width: `${Math.min(Math.max(pct, 0), 100)}%`, background: color, borderRadius: 'var(--radius-pill)', transition: 'width 0.5s' }} />
     </div>
   )
 }
 
 function ValueSkeleton({ w = '120px', h = '16px' }: { w?: string; h?: string }) {
-  return <span style={{ display: 'inline-block', width: w, height: h, borderRadius: '4px', background: 'var(--surface-subtle)', animation: 'nvShimmer 1.4s ease-in-out infinite' }} />
+  return <span style={{ display: 'inline-block', width: w, height: h, borderRadius: 'var(--radius-sm)', background: 'var(--surface-subtle)', animation: 'nvShimmer 1.4s ease-in-out infinite' }} />
 }
 
 const SS_LABEL: React.CSSProperties = { fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }
@@ -442,11 +442,11 @@ function LauncherInner() {
             <div style={{ color: 'white', fontSize: '13px', fontWeight: '500' }}>{user?.name}</div>
             <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: '11px' }}>{user?.role?.replace('_', ' ')}</div>
           </div>
-          <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '14px', fontWeight: '600' }}>
+          <div style={{ width: '34px', height: '34px', borderRadius: '50%' /* intentional: circular avatar */, background: primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: '14px', fontWeight: '600' }}>
             {user?.name?.charAt(0)?.toUpperCase() || 'U'}
           </div>
           <button onClick={() => signOut({ callbackUrl: '/login' })}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: '7px', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 'var(--radius-sm)', color: 'white', fontSize: '13px', cursor: 'pointer', fontWeight: '500' }}
             onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" /></svg>
@@ -494,7 +494,7 @@ function LauncherInner() {
         </div>
 
         {/* Suite health overview */}
-        <div style={{ flex: 1, minWidth: 0, background: 'var(--bg-card)', borderRadius: '12px', boxShadow: CARD_SHADOW, padding: 0, overflow: 'hidden' }}>
+        <div style={{ flex: 1, minWidth: 0, background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: 0, overflow: 'hidden' }}>
           {/* Title row */}
           <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-light)', fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
             Suite Health Overview
@@ -532,7 +532,7 @@ function LauncherInner() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                       {pillLicensed ? (
                         <>
-                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
+                          <span style={{ width: '7px', height: '7px', borderRadius: '50%' /* intentional: status dot */, background: HEALTH_COLORS[st], display: 'inline-block', flexShrink: 0 }} />
                           <span style={{ fontSize: '12px', color: HEALTH_COLORS[st] }}>{st}</span>
                         </>
                       ) : (
@@ -560,12 +560,12 @@ function LauncherInner() {
             const noAccess = isLic && !access
             const netvaultEmpty = card.name === 'NetVault' && !statsLoading && netStats != null && netStats.devices_total === 0 && netStats.sites_total === 0 && netStats.eol_total === 0
             return (
-              <div key={card.name} style={{ background: NAVY, borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '18px', display: 'flex', flexDirection: 'column', color: 'white', position: 'relative' }}>
+              <div key={card.name} style={{ background: NAVY, borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: '18px', display: 'flex', flexDirection: 'column', color: 'white', position: 'relative' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, opacity: licensed ? 1 : 0.5, filter: licensed ? 'none' : 'grayscale(1)', transition: 'opacity 0.2s, filter 0.2s' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
                   <img src={card.logo} alt={card.name} style={{ height: '30px', width: 'auto', objectFit: 'contain' }} />
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: HEALTH_COLORS[st], background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: '10px' }}>
-                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: HEALTH_COLORS[st] }} /> {st}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: HEALTH_COLORS[st], background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}>
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%' /* intentional: status dot */, background: HEALTH_COLORS[st] }} /> {st}
                   </span>
                 </div>
                 <div style={{ fontSize: '12px', fontWeight: 600, color: card.color, marginBottom: '4px' }}>{card.subtitle}</div>
@@ -573,7 +573,7 @@ function LauncherInner() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', marginBottom: '16px', flex: 1, filter: licensed ? 'none' : 'blur(2px)' }}>
                   {netvaultEmpty ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '6px', flex: 1, padding: '8px 0' }}>
-                      <div style={{ width: '34px', height: '34px', borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.color }}>
+                      <div style={{ width: '34px', height: '34px', borderRadius: '50%' /* intentional: circular icon badge */, background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: card.color }}>
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
                       </div>
                       <div style={{ fontWeight: 700, color: 'white', fontSize: '13px' }}>No devices yet</div>
@@ -592,13 +592,13 @@ function LauncherInner() {
                 </div>
                 </div>
                 {licensed ? (
-                  <a href={card.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: card.color, color: 'white', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: '8px', textDecoration: 'none' }}>
+                  <a href={card.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: card.color, color: 'white', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
                     Open {card.name}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                   </a>
                 ) : (
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.12)', cursor: 'not-allowed' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: 'var(--radius)', border: '1px solid rgba(255,255,255,0.12)', cursor: 'not-allowed' }}>
                       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg>
                       {noAccess ? 'No access' : 'Not licensed'}
                     </div>
@@ -620,7 +620,7 @@ function LauncherInner() {
             <div style={{ minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>NocVault Hub — Suite Intelligence</h2>
-                <span style={{ background: primary, color: '#fff', fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.5px' }}>NEW</span>
+                <span style={{ background: primary, color: '#fff', fontSize: '9px', fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--radius-sm)', letterSpacing: '0.5px' }}>NEW</span>
               </div>
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>Cross-app insight no single app can see — correlated alerts and suite-wide KPIs across all four apps.</div>
             </div>
@@ -635,12 +635,12 @@ function LauncherInner() {
                 onChange={e => setSearchQ(e.target.value)}
                 onFocus={() => { if (searchResults.length) setSearchOpen(true) }}
                 placeholder="Search any asset — IP, hostname or name…"
-                style={{ width: '100%', padding: '9px 12px 9px 34px', fontSize: '13px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '9px 12px 9px 34px', fontSize: '13px', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }}
               />
               {searchOpen && (
                 <>
                   <div onClick={() => setSearchOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 20 }} />
-                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', boxShadow: CARD_SHADOW, zIndex: 30, overflow: 'hidden', maxHeight: '360px', overflowY: 'auto' }}>
+                  <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, zIndex: 30, overflow: 'hidden', maxHeight: '360px', overflowY: 'auto' }}>
                     {searchLoading ? (
                       <div style={{ padding: '12px', fontSize: '12px', color: 'var(--text-muted)' }}>Searching all four apps…</div>
                     ) : searchResults.length === 0 ? (
@@ -656,7 +656,7 @@ function LauncherInner() {
                             {r.ip && <div style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{r.ip}</div>}
                           </div>
                           <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                            {r.sources.map(s => <span key={s} title={s} style={{ width: '8px', height: '8px', borderRadius: '50%', background: SRC_COLOR[s] || '#888' }} />)}
+                            {r.sources.map(s => <span key={s} title={s} style={{ width: '8px', height: '8px', borderRadius: '50%' /* intentional: source dot */, background: SRC_COLOR[s] || '#888' }} />)}
                           </div>
                         </button>
                       ))
@@ -676,7 +676,7 @@ function LauncherInner() {
               { lab: 'IPAM Utilization', val: hubKpis ? fmtKpi(hubKpis.ipamUtilization.pct, '%') : '—', unit: '', sub: hubKpis?.ipamUtilization.subnetsOver85 != null ? `${hubKpis.ipamUtilization.subnetsOver85} subnets >85%` : '', color: '#d97706' },
               { lab: 'Open Alerts', val: hubKpis ? fmtKpi(hubKpis.openAlerts.total) : '—', unit: '', sub: 'across all apps', color: (hubKpis?.openAlerts.total ?? 0) > 0 ? '#dc2626' : 'var(--text-primary)' },
             ].map((t, i) => (
-              <div key={i} style={{ background: 'var(--bg-card)', borderRadius: '12px', boxShadow: CARD_SHADOW, padding: '14px 16px' }}>
+              <div key={i} style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: '14px 16px' }}>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>{t.lab}</div>
                 <div style={{ fontSize: '24px', fontWeight: 800, color: t.color, marginTop: '3px', lineHeight: 1 }}>{t.val}<span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>{t.unit}</span></div>
                 <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '5px', minHeight: '14px' }}>{t.sub}</div>
@@ -685,7 +685,7 @@ function LauncherInner() {
           </div>
 
           {/* Correlated suite alerts */}
-          <div style={{ background: 'var(--bg-card)', borderRadius: '12px', boxShadow: CARD_SHADOW, padding: '16px 20px' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: '16px 20px' }}>
             <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>Correlated suite alerts</div>
             {hubAlerts == null ? (
               <div style={{ fontSize: '13px', color: 'var(--text-muted)', padding: '8px 0' }}>Loading…</div>
@@ -694,13 +694,13 @@ function LauncherInner() {
             ) : (
               hubAlerts.map((a, i) => (
                 <div key={i} style={{ display: 'flex', gap: '10px', padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--border-light)' }}>
-                  <div style={{ width: '3px', borderRadius: '2px', background: SEV_BAR[a.severity] || 'var(--text-muted)', flexShrink: 0 }} />
+                  <div style={{ width: '3px', borderRadius: '2px' /* intentional: 3px decorative severity sliver */, background: SEV_BAR[a.severity] || 'var(--text-muted)', flexShrink: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 600, fontSize: '13px', color: 'var(--text-primary)' }}>{a.title}</div>
                     <div style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '2px' }}>{a.detail}</div>
                     <div style={{ display: 'flex', gap: '4px', marginTop: '5px', flexWrap: 'wrap' }}>
                       {a.sources.map(s => (
-                        <span key={s} style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: '5px', color: SRC_COLOR[s] || 'var(--text-muted)', background: `${SRC_COLOR[s] || '#888888'}22` }}>{s}</span>
+                        <span key={s} style={{ fontSize: '10px', fontWeight: 600, padding: '2px 7px', borderRadius: 'var(--radius-sm)', color: SRC_COLOR[s] || 'var(--text-muted)', background: `${SRC_COLOR[s] || '#888888'}22` }}>{s}</span>
                       ))}
                     </div>
                   </div>
@@ -728,7 +728,7 @@ function LauncherInner() {
             fcColor = fc < 30 ? '#dc2626' : fc < 90 ? '#d97706' : 'var(--text-muted)'
           }
           return (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '14px', boxShadow: CARD_SHADOW, padding: '20px 24px', marginBottom: '8px' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: '20px 24px', marginBottom: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: 'var(--text-primary)' }}>
                   <rect x="2" y="3" width="20" height="7" rx="2" /><rect x="2" y="14" width="20" height="7" rx="2" /><line x1="6" y1="6.5" x2="6.01" y2="6.5" /><line x1="6" y1="17.5" x2="6.01" y2="17.5" />
@@ -800,7 +800,7 @@ function LauncherInner() {
                 <div style={{ fontSize: '18px', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{asset?.device?.name || assetLabel}</div>
                 <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-mono)' }}>{asset?.device?.ip || ''}</div>
               </div>
-              <button onClick={() => setAssetOpen(false)} aria-label="Close" style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '7px', color: '#fff', width: '30px', height: '30px', cursor: 'pointer', fontSize: '15px', flexShrink: 0, lineHeight: 1 }}>✕</button>
+              <button onClick={() => setAssetOpen(false)} aria-label="Close" style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 'var(--radius-sm)', color: '#fff', width: '30px', height: '30px', cursor: 'pointer', fontSize: '15px', flexShrink: 0, lineHeight: 1 }}>✕</button>
             </div>
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)' }}>
@@ -837,7 +837,7 @@ function LauncherInner() {
                   <DHead>Suite presence</DHead>
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
                     {([['NetVault', !!asset.device], ['SpanVault', !!asset.monitoring], ['LogVault', !!asset.logs], ['DDIVault', !!asset.dns]] as const).map(([app, on]) => (
-                      <span key={app} style={{ fontSize: '11px', fontWeight: 600, padding: '4px 9px', borderRadius: '6px', color: on ? (SRC_COLOR[app] || 'var(--text-primary)') : 'var(--text-muted)', background: on ? `${SRC_COLOR[app] || '#888'}22` : 'var(--surface-subtle)', opacity: on ? 1 : 0.6 }}>
+                      <span key={app} style={{ fontSize: '11px', fontWeight: 600, padding: '4px 9px', borderRadius: 'var(--radius-sm)', color: on ? (SRC_COLOR[app] || 'var(--text-primary)') : 'var(--text-muted)', background: on ? `${SRC_COLOR[app] || '#888'}22` : 'var(--surface-subtle)', opacity: on ? 1 : 0.6 }}>
                         {on ? '● ' : '○ '}{app}
                       </span>
                     ))}
@@ -857,7 +857,7 @@ function LauncherInner() {
                         <DHead>Open alerts</DHead>
                         {asset.monitoring.alerts.map((a, i) => (
                           <div key={i} style={{ display: 'flex', gap: '8px', padding: '7px 0', borderBottom: '1px solid var(--border-light)' }}>
-                            <span style={{ width: '3px', borderRadius: '2px', background: SEV_BAR[a.severity] || 'var(--text-muted)', flexShrink: 0 }} />
+                            <span style={{ width: '3px', borderRadius: '2px' /* intentional: 3px decorative severity sliver */, background: SEV_BAR[a.severity] || 'var(--text-muted)', flexShrink: 0 }} />
                             <div style={{ minWidth: 0 }}>
                               <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{a.type}</div>
                               <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{fmtDate(a.since)} · {a.severity}</div>

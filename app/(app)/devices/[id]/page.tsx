@@ -106,7 +106,7 @@ function DeviceField({ label, value }: { label: string; value: any }) {
 
 function DeviceSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '20px 24px', marginBottom: '16px' }}>
+    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '20px 24px', marginBottom: '16px' }}>
       <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>{title}</h2>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>{children}</div>
     </div>
@@ -225,7 +225,7 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
           </DeviceSection>
 
           {/* Change history timeline */}
-          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '20px 24px' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '20px 24px' }}>
             <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>
               Change history {logs.length > 0 && <span style={{ fontWeight: '400', color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>({logs.length})</span>}
             </h2>
@@ -242,7 +242,7 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
                   return (
                     <div key={i} style={{ display: 'flex', gap: '14px', paddingBottom: i < logs.length - 1 ? '14px' : 0, marginBottom: i < logs.length - 1 ? '14px' : 0, position: 'relative' }}>
                       {/* Dot */}
-                      <div style={{ width: '15px', height: '15px', borderRadius: '50%', flexShrink: 0, marginTop: '2px', background: dotColor, border: '2px solid var(--bg-card)', boxShadow: `0 0 0 1px ${dotColor}`, zIndex: 1 }} />
+                      <div style={{ width: '15px', height: '15px', borderRadius: '50%' /* intentional: circular timeline dot — must stay round in square-corner mode */, flexShrink: 0, marginTop: '2px', background: dotColor, border: '2px solid var(--bg-card)', boxShadow: `0 0 0 1px ${dotColor}`, zIndex: 1 }} />
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
@@ -255,7 +255,7 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
                           {log.changed_by_name || 'System'}
                         </div>
                         {detail && (
-                          <div style={{ marginTop: '6px', background: 'var(--surface-subtle)', borderRadius: '6px', padding: '8px 10px', border: '1px solid var(--border-light)' }}>
+                          <div style={{ marginTop: '6px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-sm)', padding: '8px 10px', border: '1px solid var(--border-light)' }}>
                             {detail.split('\n').map((line, j) => (
                               <div key={j} style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', lineHeight: '1.6' }}>{line}</div>
                             ))}

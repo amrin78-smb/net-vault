@@ -28,6 +28,11 @@
   --shadow-lg:      0 10px 40px rgba(0,0,0,0.12);
   --radius:         8px;
   --radius-sm:      6px;
+  /* Fully-rounded "pill" shapes (badges, count chips, capsule buttons).
+     Deliberately a SEPARATE token from --radius rather than a large value of it:
+     the square corner style has to flatten pills too, and a squared-off page
+     that is still full of pill badges reads as unfinished/half-applied. */
+  --radius-pill:    999px;
   --sidebar-width:  240px;
   --header-height:  72px;
 
@@ -57,6 +62,24 @@
   --tint-warn:    #fffbeb;  --tint-warn-fg:    #b45309;
   --tint-danger:  #fef2f2;  --tint-danger-fg:  #b91c1c;
   --tint-purple:  #f5f3ff;  --tint-purple-fg:  #6d28d9;
+}
+
+/* ── Corner style: square ───────────────────────────────────────
+   Set by lib/corners.ts (data-corners="square" on <html>); the ABSENCE of the
+   attribute is the default rounded style — there is intentionally no
+   [data-corners="rounded"] rule to maintain.
+
+   This overrides ONLY the three radius tokens. Consequences worth knowing:
+   - A component that hardcodes a numeric border-radius opts itself OUT
+     SILENTLY — it stays rounded while everything around it squares off. That
+     is the failure mode to look for if the square style ever looks half-applied;
+     the fix is to tokenize that radius, not to add rules here.
+   - True circles (avatars, status dots, spinners) use 50% and are deliberately
+     NOT covered — a squared avatar is a bug, not a style. */
+:root[data-corners="square"] {
+  --radius:      0;
+  --radius-sm:   0;
+  --radius-pill: 0;
 }
 
 /* ── Dark theme (NocVault suite-standard dark palette) ──────────
@@ -104,6 +127,8 @@ html, body {
 /* ── Scrollbar ─────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
+/* intentional: the scrollbar thumb keeps a literal radius — it is browser chrome,
+   not a UI surface, and squaring it off adds nothing but a harsher scrollbar. */
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 10px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
@@ -140,7 +165,7 @@ tbody tr:hover td { background: var(--bg-primary); }
   display: inline-flex;
   align-items: center;
   padding: 3px 9px;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -476,7 +501,7 @@ table thead tr th {
     var(--border-light) 63%);
   background-size: 480px 100%;
   animation: shimmer 1.3s ease-in-out infinite;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
 }
 
 /* ── Segmented control ─────────────────────────────────────── */
@@ -545,7 +570,7 @@ table thead tr th {
   color: var(--text-muted);
   background: var(--bg-primary);
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   line-height: 1.5;
 }
 
@@ -557,15 +582,23 @@ table thead tr th {
 }
 
 /* ── Inline progress bar ───────────────────────────────────── */
+/* --radius-pill, NOT a literal 3px and NOT --radius-sm. 3px on a 6px-tall track
+   IS the capsule end of a hairline bar, so --radius-sm (6px) would over-round it
+   — but leaving it literal would opt these bars out of the square switch, and
+   every other thin progress bar in the app is tokenized to --radius-pill. That
+   inconsistency is visible: most bars square off while these two stay rounded.
+   --radius-pill is safe here because the browser clamps border-radius to half the
+   box, so 999px on a 6px-tall bar renders pixel-identically to 3px in rounded
+   mode, and correctly flattens to 0 in square mode. */
 .util-track {
   flex: 1;
   height: 6px;
   background: var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   min-width: 60px;
 }
-.util-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+.util-fill { height: 100%; border-radius: var(--radius-pill); transition: width 0.4s ease; }
 
 /* ── Read-only mode (expired license) ──────────────────────── */
 body[data-readonly="true"] .btn-primary,

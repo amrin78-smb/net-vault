@@ -95,7 +95,7 @@ export default function CircuitsPage() {
     return `${currency || 'THB'} ${parseFloat(cost).toLocaleString()}`
   }
 
-  const selectStyle = { padding: '8px 12px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: 'var(--text-md)', background: 'var(--bg-card)', outline: 'none', cursor: 'pointer' }
+  const selectStyle = { padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-md)', background: 'var(--bg-card)', outline: 'none', cursor: 'pointer' }
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -112,7 +112,7 @@ export default function CircuitsPage() {
           { label: 'Backup', value: backupCount, color: 'var(--tint-info-fg)', bg: 'var(--tint-info)', border: 'var(--border)', href: '/circuits?usage=Backup', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg> },
         ].map(s => (
           <a key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+            <div style={{ background: s.bg, borderRadius: 'var(--radius)', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
@@ -129,7 +129,7 @@ export default function CircuitsPage() {
         <input className="input" style={{ flex: '1', maxWidth: '400px' }} placeholder="Search circuit ID, ISP, subnet..."
           value={search} onChange={e => setSearch(e.target.value)} />
         <button onClick={() => setShowFilterPanel(f => !f)}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : 'var(--bg-card)', color: showFilterPanel || !!(isp||usage||technology||country||site) ? 'white' : 'var(--text-secondary)', border: '1px solid ' + (showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : 'var(--border)'), borderRadius: '6px', cursor: 'pointer', fontSize: 'var(--text-base)', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : 'var(--bg-card)', color: showFilterPanel || !!(isp||usage||technology||country||site) ? 'white' : 'var(--text-secondary)', border: '1px solid ' + (showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : 'var(--border)'), borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 'var(--text-base)', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
           Filters {!!(isp||usage||technology||country||site) && `(${[isp,usage,technology,country,site].filter(Boolean).length})`}
         </button>
@@ -143,7 +143,7 @@ export default function CircuitsPage() {
 
       {/* Filter panel */}
       {showFilterPanel && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Country</div>
             <select className="select" style={{ width: '100%' }} value={country} onChange={e => { setCountry(e.target.value); setSite('') }}>
@@ -190,11 +190,11 @@ export default function CircuitsPage() {
       {/* Active filter pills */}
       {!!(isp||usage||technology||country||site) && (
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const, marginBottom: '12px' }}>
-          {country && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Country: {country}<button onClick={() => { setCountry(''); setSite('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {site && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Site: {site}<button onClick={() => setSite('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {isp && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>ISP: {isp}<button onClick={() => setIsp('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {usage && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Usage: {usage}<button onClick={() => setUsage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {technology && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Technology: {technology}<button onClick={() => setTechnology('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {country && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Country: {country}<button onClick={() => { setCountry(''); setSite('') }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {site && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Site: {site}<button onClick={() => setSite('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {isp && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>ISP: {isp}<button onClick={() => setIsp('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {usage && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Usage: {usage}<button onClick={() => setUsage('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {technology && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Technology: {technology}<button onClick={() => setTechnology('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--tint-info-fg)', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
         </div>
       )}
 
@@ -205,7 +205,7 @@ export default function CircuitsPage() {
         </span>
         {isAdmin && (
           <Link href="/circuits/new">
-            <button style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
+            <button style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
               Add circuit
             </button>
@@ -214,7 +214,7 @@ export default function CircuitsPage() {
       </div>
 
       {/* Table */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading circuits...</div>
         ) : circuits.length === 0 ? (
@@ -253,10 +253,10 @@ export default function CircuitsPage() {
                     <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <Link href={`/circuits/${c.id}`}>
-                          <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button>
+                          <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button>
                         </Link>
                         {isAdmin && (
-                          <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', border: '1px solid var(--tint-danger-fg)', borderRadius: '6px', cursor: 'pointer' }}
+                          <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', border: '1px solid var(--tint-danger-fg)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
                             onClick={() => deleteCircuit(c.id, c.circuit_id)}>Delete</button>
                         )}
                       </div>

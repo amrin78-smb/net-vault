@@ -209,7 +209,7 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   background: 'rgba(255,255,255,0.08)',
   border: '1px solid rgba(255,255,255,0.15)',
-  borderRadius: 10,
+  borderRadius: 'var(--radius)',
   padding: '12px 14px',
   color: '#fff',
   fontSize: 14,
@@ -279,7 +279,7 @@ function LoginForm() {
 
       {/* Platform status — top-right of the page */}
       <div className="nv-status-badge" style={{ position: 'fixed', top: 24, right: 32, zIndex: 2, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px #22c55e' }} />
+        <span style={{ width: 8, height: 8, borderRadius: '50%' /* intentional: platform-status dot — squaring it would look broken */, background: '#22c55e', boxShadow: '0 0 8px #22c55e' }} />
         <span style={{ color: 'rgba(255,255,255,0.45)' }}>Platform Status</span>
         <span style={{ color: '#22c55e', fontWeight: 600 }}>Operational</span>
       </div>
@@ -307,7 +307,7 @@ function LoginForm() {
             Smarter Operations.<br />
             Better Decisions.
           </h1>
-          <div style={{ width: 56, height: 3, background: RED, borderRadius: 2, marginBottom: 16 }} />
+          <div style={{ width: 56, height: 3, background: RED, borderRadius: 2 /* intentional: decorative 3px-tall accent sliver — a token radius would swallow the shape */, marginBottom: 16 }} />
           <p style={{ fontSize: 15, lineHeight: 1.6, color: 'rgba(255,255,255,0.6)', margin: 0, marginBottom: 28 }}>
             NocVault delivers real-time intelligence across your network infrastructure, assets, logs and IP services.
           </p>
@@ -315,7 +315,7 @@ function LoginForm() {
           {/* App showcase cards */}
           <div className="nv-app-grid">
             {APPS.map(app => (
-              <div key={app.name} className="nv-app-card" style={{ borderLeft: `2px solid ${app.accent}`, borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div key={app.name} className="nv-app-card" style={{ borderLeft: `2px solid ${app.accent}`, borderRadius: 'var(--radius)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
                 <AppMark name={app.name} />
                 <div style={{ minWidth: 0 }}>
                   <div style={{ fontSize: 15, fontWeight: 700, color: '#fff' }}>
@@ -337,7 +337,7 @@ function LoginForm() {
             WebkitBackdropFilter: 'blur(20px)',
             border: '1px solid rgba(255,255,255,0.12)',
             borderTop: `2px solid ${RED}`,
-            borderRadius: 16,
+            borderRadius: 'var(--radius)',
             padding: 40,
             boxShadow: '0 24px 70px rgba(0,0,0,0.45)',
           }}>
@@ -396,13 +396,13 @@ function LoginForm() {
               </label>
 
               {reason === 'timeout' && (
-                <div style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+                <div style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
                   Your session expired due to inactivity.
                 </div>
               )}
 
               {error && (
-                <div style={{ background: 'rgba(200,16,46,0.12)', border: '1px solid rgba(200,16,46,0.35)', color: '#f87171', padding: '10px 14px', borderRadius: 8, fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+                <div style={{ background: 'rgba(200,16,46,0.12)', border: '1px solid rgba(200,16,46,0.35)', color: '#f87171', padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
                   {error}
                 </div>
               )}
@@ -416,7 +416,7 @@ function LoginForm() {
                   background: RED,
                   color: '#fff',
                   border: 'none',
-                  borderRadius: 10,
+                  borderRadius: 'var(--radius)',
                   fontSize: 15,
                   fontWeight: 700,
                   cursor: loading ? 'default' : 'pointer',

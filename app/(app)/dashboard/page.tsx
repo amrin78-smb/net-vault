@@ -31,7 +31,7 @@ function UpdatedNotice() {
     <div
       style={{
         display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',
-        marginBottom: 16, borderRadius: 8, fontSize: 'var(--text-base)', fontWeight: 600,
+        marginBottom: 16, borderRadius: 'var(--radius)', fontSize: 'var(--text-base)', fontWeight: 600,
         color: 'var(--tint-success-fg)', background: 'var(--tint-success)',
         border: '1px solid rgba(22,163,74,0.30)',
       }}
@@ -166,7 +166,7 @@ function activityColor(action: string) {
 
 /* ------------------------------ card shell ------------------------- */
 const cardStyle: React.CSSProperties = {
-  background: 'var(--bg-card)', borderRadius: 8, boxShadow: CARD_SHADOW,
+  background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW,
   border: '1px solid var(--border-light)', padding: 20, boxSizing: 'border-box',
 }
 const cardStyleCompact: React.CSSProperties = { ...cardStyle, padding: 16 }
@@ -176,11 +176,11 @@ const viewLink: React.CSSProperties = { fontSize: 'var(--text-sm)', color: RED, 
 function ChartTooltip({ active, payload, label }: any) {
   if (!active || !payload || !payload.length) return null
   return (
-    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', fontSize: 'var(--text-sm)' }}>
+    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '8px 10px', boxShadow: '0 2px 10px rgba(0,0,0,0.08)', fontSize: 'var(--text-sm)' }}>
       {label != null && <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{label}</div>}
       {payload.map((p: any, i: number) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
-          <span style={{ width: 9, height: 9, borderRadius: 2, background: p.color || p.payload?.color, display: 'inline-block' }} />
+          <span style={{ width: 9, height: 9, borderRadius: 2 /* intentional: 2px on a 9x9 legend swatch — --radius-sm (6px) would round it into a circle */, background: p.color || p.payload?.color, display: 'inline-block' }} />
           <span>{p.name}: <b style={{ color: 'var(--text-primary)' }}>{Number(p.value).toLocaleString()}</b></span>
         </div>
       ))}
@@ -307,7 +307,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ============== SECTION 1 — HEALTH SCORE (navy) ============== */}
-      <div style={{ background: NAVY, borderRadius: 8, padding: 18, color: 'white', marginBottom: 20, boxShadow: CARD_SHADOW }}>
+      <div style={{ background: NAVY, borderRadius: 'var(--radius)', padding: 18, color: 'white', marginBottom: 20, boxShadow: CARD_SHADOW }}>
         <div className="nv-health" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 24 }}>
 
           {/* LEFT — gauge */}
@@ -331,7 +331,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8 }}>
-              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 6, background: gColor, color: 'white', fontWeight: 800, fontSize: 'var(--text-base)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 24, height: 24, borderRadius: 'var(--radius-sm)', background: gColor, color: 'white', fontWeight: 800, fontSize: 'var(--text-base)' }}>
                 {overview.health_grade}
               </span>
               {trendNode}
@@ -354,7 +354,7 @@ export default function DashboardPage() {
           {/* RIGHT — metric tiles in a row */}
           <div className="nv-health-right" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, flexShrink: 0 }}>
             {tiles.map((t, i) => (
-              <div key={i} style={{ width: 180, flexShrink: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '10px 12px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <div key={i} style={{ width: 180, flexShrink: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 'var(--radius)', padding: '10px 12px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   {t.icon(32, t.color)}
                 </span>
@@ -407,7 +407,7 @@ export default function DashboardPage() {
             <div style={{ flex: 1, minWidth: 0 }}>
               {fleet.segments.map((s, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 'var(--text-sm)' }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 3, background: s.color, flexShrink: 0 }} />
+                  <span style={{ width: 10, height: 10, borderRadius: 3 /* intentional: 3px on a 10x10 legend swatch — --radius-sm (6px) would round it into a circle */, background: s.color, flexShrink: 0 }} />
                   <span style={{ flex: 1, color: 'var(--text-secondary)' }}>{s.label}</span>
                   <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{s.count.toLocaleString()}</span>
                   <span style={{ color: 'var(--text-muted)', width: 42, textAlign: 'right' }}>{s.pct}%</span>
@@ -425,6 +425,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h2 style={cardTitle}>Devices by Region</h2>
             <div style={{ display: 'flex', gap: 12, fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+              {/* intentional: 2px on the 9x9 legend swatches below — --radius-sm (6px) would round them into circles */}
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: NAVY }} />Healthy</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><span style={{ width: 9, height: 9, borderRadius: 2, background: RED }} />EOL</span>
             </div>
@@ -455,7 +456,7 @@ export default function DashboardPage() {
         <div style={cardStyleCompact}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <h2 style={cardTitle}>Sites Requiring Attention</h2>
-            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 6px', borderRadius: 11, background: RED, color: 'white', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 6px', borderRadius: 'var(--radius-pill)', background: RED, color: 'white', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
               {sitesBadgeCount}
             </span>
           </div>
@@ -468,12 +469,12 @@ export default function DashboardPage() {
               const high = s.eol_pct >= 50
               return (
                 <Link key={i} href="/sites?filter=eol" style={{ textDecoration: 'none' }}>
-                  <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderRadius: 8, borderBottom: i < 2 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer' }}>
+                  <div className="nv-row" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 0, borderRadius: 'var(--radius)', borderBottom: i < 2 ? '1px solid var(--border-light)' : 'none', cursor: 'pointer' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</div>
                       <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', marginTop: 1 }}>{s.city} • {s.region}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 2 }}>
-                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, padding: '1px 4px', borderRadius: 5, color: high ? 'var(--tint-danger-fg)' : 'var(--tint-warn-fg)', background: high ? 'var(--tint-danger)' : 'var(--tint-warn)' }}>
+                        <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, padding: '1px 4px', borderRadius: 'var(--radius-sm)', color: high ? 'var(--tint-danger-fg)' : 'var(--tint-warn-fg)', background: high ? 'var(--tint-danger)' : 'var(--tint-warn)' }}>
                           {high ? 'HIGH' : 'MEDIUM'}
                         </span>
                         <span style={{ fontSize: 'var(--text-xs)', color: 'var(--tint-danger-fg)', fontWeight: 600 }}>{s.eol_count} EOL Devices</span>
@@ -497,7 +498,7 @@ export default function DashboardPage() {
           <Link key={i} href={s.href} style={{ textDecoration: 'none' }}>
             <div className="nv-row" style={{ ...cardStyle, padding: 14, cursor: 'pointer', height: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <span style={{ display: 'inline-flex', width: 36, height: 36, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 9, background: 'var(--surface-subtle)', color: 'var(--text-secondary)' }}>
+                <span style={{ display: 'inline-flex', width: 36, height: 36, flexShrink: 0, alignItems: 'center', justifyContent: 'center', borderRadius: 'var(--radius)', background: 'var(--surface-subtle)', color: 'var(--text-secondary)' }}>
                   {s.icon(18, 'currentColor')}
                 </span>
                 {loading ? <Shimmer w={60} h={26} /> : (
@@ -555,14 +556,14 @@ export default function DashboardPage() {
               <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', padding: '20px 0', textAlign: 'center' }}>No EOL sites</div>
             ) : topEol.slice(0, 5).map((s, i) => (
               <Link key={i} href="/sites?filter=eol" style={{ textDecoration: 'none', display: 'block' }}>
-                <div className="nv-row" style={{ padding: '10px 8px', margin: '0 -8px', borderRadius: 8, cursor: 'pointer' }}>
+                <div className="nv-row" style={{ padding: '10px 8px', margin: '0 -8px', borderRadius: 'var(--radius)', cursor: 'pointer' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                     <span style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.site_name}</span>
                     <span style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--tint-danger-fg)', flexShrink: 0 }}>{s.eol_count}</span>
                   </div>
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', margin: '2px 0 5px' }}>{s.city} • {s.region}</div>
-                  <div style={{ height: 6, background: 'var(--surface-subtle)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(100, s.eol_pct)}%`, height: '100%', background: RED, borderRadius: 3 }} />
+                  <div style={{ height: 6, background: 'var(--surface-subtle)', borderRadius: 'var(--radius-pill)', overflow: 'hidden' }}>
+                    <div style={{ width: `${Math.min(100, s.eol_pct)}%`, height: '100%', background: RED, borderRadius: 'var(--radius-pill)' }} />
                   </div>
                 </div>
               </Link>
@@ -585,7 +586,7 @@ export default function DashboardPage() {
               const c = activityColor(a.action)
               return (
                 <div key={i} style={{ display: 'flex', gap: 10, padding: '9px 0', borderBottom: i < Math.min(6, activity.length) - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                  <span style={{ width: 9, height: 9, borderRadius: '50%', background: c, flexShrink: 0, marginTop: 5 }} />
+                  <span style={{ width: 9, height: 9, borderRadius: '50%' /* intentional: activity status dot — squaring it would look broken */, background: c, flexShrink: 0, marginTop: 5 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{a.action}</div>
                     <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

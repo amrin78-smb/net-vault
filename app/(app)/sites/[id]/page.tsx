@@ -204,14 +204,14 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
                 <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{site.site}</h1>
                 {isAdmin && (
-                  <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', cursor: 'pointer', color: 'var(--text-secondary)' }}>Edit</button>
+                  <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', cursor: 'pointer', color: 'var(--text-secondary)' }}>Edit</button>
                 )}
               </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{site.country}</span>
                 <span style={{ color: 'var(--text-muted)' }}>·</span>
                 <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{site.region}</span>
-                {site.code && <span style={{ fontSize: 'var(--text-xs)', background: 'var(--surface-subtle)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: '20px' }}>{site.code}</span>}
+                {site.code && <span style={{ fontSize: 'var(--text-xs)', background: 'var(--surface-subtle)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 'var(--radius-pill)' }}>{site.code}</span>}
               </div>
             </div>
           )}
@@ -220,10 +220,10 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           <div style={{ display: 'flex', gap: '8px' }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               {site?.site_status === 'Decommed' && (
-                <span style={{ background: 'var(--surface-subtle)', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: '600', padding: '4px 12px', borderRadius: '20px', border: '1px solid var(--border)' }}>⚠ Decommed site</span>
+                <span style={{ background: 'var(--surface-subtle)', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: '600', padding: '4px 12px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--border)' }}>⚠ Decommed site</span>
               )}
               {isAdmin && (
-                <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: 'var(--text-base)', padding: '6px 14px', borderRadius: '6px', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? 'var(--tint-success-fg)' : 'var(--tint-danger-fg)', borderColor: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)', background: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)' }}>
+                <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: 'var(--text-base)', padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? 'var(--tint-success-fg)' : 'var(--tint-danger-fg)', borderColor: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)', background: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)' }}>
                   {togglingDecomm ? 'Updating...' : site?.site_status === 'Decommed' ? 'Reactivate site' : 'Decommission site'}
                 </button>
               )}
@@ -242,7 +242,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           { label: 'Decommed', value: decommed, color: 'var(--tint-warn-fg)', bg: 'var(--tint-warn)', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> },
           { label: 'Circuits', value: circuits.length, color: 'var(--tint-info-fg)', bg: 'var(--tint-info)', icon: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg> },
         ].map(s => (
-          <div key={s.label} style={{ background: s.bg, borderRadius: '8px', border: '1px solid var(--border)', padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
+          <div key={s.label} style={{ background: s.bg, borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '14px 16px', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: s.color, marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: '600', opacity: 0.8 }}>{s.label}</div>
             <div style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: s.color }}>{s.value}</div>
@@ -254,20 +254,20 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       {(s.address || s.city || s.coordinates || s.contact_name || s.site_type) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px', marginBottom: '20px' }}>
           {s.site_type && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '12px 16px' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '12px 16px' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Site type</div>
               <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-primary)' }}>{s.site_type}</div>
             </div>
           )}
           {(s.city || s.address) && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '12px 16px' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '12px 16px' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Location</div>
               <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-primary)' }}>{s.city}</div>
               {s.address && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginTop: '2px', lineHeight: '1.4' }}>{s.address}</div>}
             </div>
           )}
           {s.coordinates && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '12px 16px' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '12px 16px' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>GPS coordinates</div>
               <div style={{ fontSize: 'var(--text-sm)', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>{s.coordinates}</div>
               <a href={`https://www.google.com/maps?q=${s.coordinates}`} target="_blank" rel="noopener noreferrer"
@@ -277,7 +277,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
             </div>
           )}
           {(s.contact_name || s.contact_email || s.phone) && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '12px 16px' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '12px 16px' }}>
               <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '4px' }}>Site contact</div>
               {s.contact_name && <div style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-primary)' }}>{s.contact_name}</div>}
               {s.contact_email && <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginTop: '2px' }}>{s.contact_email}</div>}
@@ -305,17 +305,17 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                 return (
                   <div key={t.type} onClick={() => setTypeFilter(isActive ? '' : t.type)}
                     title={`${t.count} ${t.type}${t.eol > 0 ? ` · ${t.eol} EOL` : ''} — click to filter`}
-                    style={{ background: 'var(--bg-card)', borderRadius: '8px', border: `1px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`, padding: '12px 14px', cursor: 'pointer', transition: 'border-color 0.12s' }}>
+                    style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: `1px solid ${isActive ? 'var(--primary)' : 'var(--border)'}`, padding: '12px 14px', cursor: 'pointer', transition: 'border-color 0.12s' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                       <span style={{ fontSize: 'var(--text-sm)', color: isActive ? 'var(--primary)' : 'var(--text-secondary)', fontWeight: isActive ? '600' : '500', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.type}</span>
-                      {t.eol > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--tint-danger-fg)', background: 'var(--tint-danger)', padding: '0 6px', borderRadius: '10px', whiteSpace: 'nowrap' }}>{t.eol} EOL</span>}
+                      {t.eol > 0 && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--tint-danger-fg)', background: 'var(--tint-danger)', padding: '0 6px', borderRadius: 'var(--radius-pill)', whiteSpace: 'nowrap' }}>{t.eol} EOL</span>}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginBottom: '8px' }}>
                       <span style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)' }}>{t.count}</span>
                       <span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{pct}%</span>
                     </div>
-                    <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ width: `${pct}%`, height: '100%', borderRadius: '3px', background: isActive ? 'var(--primary)' : 'var(--text-muted)' }} />
+                    <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-pill)', overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', borderRadius: 'var(--radius-pill)', background: isActive ? 'var(--primary)' : 'var(--text-muted)' }} />
                     </div>
                   </div>
                 )
@@ -324,21 +324,21 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           )}
           <div>
             {isAdmin && selected.size > 0 && (
-              <div style={{ background: 'var(--navy)', borderRadius: '8px', padding: '10px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ background: 'var(--navy)', borderRadius: 'var(--radius)', padding: '10px 16px', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <span style={{ fontSize: 'var(--text-base)', color: 'white', fontWeight: '500' }}>{selected.size} device{selected.size > 1 ? 's' : ''} selected</span>
-                <select value={bulkField} onChange={e => { setBulkField(e.target.value); setBulkValue('') }} style={{ padding: '5px 10px', borderRadius: '6px', fontSize: 'var(--text-sm)', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
+                <select value={bulkField} onChange={e => { setBulkField(e.target.value); setBulkValue('') }} style={{ padding: '5px 10px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
                   <option value="device_status">Device status</option>
                   <option value="lifecycle_status">Lifecycle status</option>
                 </select>
-                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} style={{ padding: '5px 10px', borderRadius: '6px', fontSize: 'var(--text-sm)', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
+                <select value={bulkValue} onChange={e => setBulkValue(e.target.value)} style={{ padding: '5px 10px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', border: 'none', color: '#111827', background: 'rgba(255,255,255,0.9)' }}>
                   <option value="">Set value...</option>
                   {bulkField === 'device_status' && ['Active','Decommed','Faulty, Replaced','Spare'].map(s => <option key={s}>{s}</option>)}
                   {bulkField === 'lifecycle_status' && ['Active, Supported','EOL / EOS','Unknown'].map(s => <option key={s}>{s}</option>)}
                 </select>
-                <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ padding: '5px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', fontSize: 'var(--text-sm)', cursor: 'pointer', fontWeight: '500' }}>
+                <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ padding: '5px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', cursor: 'pointer', fontWeight: '500' }}>
                   {bulkLoading ? 'Updating...' : 'Apply'}
                 </button>
-                <button onClick={() => setSelected(new Set())} style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '6px', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+                <button onClick={() => setSelected(new Set())} style={{ padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
                   Cancel
                 </button>
               </div>
@@ -356,7 +356,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
               {(typeFilter || statusFilter) && <button className="btn-secondary" style={{ fontSize: 'var(--text-base)' }} onClick={() => { setTypeFilter(''); setStatusFilter('') }}>Clear</button>}
               <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', alignSelf: 'center', marginLeft: 'auto' }}>{filtered.length} devices</span>
             </div>
-            <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
               <div style={{ overflowX: 'auto' }}>
                 <table>
                   <thead><tr>{isAdmin && <th style={{ width: '40px' }}><input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} /></th>}<th>Name</th><th>Type</th><th>Brand / Model</th><th>IP</th><th>Lifecycle</th><th>Status</th>{isAdmin && <th>Actions</th>}</tr></thead>
@@ -370,7 +370,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{d.ip_address || '—'}</td>
                         <td><LifecycleBadge status={d.lifecycle_status} /></td>
                         <td><StatusBadge status={d.device_status} /></td>
-                        {isAdmin && <td><Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Edit</button></Link></td>}
+                        {isAdmin && <td><Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Edit</button></Link></td>}
                       </tr>
                     ))}
                   </tbody>
@@ -384,13 +384,13 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       {activeTab === 'circuits' && (
         <div>
           {circuits.length === 0 ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)' }}>No Circuits for this site</div>
+            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)' }}>No Circuits for this site</div>
           ) : (
             <>
               {[{ label: 'Main links', items: mainCircuits, color: 'var(--tint-info-fg)' }, { label: 'Backup links', items: backupCircuits, color: 'var(--text-secondary)' }, { label: 'Other', items: otherCircuits, color: 'var(--tint-warn-fg)' }].filter(g => g.items.length > 0).map(group => (
                 <div key={group.label} style={{ marginBottom: '16px' }}>
                   <div style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: group.color, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '8px' }}>{group.label} — {group.items.length}</div>
-                  <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+                  <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
                     <table>
                       <thead><tr><th>ISP</th><th>Circuit ID</th><th>Product</th><th>Usage</th><th>Max speed</th><th>Public subnet</th><th>Cost/month</th><th></th></tr></thead>
                       <tbody>
@@ -404,7 +404,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{c.public_subnet && c.public_subnet !== '-' && c.public_subnet !== 'nan' ? c.public_subnet : '—'}</td>
                             <td style={{ fontSize: 'var(--text-sm)' }}>{c.cost_month ? `${c.currency || 'THB'} ${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
                             
-                            <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link></td>
+                            <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link></td>
                           </tr>
                         ))}
                       </tbody>

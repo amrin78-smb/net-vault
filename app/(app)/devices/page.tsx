@@ -280,7 +280,7 @@ export default function DevicesPage() {
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
           {/* Export */}
           <button onClick={exportCSV} title={hasFilters ? 'Export filtered CSV' : 'Export CSV'}
-            style={{ padding: '7px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}
+            style={{ padding: '7px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}
             onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-subtle)')}
             onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-card)')}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
@@ -289,7 +289,7 @@ export default function DevicesPage() {
           {isAdmin && <>
             {/* Import */}
             <button onClick={() => { setShowImport(!showImport); setImportResult('') }} title="Import devices"
-              style={{ padding: '7px 10px', background: showImport ? 'var(--tint-info)' : 'var(--bg-card)', border: showImport ? '1px solid var(--tint-info)' : '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: showImport ? 'var(--tint-info-fg)' : 'var(--text-secondary)' }}
+              style={{ padding: '7px 10px', background: showImport ? 'var(--tint-info)' : 'var(--bg-card)', border: showImport ? '1px solid var(--tint-info)' : '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: showImport ? 'var(--tint-info-fg)' : 'var(--text-secondary)' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-subtle)')}
               onMouseLeave={e => (e.currentTarget.style.background = showImport ? 'var(--tint-info)' : 'var(--bg-card)')}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
@@ -297,7 +297,7 @@ export default function DevicesPage() {
             </button>
             {/* Check duplicates */}
             <button onClick={checkDuplicates} disabled={dupLoading} title="Check for duplicate devices"
-              style={{ padding: '7px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}
+              style={{ padding: '7px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}
               onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-subtle)')}
               onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-card)')}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/></svg>
@@ -305,7 +305,7 @@ export default function DevicesPage() {
             </button>
             {/* Add device */}
             <Link href="/devices/new">
-              <button style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
+              <button style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                 Add device
               </button>
@@ -316,7 +316,7 @@ export default function DevicesPage() {
 
       {/* Duplicates panel */}
       {showDuplicates && (
-        <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid #fbbf24', padding: '20px 24px', marginBottom: '16px' }}>
+        <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid #fbbf24', padding: '20px 24px', marginBottom: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
             <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--tint-warn-fg)', margin: 0 }}>
               Duplicate detection {duplicates.length === 0 ? '— No duplicates found' : `— ${duplicates.length} groups found`}
@@ -334,14 +334,14 @@ export default function DevicesPage() {
                 const green = duplicates.filter(d => d.classification?.startsWith('🟢')).length
                 return (
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' as const }}>
-                    {red > 0 && <span style={{ background: '#fee2e2', color: '#991b1b', padding: '4px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🔴 {red} likely duplicates</span>}
-                    {yellow > 0 && <span style={{ background: '#fef9c3', color: '#92400e', padding: '4px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🟡 {yellow} needs review</span>}
-                    {green > 0 && <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🟢 {green} likely valid</span>}
+                    {red > 0 && <span style={{ background: '#fee2e2', color: '#991b1b', padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🔴 {red} likely duplicates</span>}
+                    {yellow > 0 && <span style={{ background: '#fef9c3', color: '#92400e', padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🟡 {yellow} needs review</span>}
+                    {green > 0 && <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🟢 {green} likely valid</span>}
                   </div>
                 )
               })()}
               {duplicates.map((d, i) => (
-                <div key={i} style={{ background: d.color || '#fef3c7', borderRadius: '6px', padding: '10px 14px', fontSize: 'var(--text-base)', marginBottom: '6px' }}>
+                <div key={i} style={{ background: d.color || '#fef3c7', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 'var(--text-base)', marginBottom: '6px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const, marginBottom: '4px' }}>
                     <span style={{ fontWeight: '600', color: '#374151' }}>{d.field}: </span>
                     <span style={{ fontFamily: 'var(--font-mono)', color: '#111827' }}>{d.value}</span>
@@ -367,7 +367,7 @@ export default function DevicesPage() {
 
       {/* Import panel */}
       {showImport && isAdmin && (
-        <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '20px 24px', marginBottom: '16px' }}>
+        <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '20px 24px', marginBottom: '16px' }}>
           <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px' }}>Import devices from Excel / CSV</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: 0 }}>File must have columns: Name, Brand, Model, S/N, Type, IP Address, Site, Country, Lifecycle Status, Device Status</p>
@@ -391,7 +391,7 @@ export default function DevicesPage() {
           {importPreview.length > 0 && (
             <div style={{ marginBottom: '12px' }}>
               <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: '500' }}>Preview — first {importPreview.length} rows:</div>
-              <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '6px' }}>
+              <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)' }}>
                 <table style={{ fontSize: 'var(--text-sm)', minWidth: '600px' }}>
                   <thead><tr>{Object.keys(importPreview[0] || {}).slice(0, 7).map(k => <th key={k}>{k}</th>)}</tr></thead>
                   <tbody>
@@ -418,11 +418,11 @@ export default function DevicesPage() {
           )}
           {importResult && (
             <div style={{ marginTop: '10px' }}>
-              <div style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', padding: '10px 14px', borderRadius: '6px', fontSize: 'var(--text-base)', marginBottom: '8px' }}>
+              <div style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: '8px' }}>
                 {importResult}
               </div>
               {showSkipped && importSkipped.length > 0 && (
-                <div style={{ background: 'var(--bg-card)', border: '1px solid #fbbf24', borderRadius: '8px', overflow: 'hidden' }}>
+                <div style={{ background: 'var(--bg-card)', border: '1px solid #fbbf24', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
                   <div style={{ background: 'var(--tint-warn)', padding: '10px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--tint-warn-fg)' }}>{importSkipped.length} rows skipped — see reasons below</span>
                     <button onClick={() => setShowSkipped(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: 'var(--text-lg)' }}>×</button>
@@ -456,7 +456,7 @@ export default function DevicesPage() {
 
       {/* Bulk action bar */}
       {isAdmin && selected.size > 0 && (
-        <div style={{ background: '#1a2744', borderRadius: '8px', padding: '10px 16px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
+        <div style={{ background: '#1a2744', borderRadius: 'var(--radius)', padding: '10px 16px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }}>
           <span style={{ fontSize: 'var(--text-base)', color: 'white', fontWeight: '500' }}>{selected.size} device{selected.size > 1 ? 's' : ''} selected</span>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' as const }}>
             {[
@@ -465,20 +465,20 @@ export default function DevicesPage() {
               { label: 'Move to Site', field: 'site_id' },
             ].map(action => (
               <button key={action.field} onClick={() => { setBulkField(action.field); setBulkValue(''); setShowBulkModal(true) }}
-                style={{ padding: '5px 12px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)', borderRadius: '6px', fontSize: 'var(--text-sm)', cursor: 'pointer', fontWeight: '500' }}
+                style={{ padding: '5px 12px', background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', cursor: 'pointer', fontWeight: '500' }}
                 onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.25)')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.15)')}>
                 {action.label}
               </button>
             ))}
             <button onClick={() => { setBulkField('delete'); setShowBulkModal(true) }}
-              style={{ padding: '5px 12px', background: '#991b1b', color: 'white', border: '1px solid #7f1d1d', borderRadius: '6px', fontSize: 'var(--text-sm)', cursor: 'pointer', fontWeight: '500' }}
+              style={{ padding: '5px 12px', background: '#991b1b', color: 'white', border: '1px solid #7f1d1d', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', cursor: 'pointer', fontWeight: '500' }}
               onMouseEnter={e => (e.currentTarget.style.background = '#7f1d1d')}
               onMouseLeave={e => (e.currentTarget.style.background = '#991b1b')}>
               Delete
             </button>
           </div>
-          <button onClick={() => setSelected(new Set())} style={{ marginLeft: 'auto', padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: '6px', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+          <button onClick={() => setSelected(new Set())} style={{ marginLeft: 'auto', padding: '5px 10px', background: 'rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.7)', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
             Deselect all
           </button>
         </div>
@@ -487,16 +487,16 @@ export default function DevicesPage() {
       {/* Bulk action modal */}
       {showBulkModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '24px', width: '100%', maxWidth: '380px', boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
             {bulkField === 'delete' ? (
               <>
                 <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>Delete {selected.size} device{selected.size > 1 ? 's' : ''}?</h2>
                 <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: '0 0 20px' }}>This will permanently delete {selected.size} device{selected.size > 1 ? 's' : ''}. This cannot be undone.</p>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={bulkDelete} disabled={bulkLoading} style={{ flex: 1, padding: '9px', background: '#991b1b', color: 'white', border: 'none', borderRadius: '6px', fontSize: 'var(--text-base)', fontWeight: '600', cursor: 'pointer' }}>
+                  <button onClick={bulkDelete} disabled={bulkLoading} style={{ flex: 1, padding: '9px', background: '#991b1b', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', fontWeight: '600', cursor: 'pointer' }}>
                     {bulkLoading ? 'Deleting...' : `Delete ${selected.size} device${selected.size > 1 ? 's' : ''}`}
                   </button>
-                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: 'var(--surface-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: 'var(--text-base)', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: 'var(--surface-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', cursor: 'pointer' }}>Cancel</button>
                 </div>
               </>
             ) : (
@@ -514,10 +514,10 @@ export default function DevicesPage() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ flex: 1, padding: '9px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: '6px', fontSize: 'var(--text-base)', fontWeight: '600', cursor: 'pointer', opacity: !bulkValue ? 0.5 : 1 }}>
+                  <button onClick={bulkUpdate} disabled={!bulkValue || bulkLoading} style={{ flex: 1, padding: '9px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', fontWeight: '600', cursor: 'pointer', opacity: !bulkValue ? 0.5 : 1 }}>
                     {bulkLoading ? 'Applying...' : 'Apply'}
                   </button>
-                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: 'var(--surface-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: '6px', fontSize: 'var(--text-base)', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={() => setShowBulkModal(false)} style={{ flex: 1, padding: '9px', background: 'var(--surface-subtle)', color: 'var(--text-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', cursor: 'pointer' }}>Cancel</button>
                 </div>
               </>
             )}
@@ -534,7 +534,7 @@ export default function DevicesPage() {
           { label: 'Decommed', value: stats.decommed.toLocaleString(), color: 'var(--tint-warn-fg)', bg: 'var(--tint-warn)', border: 'var(--tint-warn)', href: '/devices?status=Decommed', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> },
         ].map(s => (
           <Link key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
-            <div style={{ background: s.bg, borderRadius: '8px', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+            <div style={{ background: s.bg, borderRadius: 'var(--radius)', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
               onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
               onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: s.color }}>{s.icon}</div>
@@ -548,7 +548,7 @@ export default function DevicesPage() {
 
       {/* Site admin scope banner */}
       {isSiteAdmin && (
-        <div style={{ background: 'var(--tint-info)', border: '1px solid var(--tint-info)', borderRadius: '8px', padding: '10px 14px', marginBottom: '14px', fontSize: 'var(--text-base)', color: 'var(--tint-info-fg)' }}>
+        <div style={{ background: 'var(--tint-info)', border: '1px solid var(--tint-info)', borderRadius: 'var(--radius)', padding: '10px 14px', marginBottom: '14px', fontSize: 'var(--text-base)', color: 'var(--tint-info-fg)' }}>
           Showing devices for your assigned sites only.
         </div>
       )}
@@ -561,7 +561,7 @@ export default function DevicesPage() {
           onKeyDown={e => { if (e.key === 'Enter') pushFilters({ search: (e.target as HTMLInputElement).value }) }} />
         <button
           onClick={() => setShowFilterPanel(f => !f)}
-          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || hasFilters ? '#1a2744' : 'var(--bg-card)', color: showFilterPanel || hasFilters ? 'white' : 'var(--text-secondary)', border: '1px solid ' + (showFilterPanel || hasFilters ? '#1a2744' : 'var(--border)'), borderRadius: '6px', cursor: 'pointer', fontSize: 'var(--text-base)', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || hasFilters ? '#1a2744' : 'var(--bg-card)', color: showFilterPanel || hasFilters ? 'white' : 'var(--text-secondary)', border: '1px solid ' + (showFilterPanel || hasFilters ? '#1a2744' : 'var(--border)'), borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 'var(--text-base)', fontWeight: '500', whiteSpace: 'nowrap' as const }}>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
           Filters {hasFilters && `(${[region,site,type,status,lifecycle,model,supportExpiry,brand,eol].filter(Boolean).length})`}
         </button>
@@ -574,7 +574,7 @@ export default function DevicesPage() {
 
       {/* Filter panel */}
       {showFilterPanel && (
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '16px', marginBottom: '12px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
           <div>
             <div style={{ fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '5px' }}>Region</div>
             <select className="select" style={{ width: '100%' }} value={region} onChange={e => { setSite(''); pushFilters({ region: e.target.value, site: '' }) }}>
@@ -639,16 +639,16 @@ export default function DevicesPage() {
       {/* Active filter pills */}
       {hasFilters && (
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' as const, marginBottom: '12px' }}>
-          {region && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Region: {region}<button onClick={() => pushFilters({ region: '', site: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {site && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Site: {site}<button onClick={() => pushFilters({ site: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {type && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Type: {type}<button onClick={() => pushFilters({ type: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {status && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Status: {status}<button onClick={() => pushFilters({ status: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {lifecycle && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Lifecycle: {lifecycle}<button onClick={() => pushFilters({ lifecycle: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {model && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Model: {model}<button onClick={() => { setModel(''); pushFilters({ model: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {supportExpiry && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: supportExpiry === 'expired' ? '#fee2e2' : supportExpiry === 'expiring' ? '#fff7ed' : '#dcfce7', color: supportExpiry === 'expired' ? '#991b1b' : supportExpiry === 'expiring' ? '#92400e' : '#166534', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Support: {supportExpiry}<button onClick={() => { setSupportExpiry(''); pushFilters({ support_expiry: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {brand && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Brand: {brand}<button onClick={() => { setBrand(''); pushFilters({ brand: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {eol === 'none' && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>No EOL date<button onClick={() => { setEol(''); pushFilters({ eol: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
-          {search && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: '20px', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Search: {search}<button onClick={() => pushFilters({ search: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {region && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Region: {region}<button onClick={() => pushFilters({ region: '', site: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {site && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Site: {site}<button onClick={() => pushFilters({ site: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {type && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Type: {type}<button onClick={() => pushFilters({ type: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {status && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Status: {status}<button onClick={() => pushFilters({ status: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {lifecycle && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Lifecycle: {lifecycle}<button onClick={() => pushFilters({ lifecycle: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {model && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Model: {model}<button onClick={() => { setModel(''); pushFilters({ model: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {supportExpiry && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: supportExpiry === 'expired' ? '#fee2e2' : supportExpiry === 'expiring' ? '#fff7ed' : '#dcfce7', color: supportExpiry === 'expired' ? '#991b1b' : supportExpiry === 'expiring' ? '#92400e' : '#166534', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Support: {supportExpiry}<button onClick={() => { setSupportExpiry(''); pushFilters({ support_expiry: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {brand && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Brand: {brand}<button onClick={() => { setBrand(''); pushFilters({ brand: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {eol === 'none' && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>No EOL date<button onClick={() => { setEol(''); pushFilters({ eol: '' }) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
+          {search && <span style={{ display: 'flex', alignItems: 'center', gap: '4px', background: '#e0f2fe', color: '#075985', padding: '3px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '500' }}>Search: {search}<button onClick={() => pushFilters({ search: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#075985', fontSize: 'var(--text-md)', lineHeight: '1', padding: '0 0 0 2px' }}>×</button></span>}
         </div>
       )}
 
@@ -659,7 +659,7 @@ export default function DevicesPage() {
             {loading ? 'Loading...' : `Showing ${total === 0 ? 0 : ((page-1)*limit)+1}–${Math.min(page*limit, total)} of ${total.toLocaleString()} devices`}
           </span>
           <select value={limit} onChange={e => { setLimit(parseInt(e.target.value)); setPage(1) }}
-            style={{ padding: '4px 8px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', background: 'var(--bg-card)', cursor: 'pointer' }}>
+            style={{ padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', background: 'var(--bg-card)', cursor: 'pointer' }}>
             <option value={25}>25 / page</option>
             <option value={50}>50 / page</option>
             <option value={100}>100 / page</option>
@@ -668,39 +668,39 @@ export default function DevicesPage() {
         </div>
         {!loading && totalPages > 1 && (
           <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === 1 ? 'default' : 'pointer', color: page === 1 ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(1)} disabled={page === 1}>First</button>
-            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === 1 ? 'default' : 'pointer', color: page === 1 ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(p => Math.max(1,p-1))} disabled={page === 1}>← Prev</button>
+            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === 1 ? 'default' : 'pointer', color: page === 1 ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(1)} disabled={page === 1}>First</button>
+            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === 1 ? 'default' : 'pointer', color: page === 1 ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(p => Math.max(1,p-1))} disabled={page === 1}>← Prev</button>
             {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
               const start = Math.max(1, Math.min(page - 2, totalPages - 4))
               const p = start + i
               return p <= totalPages ? (
                 <button key={p} onClick={() => setPage(p)}
-                  style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px', fontSize: 'var(--text-sm)', cursor: 'pointer', background: p === page ? 'var(--primary)' : 'var(--bg-card)', color: p === page ? 'white' : 'var(--text-secondary)', fontWeight: p === page ? '600' : '400' }}>
+                  style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', cursor: 'pointer', background: p === page ? 'var(--primary)' : 'var(--bg-card)', color: p === page ? 'white' : 'var(--text-secondary)', fontWeight: p === page ? '600' : '400' }}>
                   {p}
                 </button>
               ) : null
             })}
-            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === totalPages ? 'default' : 'pointer', color: page === totalPages ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page === totalPages}>Next →</button>
-            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === totalPages ? 'default' : 'pointer', color: page === totalPages ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(totalPages)} disabled={page === totalPages}>Last</button>
+            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === totalPages ? 'default' : 'pointer', color: page === totalPages ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page === totalPages}>Next →</button>
+            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === totalPages ? 'default' : 'pointer', color: page === totalPages ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(totalPages)} disabled={page === totalPages}>Last</button>
           </div>
         )}
       </div>
 
       {/* Table */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+      <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: '16px' }}>
             {[...Array(8)].map((_, i) => (
               <div key={i} style={{ display: 'flex', gap: '12px', padding: '12px 8px', borderBottom: '1px solid var(--border-light)', alignItems: 'center' }}>
-                <div className="skeleton" style={{ width: '16px', height: '16px', borderRadius: '3px', flexShrink: 0 }} />
+                <div className="skeleton" style={{ width: '16px', height: '16px', borderRadius: 'var(--radius-sm)', flexShrink: 0 }} />
                 <div className="skeleton" style={{ width: '180px', height: '14px' }} />
                 <div className="skeleton" style={{ width: '100px', height: '14px' }} />
                 <div className="skeleton" style={{ width: '140px', height: '14px' }} />
                 <div className="skeleton" style={{ width: '110px', height: '14px' }} />
                 <div className="skeleton" style={{ width: '90px', height: '14px' }} />
                 <div className="skeleton" style={{ width: '60px', height: '14px' }} />
-                <div className="skeleton" style={{ width: '70px', height: '20px', borderRadius: '10px' }} />
-                <div className="skeleton" style={{ width: '60px', height: '20px', borderRadius: '10px' }} />
+                <div className="skeleton" style={{ width: '70px', height: '20px', borderRadius: 'var(--radius-pill)' }} />
+                <div className="skeleton" style={{ width: '60px', height: '20px', borderRadius: 'var(--radius-pill)' }} />
               </div>
             ))}
           </div>
@@ -741,15 +741,15 @@ export default function DevicesPage() {
                       const end = new Date(d.support_end_date)
                       const now = new Date()
                       const in90 = new Date(); in90.setDate(in90.getDate() + 90)
-                      if (end < now) return <span style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '2px 8px', borderRadius: '20px', fontSize: 'var(--text-xs)', fontWeight: '600', whiteSpace: 'nowrap' }}>Expired</span>
-                      if (end <= in90) return <span style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '2px 8px', borderRadius: '20px', fontSize: 'var(--text-xs)', fontWeight: '600', whiteSpace: 'nowrap' }}>Expiring Soon</span>
+                      if (end < now) return <span style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600', whiteSpace: 'nowrap' }}>Expired</span>
+                      if (end <= in90) return <span style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600', whiteSpace: 'nowrap' }}>Expiring Soon</span>
                       return <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{end.toLocaleDateString()}</span>
                     })()}</td>
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <Link href={`/devices/${d.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link>
+                        <Link href={`/devices/${d.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link>
                         {isAdmin && <>
-                          <Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: '6px', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Edit</button></Link>
+                          <Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Edit</button></Link>
                           <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => deleteDevice(d.id, d.name)}>Delete</button>
                         </>}
                       </div>

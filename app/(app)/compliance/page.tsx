@@ -44,7 +44,7 @@ export default function CompliancePage() {
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading compliance report...</div>
   if (error) return (
     <div style={{ padding: '40px', textAlign: 'center' }}>
-      <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '16px 20px', borderRadius: '10px', display: 'inline-block', fontSize: 'var(--text-md)' }}>{error}</div>
+      <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '16px 20px', borderRadius: 'var(--radius)', display: 'inline-block', fontSize: 'var(--text-md)' }}>{error}</div>
     </div>
   )
   if (!data) return null
@@ -82,7 +82,7 @@ export default function CompliancePage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '16px', marginBottom: '28px' }}>
         {/* Risk / Compliance */}
         {noData ? (
-          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
             <div style={{ textAlign: 'center', flexShrink: 0 }}>
               <div style={{ fontSize: '34px', fontWeight: '800', color: 'var(--text-muted)', lineHeight: 1 }}>—</div>
               <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', marginTop: '4px' }}>Risk / Compliance</div>
@@ -97,14 +97,14 @@ export default function CompliancePage() {
             </div>
           </div>
         ) : (
-        <div style={{ background: scoreBg, border: `1px solid ${scoreBorder}`, borderRadius: '8px', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+        <div style={{ background: scoreBg, border: `1px solid ${scoreBorder}`, borderRadius: 'var(--radius)', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
           <div style={{ textAlign: 'center', flexShrink: 0 }}>
             <div style={{ fontSize: '52px', fontWeight: '800', color: scoreColor, lineHeight: 1 }}>{score}%</div>
             <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: scoreColor, marginTop: '4px' }}>Risk / Compliance</div>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ height: '12px', background: 'var(--surface-subtle)', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px' }}>
-              <div style={{ width: `${score}%`, height: '100%', background: barColor, borderRadius: '6px', transition: 'width 0.6s ease' }} />
+            <div style={{ height: '12px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-pill)', overflow: 'hidden', marginBottom: '10px' }}>
+              <div style={{ width: `${score}%`, height: '100%', background: barColor, borderRadius: 'var(--radius-pill)', transition: 'width 0.6s ease' }} />
             </div>
             <div style={{ fontSize: 'var(--text-base)', color: scoreColor, opacity: 0.85 }}>
               {score >= 80 ? 'Good — active devices comply with lifecycle and assignment policy.'
@@ -120,14 +120,14 @@ export default function CompliancePage() {
         )}
 
         {/* Data Completeness */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '8px', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
           <div style={{ textAlign: 'center', flexShrink: 0 }}>
             <div style={{ fontSize: '52px', fontWeight: '800', color: complColor, lineHeight: 1 }}>{completenessScore}%</div>
             <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', marginTop: '4px' }}>Data Completeness</div>
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ height: '12px', background: 'var(--surface-subtle)', borderRadius: '6px', overflow: 'hidden', marginBottom: '10px' }}>
-              <div style={{ width: `${completenessScore}%`, height: '100%', background: complBar, borderRadius: '6px', transition: 'width 0.6s ease' }} />
+            <div style={{ height: '12px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-pill)', overflow: 'hidden', marginBottom: '10px' }}>
+              <div style={{ width: `${completenessScore}%`, height: '100%', background: complBar, borderRadius: 'var(--radius-pill)', transition: 'width 0.6s ease' }} />
             </div>
             <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>
               How fully identifying inventory fields are populated. Empty fields lower completeness but do not count against compliance risk.
@@ -187,14 +187,14 @@ function CheckCard({ check, completeness }: { check: Check; completeness?: boole
   const borderColor = value >= 80 ? 'var(--tint-success-fg)' : value >= 60 ? 'var(--tint-warn-fg)' : 'var(--tint-danger-fg)'
 
   return (
-    <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: `1px solid ${borderColor}`, padding: '18px 20px' }}>
+    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: `1px solid ${borderColor}`, padding: '18px 20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
         <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-primary)', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>
         <div style={{ fontSize: 'var(--text-xl)', fontWeight: '800', color: c, flexShrink: 0 }}>{value}%</div>
       </div>
 
-      <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }}>
-        <div style={{ width: `${value}%`, height: '100%', background: bar, borderRadius: '3px', transition: 'width 0.5s ease' }} />
+      <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-pill)', overflow: 'hidden', marginBottom: '12px' }}>
+        <div style={{ width: `${value}%`, height: '100%', background: bar, borderRadius: 'var(--radius-pill)', transition: 'width 0.5s ease' }} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -204,7 +204,7 @@ function CheckCard({ check, completeness }: { check: Check; completeness?: boole
           </span>
           <span style={{ color: 'var(--text-secondary)' }}> of {check.total.toLocaleString()} active devices {completeness ? 'populated' : 'passing'}</span>
           {(check.fail ?? 0) > 0 && (
-            <span style={{ marginLeft: '8px', background: bg, color: c, padding: '1px 8px', borderRadius: '20px', fontWeight: '600', fontSize: 'var(--text-xs)' }}>
+            <span style={{ marginLeft: '8px', background: bg, color: c, padding: '1px 8px', borderRadius: 'var(--radius-pill)', fontWeight: '600', fontSize: 'var(--text-xs)' }}>
               {(check.fail ?? 0).toLocaleString()} {completeness ? 'missing' : 'failing'}
             </span>
           )}
@@ -222,7 +222,7 @@ function CheckCard({ check, completeness }: { check: Check; completeness?: boole
 function NotTrackedCard({ check }: { check: Check }) {
   const pop = check.populationPct
   return (
-    <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', padding: '18px 20px', opacity: 0.85 }}>
+    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '18px 20px', opacity: 0.85 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '10px' }}>
         <div style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', flex: 1, paddingRight: '12px', lineHeight: 1.4 }}>{check.label}</div>
         <div style={{ fontSize: 'var(--text-sm)', fontWeight: '600', color: 'var(--text-muted)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -230,7 +230,7 @@ function NotTrackedCard({ check }: { check: Check }) {
           Not tracked
         </div>
       </div>
-      <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: '3px', overflow: 'hidden', marginBottom: '12px' }} />
+      <div style={{ height: '6px', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-pill)', overflow: 'hidden', marginBottom: '12px' }} />
       <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
         {check.available
           ? `Only ${pop ?? 0}% of active devices have this field populated. Excluded from the risk score until coverage grows; it will reactivate automatically.`

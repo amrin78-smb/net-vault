@@ -57,7 +57,7 @@ export default function Providers({ children }: { children: ReactNode }) {
               <div key={toast.id} style={{
                 background: '#1a2744', color: '#fff',
                 borderLeft: `4px solid ${toastAccent[toast.type]}`,
-                borderRadius: '8px', padding: '10px 16px', fontSize: '13px', fontWeight: '500',
+                borderRadius: 'var(--radius)', padding: '10px 16px', fontSize: '13px', fontWeight: '500',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.3)', maxWidth: '340px', pointerEvents: 'auto',
                 animation: 'fadeIn 0.2s ease'
               }}>

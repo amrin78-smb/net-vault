@@ -115,3 +115,5 @@ theme.ts
   applyTheme(theme) — set data-theme, persist to localStorage, dispatch sync event
   toggleTheme() — flip and apply light/dark theme
   THEME_INIT_SCRIPT — const inline <script> body for no-flash theme init before paint
+
+(lib) lib/corners.ts — rounded/square corner switch. getCorners/applyCorners/toggleCorners/CORNERS_INIT_SCRIPT. Key netvault-corners, event netvault:corners, attribute data-corners="square" on <html> (rounded = ABSENCE of the attribute; there is deliberately no [data-corners="rounded"] rule). Works by overriding --radius/--radius-sm/--radius-pill ONLY, so any hardcoded numeric borderRadius opts that component out SILENTLY — always use the token.

@@ -54,8 +54,8 @@ export default function EolPage() {
 
   function OsStatus({ date }: { date: string }) {
     const d = new Date(date)
-    if (d < now) return <span style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '2px 8px', borderRadius: '20px', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expired</span>
-    if (d <= in90) return <span style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '2px 8px', borderRadius: '20px', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expiring Soon</span>
+    if (d < now) return <span style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expired</span>
+    if (d <= in90) return <span style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expiring Soon</span>
     return <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{d.toLocaleDateString()}</span>
   }
 
@@ -80,7 +80,7 @@ export default function EolPage() {
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
             <a href="/devices?lifecycle=EOL+%2F+EOS" style={{ textDecoration: 'none' }}>
-              <div style={{ background: 'var(--tint-danger)', borderRadius: '8px', border: '1px solid var(--tint-danger-fg)', padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
+              <div style={{ background: 'var(--tint-danger)', borderRadius: 'var(--radius)', border: '1px solid var(--tint-danger-fg)', padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
                 onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = 'none' }}>
                 <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--tint-danger-fg)' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
@@ -89,12 +89,12 @@ export default function EolPage() {
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--tint-danger-fg)', opacity: 0.6, marginTop: '4px' }}>View all →</div>
               </div>
             </a>
-            <div style={{ background: 'var(--tint-warn)', borderRadius: '8px', border: '1px solid var(--tint-warn-fg)', padding: '16px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--tint-warn)', borderRadius: 'var(--radius)', border: '1px solid var(--tint-warn-fg)', padding: '16px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--tint-warn-fg)' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg></div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-warn-fg)', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Sites affected</div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: 'var(--tint-warn-fg)' }}>{filtered.length}</div>
             </div>
-            <div style={{ background: 'var(--tint-info)', borderRadius: '8px', border: '1px solid var(--tint-info-fg)', padding: '16px', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ background: 'var(--tint-info)', borderRadius: 'var(--radius)', border: '1px solid var(--tint-info-fg)', padding: '16px', position: 'relative', overflow: 'hidden' }}>
               <div style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--tint-info-fg)' }}><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-info-fg)', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Regions</div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: 'var(--tint-info-fg)' }}>{regions.length}</div>
@@ -106,7 +106,7 @@ export default function EolPage() {
               {regions.map(r => <option key={r}>{r}</option>)}
             </select>
           </div>
-          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
             {loading ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div> : (
               <table>
                 <thead><tr><th>Site</th><th>Country</th><th>Region</th><th>EOL devices</th><th>% of site</th><th>Risk level</th></tr></thead>
@@ -135,20 +135,20 @@ export default function EolPage() {
       {tab === 'software' && (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
-            <div style={{ background: 'var(--tint-danger)', borderRadius: '8px', border: '1px solid var(--tint-danger-fg)', padding: '16px' }}>
+            <div style={{ background: 'var(--tint-danger)', borderRadius: 'var(--radius)', border: '1px solid var(--tint-danger-fg)', padding: '16px' }}>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-danger-fg)', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>OS EOL expired</div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: 'var(--tint-danger-fg)' }}>{swExpired.length}</div>
             </div>
-            <div style={{ background: 'var(--tint-warn)', borderRadius: '8px', border: '1px solid var(--tint-warn-fg)', padding: '16px' }}>
+            <div style={{ background: 'var(--tint-warn)', borderRadius: 'var(--radius)', border: '1px solid var(--tint-warn-fg)', padding: '16px' }}>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-warn-fg)', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Expiring within 90 days</div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: 'var(--tint-warn-fg)' }}>{swExpiring.length}</div>
             </div>
-            <div style={{ background: 'var(--tint-info)', borderRadius: '8px', border: '1px solid var(--tint-info-fg)', padding: '16px' }}>
+            <div style={{ background: 'var(--tint-info)', borderRadius: 'var(--radius)', border: '1px solid var(--tint-info-fg)', padding: '16px' }}>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-info-fg)', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>Total tracked</div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: 'var(--tint-info-fg)' }}>{softwareRows.length}</div>
             </div>
           </div>
-          <div style={{ background: 'var(--bg-card)', borderRadius: '8px', border: '1px solid var(--border)', overflow: 'hidden' }}>
+          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
             {loading ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div> : softwareRows.length === 0 ? (
               <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No devices have OS EOL dates recorded yet.</div>
             ) : (

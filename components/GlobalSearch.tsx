@@ -93,7 +93,7 @@ export default function GlobalSearch() {
             width: '100%', padding: '8px 32px 8px 34px',
             background: 'rgba(255,255,255,0.08)',
             border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 8,
+            borderRadius: 'var(--radius)',
             color: 'rgba(255,255,255,0.9)',
             fontSize: 'var(--text-base)',
             outline: 'none',
