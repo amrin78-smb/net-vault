@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.31.1': [
+    'Moved the rounded/square corners control out of the top bar and into the avatar menu, where it sits alongside the other personal settings. It was cluttering the top bar and looked out of place there. It works exactly as before and is still available to everyone, regardless of role.',
+  ],
   '1.31.0': [
     'You can now switch the whole interface between rounded and square corners. The control sits in the top bar next to the dark-mode toggle, applies instantly across every page, and switches back just as easily — neither look is temporary or "the real one".',
     'The choice is remembered per browser and is yours alone: it changes nothing for other users, needs no administrator rights, and is applied before the page draws so there is no flicker on load.',

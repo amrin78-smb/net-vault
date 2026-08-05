@@ -469,11 +469,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           <div style={{ flex: 1 }} />
 
-          {/* Corner style + theme toggle + Help ghost icon button.
-              CornersToggle lives here (not in Settings) so every role can reach
-              it — /settings redirects non-admins away. */}
+          {/* Theme toggle + Help ghost icon button. (The corner-style switcher
+              lives in the avatar dropdown below — see the note there.) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 6 }}>
-            <CornersToggle />
             <ThemeToggle />
             <a
               href="/compliance"
@@ -571,6 +569,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     </svg>
                     Change Password
                   </button>
+                  <div style={{ height: 1, background: 'var(--border-light)', margin: '4px 0' }} />
+                  {/* Corner style (rounded/square) — a per-user preference, so it
+                      belongs with the other per-user items in this dropdown rather
+                      than in the navy top bar. Deliberately NOT on /settings: that
+                      page redirects non-admins to /dashboard, and every role must be
+                      able to reach this. */}
+                  <CornersToggle />
                   <div style={{ height: 1, background: 'var(--border-light)', margin: '4px 0' }} />
                   <button
                     onClick={() => { setShowUserMenu(false); signOut({ callbackUrl: '/login' }) }}
