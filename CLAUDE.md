@@ -438,9 +438,29 @@ outside, so verify via the frontend port:
 - Use `curl` for: `/api/health` (version), any explicitly public endpoint, and
   HTTP-status/redirect sanity — e.g. `curl -s -o /dev/null -D - http://192.168.6.111:3000/`
   to see the status code and `Location` (the root should 307 → `/launcher`).
-- Deploys are **manual** — Amrin runs the app's updater script; Claude never
-  deploys. Always verify **after** the deploy: confirm `/api/health` shows the new
-  version, then confirm data via the read-only DB, then eyeball the UI.
+- Deploys are **routine for Claude** (changed 2026-08-06; this used to read "Amrin
+  runs the updater script; Claude never deploys"). The standing loop is test →
+  build → commit → push → **deploy → verify live**, with ONE precondition: only
+  when the VPN is up and `192.168.6.111` is reachable. Preflight it (a `curl
+  /api/health` is enough); if unreachable, stop at the push and say so — don't
+  retry blindly or read it as an app fault. A VPN drop makes all four apps look
+  dead at once, which is the tell.
+- Deploy by running this app's own `installer/Update-NetVault.ps1` over WinRM
+  `Invoke-Command`, never by hand-editing the server. Pass
+  `-InstallDir C:\Apps\NetVault\app` — the install root is the `app` **subfolder**
+  (`C:\Apps\NetVault` itself holds only `app`/`logs`/`nssm`) — and OMIT `-ServerIp`
+  on a routine update; it's for first install only and the script preserves the
+  existing `.env`. Run it backgrounded: an npm install + build outlasts a
+  foreground tool timeout, and timing out mid-deploy tears down the WinRM session.
+  The updater snapshots the commit + `node_modules` + build output and
+  **auto-rolls-back** on failure, so a bad deploy is recoverable, not an outage.
+- Always verify **after** the deploy, and verify *independently* rather than
+  trusting the updater's own `[OK]` lines: confirm `/api/health` shows the new
+  version, confirm data via the read-only DB, then exercise the behaviour you
+  actually changed in the UI. This is not ceremony — a live post-deploy click
+  check is what caught SpanVault 1.88.1's site-header bug, where a stretched link
+  swallowed 68% of the header's clicks. Every static check passed it, and it was
+  invisible in a screenshot.
 
 ---
 
