@@ -1,5 +1,5 @@
 {
-  "version": "2.6.3",
+  "version": "2.6.4",
   "files": [
     {
       "path": "README.md",
@@ -95,16 +95,16 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "f65c660ea49aa320f1f03b423b53df5797f46e0cdd73961c7d85a0ab2453a2e3"
+      "sha256": "82da61e878b46309e12ca5cd91deee970119c01c70ce778e632df663f68bc4bc"
     },
     {
       "path": "package.json",
-      "sha256": "8c3664cdc5517f3d4f7d7845a908ab201f4b8e7ca85ebc82db5ce7db89a7f66c"
+      "sha256": "7e4774f01e288ca40125e8d4d44380732dd58833c7423e39842e4c3c24c196e6"
     },
     {
       "path": "scripts/sign-agent.js",
       "sha256": "edd8d877a9224f8013e7c080d560390b6f88d85de04250d1e1701467437e3ffb"
     }
   ],
-  "sig": "Fc1wV9QOSvr8sD3D5CxyjbfAfP2t4RmqSPZ2m5SS8ePvNXz4jhC35yV7V/ovF3UNjd/f8X6olo05ocMck5aYDw=="
+  "sig": "UEVcdyA2iy2pJ6/Fyq57m64f6kXqGsr+YjmAlCTIbW32VvucIWIpKM32LVqKEIAZ3AqnAGedcwV5CkHIfAEKCA=="
 }
