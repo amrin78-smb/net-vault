@@ -91,7 +91,7 @@
     },
     {
       "path": "nocvault-agent.js",
-      "sha256": "13a8dd130f1982143ce3731800e661e3db8b9bd11cd9726a24c42ad51f169652"
+      "sha256": "a48e4de13a462d51f4707c6d6b8709be5cae23a8a41f019f4b004bea86e6e2dc"
     },
     {
       "path": "package-lock.json",
@@ -103,8 +103,8 @@
     },
     {
       "path": "scripts/sign-agent.js",
-      "sha256": "edd8d877a9224f8013e7c080d560390b6f88d85de04250d1e1701467437e3ffb"
+      "sha256": "ea4336a84d7b0c7c63b2159a9f6d73cb9d881f10196ff9f561b7b94dd45532ea"
     }
   ],
-  "sig": "UEVcdyA2iy2pJ6/Fyq57m64f6kXqGsr+YjmAlCTIbW32VvucIWIpKM32LVqKEIAZ3AqnAGedcwV5CkHIfAEKCA=="
+  "sig": "pccEC/8D9bKt9NcsJCPKUcncjXP7wNwVrk2Dn9w+n5vsTyoGH8ycqE4sO9txRgAHb6PN1k6D4F1fANuZwwpeCw=="
 }

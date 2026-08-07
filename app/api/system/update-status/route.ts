@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.32.2': [
+    'Fixes a fault in the 1.32.1 agent update that left an agent repeatedly reinstalling the same version. The agent reports its own version from a value held separately from its package details, and only the latter was updated — so each agent installed the new software, still believed itself to be on the old version, and immediately installed it again. Affected agents recover on this release without intervention.',
+    'The release tooling now refuses to publish an agent whose two version records disagree, so this cannot be published again. Found on our own installation before any customer ran it.',
+  ],
   '1.32.1': [
     'Corrects the agent update published in 1.32.0. The new agent software carried the same version number as the release already installed, and agents skip an update that matches the version they are running — so the encryption support would have been published but never actually collected by any agent. It now ships as a new version and installs normally.',
   ],

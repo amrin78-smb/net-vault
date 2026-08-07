@@ -15,9 +15,25 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-// Keep this literal exactly `const VERSION = '...'` (single quotes): SpanVault's
-// server fingerprints agents with the regex  const VERSION = '([^']+)'.
-const VERSION = '2.6.3';
+// Keep the declaration below exactly as-is: a single-quoted string literal on its
+// own line. SpanVault fingerprints agents by regex-matching that declaration out
+// of this file (api/server.js, api/ws-server.js), so the version cannot be read
+// from package.json here.
+//
+// Deliberately do NOT repeat that declaration's shape anywhere else in this file,
+// including inside a comment. SpanVault's regex is unanchored and takes the FIRST
+// match in the file, so a comment quoting the pattern is picked up ahead of the
+// real declaration and the agent gets fingerprinted with whatever placeholder the
+// comment used.
+//
+// It MUST be bumped in lockstep with agent/package.json. `npm version` does not
+// touch this literal, and letting the two drift is not a cosmetic bug: the
+// updater gates on `manifest.version === VERSION`, so a bundle whose files say
+// 2.6.4 while this still says 2.6.3 is downloaded, applied, and then found
+// "outdated" again on the very next boot — an infinite download/apply/restart
+// loop that NSSM eventually throttles into a Paused service (hit in production
+// 2026-08-07). scripts/sign-agent.js now refuses to sign on a mismatch.
+const VERSION = '2.6.4';
 
 // ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
 // This gate MUST execute BEFORE requiring any core module a pending update could

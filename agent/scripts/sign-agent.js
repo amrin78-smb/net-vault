@@ -189,6 +189,42 @@ function main() {
     return { path: rel, sha256: crypto.createHash('sha256').update(buf).digest('hex') };
   });
 
+  // The version the RUNNING agent reports about itself is a hardcoded literal in
+  // nocvault-agent.js (SpanVault fingerprints it with a regex, so it cannot be
+  // read from package.json). core/updater.js gates on
+  // `manifest.version === VERSION`, so signing a manifest whose version differs
+  // from that literal ships an agent that considers ITSELF outdated the instant
+  // it boots: it re-downloads the same bundle, applies it, exits to restart, and
+  // repeats forever until NSSM throttles the service into Paused. That reached
+  // production on 2026-08-07 — `npm version` bumped package.json and left the
+  // literal behind. Same reasoning as the CRLF guard above: fail at the release
+  // gate rather than rely on anyone remembering.
+  const entryPath = path.join(agentDir, 'nocvault-agent.js');
+  // Anchored to line start (/m) so a comment mentioning the pattern can never be
+  // matched instead of the real declaration — SpanVault's own copy of this regex
+  // is unanchored and takes the first hit in the file, which is exactly how a
+  // comment could hijack it.
+  const entryVersion = (fs.readFileSync(entryPath, 'utf8').match(/^const VERSION = '([^']+)'/m) || [])[1];
+  if (!entryVersion) {
+    console.error(
+      'REFUSING TO SIGN: could not find the `const VERSION = \'...\'` literal in\n' +
+      '  nocvault-agent.js. SpanVault fingerprints agents with that exact regex,\n' +
+      '  so it must stay a single-quoted literal.'
+    );
+    process.exit(1);
+  }
+  if (entryVersion !== version) {
+    console.error(
+      'REFUSING TO SIGN: version mismatch.\n' +
+      '  manifest/--version : ' + version + '\n' +
+      '  nocvault-agent.js  : ' + entryVersion + '\n' +
+      '  The agent gates its self-update on manifest.version === VERSION, so these\n' +
+      '  differing ships an infinite download/apply/restart loop. Bump the literal\n' +
+      '  in nocvault-agent.js to match and re-run.'
+    );
+    process.exit(1);
+  }
+
   // Canonical signed string — pinned by the manifest contract; the agent-side
   // verifier reconstructs and verifies exactly this:
   //   version + '\n' + files.map(f => f.path + ':' + f.sha256).join('\n')
