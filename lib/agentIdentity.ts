@@ -42,7 +42,8 @@ export function toAppSlug(app: string): string {
 // Derive the data-plane ingest URL for a module from the CURRENT request host
 // (so it follows whatever hostname the agent reached the hub through — same
 // host-resolution shape as lib/publicUrl.resolveOrigin). ws over http, wss over
-// https. Returns null for an unknown module slug.
+// https, unless the per-app TLS flag forces wss (see below). Returns null for an
+// unknown module slug.
 export function deriveIngest(app: string, req: NextRequest): string | null {
   const port = PORT_MAP[app]
   if (!port) return null
@@ -60,10 +61,23 @@ export function deriveIngest(app: string, req: NextRequest): string | null {
   const rawHost = override || req.headers.get('x-forwarded-host') || req.headers.get('host') || ''
   const host = rawHost.split(':')[0].trim()
   if (!host) return null
+  // The ingest endpoint's TLS state is INDEPENDENT of how the hub itself was
+  // reached: the hub is served over plain HTTP in every deployment we ship, so a
+  // request-derived scheme can never yield wss:// no matter how the satellite is
+  // configured — the app server can have SV_WS_TLS_CERT/DDI_WS_TLS_CERT wired up
+  // and listening on TLS while the agent is still told to dial ws://, which just
+  // fails the handshake. Hence an EXPLICIT per-app signal, set on the hub next to
+  // the cert that was installed on the satellite. Mirrors the *_PUBLIC_HOST
+  // override above: unset (the default install) falls back to the request-derived
+  // scheme, so this is additive.
+  const tlsEnv = toAppSlug(app) === 'ddivault' ? 'DDIVAULT_WS_TLS' : 'SPANVAULT_WS_TLS'
+  const tlsForced = /^(1|true|yes|on)$/i.test((process.env[tlsEnv] || '').trim())
+
   const proto = (req.headers.get('x-forwarded-proto') || req.nextUrl.protocol.replace(':', '') || 'http')
     .split(',')[0]
     .trim()
-  return `${proto === 'https' ? 'wss' : 'ws'}://${host}:${port}/`
+  const scheme = tlsForced || proto === 'https' ? 'wss' : 'ws'
+  return `${scheme}://${host}:${port}/`
 }
 
 // NocVault Agents Phase 2 — hub-issued agent identity.

@@ -275,6 +275,10 @@ const heartbeat = createHeartbeat({
 // ── Transport + runtime (mutually referenced; see wiring note above) ───────────
 transport = createTransport({
   config,
+  // Selects this endpoint's TLS pin from config.wsFingerprints — SpanVault and
+  // DDIVault present different self-signed certs, and both transports share one
+  // config object, so an untagged pin would verify one and reject the other.
+  app: 'span',
   identity,
   buffer,
   // onMessage runs the server push through the runtime router.
@@ -316,6 +320,7 @@ if (ddi && hubEnrolled()) {
   let ddiRuntime = null;
   ddiTransport = createTransport({
     config,
+    app: 'ddi',
     identity: ddiIdentity,
     buffer: ddiBuffer,
     onMessage: (msg) => ddiRuntime.dispatch(msg),

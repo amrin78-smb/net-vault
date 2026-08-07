@@ -68,6 +68,8 @@ param(
   [string]$ApiKey,
   [int]$WsPort = 3010,
   [string]$Modules,
+  [string]$WsFingerprint,
+  [string]$WsFingerprintDdi,
   [string]$InstallDir = 'C:\\Apps\\NocVaultAgent'
 )
 
@@ -179,6 +181,22 @@ if ($Modules) {
     if ($slug) { $mods[$slug] = @{ enabled = $true } }
   }
   if ($mods.Count -gt 0) { $cfg.modules = $mods }
+}
+# -- TLS certificate pins for the wss:// data plane. The app servers terminate
+#    wss:// with a SELF-SIGNED cert they generate themselves, so there is no chain
+#    to validate and the agent instead verifies the cert's SHA-256 fingerprint
+#    (core/transport.js). Written as a PER-APP map because SpanVault and DDIVault
+#    each present their own certificate when they are on different hosts - one
+#    shared pin would verify one and reject the other.
+#    -WsFingerprint alone covers the common single-host install, where one cert
+#    serves both listeners; pass -WsFingerprintDdi as well only for a split
+#    deployment. Omitting both leaves the agent encrypted-but-unpinned, which it
+#    logs plainly rather than implying the connection is verified.
+if ($WsFingerprint -or $WsFingerprintDdi) {
+  $fps = [ordered]@{}
+  if ($WsFingerprint)    { $fps.span = $WsFingerprint }
+  if ($WsFingerprintDdi) { $fps.ddi  = $WsFingerprintDdi } elseif ($WsFingerprint) { $fps.ddi = $WsFingerprint }
+  $cfg.wsFingerprints = $fps
 }
 # -Depth 4 is defensive headroom: the default (2) is enough for the shape above,
 # but a nested per-module config block would serialise as the literal string

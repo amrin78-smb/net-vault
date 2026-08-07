@@ -7,5 +7,13 @@
   "_jwtModeExample": {
     "hubUrl": "http://SERVER_IP:3000",
     "enrollToken": "REPLACE_WITH_ENROLL_TOKEN"
+  },
+
+  "_wsTls": "OPTIONAL. When an app server has TLS configured on its agent WebSocket (SV_WS_TLS_CERT/KEY, DDI_WS_TLS_CERT/KEY) the hub advertises a wss:// ingest and the agent connects over TLS automatically — nothing is needed here for the traffic to be ENCRYPTED. wsFingerprints additionally VERIFIES the server: those certs are self-signed, so there is no chain to validate and the agent instead pins the certificate's SHA-256 fingerprint. Without a pin the channel is encrypted but unauthenticated (the agent logs UNPINNED and connects anyway, so upgrading the server first never strands an agent); with one, a substituted certificate is rejected before any frame is exchanged. Keys are per app because SpanVault and DDIVault present their own certificate when they run on different hosts — one shared pin would verify one and reject the other. On the usual single-host install one cert serves both listeners, so the same value goes in both. Colons and case are ignored, so paste openssl's output as-is. The installer writes this from -WsFingerprint / -WsFingerprintDdi.",
+  "_wsTlsExample": {
+    "wsFingerprints": {
+      "span": "AB:CD:EF:...:12",
+      "ddi": "AB:CD:EF:...:12"
+    }
   }
 }

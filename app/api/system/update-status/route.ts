@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.32.0': [
+    'Remote agents can now send their data over an encrypted connection. SpanVault and DDIVault present a certificate created during installation, and the agent checks it against a fingerprint delivered in the one-time install command you copy — deliberately not over the network connection it protects, so a server that could impersonate the real one cannot also hand out a matching fingerprint.',
+    'Each application is verified separately, so an installation where SpanVault and DDIVault run on different servers checks each against its own certificate rather than accepting one for both.',
+    'An agent with no fingerprint configured still connects and records that it is unverified, rather than refusing. This means upgrading the servers first never leaves an agent unable to report in, and existing agents keep working through the change.',
+    'The installer sets both halves of this together. The certificate on the application server and the setting here that tells agents to use it are useless apart — configuring only one would leave every agent unable to connect — so a NetVault update now reconciles this side to whatever the other applications are actually running.',
+  ],
   '1.31.1': [
     'Moved the rounded/square corners control out of the top bar and into the avatar menu, where it sits alongside the other personal settings. It was cluttering the top bar and looked out of place there. It works exactly as before and is still available to everyone, regardless of role.',
   ],

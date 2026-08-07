@@ -81,6 +81,143 @@ function GrantNocRoRead($db) {
     }
 }
 
+# ── Agent WebSocket TLS (wss://) ──────────────────────────────────
+# The common NocVault agent connects to two app ingest WebSockets - SpanVault
+# 3010 and DDIVault 3011 - and those frames carry DECRYPTED credentials (the
+# ddi_config frame ships WinRM passwords), so the sockets must run wss://.
+# Certificates are SELF-SIGNED and minted here: the operator must NEVER have to
+# obtain or deploy a certificate. The agent pins the server by SHA-256
+# fingerprint, so a pair is generated ONCE and NEVER regenerated - a new key
+# silently breaks every already-pinned agent in the fleet.
+$WsTlsCertDir = 'C:\ProgramData\NocVault\certs'
+
+# openssl.exe mints the pair because Node's https.createServer needs a PEM cert
+# + PEM key, and New-SelfSignedCertificate on Windows PowerShell 5.1 can only
+# export PFX (.NET Framework has no PKCS#8 private-key export). Git for Windows
+# is a hard dependency of this suite and bundles OpenSSL 3.x, so it is present
+# by the time this runs (STEP 4 installs Git).
+function Get-WsTlsOpenSsl {
+    $paths = @(
+        "$env:ProgramFiles\Git\usr\bin\openssl.exe",
+        "$env:ProgramFiles\Git\mingw64\bin\openssl.exe",
+        "${env:ProgramFiles(x86)}\Git\usr\bin\openssl.exe",
+        "C:\Program Files\PostgreSQL\16\bin\openssl.exe"
+    )
+    foreach ($p in $paths) { if ($p -and (Test-Path -LiteralPath $p)) { return $p } }
+    # PATH lookup last, via Get-Command - '& openssl' would THROW on a machine
+    # that genuinely lacks it (PowerShell command resolution fails before any
+    # process exists to redirect stderr from).
+    try { $c = Get-Command openssl.exe -ErrorAction SilentlyContinue; if ($c) { return $c.Source } } catch {}
+    return $null
+}
+
+# SHA-256 over the certificate DER. Byte-identical to Node's
+# tls.getPeerCertificate().fingerprint256, which is what the agent pins on.
+function Get-WsTlsFingerprint([string]$certPath) {
+    try {
+        $pem = Get-Content -LiteralPath $certPath -Raw
+        $b64 = ($pem -replace '-----BEGIN CERTIFICATE-----','' -replace '-----END CERTIFICATE-----','') -replace '\s',''
+        $der = [Convert]::FromBase64String($b64)
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        return (($sha.ComputeHash($der) | ForEach-Object { $_.ToString('X2') }) -join ':')
+    } catch { return $null }
+}
+
+# Generate (once) the wss:// cert+key for one app. IDEMPOTENT: if both files
+# already exist it re-reads them and returns the SAME fingerprint. NEVER throws
+# - a TLS failure must degrade to "no TLS configured", never abort an install.
+function New-WsTlsCert([string]$app, [string]$serverIp, [int]$years = 5) {
+    $dir = 'C:\ProgramData\NocVault\certs'
+    $res = [pscustomobject]@{
+        App         = $app
+        Cert        = (Join-Path $dir "$app-ws.crt")
+        Key         = (Join-Path $dir "$app-ws.key")
+        Fingerprint = $null
+        NotAfter    = $null
+        Created     = $false
+        Ok          = $false
+        Warning     = $null
+        Error       = $null
+    }
+    try {
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        if (-not ((Test-Path -LiteralPath $res.Cert) -and (Test-Path -LiteralPath $res.Key))) {
+            $ssl = Get-WsTlsOpenSsl
+            if (-not $ssl) {
+                $res.Error = 'openssl.exe not found (looked in Git for Windows, PostgreSQL and PATH)'
+                return $res
+            }
+            # A config FILE is used rather than -subj/-addext: no leading-slash
+            # argument that an MSYS-linked openssl could path-mangle, and no
+            # dependency on OpenSSL >= 1.1.1 for -addext. The SAN MUST carry the
+            # server IP - agents dial by IP, and an IP absent from the SAN fails
+            # certificate verification outright no matter what the CN says.
+            $cfg = Join-Path $env:TEMP ("nocvault-{0}-ws-{1}.cnf" -f $app, ([guid]::NewGuid().ToString('N')))
+            $cfgText = @"
+[ req ]
+default_bits       = 2048
+default_md         = sha256
+prompt             = no
+distinguished_name = nv_dn
+x509_extensions    = nv_ext
+
+[ nv_dn ]
+CN = $serverIp
+O  = NocVault
+
+[ nv_ext ]
+basicConstraints = critical,CA:FALSE
+keyUsage         = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName   = @nv_alt
+
+[ nv_alt ]
+IP.1  = $serverIp
+IP.2  = 127.0.0.1
+DNS.1 = $env:COMPUTERNAME
+DNS.2 = localhost
+"@
+            [System.IO.File]::WriteAllText($cfg, $cfgText, (New-Object System.Text.UTF8Encoding($false)))
+            $days = ($years * 365) + 2
+            # openssl streams key-generation progress dots to STDERR. Under a
+            # host that merges stderr into PowerShell's error stream that reads
+            # as a failure even on exit 0, so relax ErrorActionPreference for the
+            # call and judge success on the files it produced instead.
+            $prevEA = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                & $ssl req -x509 -new -newkey rsa:2048 -nodes -sha256 -days $days -config $cfg -keyout $res.Key -out $res.Cert
+            } finally {
+                $ErrorActionPreference = $prevEA
+                Remove-Item -LiteralPath $cfg -Force -ErrorAction SilentlyContinue
+            }
+            if (-not ((Test-Path -LiteralPath $res.Cert) -and (Test-Path -LiteralPath $res.Key))) {
+                $res.Error = "openssl did not produce $($res.Cert)"
+                return $res
+            }
+            $res.Created = $true
+            # The key is an unencrypted private key on disk - restrict it to
+            # SYSTEM (the NSSM service account) and Administrators.
+            try { & icacls.exe $res.Key /inheritance:r /grant '*S-1-5-18:(R)' /grant '*S-1-5-32-544:(F)' | Out-Null } catch {}
+        }
+        $res.Fingerprint = Get-WsTlsFingerprint $res.Cert
+        try {
+            $pem = Get-Content -LiteralPath $res.Cert -Raw
+            $b64 = ($pem -replace '-----BEGIN CERTIFICATE-----','' -replace '-----END CERTIFICATE-----','') -replace '\s',''
+            $x   = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(,[Convert]::FromBase64String($b64))
+            $res.NotAfter = $x.NotAfter
+            $san = (($x.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.17' } | ForEach-Object { $_.Format($false) }) -join ' ')
+            if ($serverIp -and $san -and ($san -notmatch [regex]::Escape($serverIp))) {
+                $res.Warning = "existing certificate SAN does not cover $serverIp - agents dialling that IP will reject it"
+            }
+        } catch {}
+        $res.Ok = [bool]$res.Fingerprint
+    } catch {
+        $res.Error = $_.Exception.Message
+    }
+    return $res
+}
+
 # ── Banner ────────────────────────────────────────────────────────
 Clear-Host
 Write-Host ""
@@ -352,6 +489,79 @@ Expand-Archive -Path $NssmZip -DestinationPath $NssmDir -Force
 Write-OK "NSSM ready"
 
 # ================================================================
+# STEP 6.5 — Agent WebSocket TLS certificates (wss://)
+# ================================================================
+# Runs BEFORE the app steps so the generated paths can be baked straight into
+# each app's .env.local / NSSM environment below. Everything here is best-effort:
+# if a certificate cannot be minted the apps fall back to exactly today's plain
+# ws:// behaviour (DDIVault keeps its DDI_WS_ALLOW_PLAINTEXT=1 opt-out) rather
+# than failing the install.
+Write-Step "Generating agent WebSocket TLS certificates"
+$SVWsTls = $null
+$DDIWsTls = $null
+# Env fragments spliced into the app env blocks further down. Defaults preserve
+# the pre-TLS behaviour so a cert failure is a graceful degrade, not a breakage.
+$SVWsEnvLines  = ""
+$DDIWsEnvLines = "DDI_WS_ALLOW_PLAINTEXT=1"
+
+if ($InstallSpanVault) {
+    $SVWsTls = New-WsTlsCert 'spanvault' $ServerIP 5
+    if ($SVWsTls.Ok) {
+        $SVWsEnvLines = "SV_WS_TLS_CERT=$($SVWsTls.Cert)`nSV_WS_TLS_KEY=$($SVWsTls.Key)"
+        if ($SVWsTls.Created) { Write-OK "SpanVault agent WS certificate created (expires $($SVWsTls.NotAfter.ToString('yyyy-MM-dd')))" }
+        else                  { Write-OK "SpanVault agent WS certificate already present - reused, NOT regenerated (expires $($SVWsTls.NotAfter.ToString('yyyy-MM-dd')))" }
+        if ($SVWsTls.Warning) { Write-Warn "SpanVault WS cert: $($SVWsTls.Warning)" }
+    } else {
+        Write-Warn "SpanVault agent WS certificate NOT created ($($SVWsTls.Error)) - port 3010 stays plain ws://"
+    }
+}
+
+if ($InstallDDIVault) {
+    $DDIWsTls = New-WsTlsCert 'ddivault' $ServerIP 5
+    if ($DDIWsTls.Ok) {
+        # TLS is on, so the cleartext opt-out MUST go: leaving
+        # DDI_WS_ALLOW_PLAINTEXT=1 in place would keep the guard in
+        # api/ws-server.js permanently defeated for any future config drift.
+        $DDIWsEnvLines = "DDI_WS_TLS_CERT=$($DDIWsTls.Cert)`nDDI_WS_TLS_KEY=$($DDIWsTls.Key)"
+        if ($DDIWsTls.Created) { Write-OK "DDIVault agent WS certificate created (expires $($DDIWsTls.NotAfter.ToString('yyyy-MM-dd')))" }
+        else                   { Write-OK "DDIVault agent WS certificate already present - reused, NOT regenerated (expires $($DDIWsTls.NotAfter.ToString('yyyy-MM-dd')))" }
+        if ($DDIWsTls.Warning) { Write-Warn "DDIVault WS cert: $($DDIWsTls.Warning)" }
+        Write-OK "DDI_WS_ALLOW_PLAINTEXT removed - the DDIVault agent ingest now requires wss://"
+    } else {
+        Write-Warn "DDIVault agent WS certificate NOT created ($($DDIWsTls.Error)) - keeping DDI_WS_ALLOW_PLAINTEXT=1 so port 3011 still binds"
+    }
+}
+
+if (-not $InstallSpanVault -and -not $InstallDDIVault) { Write-Info "No agent-WS apps selected - skipping" }
+
+# The HUB half of the same switch. A cert on the app server only flips the
+# LISTENER: ws-server.js swaps in https.createServer and then speaks wss:// and
+# nothing else. The hub separately decides which URL to hand each agent
+# (lib/agentIdentity.ts deriveIngest), and since the hub is served over plain
+# HTTP the request-derived scheme is always ws:// - so without these flags a
+# fresh install would generate certs, flip both listeners to TLS-only, and then
+# tell every agent to dial ws://, which fails the handshake. The two halves must
+# be set in the SAME run that mints the cert; they are useless apart.
+#
+# The fingerprints ride along so the enroll-token route can bake a -WsFingerprint
+# into the install command it prints (app/api/agents/enroll-tokens/route.ts).
+$NVWsHubPairs = @()
+if ($SVWsTls -and $SVWsTls.Ok) {
+    $NVWsHubPairs += "SPANVAULT_WS_TLS=1"
+    $NVWsHubPairs += "SPANVAULT_WS_FINGERPRINT=$($SVWsTls.Fingerprint)"
+}
+if ($DDIWsTls -and $DDIWsTls.Ok) {
+    $NVWsHubPairs += "DDIVAULT_WS_TLS=1"
+    $NVWsHubPairs += "DDIVAULT_WS_FINGERPRINT=$($DDIWsTls.Fingerprint)"
+}
+# Two shapes: newline-terminated for the .env heredocs (empty => contributes
+# nothing at all, not a stray blank line), newline-PREFIXED for the NSSM
+# AppEnvironmentExtra strings, which are backtick-n joined already.
+$NVWsHubBlock = if ($NVWsHubPairs.Count) { $NVWsHubPairs -join "`n" } else { "" }
+$NVWsHubNssm  = if ($NVWsHubPairs.Count) { "`n" + ($NVWsHubPairs -join "`n") } else { "" }
+if ($NVWsHubPairs.Count) { Write-OK "Hub agent-ingest TLS flags set - agents will be told to dial wss://" }
+
+# ================================================================
 # STEP 7 — Databases
 # ================================================================
 Write-Step "Creating databases and users"
@@ -461,6 +671,7 @@ NOCVAULT_RO_USER=nocvault_readonly
 NOCVAULT_RO_PASS=$NocReadOnlyPass
 NEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000
 POSTGRES_PASSWORD=$PgAdminPassword
+$NVWsHubBlock
 "@ | Out-File -FilePath "$NVAppDir\.env" -Encoding UTF8 -NoNewline
 
 # Build
@@ -496,6 +707,7 @@ NOCVAULT_RO_PORT=5432
 NOCVAULT_RO_USER=nocvault_readonly
 NOCVAULT_RO_PASS=$NocReadOnlyPass
 NEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000
+$NVWsHubBlock
 "@ | Out-File -FilePath "$NVStandalone\.env.local" -Encoding UTF8 -NoNewline
 Write-OK "NetVault standalone .env.local written (incl. SERVER_IP, CRON_SECRET)"
 
@@ -504,7 +716,7 @@ Write-OK "NetVault standalone .env.local written (incl. SERVER_IP, CRON_SECRET)"
 & $NssmExe remove NetVault confirm 2>$null
 & $NssmExe install NetVault "C:\Program Files\nodejs\node.exe" "$NVStandalone\server.js"
 & $NssmExe set NetVault AppDirectory        $NVStandalone
-& $NssmExe set NetVault AppEnvironmentExtra "PORT=3000`nHOSTNAME=0.0.0.0`nNODE_ENV=production`nDATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault`nNEXTAUTH_SECRET=$SharedSecret`nNEXTAUTH_URL=http://${ServerIP}:3000`nSSL_DISABLED=true`nSERVER_IP=$ServerIP`nCRON_SECRET=$CronSecret`nNOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$NocReadOnlyPass"
+& $NssmExe set NetVault AppEnvironmentExtra "PORT=3000`nHOSTNAME=0.0.0.0`nNODE_ENV=production`nDATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault`nNEXTAUTH_SECRET=$SharedSecret`nNEXTAUTH_URL=http://${ServerIP}:3000`nSSL_DISABLED=true`nSERVER_IP=$ServerIP`nCRON_SECRET=$CronSecret`nNOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$NocReadOnlyPass$NVWsHubNssm"
 & $NssmExe set NetVault DisplayName         "NetVault - Network Asset Management"
 & $NssmExe set NetVault Description         "NocVault Suite - Network Asset Management"
 & $NssmExe set NetVault Start               SERVICE_AUTO_START
@@ -785,7 +997,9 @@ $$;
     Write-OK "DDIVault schemas applied and cross-DB grants set"
 
     # Create .env.local in root AND frontend
-    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_WS_PORT=3011`nDDI_WS_ALLOW_PLAINTEXT=1`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
+    # $DDIWsEnvLines is either the DDI_WS_TLS_CERT/KEY pair (TLS on) or
+    # DDI_WS_ALLOW_PLAINTEXT=1 (cert generation failed in STEP 6.5) - never both.
+    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_WS_PORT=3011`n$DDIWsEnvLines`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $DDIFrontendDir = "$DDIAppDir\frontend"
     $ddiEnv | Out-File -FilePath "$DDIAppDir\.env.local" -Encoding UTF8 -NoNewline
     $ddiEnv | Out-File -FilePath "$DDIFrontendDir\.env.local" -Encoding UTF8 -NoNewline
@@ -811,7 +1025,10 @@ $$;
     & $NssmExe remove DDIVault-API confirm 2>$null
     & $NssmExe install DDIVault-API "C:\Program Files\nodejs\node.exe" "$DDIAppDir\api\server.js"
     & $NssmExe set DDIVault-API AppDirectory        $DDIAppDir
-    & $NssmExe set DDIVault-API AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_WS_PORT=3011`nDDI_WS_ALLOW_PLAINTEXT=1`nDDI_APP_URL=http://${ServerIP}:3006`nDDI_APP_PORT=3006`nSERVER_IP=$ServerIP`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    # NSSM's AppEnvironmentExtra wins over .env.local (dotenv does not override an
+    # already-set process env var), so the WS TLS decision has to be mirrored here
+    # or the .env.local copy above is inert.
+    & $NssmExe set DDIVault-API AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nDB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_WS_PORT=3011`n$DDIWsEnvLines`nDDI_APP_URL=http://${ServerIP}:3006`nDDI_APP_PORT=3006`nSERVER_IP=$ServerIP`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set DDIVault-API DependOnService     $PgSvcName
     & $NssmExe set DDIVault-API DisplayName         "DDIVault - API"
     & $NssmExe set DDIVault-API Start               SERVICE_AUTO_START
@@ -939,7 +1156,13 @@ $$;
     Write-OK "SpanVault schema applied"
 
     # Create .env.local in root AND frontend
-    $svEnv = "NODE_ENV=production`nSV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`nSV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
+    # SpanVault-API has no NSSM AppEnvironmentExtra - api/server.js dotenv-loads
+    # this file, so .env.local is the ONLY place SV_WS_TLS_* can be set.
+    # $SVWsEnvLines is the SV_WS_TLS_CERT/KEY pair, or empty if STEP 6.5 could not
+    # mint a certificate (port 3010 then stays plain ws://, as before).
+    $svWsBlock = ""
+    if ($SVWsEnvLines) { $svWsBlock = $SVWsEnvLines + "`n" }
+    $svEnv = "NODE_ENV=production`nSV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`n${svWsBlock}SV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $SVFrontendDir = "$SVAppDir\frontend"
     $svEnv | Out-File -FilePath "$SVAppDir\.env.local" -Encoding UTF8 -NoNewline
     $svEnv | Out-File -FilePath "$SVFrontendDir\.env.local" -Encoding UTF8 -NoNewline
@@ -1156,6 +1379,26 @@ if ($InstallSpanVault) {
     Write-Host "  [7] Configure SNMP community strings per device in SpanVault > Settings" -ForegroundColor Gray
 }
 Write-Host ""
+# ── Agent WebSocket TLS fingerprints ──────────────────────────────
+# These certificates are self-signed, so there is no chain for an agent to
+# validate - the agent pins the SHA-256 fingerprint instead. Print it here (and
+# ONLY here) so the operator can carry it into the agent install command.
+if (($SVWsTls -and $SVWsTls.Ok) -or ($DDIWsTls -and $DDIWsTls.Ok)) {
+    Write-Host "  Agent WebSocket TLS (wss://) - self-signed, pin these fingerprints:" -ForegroundColor White
+    if ($SVWsTls -and $SVWsTls.Ok) {
+        Write-Host "  SpanVault agent WS TLS fingerprint: $($SVWsTls.Fingerprint)" -ForegroundColor Cyan
+        Write-Host "    (pass to the agent installer as -WsFingerprint)" -ForegroundColor Gray
+        Write-Host "    cert: $($SVWsTls.Cert)  expires: $($SVWsTls.NotAfter.ToString('yyyy-MM-dd'))" -ForegroundColor Gray
+    }
+    if ($DDIWsTls -and $DDIWsTls.Ok) {
+        Write-Host "  DDIVault agent WS TLS fingerprint: $($DDIWsTls.Fingerprint)" -ForegroundColor Cyan
+        Write-Host "    (pass to the agent installer as -WsFingerprintDdi)" -ForegroundColor Gray
+        Write-Host "    cert: $($DDIWsTls.Cert)  expires: $($DDIWsTls.NotAfter.ToString('yyyy-MM-dd'))" -ForegroundColor Gray
+    }
+    Write-Host "  Record these now - re-running the installer REUSES the same certificates," -ForegroundColor Gray
+    Write-Host "  and deleting them to regenerate breaks every already-pinned agent." -ForegroundColor Gray
+    Write-Host ""
+}
 Write-Host "  Logs location:" -ForegroundColor White
 Write-Host "  NetVault  : $NVDir\logs\" -ForegroundColor Gray
 if ($InstallLogVault)  { Write-Host "  LogVault  : $LVAppDir\logs\" -ForegroundColor Gray }

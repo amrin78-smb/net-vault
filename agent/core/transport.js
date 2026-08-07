@@ -15,7 +15,47 @@
  */
 const WebSocket = require('ws');
 
-function createTransport({ config, identity, buffer, onMessage, onOpen, logger }) {
+// ── TLS for wss:// ingests ───────────────────────────────────────────────────
+//
+// The app servers (SpanVault :3010, DDIVault :3011) terminate wss:// with a
+// SELF-SIGNED certificate they generate themselves — deliberately, so an
+// operator never has to obtain or deploy one (the same zero-deployment
+// experience PRTG gives for its probe connections). A self-signed cert has no
+// chain to validate, so `rejectUnauthorized: true` would reject every
+// connection; it is set false and the certificate is instead pinned by
+// SHA-256 fingerprint.
+//
+// Why pin rather than just encrypt: without pinning, TLS stops someone
+// *reading* the WinRM and SNMP credentials off the wire but not someone
+// *substituting themselves* for the server. `ddi_config` carries DECRYPTED
+// WinRM passwords, so that distinction is worth the one config value.
+//
+// Pins are PER APP, because SpanVault and DDIVault each generate their own
+// self-signed certificate — a single shared pin would verify one and reject the
+// other, and both transports here are handed the same `config` object.
+//   config.wsFingerprints = { span: "<sha256>", ddi: "<sha256>" }
+// `config.wsFingerprint` is still honoured as a single-endpoint fallback.
+//
+// The pin is set at install time from the command the hub generates. It is
+// deliberately NOT taken from the hub's policy response: the hub channel is
+// plain HTTP, so anyone able to substitute the server could substitute the
+// fingerprint alongside it and the pin would verify against the attacker. A pin
+// is only worth having if it arrives by a different route than the thing it
+// authenticates.
+//
+// No fingerprint configured => still connect (encrypted, unverified) and warn.
+// Refusing would strand an agent whose operator upgraded the server first, and
+// encrypted-but-unpinned is strictly better than the plain ws:// it replaces.
+function tlsOptionsFor(url, config) {
+  if (!/^wss:/i.test(String(url || ''))) return {};
+  return { rejectUnauthorized: false };
+}
+
+function normalizeFp(v) {
+  return String(v || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase();
+}
+
+function createTransport({ config, identity, buffer, onMessage, onOpen, logger, app }) {
   let ws = null;
   let reconnectTimeout = null;
   let reconnectAttempts = 0;
@@ -23,6 +63,46 @@ function createTransport({ config, identity, buffer, onMessage, onOpen, logger }
   let awaitingReady = false; // deferring the dial until identity.isReady()
   let readyPollTimer = null;
   let lastAuthToken = null; // the Authorization value the LIVE socket connected with
+
+  // Build the per-connection TLS options (no-op for a plain ws:// ingest).
+  function tlsOptions(url) {
+    return tlsOptionsFor(url, config);
+  }
+
+  // Verify the server's certificate fingerprint on the HTTP upgrade, which fires
+  // BEFORE 'open' — so a substituted certificate is rejected before any frame,
+  // and critically before the Authorization header could be acted on.
+  function armFingerprintCheck(sock, url) {
+    if (!/^wss:/i.test(String(url || ''))) return;
+    const fps = (config && config.wsFingerprints) || {};
+    const want = normalizeFp((app && fps[app]) || (config && config.wsFingerprint));
+    sock.on('upgrade', (res) => {
+      let got = '';
+      try {
+        const cert = res.socket && res.socket.getPeerCertificate && res.socket.getPeerCertificate();
+        got = normalizeFp(cert && cert.fingerprint256);
+      } catch (e) {
+        logErr('TLS: could not read server certificate:', e.message);
+      }
+      if (!want) {
+        // Encrypted but unauthenticated — say so plainly rather than implying
+        // the connection is fully protected.
+        log('TLS: connected encrypted but UNPINNED (set wsFingerprint in config.json to verify the server).');
+        return;
+      }
+      if (!got) {
+        logErr('TLS: no server certificate available to verify against the configured pin — closing.');
+        try { sock.close(4003, 'TLS pin unverifiable'); } catch (_e) { /* already closing */ }
+        return;
+      }
+      if (got !== want) {
+        logErr(`TLS: server certificate fingerprint MISMATCH — closing. expected ${want.slice(0, 16)}… got ${got.slice(0, 16)}…`);
+        try { sock.close(4004, 'TLS pin mismatch'); } catch (_e) { /* already closing */ }
+        return;
+      }
+      log('TLS: server certificate verified against configured pin.');
+    });
+  }
 
   function log(...a) {
     if (logger && logger.info) logger.info(...a);
@@ -114,7 +194,8 @@ function createTransport({ config, identity, buffer, onMessage, onOpen, logger }
     const url = currentUrl();
     log('Connecting to', url);
     lastAuthToken = authTokenOf();
-    ws = new WebSocket(url, { headers: identity.getAuthHeader() });
+    ws = new WebSocket(url, { headers: identity.getAuthHeader(), ...tlsOptions(url) });
+    armFingerprintCheck(ws, url);
 
     ws.on('open', () => {
       log('Connected to server');

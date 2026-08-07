@@ -806,9 +806,48 @@ try {
     }
     Write-OK "server.js present"
 
+    # ── Agent-ingest TLS: the HUB half of the switch ───────────────────────────
+    # SpanVault's/DDIVault's own updater mints the wss:// certificate and points
+    # SV_WS_TLS_CERT / DDI_WS_TLS_CERT at it. That flips the LISTENER only, and
+    # exclusively: ws-server.js swaps in https.createServer and then speaks wss://
+    # and nothing else. Which URL each agent is TOLD to dial is decided here, on
+    # the hub (lib/agentIdentity.ts deriveIngest), and because the hub is served
+    # over plain HTTP the request-derived scheme is always ws://. So if only the
+    # app-side updater ever ran, the hub would keep handing out ws:// to a
+    # TLS-only listener and the whole agent fleet would fail the handshake.
+    #
+    # Deriving the flags from the certificate ON DISK (rather than a parameter)
+    # makes this self-healing and idempotent: whichever order the per-app
+    # updaters ran in, the next NetVault update reconciles the hub to whatever
+    # TLS state the satellites are actually in. No cert => nothing written =>
+    # request-derived ws://, exactly the pre-TLS behaviour.
+    Write-Step "Reconciling agent-ingest TLS flags"
+    $rootEnvPath = "$AppDir\.env"
+    $certDir = 'C:\ProgramData\NocVault\certs'
+    foreach ($m in @(
+        @{ App = 'spanvault'; Tls = 'SPANVAULT_WS_TLS'; Fp = 'SPANVAULT_WS_FINGERPRINT' },
+        @{ App = 'ddivault';  Tls = 'DDIVAULT_WS_TLS';  Fp = 'DDIVAULT_WS_FINGERPRINT'  }
+    )) {
+        $crt = Join-Path $certDir "$($m.App)-ws.crt"
+        if (-not (Test-Path $crt)) { Write-Host "    $($m.App): no cert - ingest stays ws://" -ForegroundColor Gray; continue }
+        # SHA-256 over the certificate DER — byte-identical to Node's
+        # tls.getPeerCertificate().fingerprint256, which is what the agent pins on.
+        $fp = $null
+        try {
+            $pem = Get-Content -LiteralPath $crt -Raw
+            $b64 = ($pem -replace '-----BEGIN CERTIFICATE-----','' -replace '-----END CERTIFICATE-----','') -replace '\s',''
+            $der = [Convert]::FromBase64String($b64)
+            $sha = [System.Security.Cryptography.SHA256]::Create()
+            $fp = (($sha.ComputeHash($der) | ForEach-Object { $_.ToString('X2') }) -join ':')
+        } catch { $fp = $null }
+        if (-not $fp) { Write-Warn "$($m.App): cert present but unreadable - leaving ingest flags untouched"; continue }
+        Set-EnvVar -Path $rootEnvPath -Key $m.Tls -Value '1'
+        Set-EnvVar -Path $rootEnvPath -Key $m.Fp  -Value $fp
+        Write-OK "$($m.App): ingest wss:// + pin $($fp.Substring(0,17))..."
+    }
+
     Write-Step "Writing env vars to standalone runtime"
     $standaloneEnvPath = "$standaloneDir\.env.local"
-    $rootEnvPath = "$AppDir\.env"
     # Restore the pre-build standalone .env.local first, so any keys we don't
     # explicitly propagate (manual edits) survive the rebuild. The whitelist
     # below then refreshes the managed keys on top.
@@ -817,7 +856,11 @@ try {
         Write-OK "standalone .env.local restored (manual keys preserved)"
     }
     if (Test-Path $rootEnvPath) {
-        foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP', 'CRON_SECRET', 'NOCVAULT_RO_HOST', 'NOCVAULT_RO_PORT', 'NOCVAULT_RO_USER', 'NOCVAULT_RO_PASS')) {
+        foreach ($key in @('DATABASE_URL', 'NEXTAUTH_SECRET', 'NEXTAUTH_URL', 'SERVER_IP', 'CRON_SECRET', 'NOCVAULT_RO_HOST', 'NOCVAULT_RO_PORT', 'NOCVAULT_RO_USER', 'NOCVAULT_RO_PASS',
+                           # Written by the reconcile step just above. deriveIngest reads
+                           # these from the RUNNING process env, so they must reach the
+                           # standalone runtime file, not just $AppDir\.env.
+                           'SPANVAULT_WS_TLS', 'SPANVAULT_WS_FINGERPRINT', 'DDIVAULT_WS_TLS', 'DDIVAULT_WS_FINGERPRINT')) {
             $line = Get-Content $rootEnvPath | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
             if ($line) {
                 $val = $line.Substring($key.Length + 1)

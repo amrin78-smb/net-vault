@@ -7,6 +7,9 @@
     1. Environment (psql / node present, server IP, DB connect)
     2. Windows services (all 10 NSSM services Running)
     3. TCP/UDP ports listening
+   3b. Agent WebSocket TLS: self-signed certs on disk, SV_/DDI_WS_TLS_* wired
+       into the env each app reads, 3010/3011 listening, cert SAN covers the
+       server IP, expiry runway, and DDI_WS_ALLOW_PLAINTEXT no longer set
     4. HTTP health + deployed versions for all 4 apps
     5. Public endpoints + launcher performance (suite probes, cache, license)
     6. NextAuth / login smoke (best-effort)
@@ -209,6 +212,103 @@ foreach ($port in ($tcpPorts.Keys | Sort-Object)) {
 foreach ($uport in @(514, 1514)) {
     $u = Get-NetUDPEndpoint -LocalPort $uport -ErrorAction SilentlyContinue
     if ($u) { Ok "UDP $uport bound - LogVault syslog" } else { Bad "UDP $uport NOT bound - LogVault syslog collector" }
+}
+
+# ---------------------------------------------------------------
+Section "3b. Agent WebSocket TLS (wss:// on 3010 / 3011)"
+# The common NocVault agent ships DECRYPTED credentials over these two ingest
+# sockets, so both must terminate wss://. The installer mints a SELF-SIGNED cert
+# per app under C:\ProgramData\NocVault\certs and points the app's env at it.
+# Checked here: the PEM pair exists and parses, the env vars are set where each
+# app actually reads them, the ports listen, and - critically - DDIVault's
+# cleartext opt-out DDI_WS_ALLOW_PLAINTEXT is GONE (it defeats the guard in
+# api/ws-server.js, so leaving it behind silently keeps the ingest plaintext-capable).
+$certDir = 'C:\ProgramData\NocVault\certs'
+
+# SHA-256 over the DER - the same value Node reports as fingerprint256 and the
+# agent pins on. Returns $null if the file is missing or not a parsable PEM.
+function WsCertInfo([string]$certPath) {
+    if (-not (Test-Path -LiteralPath $certPath)) { return $null }
+    try {
+        $pem = Get-Content -LiteralPath $certPath -Raw
+        $b64 = ($pem -replace '-----BEGIN CERTIFICATE-----','' -replace '-----END CERTIFICATE-----','') -replace '\s',''
+        $der = [Convert]::FromBase64String($b64)
+        $sha = [System.Security.Cryptography.SHA256]::Create()
+        $fp  = (($sha.ComputeHash($der) | ForEach-Object { $_.ToString('X2') }) -join ':')
+        $x   = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(,$der)
+        $san = (($x.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.17' } | ForEach-Object { $_.Format($false) }) -join ' ')
+        return [pscustomobject]@{ Fingerprint = $fp; NotAfter = $x.NotAfter; San = $san }
+    } catch { return $null }
+}
+
+# The env a service actually sees = NSSM AppEnvironmentExtra UNION the .env.local
+# it dotenv-loads. dotenv does NOT override an already-set process var, so NSSM
+# wins on a conflict - check BOTH sources for every var below.
+function WsSvcEnv([string]$service) {
+    if (-not $nssm) { return "" }
+    $raw = ""
+    try { $raw = (& $nssm get $service AppEnvironmentExtra 2>$null | Out-String) } catch { $raw = "" }
+    return ($raw -replace "`0", '')
+}
+function WsEnvFile([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return "" }
+    try { return (Get-Content -LiteralPath $path -Raw) } catch { return "" }
+}
+
+$svEnvFile   = Join-Path $InstallDir "SpanVault\app\.env.local"
+$ddiEnvFile  = Join-Path $InstallDir "DDIVault\app\.env.local"
+$svApiEnv    = WsSvcEnv 'SpanVault-API'
+$ddiApiEnv   = WsSvcEnv 'DDIVault-API'
+$svEnvText   = WsEnvFile $svEnvFile
+$ddiEnvText  = WsEnvFile $ddiEnvFile
+
+foreach ($t in @(
+    @{ App='spanvault'; Label='SpanVault'; Port=3010; CertVar='SV_WS_TLS_CERT';  KeyVar='SV_WS_TLS_KEY';  Env=($svApiEnv  + "`n" + $svEnvText)  },
+    @{ App='ddivault';  Label='DDIVault';  Port=3011; CertVar='DDI_WS_TLS_CERT'; KeyVar='DDI_WS_TLS_KEY'; Env=($ddiApiEnv + "`n" + $ddiEnvText) }
+)) {
+    $crt = Join-Path $certDir ($t.App + "-ws.crt")
+    $key = Join-Path $certDir ($t.App + "-ws.key")
+    $info = WsCertInfo $crt
+
+    if ($info -and (Test-Path -LiteralPath $key)) {
+        Ok ($t.Label + " WS cert + key present: " + $crt)
+        Inf ($t.Label + " WS TLS fingerprint: " + $info.Fingerprint)
+        $daysLeft = [int]([math]::Floor(($info.NotAfter - (Get-Date)).TotalDays))
+        if ($daysLeft -lt 0)        { Bad ($t.Label + " WS cert EXPIRED on " + $info.NotAfter.ToString('yyyy-MM-dd') + " - every pinned agent is disconnected") }
+        elseif ($daysLeft -lt 90)   { Wn  ($t.Label + " WS cert expires in " + $daysLeft + " days (" + $info.NotAfter.ToString('yyyy-MM-dd') + ") - re-issue + re-pin the fleet before then") }
+        else                        { Ok  ($t.Label + " WS cert valid until " + $info.NotAfter.ToString('yyyy-MM-dd') + " (" + $daysLeft + " days)") }
+        # Agents dial by IP, so the IP must be in the SAN or verification fails
+        # outright regardless of what the CN says.
+        if ($info.San -and ($info.San -match [regex]::Escape($ServerIP))) { Ok ($t.Label + " WS cert SAN covers " + $ServerIP) }
+        else { Bad ($t.Label + " WS cert SAN does NOT cover " + $ServerIP + " - agents dialling that IP will reject it (SAN: " + $info.San + ")") }
+    }
+    elseif (Test-Path -LiteralPath $crt) { Bad ($t.Label + " WS cert exists but is unreadable/not PEM, or the key is missing: " + $crt) }
+    else { Bad ($t.Label + " WS cert MISSING (" + $crt + ") - agent traffic on " + $t.Port + " is plain ws://") }
+
+    $hasCertVar = ($t.Env -match ("(?m)^\s*" + $t.CertVar + "\s*=\s*\S"))
+    $hasKeyVar  = ($t.Env -match ("(?m)^\s*" + $t.KeyVar  + "\s*=\s*\S"))
+    if ($hasCertVar -and $hasKeyVar) { Ok ($t.Label + " " + $t.CertVar + " + " + $t.KeyVar + " set (NSSM env or .env.local)") }
+    elseif (-not $nssm -and -not (Test-Path -LiteralPath $svEnvFile) -and -not (Test-Path -LiteralPath $ddiEnvFile)) { Wn ("Cannot verify " + $t.Label + " WS TLS env (nssm + .env.local both unreadable)") }
+    else { Bad ($t.Label + " " + $t.CertVar + "/" + $t.KeyVar + " NOT set - the app serves plain ws:// on " + $t.Port + " regardless of the cert on disk") }
+
+    $listen = Get-NetTCPConnection -LocalPort $t.Port -State Listen -ErrorAction SilentlyContinue
+    if ($listen) { Ok ("TCP " + $t.Port + " LISTEN - " + $t.Label + " agent WS ingest") }
+    else { Bad ("TCP " + $t.Port + " NOT listening - " + $t.Label + " agent WS ingest is down") }
+}
+
+# DDIVault's cleartext opt-in must be gone once TLS is configured, in BOTH places
+# the app reads env from. If TLS was never configured the var is legitimately
+# required (without it the ingest refuses to bind 3011 at all), so only report it
+# as a failure when TLS IS in place.
+$ddiTlsOn = (($ddiApiEnv + "`n" + $ddiEnvText) -match '(?m)^\s*DDI_WS_TLS_CERT\s*=\s*\S')
+$plainNssm = ($ddiApiEnv -match '(?m)^\s*DDI_WS_ALLOW_PLAINTEXT\s*=\s*1')
+$plainFile = ($ddiEnvText -match '(?m)^\s*DDI_WS_ALLOW_PLAINTEXT\s*=\s*1')
+if ($plainNssm -or $plainFile) {
+    $where = @(); if ($plainNssm) { $where += 'NSSM service env' }; if ($plainFile) { $where += '.env.local' }
+    if ($ddiTlsOn) { Bad ("DDI_WS_ALLOW_PLAINTEXT=1 still set in " + ($where -join ' + ') + " - the cleartext guard in api/ws-server.js stays defeated even though TLS is configured") }
+    else           { Wn  ("DDI_WS_ALLOW_PLAINTEXT=1 set in " + ($where -join ' + ') + " - expected while TLS is unconfigured, but WinRM credentials cross port 3011 in cleartext") }
+} else {
+    Ok "DDI_WS_ALLOW_PLAINTEXT not set (NSSM env or .env.local) - cleartext opt-out is off"
 }
 
 # ---------------------------------------------------------------
