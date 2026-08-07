@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.32.1': [
+    'Corrects the agent update published in 1.32.0. The new agent software carried the same version number as the release already installed, and agents skip an update that matches the version they are running — so the encryption support would have been published but never actually collected by any agent. It now ships as a new version and installs normally.',
+  ],
   '1.32.0': [
     'Remote agents can now send their data over an encrypted connection. SpanVault and DDIVault present a certificate created during installation, and the agent checks it against a fingerprint delivered in the one-time install command you copy — deliberately not over the network connection it protects, so a server that could impersonate the real one cannot also hand out a matching fingerprint.',
     'Each application is verified separately, so an installation where SpanVault and DDIVault run on different servers checks each against its own certificate rather than accepting one for both.',
