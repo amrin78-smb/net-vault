@@ -33,7 +33,7 @@ const os = require('os');
 // "outdated" again on the very next boot — an infinite download/apply/restart
 // loop that NSSM eventually throttles into a Paused service (hit in production
 // 2026-08-07). scripts/sign-agent.js now refuses to sign on a mismatch.
-const VERSION = '2.6.4';
+const VERSION = '2.6.5';
 
 // ── Self-update apply-on-next-start (Phase 3, Workstream B) — RUNS FIRST ────────
 // This gate MUST execute BEFORE requiring any core module a pending update could

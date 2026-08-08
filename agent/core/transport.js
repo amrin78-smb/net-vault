@@ -14,6 +14,7 @@
  *   - the exact backoff curve (base capped at 120s, 0.8-1.2 jitter, single timer).
  */
 const WebSocket = require('ws');
+const tls = require('tls');
 
 // ── TLS for wss:// ingests ───────────────────────────────────────────────────
 //
@@ -46,9 +47,58 @@ const WebSocket = require('ws');
 // No fingerprint configured => still connect (encrypted, unverified) and warn.
 // Refusing would strand an agent whose operator upgraded the server first, and
 // encrypted-but-unpinned is strictly better than the plain ws:// it replaces.
-function tlsOptionsFor(url, config) {
+//
+// WHERE the pin is checked matters as much as that it is checked. The obvious
+// place — the 'upgrade' event — is TOO LATE: the Authorization header travels in
+// the upgrade REQUEST, so by the time the response arrives the agent's Bearer
+// credential has already been handed to whoever answered. Verified by test:
+// an impostor endpoint read `Bearer <jwt>` in full before the pin closed the
+// socket. For a legacy api_key agent that credential does not expire, so the
+// leak outlives the connection it happened on.
+//
+// So when a pin IS configured we take over socket creation and verify the
+// certificate on 'secureConnect' — after the TLS handshake, before http.request
+// writes a single header byte. On mismatch the socket is destroyed and the
+// request never starts.
+//
+// Note the callback discipline: http.ClientRequest does
+// `if (newSocket) oncreate(null, newSocket)` on whatever createConnection
+// RETURNS, and oncreate is once()-wrapped. Returning the socket would hand it
+// over immediately — before secureConnect — and reintroduce the very leak this
+// closes. Return undefined; only ever hand the socket over via `cb`.
+function tlsOptionsFor(url, config, app) {
   if (!/^wss:/i.test(String(url || ''))) return {};
-  return { rejectUnauthorized: false };
+  const fps = (config && config.wsFingerprints) || {};
+  const want = normalizeFp((app && fps[app]) || (config && config.wsFingerprint));
+  // Unpinned: nothing to verify, so there is nothing to gate the request on.
+  if (!want) return { rejectUnauthorized: false };
+  return {
+    rejectUnauthorized: false,
+    // Deliberately NO `agent` key. `agent: false` reads like "no agent" but Node
+    // treats it as "build a fresh default Agent", and once ANY agent is present
+    // the agent owns socket creation and `createConnection` below is never
+    // called — the request goes out over ws's own TLS connect and the credential
+    // leaks exactly as before. Leaving agent undefined alongside a
+    // createConnection is the no-agent path, and is what ws itself relies on.
+    createConnection: (connOpts, cb) => {
+      const sock = tls.connect({ ...connOpts, rejectUnauthorized: false }, () => {
+        let got = '';
+        try {
+          got = normalizeFp(sock.getPeerCertificate().fingerprint256);
+        } catch (_e) {
+          got = '';
+        }
+        if (got !== want) {
+          sock.destroy();
+          cb(new Error('TLS pin mismatch — refusing to send credentials'));
+          return;
+        }
+        cb(null, sock);
+      });
+      sock.once('error', (e) => cb(e));
+      return undefined;
+    },
+  };
 }
 
 function normalizeFp(v) {
@@ -66,12 +116,21 @@ function createTransport({ config, identity, buffer, onMessage, onOpen, logger, 
 
   // Build the per-connection TLS options (no-op for a plain ws:// ingest).
   function tlsOptions(url) {
-    return tlsOptionsFor(url, config);
+    // `app` selects this transport's own pin — without it a dual-module agent
+    // would gate the span socket on the ddi pin (or none at all).
+    return tlsOptionsFor(url, config, app);
   }
 
   // Verify the server's certificate fingerprint on the HTTP upgrade, which fires
-  // BEFORE 'open' — so a substituted certificate is rejected before any frame,
-  // and critically before the Authorization header could be acted on.
+  // BEFORE 'open', so a substituted certificate is rejected before any frame.
+  //
+  // This is now a SECOND line of defence, not the primary one. When a pin is
+  // configured the handshake-time check in tlsOptionsFor() has already run and
+  // the request was never sent. This layer still earns its place: it is what
+  // logs the UNPINNED case, and it re-checks the certificate the connection
+  // actually ended up on. Do NOT treat it as sufficient on its own — it cannot
+  // protect the Authorization header, which is sent in the upgrade REQUEST and
+  // is therefore already disclosed by the time this fires.
   function armFingerprintCheck(sock, url) {
     if (!/^wss:/i.test(String(url || ''))) return;
     const fps = (config && config.wsFingerprints) || {};

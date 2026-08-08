@@ -821,29 +821,65 @@ try {
     # updaters ran in, the next NetVault update reconciles the hub to whatever
     # TLS state the satellites are actually in. No cert => nothing written =>
     # request-derived ws://, exactly the pre-TLS behaviour.
+    # PROBE the live listener rather than inferring from a certificate file.
+    # "A cert exists on disk" is only a proxy for "the listener speaks TLS", and
+    # the two genuinely diverge: the app-side updater writes SV_WS_TLS_CERT with
+    # Set-EnvFileVars, which SILENTLY does nothing if that .env file is missing,
+    # so a valid cert can sit on disk while the listener is still plaintext. Had
+    # we trusted the file, the hub would then advertise wss:// at a ws:// socket
+    # and take the whole fleet down. The socket itself cannot be wrong.
+    #
+    # Pinning what the endpoint ACTUALLY presents also removes a second failure
+    # mode: a cert regenerated without the app being restarted would otherwise
+    # publish a pin the running server does not match.
     Write-Step "Reconciling agent-ingest TLS flags"
     $rootEnvPath = "$AppDir\.env"
-    $certDir = 'C:\ProgramData\NocVault\certs'
     foreach ($m in @(
-        @{ App = 'spanvault'; Tls = 'SPANVAULT_WS_TLS'; Fp = 'SPANVAULT_WS_FINGERPRINT' },
-        @{ App = 'ddivault';  Tls = 'DDIVAULT_WS_TLS';  Fp = 'DDIVAULT_WS_FINGERPRINT'  }
+        @{ App = 'spanvault'; Port = 3010; Tls = 'SPANVAULT_WS_TLS'; Fp = 'SPANVAULT_WS_FINGERPRINT' },
+        @{ App = 'ddivault';  Port = 3011; Tls = 'DDIVAULT_WS_TLS';  Fp = 'DDIVAULT_WS_FINGERPRINT'  }
     )) {
-        $crt = Join-Path $certDir "$($m.App)-ws.crt"
-        if (-not (Test-Path $crt)) { Write-Host "    $($m.App): no cert - ingest stays ws://" -ForegroundColor Gray; continue }
-        # SHA-256 over the certificate DER — byte-identical to Node's
-        # tls.getPeerCertificate().fingerprint256, which is what the agent pins on.
-        $fp = $null
+        $fp = $null; $reachable = $false
+        $client = $null; $ssl = $null
         try {
-            $pem = Get-Content -LiteralPath $crt -Raw
-            $b64 = ($pem -replace '-----BEGIN CERTIFICATE-----','' -replace '-----END CERTIFICATE-----','') -replace '\s',''
-            $der = [Convert]::FromBase64String($b64)
-            $sha = [System.Security.Cryptography.SHA256]::Create()
-            $fp = (($sha.ComputeHash($der) | ForEach-Object { $_.ToString('X2') }) -join ':')
+            $client = New-Object System.Net.Sockets.TcpClient
+            $iar = $client.BeginConnect('127.0.0.1', $m.Port, $null, $null)
+            # EndConnect BEFORE testing .Connected — the property is still false
+            # while the connect is pending, so gating on it here silently reports
+            # every port as unreachable (which would freeze the flags forever).
+            # EndConnect throws on a refused/failed connect, which the catch takes.
+            if ($iar.AsyncWaitHandle.WaitOne(3000)) {
+                $client.EndConnect($iar)
+                $reachable = $client.Connected
+                # Accept ANY certificate: this is identification, not validation —
+                # the cert is self-signed by design and we only want its fingerprint.
+                $ssl = New-Object System.Net.Security.SslStream($client.GetStream(), $false, ({ $true } -as [System.Net.Security.RemoteCertificateValidationCallback]))
+                $ssl.AuthenticateAsClient('127.0.0.1')
+                $raw = $ssl.RemoteCertificate.GetRawCertData()
+                $sha = [System.Security.Cryptography.SHA256]::Create()
+                $fp = (($sha.ComputeHash($raw) | ForEach-Object { $_.ToString('X2') }) -join ':')
+            }
         } catch { $fp = $null }
-        if (-not $fp) { Write-Warn "$($m.App): cert present but unreadable - leaving ingest flags untouched"; continue }
-        Set-EnvVar -Path $rootEnvPath -Key $m.Tls -Value '1'
-        Set-EnvVar -Path $rootEnvPath -Key $m.Fp  -Value $fp
-        Write-OK "$($m.App): ingest wss:// + pin $($fp.Substring(0,17))..."
+        finally {
+            if ($ssl) { try { $ssl.Dispose() } catch {} }
+            if ($client) { try { $client.Close() } catch {} }
+        }
+
+        if ($fp) {
+            Set-EnvVar -Path $rootEnvPath -Key $m.Tls -Value '1'
+            Set-EnvVar -Path $rootEnvPath -Key $m.Fp  -Value $fp
+            Write-OK "$($m.App): ingest wss:// + pin $($fp.Substring(0,17))..."
+        } elseif ($reachable) {
+            # Port answered but would not negotiate TLS => a plaintext listener.
+            # Clearing is as important as setting: a stale =1 here points every
+            # agent at wss:// on a socket that only speaks ws://.
+            Set-EnvVar -Path $rootEnvPath -Key $m.Tls -Value '0'
+            Write-OK "$($m.App): listener is plaintext - ingest stays ws://"
+        } else {
+            # Nothing listening (app stopped, or not installed). Leave whatever is
+            # configured ALONE — flipping the hub off because a service happened to
+            # be down mid-update would disconnect a fleet that is working fine.
+            Write-Host "    $($m.App): port $($m.Port) not answering - ingest flags left unchanged" -ForegroundColor Gray
+        }
     }
 
     Write-Step "Writing env vars to standalone runtime"

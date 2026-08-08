@@ -34,7 +34,12 @@ function startTlsWs() {
   return new Promise((resolve) => {
     const server = https.createServer({ cert: CERT, key: KEY });
     const wss = new WebSocketServer({ server });
-    server.listen(0, '127.0.0.1', () => resolve({ server, wss, port: server.address().port }));
+    // What the SERVER actually received. The pin is worthless if the credential
+    // is already on the wire by the time we reject, so the tests assert on what
+    // reached the far end rather than only on whether the socket opened.
+    const seenAuth = [];
+    server.on('upgrade', (req) => { seenAuth.push(req.headers.authorization || null); });
+    server.listen(0, '127.0.0.1', () => resolve({ server, wss, port: server.address().port, seenAuth }));
   });
 }
 
@@ -59,7 +64,7 @@ function bufferStub() {
 // Dial a throwaway wss server with the given config, then report what happened.
 function run(name, extraConfig, expect) {
   return new Promise((resolve, reject) => {
-    startTlsWs().then(({ server, wss, port }) => {
+    startTlsWs().then(({ server, wss, port, seenAuth }) => {
       const url = `wss://127.0.0.1:${port}/`;
       const logs = [];
       const t = createTransport({
@@ -81,7 +86,7 @@ function run(name, extraConfig, expect) {
         wss.close();
         server.close();
         try {
-          expect({ open, logs });
+          expect({ open, logs, seenAuth });
           ok(name);
           resolve();
         } catch (e) {
@@ -109,7 +114,12 @@ function run(name, extraConfig, expect) {
     { wsFingerprints: { span: 'de'.repeat(32) } },
     ({ open, logs }) => {
       assert.strictEqual(open, false, 'socket MUST NOT stay open when the fingerprint differs');
-      assert.ok(logs.some((l) => /MISMATCH/.test(l)), 'should log the mismatch');
+      // Case-insensitive: the rejection now happens during the TLS handshake
+      // ("TLS pin mismatch — refusing to send credentials") rather than on the
+      // upgrade response ("fingerprint MISMATCH"). Both are a mismatch being
+      // reported; the assertion is that the operator is told, not which of the
+      // two layers caught it.
+      assert.ok(logs.some((l) => /mismatch/i.test(l)), 'should log the mismatch');
     });
 
   // openssl prints fingerprints as AB:CD:EF..; operators will paste that form.
@@ -136,6 +146,30 @@ function run(name, extraConfig, expect) {
     ({ open, logs }) => {
       assert.strictEqual(open, true, 'no span pin -> unpinned, not a false match');
       assert.ok(logs.some((l) => /UNPINNED/.test(l)), 'span must not silently borrow the ddi pin');
+    });
+
+  // THE point of pinning, and the assertion the original implementation failed.
+  // Verifying on the 'upgrade' event is too late: the Authorization header rides
+  // in the upgrade REQUEST, so a mismatched server has already been handed the
+  // agent's Bearer credential by the time the response is inspected. For a
+  // legacy api_key agent that credential never expires, so the leak outlives the
+  // connection. The pin must gate the TLS handshake, before any header is sent.
+  await run('a MISMATCHED pin must not disclose the Authorization header',
+    { wsFingerprints: { span: 'aa'.repeat(32) } },
+    ({ open, seenAuth }) => {
+      assert.strictEqual(open, false, 'must not complete the connection');
+      assert.deepStrictEqual(
+        seenAuth, [],
+        'the server must never receive the upgrade request — got: ' + JSON.stringify(seenAuth)
+      );
+    });
+
+  // The mirror of the above: gating the handshake must not break the good path.
+  await run('a MATCHING pin still sends credentials and connects',
+    { wsFingerprints: { span: FP } },
+    ({ open, seenAuth }) => {
+      assert.strictEqual(open, true, 'a correct pin must connect');
+      assert.ok(seenAuth.some((a) => /^Bearer /.test(a || '')), 'credential should reach a verified server');
     });
 
   console.log(`\n${passed} TLS-pin assertions passed.`);

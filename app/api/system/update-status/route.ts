@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.32.3': [
+    'Strengthens the agent connection encryption added in 1.32.0. The agent checked the server\'s identity a moment too late — after it had already presented its access credential — so a machine impersonating the server was refused, but not before it had been handed that credential. The check now happens during the initial handshake, before anything is sent. Found by our own testing; no impersonation has occurred.',
+    'The agent must be updated for this: agents on the earlier release keep the late check until they update themselves, which happens automatically.',
+    'A NetVault update now determines whether each application\'s agent connection is encrypted by testing the live connection rather than by looking for a certificate file. A certificate can be present while the application is still running unencrypted, and acting on the file alone would have told every agent to connect in a way the server does not accept.',
+  ],
   '1.32.2': [
     'Fixes a fault in the 1.32.1 agent update that left an agent repeatedly reinstalling the same version. The agent reports its own version from a value held separately from its package details, and only the latter was updated — so each agent installed the new software, still believed itself to be on the old version, and immediately installed it again. Affected agents recover on this release without intervention.',
     'The release tooling now refuses to publish an agent whose two version records disagree, so this cannot be published again. Found on our own installation before any customer ran it.',
