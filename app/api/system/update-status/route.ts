@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.33.2': [
+    'Two-factor setup now has its own Security page, available to everyone. It was previously only inside Settings, which is restricted to administrators — so viewers and site administrators had no way to set it up at all.',
+    'That would have become a lockout rather than an inconvenience: had two-factor later been required for one of those roles, its members would have been refused at sign-in for not having it, while the only page that could set it up stayed closed to them.',
+  ],
   '1.33.1': [
     'Fixes a confusing moment right after turning on two-factor authentication. The code being shown by your authenticator at that instant was refused at the sign-in screen for up to thirty seconds — so anyone who sensibly tested the new setup straight away was told their code was not accepted when it was perfectly valid. A fresh code always worked, but the first impression was that the feature was broken.',
     'The protection this removes was not real: anyone close enough to read the code during setup could photograph the setup barcode instead and have lasting access. Codes used to sign in still cannot be reused, which is where it matters.',

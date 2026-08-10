@@ -48,6 +48,10 @@ const navIcons: Record<string, { icon: React.ReactNode; color: string; bg: strin
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><circle cx="7" cy="7" r="1.2"/><circle cx="7" cy="17" r="1.2"/></svg>,
     color: '#2dd4bf', bg: 'rgba(13,148,136,0.25)',
   },
+  '/security': {
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z"/></svg>,
+    color: '#34d399', bg: 'rgba(16,185,129,0.25)',
+  },
   '/settings': {
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.02 7.02 0 00-1.62-.94l-.36-2.54A.484.484 0 0014 2h-4a.484.484 0 00-.48.41l-.36 2.54a7.38 7.38 0 00-1.62.94l-2.39-.96a.48.48 0 00-.59.22L2.74 8.87a.47.47 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.36 1.04.67 1.62.94l.36 2.54c.05.24.27.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54a7.38 7.38 0 001.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>,
     color: '#9ca3af', bg: 'rgba(136,135,128,0.25)',
@@ -67,6 +71,12 @@ const navItems = [
   { href: '/audit', label: 'Audit Log', adminOnly: true },
   { href: '/compliance', label: 'Compliance', adminOnly: true },
   { href: '/agents', label: 'Agents', superAdminOnly: true },
+  // No adminOnly/hideForSiteAdmin: every authenticated user must be able to set
+  // up their own two-factor. It is not an administrative privilege, and once a
+  // role is named in mfa_required_roles a member who cannot self-enrol is locked
+  // out for good — refused at login for having no factor, with the only page
+  // that could give them one closed to their role.
+  { href: '/security', label: 'Security' },
   { href: '/settings', label: 'Settings', adminOnly: true },
 ]
 
