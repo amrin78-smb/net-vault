@@ -102,11 +102,27 @@ export async function POST(req: NextRequest) {
     for (const h of hashes) {
       await query('INSERT INTO user_mfa_backup_codes (user_id, code_hash) VALUES ($1, $2)', [user.id, h])
     }
+    // mfa_last_step is deliberately left NULL rather than set to the step just
+    // used. Consuming it here means the code the authenticator is showing RIGHT
+    // NOW is refused at the login screen for up to 30 seconds — and enabling
+    // MFA then immediately testing the login is exactly what a careful admin
+    // does, so they would meet "that code was not accepted" for a code that is
+    // genuinely valid, and reasonably conclude the feature is broken.
+    //
+    // Nothing real is given up. mfa_last_step exists to stop a code captured at
+    // the LOGIN screen being replayed at the login screen. This is not a login:
+    // it happens inside an already-authenticated session that also re-proved the
+    // password. The only adversary who could exploit the enable-step window is
+    // one already watching the enrolment screen — and they could photograph the
+    // QR code instead and have permanent access, which no step counter prevents.
+    //
+    // Replay defence on the path that matters is unchanged: every successful
+    // LOGIN still records its step (see lib/mfaGate.ts).
     await query(
-      `UPDATE users SET mfa_enabled = TRUE, mfa_enrolled_at = NOW(), mfa_last_step = $1,
+      `UPDATE users SET mfa_enabled = TRUE, mfa_enrolled_at = NOW(), mfa_last_step = NULL,
                         mfa_failed_attempts = 0, mfa_locked_until = NULL
-       WHERE id = $2`,
-      [step, user.id]
+       WHERE id = $1`,
+      [user.id]
     )
     // Returned ONCE. Nothing stores them in readable form after this response.
     return NextResponse.json({ enabled: true, backup_codes: codes })

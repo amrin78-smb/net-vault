@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.33.1': [
+    'Fixes a confusing moment right after turning on two-factor authentication. The code being shown by your authenticator at that instant was refused at the sign-in screen for up to thirty seconds — so anyone who sensibly tested the new setup straight away was told their code was not accepted when it was perfectly valid. A fresh code always worked, but the first impression was that the feature was broken.',
+    'The protection this removes was not real: anyone close enough to read the code during setup could photograph the setup barcode instead and have lasting access. Codes used to sign in still cannot be reused, which is where it matters.',
+  ],
   '1.33.0': [
     'You can now protect your account with an authenticator app. Settings has a new Security tab where you scan a QR code with Microsoft Authenticator, Google Authenticator, 1Password or similar, and from then on signing in asks for the six-digit code as well as your password.',
     'It covers the whole suite. NetVault is the only place a password is checked - LogVault, DDIVault and SpanVault all sign in through it - so turning this on protects all four applications, and there is no way around it by going to one of the others directly.',
