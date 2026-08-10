@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.33.0': [
+    'You can now protect your account with an authenticator app. Settings has a new Security tab where you scan a QR code with Microsoft Authenticator, Google Authenticator, 1Password or similar, and from then on signing in asks for the six-digit code as well as your password.',
+    'It covers the whole suite. NetVault is the only place a password is checked - LogVault, DDIVault and SpanVault all sign in through it - so turning this on protects all four applications, and there is no way around it by going to one of the others directly.',
+    'You are given ten backup codes when you turn it on. Each works once in place of the app, for when your phone is lost or replaced, and they are shown only that one time. If they run out, an administrator can reset your setup so you can enrol again; that reset is recorded in the audit trail.',
+    'It is entirely optional to begin with. Administrators can later require it for chosen roles, but nothing is required by default - switching a role on before its members have enrolled would lock them out.',
+    'Repeated wrong codes temporarily lock the account, and a code that has been used once cannot be used again even within the short window it stays valid.',
+  ],
   '1.32.3': [
     'Strengthens the agent connection encryption added in 1.32.0. The agent checked the server\'s identity a moment too late — after it had already presented its access credential — so a machine impersonating the server was refused, but not before it had been handed that credential. The check now happens during the initial handshake, before anything is sent. Found by our own testing; no impersonation has occurred.',
     'The agent must be updated for this: agents on the earlier release keep the late check until they update themselves, which happens automatically.',

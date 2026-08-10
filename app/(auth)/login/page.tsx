@@ -243,17 +243,69 @@ function LoginForm() {
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [mfaStage, setMfaStage] = useState(false)
+  const [totp, setTotp] = useState('')
+  const totpRef = useRef<HTMLInputElement>(null)
 
-  // Form submission logic unchanged — keep the existing NextAuth signIn() call.
+  // Two-step sign-in when the account has a second factor.
+  //
+  // Step 1 asks /api/auth/mfa/precheck whether a code is needed, purely so the
+  // form knows whether to show the field — a user without MFA never sees one,
+  // and a user with it isn't told "invalid password" when the real problem is a
+  // missing code. That endpoint issues nothing; authorize() re-checks the
+  // password AND the code regardless of what the browser did here, so skipping
+  // or faking step 1 gains nothing.
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const res = await signIn('credentials', { email, password, redirect: false })
+
+    if (!mfaStage) {
+      try {
+        const r = await fetch('/api/auth/mfa/precheck', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        })
+        if (r.status === 429) {
+          setError('Too many attempts. Wait a few minutes and try again.')
+          setLoading(false)
+          return
+        }
+        const d = await r.json().catch(() => ({}))
+        if (d?.enrolmentRequired) {
+          setError('Your role requires an authenticator app. Ask an administrator to set it up for you.')
+          setLoading(false)
+          return
+        }
+        if (d?.mfaRequired) {
+          setMfaStage(true)
+          setLoading(false)
+          setTimeout(() => totpRef.current?.focus(), 50)
+          return
+        }
+        // Not required (or the password was wrong — precheck answers the same
+        // either way). Fall through and let signIn() give the real verdict.
+      } catch {
+        // Precheck is only an affordance; if it fails, attempt the sign-in
+        // anyway rather than blocking login on a non-essential request.
+      }
+    }
+
+    const res = await signIn('credentials', {
+      email,
+      password,
+      totp: mfaStage ? totp : undefined,
+      redirect: false,
+    })
     if (res?.ok) {
       router.push(callbackUrl)
     } else {
-      setError('Invalid email or password')
+      // NextAuth collapses every authorize() rejection into one error, so this
+      // cannot distinguish a bad code from a bad password. Word it for the step
+      // the user is actually on.
+      setError(mfaStage ? 'That code was not accepted. Check your authenticator and try again.' : 'Invalid email or password')
+      setTotp('')
       setLoading(false)
     }
   }
@@ -384,6 +436,32 @@ function LoginForm() {
                   required
                 />
               </div>
+
+              {mfaStage && (
+                <div style={{ marginBottom: 18 }}>
+                  <label style={labelStyle}>Authentication code</label>
+                  <input
+                    ref={totpRef}
+                    // Not type="number": it strips leading zeros, and a TOTP
+                    // beginning with 0 is perfectly normal. inputMode gets the
+                    // numeric keypad on a phone without that side effect.
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    className="nv-login-input"
+                    style={{ ...inputStyle, letterSpacing: 4, fontSize: 18, textAlign: 'center' }}
+                    value={totp}
+                    onChange={e => setTotp(e.target.value)}
+                    placeholder="000000"
+                    maxLength={14}
+                    required
+                    autoFocus
+                  />
+                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 7, textAlign: 'center' }}>
+                    From your authenticator app — or enter one of your backup codes.
+                  </div>
+                </div>
+              )}
 
               <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 13, color: 'rgba(255,255,255,0.65)', marginBottom: 22, cursor: 'pointer', userSelect: 'none' }}>
                 <input

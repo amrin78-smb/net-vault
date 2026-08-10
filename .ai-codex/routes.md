@@ -221,3 +221,9 @@ DELETE /api/users/[id] — missing force-dynamic
 PUT /api/users/me — missing force-dynamic
 GET /api/users — missing force-dynamic
 POST /api/users — missing force-dynamic
+
+## MFA (TOTP second factor, 1.33.0)
+- `POST /api/auth/mfa/precheck` [public] [db] — login step 1. `{email,password}` → `{ok, mfaRequired?, enrolmentRequired?}`. Verifies the password before answering (so it cannot enumerate who has MFA) and rate-limited 20/5min per IP. GRANTS NOTHING — no session, token or cookie; authorize() re-checks password AND code independently, so skipping or faking this call gains nothing. It only decides whether the form shows a code field.
+- `GET /api/mfa` [auth] [db] — current user's MFA state (enabled, enrolled_at, backup codes remaining, whether their role requires it).
+- `POST /api/mfa` [auth] [db] — `{action:'setup'}` mints a secret + QR data URI but does NOT enable (a mis-scanned QR must not lock the user out); `{action:'enable',token}` verifies a code then enables and returns backup codes ONCE; `{action:'disable',password}` re-confirms the password (a hijacked session must not be able to silently remove the factor) and is refused when policy requires MFA for that role. Always acts on the SESSION's user id — never one from the body.
+- `POST /api/admin/users/[id]/mfa-reset` [super_admin] [db] — clears a user's factor so they can re-enrol (lost phone + spent backup codes). This is an auth-bypass capability by design, so it is super_admin-only and written to `audit_log`.

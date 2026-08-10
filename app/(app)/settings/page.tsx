@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { STAGE_LABELS } from '@/app/components/UpdateFailureBanner'
+import MfaCard from './MfaCard'
 
 // Shape of GET /api/system/last-update-status - written by Update-NetVault.ps1's
 // Write-StatusJson on every run (success or failure). The "Update Now" overlay
@@ -339,15 +340,15 @@ export default function SettingsPage() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
   useEffect(() => { if (user && user.role !== 'admin' && user.role !== 'super_admin') router.push('/dashboard') }, [user, router])
 
-  const [activeTab, setActiveTab] = useState<'general'|'users'|'sites'|'license'|'updates'|'about'>('general')
+  const [activeTab, setActiveTab] = useState<'general'|'users'|'sites'|'security'|'license'|'updates'|'about'>('general')
 
   // Deep-link support: the suite apps' "Manage License" link points at
   // /settings/license (which redirects here as ?tab=license). Honour ?tab=<name>
   // on load so the correct tab opens instead of the default.
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t && ['general', 'users', 'sites', 'license', 'updates', 'about'].includes(t)) {
-      setActiveTab(t as 'general' | 'users' | 'sites' | 'license' | 'updates' | 'about')
+    if (t && ['general', 'users', 'sites', 'security', 'license', 'updates', 'about'].includes(t)) {
+      setActiveTab(t as 'general' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about')
     }
   }, [])
   const [loadingSettings, setLoadingSettings] = useState(true)
@@ -632,7 +633,7 @@ export default function SettingsPage() {
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', flexWrap: 'wrap' }}>
-        {(['general', 'users', 'sites', 'license', 'eol', 'updates', 'about'] as const)
+        {(['general', 'users', 'sites', 'security', 'license', 'eol', 'updates', 'about'] as const)
           .filter(tab => tab !== 'general' || isAdmin)
           .filter(tab => tab !== 'license' || isSuperAdmin)
           // EOL Intelligence is an admin curation surface — super_admin only.
@@ -640,7 +641,7 @@ export default function SettingsPage() {
           .filter(tab => tab !== 'updates' || isAdmin)
           .map(tab => (
           <button key={tab} onClick={() => { if (tab === 'eol') { router.push('/settings/eol-intelligence') } else { setActiveTab(tab as typeof activeTab) } }} style={{ padding: '10px 18px', fontSize: 'var(--text-md)', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
-            {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'eol' ? 'EOL Intelligence' : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
+            {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : tab === 'eol' ? 'EOL Intelligence' : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
             {tab === 'updates' && updateStatus?.update_available && (
               <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%' /* intentional: update-available status dot — squaring it would look broken */, background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
             )}
@@ -810,6 +811,13 @@ export default function SettingsPage() {
             </table>
           </div>
         </div>
+      )}
+
+      {/* SECURITY TAB — self-service MFA for the signed-in user. Every role
+          sees this: two-factor is not an admin-only privilege, and the hub is
+          the single sign-in for all four apps. */}
+      {activeTab === 'security' && (
+        <div><MfaCard /></div>
       )}
 
       {/* GENERAL TAB */}

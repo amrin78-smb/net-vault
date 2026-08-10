@@ -526,6 +526,25 @@ else {
     # user_apps drives per-user app-access RBAC (netvault 1.23.0). No rows for a user = all apps.
     $uapps = Pg "netvault" "SELECT has_table_privilege('netvault','user_apps','SELECT');"
     if ($script:PgExit -eq 0 -and $uapps -eq "t") { Ok "user_apps table present (per-user app access)" } else { Bad ("user_apps table missing/unreadable (got '" + $uapps + "')") }
+
+    # MFA (TOTP second factor, netvault 1.33.0). The hub is the suite's only
+    # password-verification point, so these back the second factor for all four
+    # apps. Check the columns AND the backup-code table: without the latter a
+    # user who loses their authenticator has no way back in.
+    $mfaCols = Pg "netvault" "SELECT count(*) FROM information_schema.columns WHERE table_name='users' AND column_name IN ('mfa_secret','mfa_enabled','mfa_enrolled_at','mfa_last_step','mfa_failed_attempts','mfa_locked_until');"
+    if ($script:PgExit -eq 0 -and $mfaCols -eq "6") { Ok "users MFA columns present (6/6)" } else { Bad ("users MFA columns incomplete (expected 6, got '" + $mfaCols + "')") }
+    $mfaBk = Pg "netvault" "SELECT has_table_privilege('netvault','user_mfa_backup_codes','SELECT');"
+    if ($script:PgExit -eq 0 -and $mfaBk -eq "t") { Ok "user_mfa_backup_codes table present (MFA recovery)" } else { Bad ("user_mfa_backup_codes missing/unreadable (got '" + $mfaBk + "')") }
+    # The policy key must exist and default to empty. Shipping a non-empty value
+    # would demand MFA from roles before anyone in them has enrolled, locking
+    # them out of a brand-new install with psql as the only way back.
+    $mfaPolicy = Pg "netvault" "SELECT value FROM app_settings WHERE key='mfa_required_roles';"
+    if ($script:PgExit -eq 0 -and $mfaPolicy -eq "[]") { Ok "mfa_required_roles seeded empty (opt-in)" } else { Bad ("mfa_required_roles missing or not empty on a fresh install (got '" + $mfaPolicy + "')") }
+    # mfa_secret is a bearer credential. users_public is a column allowlist, so a
+    # new column is hidden by default — verify that actually held rather than
+    # assuming it.
+    $mfaLeak = Pg "netvault" "SELECT count(*) FROM information_schema.columns WHERE table_name='users_public' AND column_name LIKE 'mfa%';"
+    if ($script:PgExit -eq 0 -and $mfaLeak -eq "0") { Ok "users_public exposes no MFA columns (secret not readable by diagnostics)" } else { Bad ("users_public LEAKS MFA columns (got '" + $mfaLeak + "')") }
     $aset = Pg "netvault" "SELECT count(*) FROM app_settings;"
     if ($script:PgExit -eq 0) { Ok ("app_settings present (" + $aset + " keys)") } else { Bad "app_settings unreadable" }
     # agent_registry — NocVault Agents Phase 2 hub control plane (netvault 1.24.0).

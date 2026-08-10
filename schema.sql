@@ -394,6 +394,50 @@ ALTER TABLE devices  ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMPTZ DEF
 ALTER TABLE sites    ADD COLUMN IF NOT EXISTS site_status        TEXT NOT NULL DEFAULT 'Active';
 ALTER TABLE circuits ADD COLUMN IF NOT EXISTS updated_at         TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE users    ADD COLUMN IF NOT EXISTS password_hash      TEXT;
+-- ── MFA (TOTP second factor) ─────────────────────────────────────
+-- The hub is the only place in the suite that verifies a password (the
+-- satellites redeem a hub-signed SSO token and have no password path of their
+-- own since logvault 2.31.11 / ddivault 1.30.1), so these columns cover all
+-- four apps.
+--
+-- mfa_secret is ENCRYPTED (AES-256-GCM, key derived from NEXTAUTH_SECRET — see
+-- lib/mfa.ts). It is also invisible to claude_readonly/nocvault_readonly without
+-- any extra grant here, because users_public further down is an explicit COLUMN
+-- ALLOWLIST — a new users column is hidden by default. Do not "helpfully" widen
+-- that view to SELECT *.
+--
+-- mfa_last_step stores the last TOTP step accepted for this account: a code is
+-- valid across a ±1-step drift window (~90s), so without recording it a code
+-- seen once can be replayed inside that window.
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_secret          TEXT;
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_enabled         BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_enrolled_at     TIMESTAMPTZ;
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_last_step       BIGINT;
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_failed_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_locked_until    TIMESTAMPTZ;
+
+-- Backup codes: the recovery path when the authenticator device is lost.
+-- Deliberately placed AFTER the users table exists (created near the top of this
+-- file) — a FK naming a table defined later aborts a fresh install under
+-- ON_ERROR_STOP while re-running against an existing DB looks fine.
+--
+-- HASHED with bcrypt, not encrypted: we only ever compare, never read them back,
+-- and hashing means they survive a NEXTAUTH_SECRET rotation that would render
+-- every encrypted mfa_secret unreadable. That keeps a real way back in.
+CREATE TABLE IF NOT EXISTS user_mfa_backup_codes (
+    id         SERIAL PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    code_hash  TEXT NOT NULL,
+    used_at    TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mfa_backup_user ON user_mfa_backup_codes(user_id) WHERE used_at IS NULL;
+
+-- Which roles MUST have MFA. JSON array of role names, e.g. ["super_admin"].
+-- Empty (the default) = nobody is forced, everyone may still opt in. Enforcing a
+-- role before anyone in it has enrolled locks those users out, and the only way
+-- back is psql — so this ships empty and is turned on deliberately.
+INSERT INTO app_settings (key, value) VALUES ('mfa_required_roles', '[]') ON CONFLICT (key) DO NOTHING;
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_type            TEXT;
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_version         TEXT;
 ALTER TABLE devices  ADD COLUMN IF NOT EXISTS os_eol_date        DATE;
