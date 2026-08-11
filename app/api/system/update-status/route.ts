@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.33.3': [
+    'Two-factor setup has moved into Settings as a "Security / 2FA" tab, and no longer takes up a place of its own in the main menu.',
+    'Settings is therefore no longer restricted to administrators, but a non-administrator sees only that one tab - not Users, Sites, Updates or anything else. Everyone has to be able to reach their own two-factor setup: once it is required for a role, anyone in that role who cannot set it up is turned away at sign-in with no way to put it right.',
+    'The old address still works and simply forwards to the new tab, so an existing bookmark is not broken.',
+  ],
   '1.33.2': [
     'Two-factor setup now has its own Security page, available to everyone. It was previously only inside Settings, which is restricted to administrators — so viewers and site administrators had no way to set it up at all.',
     'That would have become a lockout rather than an inconvenience: had two-factor later been required for one of those roles, its members would have been refused at sign-in for not having it, while the only page that could set it up stayed closed to them.',

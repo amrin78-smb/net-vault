@@ -338,19 +338,46 @@ export default function SettingsPage() {
   const user = session?.user as { role?: string } | undefined
   const isSuperAdmin = user?.role === 'super_admin'
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin'
-  useEffect(() => { if (user && user.role !== 'admin' && user.role !== 'super_admin') router.push('/dashboard') }, [user, router])
+  // Non-admins are no longer bounced out of Settings entirely — they are
+  // admitted to the Security / 2FA tab and nothing else (see the tab filter
+  // below, which reduces to just that one for them).
+  //
+  // They have to be able to get here. Two-factor is not an administrative
+  // privilege, and once mfa_required_roles names a role, a member of it who
+  // cannot self-enrol is locked out permanently: authorize() refuses the login
+  // for having no factor, and the only page that could give them one would be
+  // shut. Every other tab remains admin-gated exactly as before.
+  const canSeeAdminTabs = user?.role === 'admin' || user?.role === 'super_admin'
 
   const [activeTab, setActiveTab] = useState<'general'|'users'|'sites'|'security'|'license'|'updates'|'about'>('general')
+
+  // A non-admin has exactly one tab, so land them on it rather than on the
+  // 'general' default they are not allowed to see.
+  useEffect(() => {
+    if (user && !canSeeAdminTabs) setActiveTab('security')
+  }, [user, canSeeAdminTabs])
 
   // Deep-link support: the suite apps' "Manage License" link points at
   // /settings/license (which redirects here as ?tab=license). Honour ?tab=<name>
   // on load so the correct tab opens instead of the default.
+  //
+  // The role check is NOT cosmetic. Filtering the tab STRIP hides the button,
+  // but each tab's content is rendered by its own `activeTab === '<name>'`
+  // block — so a non-admin arriving at /settings?tab=users would have had the
+  // user-management panel rendered for them with no button ever shown. Depends
+  // on `user` (not []) because the session resolves after first paint, so a
+  // mount-only effect would decide this before the role is known.
   useEffect(() => {
+    if (!user) return
     const t = new URLSearchParams(window.location.search).get('tab')
-    if (t && ['general', 'users', 'sites', 'security', 'license', 'updates', 'about'].includes(t)) {
+    if (!t) return
+    const allowed = canSeeAdminTabs
+      ? ['general', 'users', 'sites', 'security', 'license', 'updates', 'about']
+      : ['security']
+    if (allowed.includes(t)) {
       setActiveTab(t as 'general' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about')
     }
-  }, [])
+  }, [user, canSeeAdminTabs])
   const [loadingSettings, setLoadingSettings] = useState(true)
 
   const [idleTimeout, setIdleTimeout] = useState('30')
@@ -634,6 +661,11 @@ export default function SettingsPage() {
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', flexWrap: 'wrap' }}>
         {(['general', 'users', 'sites', 'security', 'license', 'eol', 'updates', 'about'] as const)
+          // Security / 2FA is the ONE tab a non-admin may see; everything else
+          // on this page is administrative. Filtering here rather than gating
+          // the whole page is what lets a viewer reach their own two-factor
+          // setup without being handed Users, Sites or Updates as well.
+          .filter(tab => tab === 'security' || canSeeAdminTabs)
           .filter(tab => tab !== 'general' || isAdmin)
           .filter(tab => tab !== 'license' || isSuperAdmin)
           // EOL Intelligence is an admin curation surface — super_admin only.
@@ -641,7 +673,7 @@ export default function SettingsPage() {
           .filter(tab => tab !== 'updates' || isAdmin)
           .map(tab => (
           <button key={tab} onClick={() => { if (tab === 'eol') { router.push('/settings/eol-intelligence') } else { setActiveTab(tab as typeof activeTab) } }} style={{ padding: '10px 18px', fontSize: 'var(--text-md)', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
-            {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security' : tab === 'eol' ? 'EOL Intelligence' : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
+            {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security / 2FA' : tab === 'eol' ? 'EOL Intelligence' : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
             {tab === 'updates' && updateStatus?.update_available && (
               <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%' /* intentional: update-available status dot — squaring it would look broken */, background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
             )}

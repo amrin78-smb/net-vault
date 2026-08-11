@@ -1,28 +1,28 @@
 'use client'
 
-import MfaCard from '../settings/MfaCard'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 /**
- * /security — the signed-in user's own account security (currently two-factor).
+ * /security — kept only as a redirect to Settings → Security / 2FA.
  *
- * Deliberately its OWN route rather than only a Settings tab: /settings
- * redirects any non-admin to /dashboard and its nav entry is adminOnly, so a
- * viewer or site_admin could never have reached the enrolment card there.
+ * This was briefly a page of its own in the sidebar. Two-factor setup belongs
+ * with the other settings rather than as a top-level nav item, so the card moved
+ * into Settings; this route stays so a bookmark or a link from that window still
+ * lands somewhere sensible instead of 404ing.
  *
- * That is not a cosmetic gap. Two-factor is not an administrative privilege —
- * and once mfa_required_roles names a role, a member of it who cannot self-enrol
- * is permanently locked out: the login refuses them for having no factor, and
- * the only page that could give them one is closed to their role. Every
- * authenticated user must be able to reach this.
+ * Settings is no longer admin-only precisely because of this move — every role
+ * has to be able to reach its own two-factor setup, or requiring MFA for a role
+ * locks its members out with no page able to give them a factor.
  */
-export default function SecurityPage() {
+export default function SecurityRedirect() {
+  const router = useRouter()
+  useEffect(() => {
+    router.replace('/settings?tab=security')
+  }, [router])
   return (
-    <div style={{ padding: '24px 28px' }}>
-      <h1 style={{ fontSize: 'var(--text-xl)', margin: '0 0 4px' }}>Security</h1>
-      <p style={{ color: 'var(--text-muted)', fontSize: 'var(--text-sm)', margin: '0 0 20px' }}>
-        Settings that protect your own account.
-      </p>
-      <MfaCard />
+    <div style={{ padding: '24px 28px', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>
+      Taking you to Settings → Security / 2FA…
     </div>
   )
 }
