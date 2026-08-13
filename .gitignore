@@ -56,3 +56,7 @@ demo-seed.js
 
 # NocVault Suite GUI build artifacts (produced by installer/Build-Setup-Exe.ps1)
 installer/*.exe
+
+# Ad-hoc diagnostic scratch scripts (read-only DB probes). Local only —
+# these were committed by accident by a `git add -A` in 1.34.0.
+_*.js
