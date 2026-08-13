@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.34.0': [
+    'Adding and editing a site now opens a dialog in the centre of the screen instead of a panel inserted above the site list. With 52 sites, clicking Edit on a row near the bottom opened the form off-screen: you had to scroll up to find it, and scroll back down afterwards to carry on where you were.',
+    'The dialog closes on Escape or by clicking outside it, and the Save and Cancel buttons stay pinned at the bottom, so they are reachable without scrolling however long the form is.',
+    'The Add-site form moved to the same dialog, so both forms behave identically rather than one being a panel and the other a dialog. Opening one now closes the other.',
+  ],
   '1.33.3': [
     'Two-factor setup has moved into Settings as a "Security / 2FA" tab, and no longer takes up a place of its own in the main menu.',
     'Settings is therefore no longer restricted to administrators, but a non-administrator sees only that one tab - not Users, Sites, Updates or anything else. Everyone has to be able to reach their own two-factor setup: once it is required for a role, anyone in that role who cannot set it up is turned away at sign-in with no way to put it right.',

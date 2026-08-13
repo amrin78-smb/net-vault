@@ -5,7 +5,77 @@ import { useState, useEffect, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { STAGE_LABELS } from '@/app/components/UpdateFailureBanner'
+import { useEscape } from '@/components/ui'
 import MfaCard from './MfaCard'
+
+/**
+ * Shell for the Add/Edit site dialogs.
+ *
+ * These used to be inline panels rendered ABOVE the sites table. With 52 sites
+ * that meant clicking Edit on a row near the bottom opened a form off-screen —
+ * you had to scroll up to find it, and again to get back to where you were.
+ *
+ * A centred modal rather than a slide-in drawer, deliberately: `.modal-overlay`,
+ * the backdrop-click/stopPropagation shape and `useEscape` are already this
+ * app's convention (see the agents page, which uses it twice). A drawer would
+ * be a one-off pattern here for no gain — this is a focused edit on a single
+ * record, then straight back to the list, which is what a modal is for.
+ *
+ * Defined at module top level, NOT inside SettingsPage: a component declared
+ * inside another remounts on every render, which would drop focus out of these
+ * inputs on every keystroke.
+ */
+function SiteDialog({ title, subtitle, onClose, children, footer }: {
+  title: string
+  subtitle?: string
+  onClose: () => void
+  children: React.ReactNode
+  footer: React.ReactNode
+}) {
+  useEscape(onClose)
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        style={{
+          background: 'var(--bg-card)', borderRadius: 'var(--radius)', width: '100%',
+          maxWidth: 760, boxShadow: 'var(--shadow-lg)', maxHeight: '90vh',
+          display: 'flex', flexDirection: 'column', margin: '0 16px',
+        }}
+      >
+        <div style={{
+          padding: '20px 24px 16px', borderBottom: '1px solid var(--border-light)',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div>
+            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>{title}</h2>
+            {subtitle && (
+              <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '4px 0 0' }}>{subtitle}</p>
+            )}
+          </div>
+          <button className="btn-icon" onClick={onClose} aria-label="Close" title="Close (Esc)"
+            style={{ fontSize: 'var(--text-lg)', lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}>
+            ×
+          </button>
+        </div>
+        {/* Only the BODY scrolls — the header and the action buttons stay put, so
+            "Save" is reachable without scrolling however long the form gets. */}
+        <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, minHeight: 0 }}>
+          {children}
+        </div>
+        <div style={{
+          padding: '14px 24px', borderTop: '1px solid var(--border-light)',
+          display: 'flex', gap: '8px', flexShrink: 0,
+        }}>
+          {footer}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // Shape of GET /api/system/last-update-status - written by Update-NetVault.ps1's
 // Write-StatusJson on every run (success or failure). The "Update Now" overlay
@@ -548,6 +618,10 @@ export default function SettingsPage() {
   }
 
   async function openEditSite(s: Site) {
+    // Close the Add dialog first. As inline panels these two could sit stacked
+    // on the page harmlessly; as modals they would overlay each other, and both
+    // would bind Escape.
+    setShowSiteForm(false)
     setEditSite(s)
     setEditSiteError('')
     // Fetch full site details
@@ -890,12 +964,19 @@ export default function SettingsPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <input className="input input-md" placeholder="Search sites or countries..." value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
-            <button className="btn-primary" onClick={() => { setShowSiteForm(true); setSiteError('') }}>+ Add site</button>
+            <button className="btn-primary" onClick={() => { setEditSite(null); setShowSiteForm(true); setSiteError('') }}>+ Add site</button>
           </div>
 
           {showSiteForm && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>Add new site</h3>
+            <SiteDialog
+              title="Add new site"
+              subtitle="Site name and country are required."
+              onClose={() => setShowSiteForm(false)}
+              footer={<>
+                <button className="btn-primary" onClick={addSite} disabled={savingSite}>{savingSite ? 'Saving...' : 'Add site'}</button>
+                <button className="btn-secondary" onClick={() => setShowSiteForm(false)}>Cancel</button>
+              </>}
+            >
               <div className="form-grid-compact" style={{ marginBottom: '16px' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Site name <span style={{ color: 'var(--primary)' }}>*</span></label>
@@ -957,17 +1038,19 @@ export default function SettingsPage() {
                   <input className="input input-sm" placeholder="e.g. +66 2 123 4567" value={siteForm.phone} onChange={e => setSiteForm(f => ({ ...f, phone: e.target.value }))} />
                 </div>
               </div>
-              {siteError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{siteError}</div>}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn-primary" onClick={addSite} disabled={savingSite}>{savingSite ? 'Saving...' : 'Add site'}</button>
-                <button className="btn-secondary" onClick={() => setShowSiteForm(false)}>Cancel</button>
-              </div>
-            </div>
+              {siteError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>{siteError}</div>}
+            </SiteDialog>
           )}
 
           {editSite && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>Edit site — {editSite.name || (editSite as any).site}</h3>
+            <SiteDialog
+              title={`Edit site — ${editSite.name || (editSite as any).site}`}
+              onClose={() => setEditSite(null)}
+              footer={<>
+                <button className="btn-primary" onClick={saveEditSite} disabled={savingEditSite}>{savingEditSite ? 'Saving...' : 'Save changes'}</button>
+                <button className="btn-secondary" onClick={() => setEditSite(null)}>Cancel</button>
+              </>}
+            >
               <div className="form-grid-compact" style={{ marginBottom: '16px' }}>
                 {[
                   { label: 'Site name *', field: 'name', placeholder: 'e.g. Bangkok Office' },
@@ -1001,12 +1084,8 @@ export default function SettingsPage() {
                     style={{ resize: 'vertical' }} />
                 </div>
               </div>
-              {editSiteError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{editSiteError}</div>}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn-primary" onClick={saveEditSite} disabled={savingEditSite}>{savingEditSite ? 'Saving...' : 'Save changes'}</button>
-                <button className="btn-secondary" onClick={() => setEditSite(null)}>Cancel</button>
-              </div>
-            </div>
+              {editSiteError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>{editSiteError}</div>}
+            </SiteDialog>
           )}
 
           <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
