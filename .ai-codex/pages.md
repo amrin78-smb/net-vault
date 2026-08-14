@@ -28,6 +28,7 @@ client /circuits/[id] — CircuitDetailPage — view/edit single circuit
 
 ## Pages — (app) route group / EOL & Compliance
 client /eol — EolPage — hardware EOL by site + software OS-EOL tracking (tabs)
+client /eol-intelligence — EolIntelligencePage — EOL seed catalog, enrichment jobs, coverage, discrepancies (super_admin + licensed 'eol' module; top-level nav since 1.35.0, previously under Settings)
 client /compliance — CompliancePage — risk/compliance score + data completeness dashboard
 client /audit — AuditPage — audit log table with action/user/date filters
 
@@ -37,7 +38,7 @@ client /agents — AgentsPage — NocVault agent fleet management (super_admin o
 ## Pages — (app) route group / Settings
 client /settings — SettingsPage — admin tabs: general, users, sites, license, updates, about
 server /settings/license — SettingsLicenseRedirect — redirects to /settings?tab=license (suite deep-link)
-client /settings/eol-intelligence — EolIntelligencePage — EOL seed catalog, enrichment jobs, coverage, discrepancies (super_admin, licensed add-on)
+client /settings/eol-intelligence — EolIntelligenceRedirect — redirect only, forwards to /eol-intelligence (moved out of Settings in 1.35.0; kept so old bookmarks resolve)
 
 ## Pages — (app) route group / Dashboard & legacy
 client /dashboard — DashboardPage — main infrastructure overview: health gauge, fleet charts, stats, activity

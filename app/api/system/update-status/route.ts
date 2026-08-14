@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.0': [
+    'EOL Intelligence has its own place in the main menu instead of sitting inside Settings. It is a separately licensed add-on with its own entitlement check, not a preference, and buried under Settings it was only findable by someone who already knew it was there.',
+    'It sits directly beneath EOL / Risk, since one is the curation engine and the other is the report it feeds. The two carry different icons on purpose so they do not read as the same page listed twice.',
+    'The menu entry is visible to super administrators, matching the page\'s own restriction. On an install without the EOL module licensed it still appears and explains that the add-on is not enabled, rather than hiding the feature from the one person able to license it.',
+    'The old Settings address still works and forwards to the new page, so an existing bookmark is not broken. The EOL Intelligence tab has been removed from Settings, so there is now exactly one way in.',
+  ],
   '1.34.0': [
     'Adding and editing a site now opens a dialog in the centre of the screen instead of a panel inserted above the site list. With 52 sites, clicking Edit on a row near the bottom opened the form off-screen: you had to scroll up to find it, and scroll back down afterwards to carry on where you were.',
     'The dialog closes on Escape or by clicking outside it, and the Save and Cancel buttons stay pinned at the bottom, so they are reachable without scrolling however long the form is.',

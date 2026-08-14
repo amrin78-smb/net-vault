@@ -36,6 +36,14 @@ const navIcons: Record<string, { icon: React.ReactNode; color: string; bg: strin
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 20h20L12 2zm0 4l7.5 12h-15L12 6z"/><rect x="11" y="10" width="2" height="5" rx="1"/><rect x="11" y="16" width="2" height="2" rx="1"/></svg>,
     color: '#fbbf24', bg: 'rgba(186,117,23,0.25)',
   },
+  // Deliberately NOT the amber warning triangle used by /eol. That page is the
+  // risk report ("which of my devices are past end-of-life"); this one is the
+  // curation/enrichment engine behind it. Same subject, different job — a
+  // duplicate icon would make them look like the same page twice.
+  '/eol-intelligence': {
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" opacity="0.75"/><path d="M4 12.5v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" opacity="0.5"/></svg>,
+    color: '#c084fc', bg: 'rgba(147,86,220,0.25)',
+  },
   '/audit': {
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zm-4 4h8v1.5H9zm0 3h5v1.5H9z"/></svg>,
     color: '#f472b6', bg: 'rgba(212,83,126,0.25)',
@@ -64,6 +72,15 @@ const navItems = [
   { href: '/devices', label: 'Devices' },
   { href: '/circuits', label: 'Circuits' },
   { href: '/eol', label: 'EOL / Risk', hideForSiteAdmin: true },
+  // Promoted out of Settings: this is a separately licensed add-on (the 'eol'
+  // module) with its own entitlement gate, not a preference. Buried under
+  // Settings it was only findable by someone who already knew it existed —
+  // which is the wrong property for a paid feature. superAdminOnly matches the
+  // page's own gate; the page additionally shows a locked upsell when the
+  // module is not licensed, so the nav item stays visible to a super_admin on
+  // an unlicensed install rather than the feature being invisible to the one
+  // person who could buy it.
+  { href: '/eol-intelligence', label: 'EOL Intelligence', superAdminOnly: true },
   { href: '/audit', label: 'Audit Log', adminOnly: true },
   { href: '/compliance', label: 'Compliance', adminOnly: true },
   { href: '/agents', label: 'Agents', superAdminOnly: true },

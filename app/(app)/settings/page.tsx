@@ -734,7 +734,7 @@ export default function SettingsPage() {
       </div>
 
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', flexWrap: 'wrap' }}>
-        {(['general', 'users', 'sites', 'security', 'license', 'eol', 'updates', 'about'] as const)
+        {(['general', 'users', 'sites', 'security', 'license', 'updates', 'about'] as const)
           // Security / 2FA is the ONE tab a non-admin may see; everything else
           // on this page is administrative. Filtering here rather than gating
           // the whole page is what lets a viewer reach their own two-factor
@@ -742,12 +742,10 @@ export default function SettingsPage() {
           .filter(tab => tab === 'security' || canSeeAdminTabs)
           .filter(tab => tab !== 'general' || isAdmin)
           .filter(tab => tab !== 'license' || isSuperAdmin)
-          // EOL Intelligence is an admin curation surface — super_admin only.
-          .filter(tab => tab !== 'eol' || isSuperAdmin)
           .filter(tab => tab !== 'updates' || isAdmin)
           .map(tab => (
-          <button key={tab} onClick={() => { if (tab === 'eol') { router.push('/settings/eol-intelligence') } else { setActiveTab(tab as typeof activeTab) } }} style={{ padding: '10px 18px', fontSize: 'var(--text-md)', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
-            {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security / 2FA' : tab === 'eol' ? 'EOL Intelligence' : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
+          <button key={tab} onClick={() => setActiveTab(tab as typeof activeTab)} style={{ padding: '10px 18px', fontSize: 'var(--text-md)', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
+            {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security / 2FA' : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
             {tab === 'updates' && updateStatus?.update_available && (
               <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%' /* intentional: update-available status dot — squaring it would look broken */, background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
             )}
