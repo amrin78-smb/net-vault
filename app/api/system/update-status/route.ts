@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.1': [
+    'The licence banner now refreshes every five minutes, matching the other three apps. It previously read the licence once when the page first loaded and never again.',
+    'Because the banner sits in the shared layout, moving between pages does not reload it - so a tab left open kept showing whatever day count it read at load time. On a tab open for a few days the number could be visibly wrong, and a licence renewed or expired mid-session would not show until a full page reload.',
+    'This was the hub behaving differently from the apps it serves: NetVault, LogVault, DDIVault and SpanVault now all re-read the licence on the same five-minute cycle.',
+  ],
   '1.35.0': [
     'EOL Intelligence has its own place in the main menu instead of sitting inside Settings. It is a separately licensed add-on with its own entitlement check, not a preference, and buried under Settings it was only findable by someone who already knew it was there.',
     'It sits directly beneath EOL / Risk, since one is the curation engine and the other is the report it feeds. The two carry different icons on purpose so they do not read as the same page listed twice.',

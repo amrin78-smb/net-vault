@@ -31,18 +31,30 @@ export default function LicenseBanner() {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/license')
-      .then(r => r.json())
-      .then(d => {
-        if (cancelled) return
-        if (!d || d.error) { setMode('unreachable'); return }
-        setLicense(d as LicenseInfo)
-        const s = String(d.status)
-        // Map NetVault's status vocabulary onto the suite-standard banner modes.
-        setMode(s === 'expired' ? 'disabled' : (s as Mode))
-      })
-      .catch(() => { if (!cancelled) setMode('unreachable') })
-    return () => { cancelled = true }
+    const check = () => {
+      fetch('/api/license')
+        .then(r => r.json())
+        .then(d => {
+          if (cancelled) return
+          if (!d || d.error) { setMode('unreachable'); return }
+          setLicense(d as LicenseInfo)
+          const s = String(d.status)
+          // Map NetVault's status vocabulary onto the suite-standard banner modes.
+          setMode(s === 'expired' ? 'disabled' : (s as Mode))
+        })
+        .catch(() => { if (!cancelled) setMode('unreachable') })
+    }
+    check()
+    // Re-check every 5 min, matching all three satellites (their LicenseGuard.tsx
+    // providers use the same interval, tied to the backend's licence cache TTL).
+    // This used to fetch ONCE on mount: because the banner lives in the (app)
+    // layout, a client-side route change does not remount it, so a NetVault tab
+    // left open kept showing whatever day count it read at page load — the count
+    // could sit stale for days, and a licence that expired or was renewed mid-
+    // session would not surface until a full reload. The satellites never had
+    // that problem; the hub was the odd one out.
+    const interval = setInterval(check, 5 * 60 * 1000)
+    return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
   if (!license || mode === 'active') {
