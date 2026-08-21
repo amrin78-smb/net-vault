@@ -701,14 +701,19 @@ else {
         @{ Db="spanvault"; Tbl="monitored_devices";        Col="snmp_community" },
         @{ Db="spanvault"; Tbl="agents";                   Col="api_key" },
         @{ Db="spanvault"; Tbl="agent_discovered_devices"; Col="snmp_community" },
-        @{ Db="spanvault"; Tbl="wireless_controllers";     Col="api_refresh_token" }
+        @{ Db="spanvault"; Tbl="wireless_controllers";     Col="api_refresh_token" },
+        # MFA backup-code hashes. Added after a fresh-install audit found this
+        # column readable by both diagnostic roles on a from-scratch install -
+        # the blanket grant covers the table because it is created before that
+        # grant runs, and nothing revoked it afterwards the way users does.
+        @{ Db="netvault";  Tbl="user_mfa_backup_codes";    Col="code_hash" }
     )
     $secOk = $true; $secBad = @()
     foreach ($s in $secCol) {
         $r = Pg $s.Db "SELECT has_column_privilege('nocvault_readonly','$($s.Tbl)','$($s.Col)','SELECT');"
         if ($r -ne "f") { $secOk = $false; $secBad += ($s.Db + "." + $s.Tbl + "." + $s.Col + "=" + $r) }
     }
-    if ($secOk) { Ok "nocvault_readonly is BLOCKED from every secret credential column (ddi_servers.ps_password, monitored_devices/agent_discovered_devices.snmp_community, agents.api_key, wireless_controllers.api_refresh_token)" }
+    if ($secOk) { Ok "nocvault_readonly is BLOCKED from every secret credential column (ddi_servers.ps_password, monitored_devices/agent_discovered_devices.snmp_community, agents.api_key, wireless_controllers.api_refresh_token, user_mfa_backup_codes.code_hash)" }
     else { Bad ("SECURITY REGRESSION: nocvault_readonly CAN read secret column(s): " + ($secBad -join ', ') + " -- a blanket GRANT likely re-widened access") }
     # (b) view-based: each secret base table must be UNreadable AND its *_public view readable.
     $secView = @(

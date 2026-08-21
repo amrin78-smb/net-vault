@@ -621,6 +621,37 @@ EXCEPTION WHEN OTHERS THEN
 END
 $$;
 
+-- user_mfa_backup_codes: independent of the blocks around it.
+--
+-- code_hash is a CREDENTIAL hash, the same category as users.password_hash
+-- immediately above, and the blanket GRANT SELECT ON ALL TABLES earlier in the
+-- Permissions section covers this table (it is created well before that grant
+-- runs). Without this REVOKE both diagnostic roles can read every backup-code
+-- hash — verified readable on the live DB and on a from-scratch install before
+-- this block existed.
+--
+-- Practical risk is lower than password_hash (codes are 56 bits of
+-- crypto.randomBytes under bcrypt, not user-chosen), which is exactly why it
+-- was easy to miss. It is excluded anyway: the rule is that a new
+-- secret-bearing column is never covered by precedent, and one credential-hash
+-- column readable while the one beside it is revoked is the inconsistency that
+-- makes the model unreviewable.
+--
+-- No _public view counterpart: nothing reads this table diagnostically, so a
+-- plain REVOKE is the whole fix.
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nocvault_readonly') THEN
+    REVOKE SELECT ON user_mfa_backup_codes FROM nocvault_readonly;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'claude_readonly') THEN
+    REVOKE SELECT ON user_mfa_backup_codes FROM claude_readonly;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'SECURITY: user_mfa_backup_codes REVOKE for nocvault_readonly/claude_readonly FAILED (%). MFA backup-code hashes may still be exposed to those roles — investigate and re-run this schema file immediately.', SQLERRM;
+END
+$$;
+
 -- app_settings: independent of users' block above.
 DO $$
 BEGIN

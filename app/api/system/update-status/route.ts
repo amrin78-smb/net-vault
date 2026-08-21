@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.2': [
+    "SECURITY: the read-only diagnostic database accounts could read the stored hashes of two-factor backup codes. Every other stored credential in the suite is already hidden from those accounts; this table was missed when two-factor sign-in was added, and it affected new installations as well as this one.",
+    "The codes themselves are not recoverable from what was exposed - they are long random values protected by a slow hash - so this is a consistency fix rather than an urgent one. It is closed anyway, because a credential left readable next to one that is not is how the next real gap gets overlooked.",
+    "Found by auditing whether the suite installer had fallen behind recent work, not from a report of anything looking wrong. The fresh-install test script now checks this account cannot read the column, so the same omission cannot return unnoticed.",
+  ],
   '1.35.1': [
     'The licence banner now refreshes every five minutes, matching the other three apps. It previously read the licence once when the page first loaded and never again.',
     'Because the banner sits in the shared layout, moving between pages does not reload it - so a tab left open kept showing whatever day count it read at load time. On a tab open for a few days the number could be visibly wrong, and a licence renewed or expired mid-session would not show until a full page reload.',
