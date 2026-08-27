@@ -667,3 +667,38 @@ EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'SECURITY: app_settings_public REVOKE/GRANT for nocvault_readonly/claude_readonly FAILED (%). app_settings.value (incl. license_key) may still be exposed to those roles — investigate and re-run this schema file immediately.', SQLERRM;
 END
 $$;
+
+-- ── OS EOL de-duplication (2026-08, one-time but idempotent) ────────────────
+-- devices.os_eol_date is meant to hold a SOFTWARE/OS end-of-life that a vendor
+-- publishes SEPARATELY from hardware support-end (lib/eolFeed.ts: "eol_seed.
+-- eol_date = software/OS EOL; eol_seed.eos_date = hardware support-end").
+--
+-- Two catalog rows had the hardware Last-Date-of-Support written into BOTH
+-- fields, so enrichment stamped an "OS EOL" onto 39 devices that have no OS
+-- type and no OS version recorded — NetVault collects neither today (0 of 2482
+-- devices carry either). Those devices then appeared on the EOL report's
+-- "Software EOL" tab AND the Hardware tab, double-counting the same expiry.
+--
+-- Both statements are deliberately SELF-LIMITING rather than a blanket wipe:
+-- they only clear a date that DUPLICATES the hardware date, so a genuinely
+-- distinct OS EOL (the 34 Allied Telesis models in the catalog carry real
+-- 3-year gaps) is never touched. Safe to re-run on every deploy, which is the
+-- point — enrichment only ever writes os_eol_date, never clears it, so without
+-- this the stale values would survive the catalog fix indefinitely.
+UPDATE devices
+   SET os_eol_date = NULL
+ WHERE os_eol_date IS NOT NULL
+   AND eol_source = 'seed'
+   AND support_end_date IS NOT NULL
+   AND os_eol_date = support_end_date
+   AND (os_version IS NULL OR os_version = '')
+   AND (os_type IS NULL OR os_type = '');
+
+-- Same rule at the source, so re-enrichment cannot re-apply it. Scoped to rows
+-- where the two dates are identical; a curator entering a real, distinct OS EOL
+-- is unaffected.
+UPDATE eol_seed
+   SET eol_date = NULL
+ WHERE eol_date IS NOT NULL
+   AND eos_date IS NOT NULL
+   AND eol_date = eos_date;

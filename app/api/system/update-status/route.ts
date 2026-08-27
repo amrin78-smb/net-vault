@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.3': [
+    "The EOL report listed 39 devices as having expired software, with no operating system or version shown for any of them. Those entries were wrong and have been removed - the Software EOL tab now correctly shows none.",
+    "The dates came from two catalogue entries where a vendor hardware support-end date had been copied into the software end-of-life field as well. The same devices were therefore counted twice: once on the Hardware tab, correctly, and again on the Software tab under a date that described the hardware.",
+    "Hardware EOL figures are unchanged - all 1,921 tracked devices remain, on the tab that was always right.",
+    "The Software tab now explains that no operating system version is collected for any device, rather than showing an unexplained zero.",
+    "The offline device catalogue bundled with NetVault has also been refreshed, from 949 models to 7,902, improving end-of-life coverage on installations with no internet access.",
+  ],
   '1.35.2': [
     "SECURITY: the read-only diagnostic database accounts could read the stored hashes of two-factor backup codes. Every other stored credential in the suite is already hidden from those accounts; this table was missed when two-factor sign-in was added, and it affected new installations as well as this one.",
     "The codes themselves are not recoverable from what was exposed - they are long random values protected by a slow hash - so this is a consistency fix rather than an urgent one. It is closed anyway, because a credential left readable next to one that is not is how the next real gap gets overlooked.",

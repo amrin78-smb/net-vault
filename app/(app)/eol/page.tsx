@@ -150,7 +150,14 @@ export default function EolPage() {
           </div>
           <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
             {loading ? <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading...</div> : softwareRows.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No devices have OS EOL dates recorded yet.</div>
+              <div style={{ padding: '40px 24px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <div style={{ fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 6 }}>No software EOL data</div>
+                <div style={{ fontSize: 'var(--text-sm)', lineHeight: 1.6, maxWidth: 620, margin: '0 auto' }}>
+                  NetVault does not currently collect an OS type or version for any device, so no
+                  software end-of-life can be determined. Hardware lifecycle dates are unaffected and
+                  are shown on the Hardware EOL tab.
+                </div>
+              </div>
             ) : (
               <table>
                 <thead><tr><th>Device</th><th>Site</th><th>Type</th><th>OS Type</th><th>OS Version</th><th>OS EOL Date</th><th>Status</th></tr></thead>
