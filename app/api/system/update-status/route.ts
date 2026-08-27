@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.4': [
+    "Corrects the hardware end-of-support date for 38 Cisco Aironet 2602 access points, from 30 September 2022 to 31 December 2021. The earlier date came from a catalogue entry with no source attached and does not appear anywhere in Cisco's end-of-life bulletin for the series.",
+    "Two other catalogue entries covering the same access points already carried the correct date and cited the Cisco bulletin. The incorrect one took precedence because it matched the exact part number while the sourced entries matched the shorter product code.",
+    "These devices have therefore been out of support for nine months longer than the report showed. The corrected entry now records every milestone from the bulletin and links to it.",
+  ],
   '1.35.3': [
     "The EOL report listed 39 devices as having expired software, with no operating system or version shown for any of them. Those entries were wrong and have been removed - the Software EOL tab now correctly shows none.",
     "The dates came from two catalogue entries where a vendor hardware support-end date had been copied into the software end-of-life field as well. The same devices were therefore counted twice: once on the Hardware tab, correctly, and again on the Software tab under a date that described the hardware.",

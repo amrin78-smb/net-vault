@@ -702,3 +702,27 @@ UPDATE eol_seed
  WHERE eol_date IS NOT NULL
    AND eos_date IS NOT NULL
    AND eol_date = eos_date;
+
+-- ── AIR-CAP2602E support-end correction (2026-08, idempotent) ──────────────
+-- The bundled catalog carried support_end_date 2022-09-30 for this SKU with NO
+-- source. Cisco's own bulletin for the series (EOL11045 / c51-737512) prints
+-- Last Date of Support 2021-12-31, and 2022-09-30 appears nowhere in it. Two
+-- other catalog entries covering the same hardware already said 2021-12-31;
+-- the wrong one won because it matches the full SKU exactly while the sourced
+-- series entry matches the shorter PID.
+--
+-- Fixed upstream in nocvault-eol and regenerated into lib/eolSeed.ts, but that
+-- alone does NOT reach an existing install: migrateLegacySeed only fills rows
+-- whose dates are BOTH null, so a row already carrying the wrong date is never
+-- updated by it. Hence this statement.
+--
+-- Guarded on the exact wrong value, so it fires once and is a no-op forever
+-- after — and cannot touch a row a curator has since set to anything else.
+-- Devices pick the corrected date up on the next enrichment run, because
+-- enrichDevices overwrites a value whose eol_source is already 'seed'.
+UPDATE eol_seed
+   SET eos_date   = DATE '2021-12-31',
+       source_url = COALESCE(source_url, 'https://www.cisco.com/c/en/us/products/collateral/wireless/aironet-2600-series/eos-eol-notice-c51-737512.html'),
+       updated_at = NOW()
+ WHERE model_raw = 'AIR-CAP2602E-E-K9'
+   AND eos_date = DATE '2022-09-30';
