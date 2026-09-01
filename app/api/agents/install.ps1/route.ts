@@ -6,8 +6,12 @@ export const dynamic = 'force-dynamic'
 // GET /api/agents/install.ps1 — PUBLIC (no session). Returns the PowerShell
 // installer as text/plain, with the hub origin BAKED in so the downloaded agent
 // files (and enroll/heartbeat traffic) point back here. Public is correct: the
-// remote host runs `irm` before it has any credential (matches SpanVault serving
-// install.ps1 publicly). Based on agent/install.ps1 — the elevation / Node /
+// remote host runs `irm` before it has any credential, so there is no session to
+// require. (This used to cite SpanVault serving its own install.ps1 publicly as
+// precedent; SpanVault removed that route in 1.101.0 when agents were centralised
+// here, so this is now the suite's only agent installer endpoint. The security
+// boundary is the enrollment token in the minted one-liner, not the route.)
+// Based on agent/install.ps1 — the elevation / Node /
 // NSSM / service logic is kept close to verbatim; the two changes are (1) fetch
 // the agent bundle from the hub instead of assuming pre-staged files, and (2) a
 // Token-driven config.json (hub channel) with the span data path optional.

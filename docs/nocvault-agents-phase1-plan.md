@@ -122,6 +122,18 @@ identically" + "the core is ready for a second module to plug in."
 
 ## SpanVault migration & backward compatibility
 
+> **Status (1 Sep 2026) — this section is historical.** The migration is complete.
+> Every deployed agent is hub-enrolled (verified against the live DB: 1 agent, 0
+> legacy `api_key` installs), so the "both old and new agents coexist" rollout
+> state below no longer applies. SpanVault 1.101.0 went past T10's "leave the files
+> and add a DEPRECATED.md" and **removed `spanvault/agent/` outright**, along with
+> the six unauthenticated `/api/agent/*` routes that distributed it — which also
+> closes the unsigned-self-update gap T5 was written to address, by deleting the
+> path rather than signing it. What remains in SpanVault is the receiving end: the
+> WS ingest listener on 3010, the `/agents` fleet page, and `/api/agents/*`. The
+> accept-both auth path (hub JWT **or** legacy `apiKey`) is deliberately still
+> present and is a separate, later decision.
+
 - The unified agent (`span` module) speaks the **same protocol** SpanVault's `ws-server` already expects:
   Bearer-`apiKey` auth, `heartbeat`, `snmp_batch`, `batch` (buffered flush). No server parsing changes.
 - **Both old and new agents coexist.** During rollout, some remote hosts run the legacy `spanvault/agent`,
