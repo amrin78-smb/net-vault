@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.7': [
+    "Fixed: the disk-space forecast on the launcher could never produce a result on a server that gets updated. It keeps a rolling thirty days of readings to work out how long until the disk fills, but it stored them inside the build output - the exact directory the update process replaces every time - so the history was wiped on each update and silently started again from nothing.",
+    "The readings now live alongside the logs, outside the part of the installation that updates replace, so the forecast survives a deploy and can actually accumulate enough history to be useful.",
+    "Cross-application database connections now use the numeric loopback address rather than the name localhost, matching the rest of the suite. On Windows the name resolves to the IPv6 form first, which these applications do not listen on, causing a delay on every connection.",
+  ],
   '1.35.6': [
     "Raises the time the service manager waits for each NocVault service to stop cleanly, from 1.5 seconds to 15. The previous window was too short for a service that needs to finish what it is doing before exiting - most importantly the SpanVault collector, which can be part-way through renewing an Aruba Central access token, where being interrupted at the wrong moment permanently breaks that integration until someone re-authorises it by hand.",
     "This is a ceiling rather than a delay: a service with nothing to finish still stops immediately, so nothing gets slower. Applied to all ten services on the existing installation as well, so it takes effect now rather than at the next fresh install.",

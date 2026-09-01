@@ -69,7 +69,25 @@ async function cpuPercent(): Promise<number> {
 // isn't enough history yet. Failures degrade silently to null.
 async function diskForecastDays(usedBytes: number, freeBytes: number): Promise<number | null> {
   try {
-    const dir = path.join(process.cwd(), '.data')
+    // NOT process.cwd(). NSSM sets AppDirectory to .next/standalone, so cwd IS the
+    // build output - the directory installer/Update-NetVault.ps1 renames to
+    // .lastgood and replaces on every single deploy. The 30-day history this
+    // forecast needs was therefore wiped each time and silently restarted from
+    // nothing, so "days until full" could never be produced on a server that gets
+    // updated more often than monthly. Write outside the build output instead:
+    // NETVAULT_DATA_DIR if set, else <installRoot>/data.
+    //
+    // The three '..' are deliberate and load-bearing. cwd is
+    // <installRoot>/app/.next/standalone, so:
+    //   ..        -> .next
+    //   ../..     -> app        <- INSIDE the git checkout; `git clean -fd` during
+    //                              every update deletes it, so this is NOT far enough
+    //   ../../..  -> installRoot <- sibling of app, outside the repo, survives
+    // This mirrors where logs/ already lives (see the two-candidate probing in
+    // app/api/system/last-update-status/route.ts).
+    const dir =
+      process.env.NETVAULT_DATA_DIR ||
+      path.join(process.cwd(), '..', '..', '..', 'data')
     const file = path.join(dir, 'disk-history.json')
     await fs.mkdir(dir, { recursive: true })
 
