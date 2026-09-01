@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.6': [
+    "Raises the time the service manager waits for each NocVault service to stop cleanly, from 1.5 seconds to 15. The previous window was too short for a service that needs to finish what it is doing before exiting - most importantly the SpanVault collector, which can be part-way through renewing an Aruba Central access token, where being interrupted at the wrong moment permanently breaks that integration until someone re-authorises it by hand.",
+    "This is a ceiling rather than a delay: a service with nothing to finish still stops immediately, so nothing gets slower. Applied to all ten services on the existing installation as well, so it takes effect now rather than at the next fresh install.",
+    "Groundwork for the clean-shutdown handling being added to each application next - without this the handlers would be cut off part-way through.",
+  ],
   '1.35.5': [
     "SECURITY: the machine-level secrets file the installer writes was left readable by any local user on the server. It inherited its permissions from the containing folder and no explicit restriction was ever applied, and it holds the PostgreSQL administrator password, which grants full control over all four suite databases. It is now restricted to SYSTEM and Administrators, matching how the agent TLS private key was already protected.",
     "SECURITY: every password and secret the installer generates - the database administrator password, the shared sign-in secret used across all four apps, the four per-application database passwords, and the key protecting LogVault's tamper-evident log chain - was produced by a random number generator that is predictable by design and seeded from the time of day. They are now generated from the operating system's cryptographic random source.",

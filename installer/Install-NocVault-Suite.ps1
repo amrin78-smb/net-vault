@@ -780,6 +780,14 @@ Write-OK "NetVault standalone .env.local written (incl. SERVER_IP, CRON_SECRET)"
 & $NssmExe set NetVault AppRotateBytes      10485760
 & $NssmExe set NetVault AppRotateOnline     1
 & $NssmExe set NetVault AppRestartDelay     3000
+# Stop window. NSSM default is 1500ms per stage: it sends a console Ctrl-C event,
+# waits, then escalates to WM_CLOSE, then thread termination, then TerminateProcess.
+# Node maps that console event to SIGINT (NOT SIGTERM - a SIGTERM-only handler never
+# fires under NSSM on Windows), and a service with no handler exits immediately on it,
+# so this value is a CEILING rather than a delay - raising it costs nothing for a
+# service that shuts down promptly. 1500ms is not enough for a collector that has to
+# drain in-flight work before exiting, which is why it is raised here.
+& $NssmExe set NetVault AppStopMethodConsole 15000
 Write-OK "NetVault service registered"
 
 New-NetFirewallRule -DisplayName "NocVault NetVault 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -ErrorAction SilentlyContinue | Out-Null
@@ -901,6 +909,7 @@ if ($InstallLogVault) {
     & $NssmExe set LogVault-Collector AppRotateBytes      10485760
     & $NssmExe set LogVault-Collector AppRotateOnline     1
     & $NssmExe set LogVault-Collector AppRestartDelay     3000
+    & $NssmExe set LogVault-Collector AppStopMethodConsole 15000
     & $NssmExe set LogVault-Collector AppThrottle         60000
 
     # NSSM — LogVault-API
@@ -918,6 +927,7 @@ if ($InstallLogVault) {
     & $NssmExe set LogVault-API AppRotateBytes      10485760
     & $NssmExe set LogVault-API AppRotateOnline     1
     & $NssmExe set LogVault-API AppRestartDelay     3000
+    & $NssmExe set LogVault-API AppStopMethodConsole 15000
     & $NssmExe set LogVault-API AppThrottle         60000
 
     # NSSM — LogVault-App (uses next.cmd)
@@ -936,6 +946,7 @@ if ($InstallLogVault) {
     & $NssmExe set LogVault-App AppRotateBytes      10485760
     & $NssmExe set LogVault-App AppRotateOnline     1
     & $NssmExe set LogVault-App AppRestartDelay     3000
+    & $NssmExe set LogVault-App AppStopMethodConsole 15000
     & $NssmExe set LogVault-App AppThrottle         60000
     Write-OK "LogVault services registered"
 
@@ -1091,6 +1102,7 @@ $$;
     & $NssmExe set DDIVault-API AppRotateBytes      10485760
     & $NssmExe set DDIVault-API AppRotateOnline     1
     & $NssmExe set DDIVault-API AppRestartDelay     3000
+    & $NssmExe set DDIVault-API AppStopMethodConsole 15000
 
     # NSSM — DDIVault-App (uses next.cmd)
     $DDINextCmd = "$DDIFrontendDir\node_modules\.bin\next.cmd"
@@ -1108,6 +1120,7 @@ $$;
     & $NssmExe set DDIVault-App AppRotateBytes      10485760
     & $NssmExe set DDIVault-App AppRotateOnline     1
     & $NssmExe set DDIVault-App AppRestartDelay     3000
+    & $NssmExe set DDIVault-App AppStopMethodConsole 15000
 
     # NSSM — DDIVault-Collector
     & $NssmExe stop DDIVault-Collector confirm 2>$null
@@ -1124,6 +1137,7 @@ $$;
     & $NssmExe set DDIVault-Collector AppRotateBytes      10485760
     & $NssmExe set DDIVault-Collector AppRotateOnline     1
     & $NssmExe set DDIVault-Collector AppRestartDelay     3000
+    & $NssmExe set DDIVault-Collector AppStopMethodConsole 15000
     Write-OK "DDIVault services registered"
 
     New-NetFirewallRule -DisplayName "NocVault DDIVault 3006" -Direction Inbound -Protocol TCP -LocalPort 3006 -Action Allow -ErrorAction SilentlyContinue | Out-Null
@@ -1251,6 +1265,7 @@ $$;
     & $NssmExe set SpanVault-API AppRotateBytes      10485760
     & $NssmExe set SpanVault-API AppRotateOnline     1
     & $NssmExe set SpanVault-API AppRestartDelay     3000
+    & $NssmExe set SpanVault-API AppStopMethodConsole 15000
 
     # NSSM — SpanVault-App (uses node.exe with next start)
     & $NssmExe stop SpanVault-App confirm 2>$null
@@ -1266,6 +1281,7 @@ $$;
     & $NssmExe set SpanVault-App AppRotateBytes      10485760
     & $NssmExe set SpanVault-App AppRotateOnline     1
     & $NssmExe set SpanVault-App AppRestartDelay     3000
+    & $NssmExe set SpanVault-App AppStopMethodConsole 15000
 
     # NSSM — SpanVault-Collector
     & $NssmExe stop SpanVault-Collector confirm 2>$null
@@ -1281,6 +1297,7 @@ $$;
     & $NssmExe set SpanVault-Collector AppRotateBytes      10485760
     & $NssmExe set SpanVault-Collector AppRotateOnline     1
     & $NssmExe set SpanVault-Collector AppRestartDelay     3000
+    & $NssmExe set SpanVault-Collector AppStopMethodConsole 15000
     Write-OK "SpanVault services registered"
 
     New-NetFirewallRule -DisplayName "NocVault SpanVault 3008" -Direction Inbound -Protocol TCP -LocalPort 3008 -Action Allow -ErrorAction SilentlyContinue | Out-Null
