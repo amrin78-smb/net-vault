@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.8': [
+    "Fixed: updating NetVault disconnected every remote agent, and they could not reconnect afterwards. The update checks whether each satellite application accepts encrypted agent connections, and records the answer so agents are told the right address to dial. That check could never succeed - it offered only obsolete encryption protocols that modern versions of the runtime refuse - so it concluded every listener was unencrypted and recorded the wrong answer on each update.",
+    "Agents were then told to connect without encryption to a listener that only accepts encrypted connections, so the connection was refused and they retried indefinitely. Measured on this server: the old check failed while an explicit modern protocol succeeded and returned the correct certificate fingerprint.",
+    "The check now states the protocol explicitly. The reasoning behind testing the live socket rather than trusting a certificate file on disk is unchanged and still correct - it simply needed to be able to talk to that socket.",
+  ],
   '1.35.7': [
     "Fixed: the disk-space forecast on the launcher could never produce a result on a server that gets updated. It keeps a rolling thirty days of readings to work out how long until the disk fills, but it stored them inside the build output - the exact directory the update process replaces every time - so the history was wiped on each update and silently started again from nothing.",
     "The readings now live alongside the logs, outside the part of the installation that updates replace, so the forecast survives a deploy and can actually accumulate enough history to be useful.",

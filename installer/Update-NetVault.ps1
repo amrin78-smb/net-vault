@@ -839,6 +839,25 @@ try {
     # publish a pin the running server does not match.
     Write-Step "Reconciling agent-ingest TLS flags"
     $rootEnvPath = "$AppDir\.env"
+
+    # TLS 1.2 (+1.3 where the framework exposes it), stated EXPLICITLY.
+    #
+    # The parameterless AuthenticateAsClient($host) overload negotiates with
+    # SslProtocols.Default, which on .NET Framework means SSL3 | TLS 1.0. Node 20
+    # refuses both outright, so the handshake fails with "A call to SSPI failed"
+    # against a listener that is working perfectly. The probe then took that
+    # failure as proof of a plaintext listener and wrote *_WS_TLS=0 - so every
+    # NetVault deploy silently told the whole agent fleet to dial ws:// at a
+    # wss:// socket, and no agent could reconnect afterwards. Measured on the
+    # production server 2026-09-01: default protocols failed, TLS 1.2 succeeded
+    # and returned the same fingerprint the SpanVault updater prints.
+    #
+    # The comment below still holds - the socket is a better signal than the cert
+    # file - but only if the probe can actually speak to it.
+    $tlsProtocols = [System.Security.Authentication.SslProtocols]::Tls12
+    if ([System.Security.Authentication.SslProtocols].GetEnumNames() -contains 'Tls13') {
+        $tlsProtocols = $tlsProtocols -bor [System.Security.Authentication.SslProtocols]::Tls13
+    }
     foreach ($m in @(
         @{ App = 'spanvault'; Port = 3010; Tls = 'SPANVAULT_WS_TLS'; Fp = 'SPANVAULT_WS_FINGERPRINT' },
         @{ App = 'ddivault';  Port = 3011; Tls = 'DDIVAULT_WS_TLS';  Fp = 'DDIVAULT_WS_FINGERPRINT'  }
@@ -858,7 +877,7 @@ try {
                 # Accept ANY certificate: this is identification, not validation —
                 # the cert is self-signed by design and we only want its fingerprint.
                 $ssl = New-Object System.Net.Security.SslStream($client.GetStream(), $false, ({ $true } -as [System.Net.Security.RemoteCertificateValidationCallback]))
-                $ssl.AuthenticateAsClient('127.0.0.1')
+                $ssl.AuthenticateAsClient('127.0.0.1', $null, $tlsProtocols, $false)
                 $raw = $ssl.RemoteCertificate.GetRawCertData()
                 $sha = [System.Security.Cryptography.SHA256]::Create()
                 $fp = (($sha.ComputeHash($raw) | ForEach-Object { $_.ToString('X2') }) -join ':')
