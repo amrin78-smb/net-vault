@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.5': [
+    "SECURITY: the machine-level secrets file the installer writes was left readable by any local user on the server. It inherited its permissions from the containing folder and no explicit restriction was ever applied, and it holds the PostgreSQL administrator password, which grants full control over all four suite databases. It is now restricted to SYSTEM and Administrators, matching how the agent TLS private key was already protected.",
+    "SECURITY: every password and secret the installer generates - the database administrator password, the shared sign-in secret used across all four apps, the four per-application database passwords, and the key protecting LogVault's tamper-evident log chain - was produced by a random number generator that is predictable by design and seeded from the time of day. They are now generated from the operating system's cryptographic random source.",
+    "One of those values, in the older single-application installer, was additionally drawn in a way that guaranteed every character in it was different, which reduced the number of possible values considerably. That has been corrected as well.",
+    "The uninstaller stopped every Node.js process running on the machine, not only the suite's own. On a server running any other Node.js application, uninstalling took that application down too, silently. It now identifies its own processes and leaves everything else alone.",
+    "Existing installations keep their current secrets - these changes affect newly generated values only. Rotating the existing ones is a separate operation with its own consequences and has not been done automatically.",
+  ],
   '1.35.4': [
     "Corrects the hardware end-of-support date for 38 Cisco Aironet 2602 access points, from 30 September 2022 to 31 December 2021. The earlier date came from a catalogue entry with no source attached and does not appear anywhere in Cisco's end-of-life bulletin for the series.",
     "Two other catalogue entries covering the same access points already carried the correct date and cited the Cisco bulletin. The incorrect one took precedence because it matched the exact part number while the sourced entries matched the shorter product code.",

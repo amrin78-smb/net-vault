@@ -72,8 +72,32 @@ $PgAdminPassword = Read-Host "Enter PostgreSQL admin (postgres) password" -AsSec
 $PgAdminPasswordPlain = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
     [Runtime.InteropServices.Marshal]::SecureStringToBSTR($PgAdminPassword))
 
-$NextAuthSecret = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 48 | % {[char]$_})
-$CronSecret = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+# Cryptographically secure random bytes. Get-Random is NOT a CSPRNG - it is
+# System.Random, seeded from a time-derived value on PS 5.1 - and these values are
+# the PostgreSQL superuser password, NEXTAUTH_SECRET (which signs every cross-app
+# SSO token and is the KDF input for DDIVault credential encryption), the LogVault
+# tamper-chain HMAC key, and the four per-app DB passwords.
+#
+# PS 5.1 is Windows PowerShell (.NET Framework), so RandomNumberGenerator::GetInt32()
+# and ::Fill() are unavailable - they are .NET Core only. Only the INSTANCE
+# GetBytes([byte[]]) exists, so modulo bias has to be handled by the caller.
+function Get-SecureBytes([int]$count) {
+    $bytes = New-Object byte[] $count
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    return $bytes
+}
+# 32 secure bytes rendered as 64 lowercase hex chars. No bias to handle: each byte
+# maps to exactly two hex digits, consuming its full range.
+function New-HexSecret([int]$bytes = 32) {
+    -join ((Get-SecureBytes $bytes) | ForEach-Object { '{0:x2}' -f $_ })
+}
+# NOTE: the previous NEXTAUTH_SECRET line used `Get-Random -Count 48` over a 62-element
+# set, which shuffles WITHOUT replacement - the 48 characters were guaranteed to be all
+# DIFFERENT, a large and non-obvious reduction in keyspace on top of Get-Random not
+# being a CSPRNG. Both are fixed by drawing bytes and sampling with replacement.
+$NextAuthSecret = New-HexSecret 32
+$CronSecret = New-HexSecret 32
 
 # Detect server IP
 $ServerIP = (Get-NetIPAddress -AddressFamily IPv4 |

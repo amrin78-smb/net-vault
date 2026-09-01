@@ -44,12 +44,52 @@ function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
 function Write-Info($msg) { Write-Host "    [--] $msg" -ForegroundColor Gray }
 
+# Cryptographically secure random bytes. Get-Random is NOT a CSPRNG - it is
+# System.Random, seeded from a time-derived value on PS 5.1 - and these values are
+# the PostgreSQL superuser password, NEXTAUTH_SECRET (which signs every cross-app
+# SSO token and is the KDF input for DDIVault credential encryption), the LogVault
+# tamper-chain HMAC key, and the four per-app DB passwords.
+#
+# PS 5.1 is Windows PowerShell (.NET Framework), so RandomNumberGenerator::GetInt32()
+# and ::Fill() are unavailable - they are .NET Core only. Only the INSTANCE
+# GetBytes([byte[]]) exists, so modulo bias has to be handled by the caller.
+function Get-SecureBytes([int]$count) {
+    $bytes = New-Object byte[] $count
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    return $bytes
+}
+# 32 secure bytes rendered as 64 lowercase hex chars. No bias to handle: each byte
+# maps to exactly two hex digits, consuming its full range.
+function New-HexSecret([int]$bytes = 32) {
+    -join ((Get-SecureBytes $bytes) | ForEach-Object { '{0:x2}' -f $_ })
+}
+
 # Generate a random alphanumeric password. Alphanumeric-only is deliberate: the
 # values go into SQL string literals, a postgresql://user:PASS@host DATABASE_URL,
 # and KEY=VALUE .env files, so they must have no special characters.
+#
+# The alphabet is 57 characters (ambiguity-stripped: no I/O/l/0/1). 256 is not a
+# multiple of 57, so a plain byte % 57 would make the first 28 characters of the
+# alphabet very slightly more likely than the rest. Rejection sampling removes that:
+# 256 - (256 % 57) = 228, so any byte >= 228 is discarded rather than folded.
 function New-Pass([int]$len = 28) {
     $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'.ToCharArray()
-    -join (1..$len | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
+    $n     = $chars.Length
+    $limit = 256 - (256 % $n)
+    $out   = New-Object char[] $len
+    $i     = 0
+    while ($i -lt $len) {
+        # Draw in blocks so a rejected byte costs no extra RNG round-trip.
+        foreach ($b in (Get-SecureBytes ([Math]::Max(32, $len * 2)))) {
+            if ($b -lt $limit) {
+                $out[$i] = $chars[$b % $n]
+                $i++
+                if ($i -ge $len) { break }
+            }
+        }
+    }
+    -join $out
 }
 # Read a single KEY=VALUE from a machine-level secrets file (UTF-8, one per line).
 function Get-EnvVal([string]$file, [string]$key) {
@@ -313,6 +353,16 @@ $secretsContent = @(
 ) -join "`r`n"
 [System.IO.File]::WriteAllText($SecretsFile, $secretsContent + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
 
+# Restrict the secrets file to SYSTEM (the NSSM service account) and Administrators,
+# same idiom as the WS TLS private key above. Without this it inherits ProgramData's
+# ACL, which grants BUILTIN\Users read - verified on the production server 2026-09-01,
+# where POSTGRES_PASSWORD (superuser across all four databases) was readable by any
+# local user. Nothing legitimate is locked out: this file is installer/updater state
+# only and is never read at runtime by an app service - every reader runs elevated or
+# as SYSTEM. /inheritance:r first, so the inherited Users ACE is actually removed and
+# not merely supplemented. Best-effort like the TLS key, so it never fails an install.
+try { & icacls.exe $SecretsFile /inheritance:r /grant '*S-1-5-18:(R)' /grant '*S-1-5-32-544:(F)' | Out-Null } catch {}
+
 # Assign the credential variables everything downstream references (names unchanged).
 $NVDbPass             = $NvPass
 $LVDbPass             = $LvPass
@@ -324,12 +374,15 @@ $DefaultNocRoPassword = $NocRoPass
 # CRON_SECRET authorises NetVault's daily health-snapshot job (Bearer token).
 # Generated once here so .env, standalone .env.local, the NSSM service env and
 # the scheduled task all share the same value.
-$CronSecret   = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+$CronSecret   = New-HexSecret 32
 # LOG_INTEGRITY_KEY keys LogVault's tamper-evident HMAC hash chain (prev_hash/entry_hash
 # on syslog_entries). Generated once so the collector's NSSM env and LogVault .env.local
 # share one value; if it is unset the chain is silently disabled, so fresh installs must
 # set it for the Phase 3 log-integrity feature to work.
-$LogIntegrityKey = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+# NOTE: drawn from a fresh CSPRNG read, not the same stream as $CronSecret above.
+# Under the old Get-Random both came from one time-seeded sequence a few statements
+# apart, so recovering either one materially helped predict the other.
+$LogIntegrityKey = New-HexSecret 32
 
 # ── Auto-detect server IP ─────────────────────────────────────────
 if (-not $ServerIP) {

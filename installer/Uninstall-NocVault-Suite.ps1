@@ -151,9 +151,22 @@ if (-not $KeepDatabases -and -not $PgAdminPassword) {
 # STEP 1 — Stop & delete services
 # ================================================================
 Write-Step "Stopping and removing services"
+# Collect the PIDs belonging to THIS suite BEFORE deleting each service. Once
+# sc.exe delete runs, the service -> PID association is gone and there is no way
+# left to tell our node processes from anyone else's. Each NSSM service hosts a
+# child node.exe, so record both the service process and its children.
+$NocPids = New-Object System.Collections.Generic.List[int]
 foreach ($svc in $Services) {
     $s = Get-Service -Name $svc -ErrorAction SilentlyContinue
     if (-not $s) { continue }
+    try {
+        $wmiSvc = Get-CimInstance Win32_Service -Filter "Name='$svc'" -ErrorAction SilentlyContinue
+        if ($wmiSvc -and $wmiSvc.ProcessId -gt 0) {
+            $NocPids.Add([int]$wmiSvc.ProcessId)
+            Get-CimInstance Win32_Process -Filter "ParentProcessId=$($wmiSvc.ProcessId)" -ErrorAction SilentlyContinue |
+                ForEach-Object { $NocPids.Add([int]$_.ProcessId) }
+        }
+    } catch {}
     if ($s.Status -ne 'Stopped') {
         & sc.exe stop $svc | Out-Null
         Start-Sleep -Seconds 2
@@ -162,12 +175,37 @@ foreach ($svc in $Services) {
     Write-OK "Removed service: $svc"
 }
 
-# Kill any leftover node processes still holding files in the app dirs
-$leftover = Get-Process -Name node -ErrorAction SilentlyContinue
-if ($leftover) {
-    $leftover | Stop-Process -Force -ErrorAction SilentlyContinue
+# Kill leftover node processes still holding files under the install dir, so
+# STEP 6 can remove those directories.
+#
+# This used to be a bare `Get-Process -Name node | Stop-Process -Force`, which
+# killed EVERY node process on the machine - any unrelated Node application on a
+# shared server went down with the uninstall, silently, and the
+# -ErrorAction SilentlyContinue swallowed every failure including attempts to kill
+# other users' processes. Two narrowing signals are used instead, and a process is
+# only killed if it matches one of them:
+#   1. a PID captured from one of OUR services above (exact - no guessing), or
+#   2. a node.exe whose command line points inside $InstallDir (catches anything
+#      orphaned from an earlier run whose service was already gone).
+$targets = @{}
+foreach ($procId in ($NocPids | Sort-Object -Unique)) {
+    $p = Get-Process -Id $procId -ErrorAction SilentlyContinue
+    if ($p -and $p.ProcessName -eq 'node') { $targets[$procId] = $p }
+}
+try {
+    Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+        Where-Object { $_.CommandLine -and $_.CommandLine -like "*$InstallDir*" } |
+        ForEach-Object {
+            $p = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue
+            if ($p) { $targets[[int]$_.ProcessId] = $p }
+        }
+} catch {}
+if ($targets.Count -gt 0) {
+    $targets.Values | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
-    Write-OK "Stopped leftover node processes"
+    Write-OK "Stopped $($targets.Count) leftover NocVault node process(es)"
+} else {
+    Write-OK "No leftover NocVault node processes"
 }
 
 # ================================================================

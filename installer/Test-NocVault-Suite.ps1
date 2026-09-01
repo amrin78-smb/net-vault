@@ -35,6 +35,11 @@
     -ServerIP / -PgPassword   pass inline to avoid prompts
 ================================================================
 #>
+# Requires elevation: this script reads C:\ProgramData\NocVault\secrets.env, which is
+# restricted to SYSTEM + Administrators by the installer. It also queries service state.
+# Without this the script still RUNS unelevated but silently degrades - it cannot read
+# the secrets file and falls through to prompting for the postgres password.
+#Requires -RunAsAdministrator
 [CmdletBinding()]
 param(
     [string]$ServerIP = "",

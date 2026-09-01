@@ -678,7 +678,12 @@ try {
         }
         # Existing installs predate CRON_SECRET - generate one if missing
         if (-not (Select-String -Path "$AppDir\.env" -Pattern "^CRON_SECRET=" -Quiet -ErrorAction SilentlyContinue)) {
-            $CronSecret = -join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+            # CSPRNG, not Get-Random (System.Random, time-seeded) - this value is a
+            # Bearer token authorising NetVault system endpoints.
+            $csBytes = New-Object byte[] 32
+            $csRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+            try { $csRng.GetBytes($csBytes) } finally { $csRng.Dispose() }
+            $CronSecret = -join ($csBytes | ForEach-Object { '{0:x2}' -f $_ })
             Set-EnvVar -Path "$AppDir\.env" -Key 'CRON_SECRET' -Value $CronSecret
             Write-OK "CRON_SECRET generated and added to .env"
         }
