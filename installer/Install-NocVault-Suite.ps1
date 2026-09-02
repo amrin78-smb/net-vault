@@ -486,8 +486,18 @@ Write-Step "Installing Node.js v20.19.0"
 # PowerShell's own command resolution fails first) - wrap in try/catch so a bare
 # machine falls through to the msiexec install below instead of crashing the setup.
 $nodeVer = try { & node --version 2>$null } catch { $null }
-if ($nodeVer -eq 'v20.19.0') {
-    Write-OK "Node.js v20.19.0 already installed"
+
+# Compare as a VERSION, not a string. The old check was $nodeVer -eq 'v20.19.0',
+# so a machine already running a NEWER Node (v20.19.1, v22, anything the customer
+# installed themselves) was treated as "wrong version" and had 20.19.0 reinstalled
+# over the top of it on every run - a silent downgrade of someone else's runtime on
+# a shared server. Accept anything at or above the required version instead, and
+# only install when Node is genuinely absent or genuinely older.
+$nodeRequired = [version]'20.19.0'
+$nodeCurrent  = $null
+if ($nodeVer -match '^v?(\d+\.\d+\.\d+)') { $nodeCurrent = [version]$Matches[1] }
+if ($nodeCurrent -and $nodeCurrent -ge $nodeRequired) {
+    Write-OK "Node.js $nodeVer already installed (>= v$nodeRequired required)"
 } else {
     Start-Process -Wait -FilePath "msiexec.exe" -ArgumentList "/I `"$NodeMsi`" /quiet"
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + $env:PATH

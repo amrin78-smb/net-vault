@@ -138,6 +138,31 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 
 # -- Install directory ---------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+# -- Lock down the agent directory ---------------------------------------------
+#    This directory holds hub-issued secrets: config.json (enrollment +
+#    connection credentials) and hub-identity.json (the hub-signed JWT this
+#    agent authenticates to every app with). Node creates both with a default
+#    ACL inherited from C:, so on a domain-joined box every interactive user
+#    could read the JWT straight off disk and impersonate this agent.
+#
+#    The grant goes on the DIRECTORY with (OI)(CI) so new files INHERIT it -
+#    deliberately not on the files themselves. The agent replaces both files
+#    with a write-to-.tmp + rename (nocvault-agent.js persistConfig, and
+#    core/identity-store.js) whenever hub policy changes the module set or the
+#    JWT rotates, and a renamed-in file carries the DIRECTORY ACL, not whatever
+#    the file it replaced had. A per-file grant would therefore be silently
+#    discarded the first time an admin toggled a module - a fix that reverts
+#    itself, and looks applied right up until it matters.
+#
+#    SYSTEM gets (F), NOT the (R) used for secrets.env in the suite installer:
+#    this is a live working directory the service writes to. Read-only SYSTEM
+#    would break config persistence, identity rotation and self-update outright.
+try {
+  & icacls.exe $InstallDir /inheritance:r /grant '*S-1-5-18:(OI)(CI)(F)' /grant '*S-1-5-32-544:(OI)(CI)(F)' | Out-Null
+} catch {
+  Write-Host "  ! Could not restrict permissions on $InstallDir - secrets may be world-readable." -ForegroundColor Yellow
+}
+
 
 # -- Agent files: fetch the bundle manifest from the hub, then download each file
 #    into $InstallDir (creating parent dirs). Replaces the Phase 1 "pre-staged

@@ -309,11 +309,26 @@ if ($RemoveDependencies) {
     }
 
     # Node.js (MSI)
-    $nodeProduct = Get-CimInstance Win32_Product -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -like "Node.js*" } | Select-Object -First 1
+    #
+    # Read the uninstall registry rather than querying Win32_Product. Enumerating
+    # that WMI class makes the installer service VALIDATE and reconfigure every
+    # installed MSI on the machine - it is slow (minutes on a server with many
+    # products), it writes an MsiInstaller 1035 "reconfigured" event per product,
+    # and on a badly-behaved package it can genuinely change state. Microsoft has
+    # advised against Win32_Product for exactly this reason for years. The registry
+    # holds the same ProductCode with none of that: for an MSI-installed product
+    # the Uninstall subkey name IS the ProductCode GUID msiexec /x needs.
+    #
+    # Both registry views are checked because a 64-bit host can carry a 32-bit MSI.
+    $nodeProduct = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    ) | ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } |
+        Where-Object { $_.DisplayName -like 'Node.js*' -and $_.PSChildName -match '^\{[0-9A-Fa-f-]{36}\}$' } |
+        Select-Object -First 1
     if ($nodeProduct) {
-        Write-Info "Uninstalling Node.js..."
-        Start-Process -Wait -FilePath "msiexec.exe" -ArgumentList "/x", $nodeProduct.IdentifyingNumber, "/quiet", "/norestart"
+        Write-Info "Uninstalling Node.js ($($nodeProduct.DisplayName))..."
+        Start-Process -Wait -FilePath "msiexec.exe" -ArgumentList "/x", $nodeProduct.PSChildName, "/quiet", "/norestart"
         Write-OK "Node.js uninstalled"
     } else {
         Write-Warn "Node.js MSI product not found - skipping"
