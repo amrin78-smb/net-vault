@@ -778,6 +778,32 @@ if ($sent -and $script:DbReady) {
     Wn ("Packet sent but DB unavailable to verify - search LogVault Log Explorer for token " + $token)
 }
 
+# ---- 10a-ii. LogVault: collector heartbeat + listener state ----
+# The collector publishes its own liveness to app_settings.collector_status every
+# 60s, and /api/health reports it. Before that existed the header pill was driven
+# by the health endpoint's status code alone, so it showed a healthy collector
+# whenever the API could answer - including with the collector stopped. Assert the
+# channel actually works on a fresh install, otherwise the indicator silently goes
+# back to being decorative.
+#
+# Read via app_settings_public: the raw table is not readable by the readonly
+# roles (it holds smtp_pass), and collector_status is deliberately on that view.
+if ($script:DbReady) {
+    $hb = Pg "logvault" "SELECT EXTRACT(EPOCH FROM (NOW() - updated_at))::int FROM app_settings_public WHERE key='collector_status';"
+    if ($script:PgExit -eq 0 -and $hb -ne "" -and $null -ne $hb) {
+        if ([int]$hb -le 180) {
+            Ok ("LogVault collector heartbeat is fresh (" + $hb + "s old, stale threshold 180s)")
+            $st = Pg "logvault" "SELECT value FROM app_settings_public WHERE key='collector_status';"
+            if ($st -match '"ok":false') { Wn "  one or more syslog listeners FAILED to bind - traffic to those ports is being discarded by the OS" }
+            else { Inf "  all syslog listeners bound" }
+        } else {
+            Bad ("LogVault collector heartbeat is STALE (" + $hb + "s old) - the collector is not running, or cannot write to app_settings")
+        }
+    } else {
+        Bad "LogVault collector has never written a heartbeat (app_settings.collector_status absent) - the header collector indicator cannot report real state"
+    }
+}
+
 # ---- 10b. SpanVault: ping/SNMP poll heartbeat ----
 Write-Host "  --- SpanVault collector (poll heartbeat) ---" -ForegroundColor DarkGray
 if ($script:DbReady) {

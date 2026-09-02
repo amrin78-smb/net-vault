@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.10': [
+    "The suite installation test now checks that LogVault's collector is publishing its own status, and reports which syslog ports it is listening on. This accompanies the LogVault change that makes its collector indicator reflect the collector rather than the web application; without a check here, a fresh install could silently go back to an indicator that cannot report a real fault.",
+  ],
   '1.35.9': [
     "Fixed: on a machine where an agent is installed, the agent's own folder could be read by any user who could log in to that machine. It holds the credentials the agent enrols with and the signed identity it uses to authenticate to each application, so anyone with an account on that machine could copy them and act as that agent. Access is now restricted to the system account and administrators.",
     "The restriction is applied to the folder rather than to the individual files, on purpose. The agent replaces both files whenever its assigned modules change or its identity is renewed, and a replaced file takes its permissions from the folder it sits in - so restricting only the files would have quietly undone itself the first time an administrator changed a module, while still appearing to have been applied.",
