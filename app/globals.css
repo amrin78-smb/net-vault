@@ -601,9 +601,20 @@ table thead tr th {
 .util-fill { height: 100%; border-radius: var(--radius-pill); transition: width 0.4s ease; }
 
 /* ── Read-only mode (expired license) ──────────────────────── */
-body[data-readonly="true"] .btn-primary,
-body[data-readonly="true"] button[type="submit"],
-body[data-readonly="true"] .btn-danger {
+/* The `.license-action` exemption is LOAD-BEARING, not a style preference.
+   Without it this rule disabled the one button that installs a new licence —
+   `pointer-events: none` on every `.btn-primary` includes "Activate License" —
+   so an expired licence could not be renewed from inside the app at all. The
+   button looked merely greyed out; it was actually unclickable, and nothing in
+   the React markup showed it (the component only sets `disabled` while a
+   request is in flight). The API side was always correct: POST /api/license
+   deliberately does not call `checkWriteAllowed()`, so only the UI was locked.
+
+   Rule for anything added here: a control that is part of RESTORING the licence
+   must carry `.license-action`. Nothing else should. */
+body[data-readonly="true"] .btn-primary:not(.license-action),
+body[data-readonly="true"] button[type="submit"]:not(.license-action),
+body[data-readonly="true"] .btn-danger:not(.license-action) {
   opacity: 0.4;
   pointer-events: none;
   cursor: not-allowed;

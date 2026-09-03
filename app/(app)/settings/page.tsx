@@ -1210,7 +1210,10 @@ export default function SettingsPage() {
                 {licenseActivateMsg.text}
               </div>
             )}
-            <button className="btn-primary" onClick={activateLicense} disabled={activatingLicense}>
+            {/* license-action exempts this button from read-only mode's global
+                pointer-events:none (see globals.css). Without it, an expired
+                licence makes the button that renews the licence unclickable. */}
+            <button className="btn-primary license-action" onClick={activateLicense} disabled={activatingLicense}>
               {activatingLicense ? 'Activating…' : 'Activate License'}
             </button>
           </div>

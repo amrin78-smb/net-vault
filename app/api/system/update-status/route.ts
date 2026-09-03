@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.35.11': [
+    "Fixed: once a licence had fully expired, the Activate License button could not be clicked, so a new licence could not be entered from inside the application. The only way out of an expired licence was blocked by the expiry itself.",
+    "When a licence expires the application switches to read-only mode, which disables every action button so nothing can be changed until it is renewed. That rule was applied to the licence activation button as well, which is the one button that has to keep working. Activation is now exempt.",
+    "The button appeared merely greyed out, but was genuinely unresponsive to clicks. Entering a valid key and pressing it did nothing at all.",
+    "Only the button was affected. The server side always accepted activation while expired, so no licence key was rejected and nothing needs to be re-issued — any key that was pasted and appeared to do nothing can simply be pasted again.",
+  ],
   '1.35.10': [
     "The suite installation test now checks that LogVault's collector is publishing its own status, and reports which syslog ports it is listening on. This accompanies the LogVault change that makes its collector indicator reflect the collector rather than the web application; without a check here, a fresh install could silently go back to an indicator that cannot report a real fault.",
   ],
