@@ -473,10 +473,21 @@ onto `devices` (status-change recommendations are **never** auto-applied — hum
 The seed catalog is fed two ways:
 1. **Bundled baseline** — `lib/eolSeed.ts` (`EOL_SEED`), migrated into `eol_seed` by
    `migrateLegacySeed` in `lib/eolEnrich.ts`. This is the **offline floor**: a fresh /
-   air-gapped install works with NO internet. (949 vendor-confirmed models as of 1.16.0,
-   up from an original 32 — see commit `1d24806`. `lib/eolSeed.ts` is a GENERATED file;
-   regenerate it from the central nocvault-eol seed with `node scripts/gen-eol-seed.cjs`
-   rather than hand-editing.)
+   air-gapped install works with NO internet. (**~7,900 models as of 1.36.1** — 949 as of
+   1.16.0, up from an original 32; see commit `1d24806`. `lib/eolSeed.ts` is a GENERATED
+   file; regenerate it from the central nocvault-eol seed with
+   `node scripts/gen-eol-seed.cjs` rather than hand-editing.)
+
+   **The size of this array is a performance fact, not trivia.** `migrateLegacySeed()`
+   issues up to four sequential statements per entry, and `ensureEolSchema()` — which
+   calls it — is awaited on the request path of all 12 EOL routes. Memoization is
+   per-process, so the first request after any restart pays the whole cost while every
+   other in-flight request blocks on the same promise. At ~7,900 entries that was tens of
+   thousands of round trips and a ~10s stall on the EOL Intelligence page after every
+   deploy (fixed in 1.36.1 with a fast-path guard keyed on `EOL_SEED.length`, recorded in
+   `app_settings.eol_seed_bundled_count`). The stale "949" figure here is part of why the
+   cost was easy to miss. **If you regenerate the seed, the guard re-runs the bootstrap
+   once — that is intended; do not remove the guard to "make it always self-heal".**
 2. **Central signed feed** (live updates) — the **"Sync from EOL feed"** button on the
    EOL Intelligence page → `POST /api/admin/eol-seed/sync` (super_admin) → `lib/eolFeed.ts`
    `syncFromFeed()`. It fetches `${NOCVAULT_EOL_FEED_URL || 'https://nocvault-eol.netlify.app'}/api/v1/feed`
