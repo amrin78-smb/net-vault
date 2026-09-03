@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.36.1': [
+    "Fixed: the EOL Intelligence page sat on Loading for around ten seconds the first time it was opened after any restart or update. On starting up it was re-seeding the bundled catalog of roughly 7,900 models, issuing several database statements for each one - tens of thousands in total - before it would answer anything. That work is a first-install step and almost never changes anything on an established system, so it is now skipped unless the bundled catalog has actually changed.",
+    "Fixed: the Quick EOL lookup returned unrelated hardware. Searching 2900 also matched HPE switches, because it was matching against alternate model names and one of those contains 12900. The lookup now matches on vendor and model only.",
+    "The lookup also now requires every word to match, so Cisco 2900 narrows to Cisco. Previously that search returned nothing at all, because no single field contains the whole phrase.",
+    "The seed catalog search lower down the page is unchanged and still matches alternate names, which is useful when looking for an entry to edit.",
+  ],
   '1.36.0': [
     "The EOL Intelligence page now has a Quick EOL lookup box near the top. Type a model or vendor and it returns the end-of-life and end-of-support dates, matching on model names and known aliases. A search already existed but was near the bottom of the page inside the seed catalog section, where it was easy to miss.",
     "The page also opens considerably faster. It was loading a charting library of roughly 386 KB solely to draw the single circular coverage graphic, which was about eight times the size of the page itself. That graphic is now drawn directly and the library is no longer loaded on this page at all.",

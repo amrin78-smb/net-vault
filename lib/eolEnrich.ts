@@ -153,7 +153,43 @@ async function doEnsureEolSchema(): Promise<EolInitResult> {
  * UI) — but NEVER overwrites a row that already carries a curated date. Re-runs
  * never duplicate.
  */
+// Marker recording which bundled-seed revision has already been applied.
+// Keyed on EOL_SEED.length so a regenerated seed (a different number of models)
+// re-runs the bootstrap exactly once.
+const SEED_MARKER_KEY = 'eol_seed_bundled_count'
+
 async function migrateLegacySeed(): Promise<void> {
+  // ── Fast path ────────────────────────────────────────────────────────────
+  // Seeding the bundled offline floor is a FRESH-INSTALL job. Without this
+  // guard it re-ran on every cold process start, and the cost is not small:
+  // the loop below issues up to four sequential statements per bundled entry,
+  // and EOL_SEED currently carries ~7,900 models — tens of thousands of
+  // round trips. ensureEolSchema() is awaited on the request path of all 12
+  // EOL routes, so the FIRST request after any restart paid the entire bill
+  // while the other five in-flight requests blocked on the same promise.
+  // Measured effect: the EOL Intelligence page sat at "Loading..." for ~10s
+  // after every deploy. The queries themselves were never slow (10-25 ms);
+  // this loop was the whole delay.
+  //
+  // Note almost every entry already no-ops — only 47 of 7,925 live rows are
+  // added_by='system', the rest came from the signed feed — so the loop was
+  // doing ~24,000 round trips to make essentially no changes.
+  //
+  // Re-runs when: the bundled seed changes size (marker mismatch), or the
+  // seed table has been emptied (floor genuinely needs restoring). A purge of
+  // SOME rows is a deliberate admin action and does not re-trigger it.
+  try {
+    const marker = await query(`SELECT value FROM app_settings WHERE key = $1`, [SEED_MARKER_KEY])
+    const seen = marker.rows.length ? parseInt(String(marker.rows[0].value), 10) : -1
+    if (seen === EOL_SEED.length) {
+      const have = await query(`SELECT COUNT(*)::int AS n FROM eol_seed`)
+      if ((have.rows[0]?.n ?? 0) > 0) return
+    }
+  } catch {
+    // app_settings unreadable for any reason — fall through and do the work.
+    // Correctness before speed: a missed bootstrap loses the offline floor.
+  }
+
   for (const entry of EOL_SEED) {
     const rawModel = entry.matches[0] ?? entry.key
     // Prefer the entry's explicit vendor (the regenerated bundled seed carries it,
@@ -236,6 +272,16 @@ async function migrateLegacySeed(): Promise<void> {
       )
     }
   }
+
+  // Record the revision just applied so the next cold start takes the fast path.
+  // Best-effort: if this write fails the only consequence is doing the work again.
+  try {
+    await query(
+      `INSERT INTO app_settings (key, value) VALUES ($1, $2)
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+      [SEED_MARKER_KEY, String(EOL_SEED.length)]
+    )
+  } catch { /* non-fatal */ }
 }
 
 /** Derive a vendor name from the legacy key/raw model. */

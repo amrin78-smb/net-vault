@@ -198,7 +198,7 @@ function QuickEolLookup() {
     setRes(prev => ({ entries: prev?.entries ?? [], total: prev?.total ?? 0, loading: true }))
     const t = setTimeout(async () => {
       const d = await safeJson<{ entries: SeedEntry[]; total: number }>(
-        `/api/admin/eol-seed?search=${encodeURIComponent(term)}&page=1&pageSize=8`
+        `/api/admin/eol-seed?search=${encodeURIComponent(term)}&mode=model&page=1&pageSize=8`
       )
       if (cancelled) return
       setRes({ entries: d?.entries ?? [], total: d?.total ?? 0, loading: false })
@@ -213,7 +213,7 @@ function QuickEolLookup() {
     <div style={cardStyle}>
       <div style={sectionLabel}>Quick EOL lookup</div>
       <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '-8px', marginBottom: '12px' }}>
-        Find the end-of-life and end-of-support dates for a specific model. Searches vendor, model and known aliases.
+        Find the end-of-life and end-of-support dates for a specific model. Matches on vendor and model name; every word must match, so &ldquo;Cisco 2900&rdquo; narrows to Cisco.
       </div>
       <input
         value={q}

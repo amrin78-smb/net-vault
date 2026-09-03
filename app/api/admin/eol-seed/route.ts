@@ -66,20 +66,53 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ groups: groupsRes.rows, total: totalRes.rows[0].total as number })
     }
 
-    // Mode 2: full-text-ish search across vendor/model/aliases (flat)
+    // Mode 2: search (flat).
+    //
+    // Two shapes, because the two callers want different things:
+    //
+    //   default    — vendor + model + ALIASES, single substring. This is the seed
+    //                catalog browser: an admin looking for an entry to edit wants
+    //                alias hits.
+    //   mode=model — vendor + model only, ALIASES EXCLUDED, and every whitespace
+    //                token must match. This is the Quick EOL lookup.
+    //
+    // Aliases are why "2900" returned HPE switches: JG624A carries the alias
+    // "flexfabric1290048p10gbesfpe", and "12900" contains "2900" as a substring.
+    // Substring-matching a concatenated alias blob is far too loose for a
+    // "what is the EOL date for this model" question, so the lookup drops it.
+    //
+    // Token-AND (rather than dropping vendor too) is what keeps "Cisco 2900"
+    // working: 'cisco' matches the vendor, '2900' matches the model, and both
+    // must hold. A single-substring match over vendor+model could not satisfy
+    // that query at all, since no one column contains the whole string.
     const search = (sp.get('search') || '').trim()
     if (search) {
-      const like = `%${search}%`
-      const where = `WHERE (vendor ILIKE $1 OR model_raw ILIKE $1 OR model_normalized ILIKE $1 OR array_to_string(aliases, ' ') ILIKE $1)`
-      const totalRes = await query(`SELECT COUNT(*)::int AS total FROM eol_seed ${where}`, [like])
+      const modelOnly = sp.get('mode') === 'model'
+      let where: string
+      let params: unknown[]
+
+      if (modelOnly) {
+        const tokens = search.split(/\s+/).filter(Boolean).slice(0, 6)
+        const clauses = tokens.map((_t, i) => {
+          const p = i + 1
+          return `(vendor ILIKE $${p} OR model_raw ILIKE $${p} OR model_normalized ILIKE $${p})`
+        })
+        where = `WHERE ${clauses.join(' AND ')}`
+        params = tokens.map(t => `%${t}%`)
+      } else {
+        where = `WHERE (vendor ILIKE $1 OR model_raw ILIKE $1 OR model_normalized ILIKE $1 OR array_to_string(aliases, ' ') ILIKE $1)`
+        params = [`%${search}%`]
+      }
+
+      const totalRes = await query(`SELECT COUNT(*)::int AS total FROM eol_seed ${where}`, params)
       const total = totalRes.rows[0].total as number
       const res = await query(
         `SELECT ${SEED_COLUMNS}
          FROM eol_seed
          ${where}
          ORDER BY vendor, model_raw, id
-         LIMIT $2 OFFSET $3`,
-        [like, pageSize, offset]
+         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, pageSize, offset]
       )
       return NextResponse.json({ entries: res.rows, total, page, pageSize })
     }
