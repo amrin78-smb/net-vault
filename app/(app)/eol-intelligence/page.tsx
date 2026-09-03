@@ -4,7 +4,6 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { PieChart, Pie, Cell } from 'recharts'
 
 // ── API contract types ──────────────────────────────────────────────
 type LatestJob = {
@@ -153,6 +152,113 @@ const sectionLabel: React.CSSProperties = {
   marginBottom: '16px',
   textTransform: 'uppercase',
   letterSpacing: '0.04em',
+}
+
+// Two-segment coverage ring, drawn directly.
+//
+// This replaced a recharts <PieChart>. recharts was imported into this route for
+// exactly this one 120x120 graphic and nothing else, and cost ~386 KB of
+// JavaScript across two chunks — roughly eight times the page's own 49 KB. That
+// download was the main reason the page felt slow to open; the API calls behind
+// it all return in 10-25 ms.
+//
+// Geometry matches the chart it replaces: r=48 with a 16px stroke reproduces the
+// old innerRadius 40 / outerRadius 56, and rotate(-90) reproduces startAngle 90
+// (i.e. begins at twelve o'clock and fills clockwise).
+function CoverageDonut({ dated, total }: { dated: number; total: number }) {
+  const R = 48
+  const CIRC = 2 * Math.PI * R
+  const frac = total > 0 ? Math.min(1, Math.max(0, dated / total)) : 0
+  return (
+    <svg width="120" height="120" viewBox="0 0 120 120" aria-hidden="true">
+      <circle cx="60" cy="60" r={R} fill="none" stroke="var(--border-light)" strokeWidth={16} />
+      {frac > 0 && (
+        <circle cx="60" cy="60" r={R} fill="none" stroke="var(--primary)" strokeWidth={16}
+          strokeDasharray={`${CIRC * frac} ${CIRC}`} transform="rotate(-90 60 60)" />
+      )}
+    </svg>
+  )
+}
+
+// Quick lookup: "what is the EOL date for this model?" — the question this page
+// gets opened for. The seed catalog already had a search box, but it sat at the
+// bottom inside the catalog accordion, so it was effectively undiscoverable.
+// This is deliberately self-contained (its own state, its own fetch) so it does
+// not fight the accordion's search, which drives a different view.
+function QuickEolLookup() {
+  const [q, setQ] = useState('')
+  const [res, setRes] = useState<{ entries: SeedEntry[]; total: number; loading: boolean } | null>(null)
+
+  useEffect(() => {
+    const term = q.trim()
+    // 2 chars minimum: a single character matches most of a 7,900-row catalog
+    // and the result is noise, not an answer.
+    if (term.length < 2) { setRes(null); return }
+    let cancelled = false
+    setRes(prev => ({ entries: prev?.entries ?? [], total: prev?.total ?? 0, loading: true }))
+    const t = setTimeout(async () => {
+      const d = await safeJson<{ entries: SeedEntry[]; total: number }>(
+        `/api/admin/eol-seed?search=${encodeURIComponent(term)}&page=1&pageSize=8`
+      )
+      if (cancelled) return
+      setRes({ entries: d?.entries ?? [], total: d?.total ?? 0, loading: false })
+    }, 300)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [q])
+
+  const th: React.CSSProperties = { textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', padding: '6px 10px', borderBottom: '1px solid var(--border)' }
+  const td: React.CSSProperties = { fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', padding: '7px 10px', borderBottom: '1px solid var(--border-light)' }
+
+  return (
+    <div style={cardStyle}>
+      <div style={sectionLabel}>Quick EOL lookup</div>
+      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '-8px', marginBottom: '12px' }}>
+        Find the end-of-life and end-of-support dates for a specific model. Searches vendor, model and known aliases.
+      </div>
+      <input
+        value={q}
+        onChange={e => setQ(e.target.value)}
+        placeholder="Model or vendor — e.g. C9300-48P, FortiGate 100F, Aruba 2930F"
+        style={{ width: '100%', padding: '10px 14px', fontSize: 'var(--text-md)', borderRadius: 'var(--radius-sm)',
+          border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+      />
+      {res && (
+        <div style={{ marginTop: '12px' }}>
+          {res.loading && res.entries.length === 0 ? (
+            <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', padding: '8px 0' }}>Searching…</div>
+          ) : res.entries.length === 0 ? (
+            <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', padding: '8px 0' }}>
+              No catalog entry matches &ldquo;{q.trim()}&rdquo;. It may not be in the seed catalog yet — try the vendor name alone, or add an entry below.
+            </div>
+          ) : (
+            <>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr><th style={th}>Vendor</th><th style={th}>Model</th><th style={th}>EOL</th><th style={th}>End of support</th><th style={th}>Confidence</th></tr></thead>
+                  <tbody>
+                    {res.entries.map(e => (
+                      <tr key={e.id}>
+                        <td style={td}>{e.vendor}</td>
+                        <td style={{ ...td, color: 'var(--text-primary)', fontWeight: 600 }}>{e.model_raw}</td>
+                        <td style={td}>{fmtDate(e.eol_date)}</td>
+                        <td style={td}>{fmtDate(e.eos_date)}</td>
+                        <td style={td}><ConfidenceBadge value={e.confidence} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '8px' }}>
+                {res.total > res.entries.length
+                  ? `Showing ${res.entries.length} of ${res.total.toLocaleString()} matches — refine the search or use the seed catalog below.`
+                  : `${res.total.toLocaleString()} match${res.total === 1 ? '' : 'es'}.`}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function ConfidenceBadge({ value }: { value: string }) {
@@ -841,6 +947,12 @@ export default function EolIntelligencePage() {
         )}
       </div>
 
+      {/* ── 1.2 QUICK EOL LOOKUP ───────────────────────────────────── */}
+      {/* Placed high on purpose: "what is the EOL date for this model" is the
+          question this page is opened for, and the seed catalog search that
+          answered it sat ~400 lines further down, inside an accordion. */}
+      <QuickEolLookup />
+
       {/* ── 1.5 EOL COVERAGE ───────────────────────────────────────── */}
       <div style={cardStyle}>
         <div style={{ ...sectionLabel, marginBottom: '4px' }}>EOL coverage</div>
@@ -868,16 +980,7 @@ export default function EolIntelligencePage() {
                   <div style={subTitle}>Inventory coverage</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <div style={{ position: 'relative', width: '120px', height: '120px', flex: '0 0 auto' }}>
-                      <PieChart width={120} height={120}>
-                        <Pie
-                          data={[{ name: 'Dated', value: inv.dated }, { name: 'Dateless', value: inv.dateless }]}
-                          dataKey="value" cx="50%" cy="50%" innerRadius={40} outerRadius={56}
-                          startAngle={90} endAngle={-270} stroke="none" isAnimationActive={false}
-                        >
-                          <Cell fill="var(--primary)" />
-                          <Cell fill="var(--border-light)" />
-                        </Pie>
-                      </PieChart>
+                      <CoverageDonut dated={inv.dated} total={inv.total} />
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
                         <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1 }}>{pct}%</div>
                         <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>covered</div>

@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.36.0': [
+    "The EOL Intelligence page now has a Quick EOL lookup box near the top. Type a model or vendor and it returns the end-of-life and end-of-support dates, matching on model names and known aliases. A search already existed but was near the bottom of the page inside the seed catalog section, where it was easy to miss.",
+    "The page also opens considerably faster. It was loading a charting library of roughly 386 KB solely to draw the single circular coverage graphic, which was about eight times the size of the page itself. That graphic is now drawn directly and the library is no longer loaded on this page at all.",
+    "The delay was never the data. Every query behind this page returns in between ten and twenty-five milliseconds; the wait was almost entirely the browser downloading and starting that library.",
+    "The coverage graphic is unchanged visually - same size, same proportions, same colours.",
+  ],
   '1.35.11': [
     "Fixed: once a licence had fully expired, the Activate License button could not be clicked, so a new licence could not be entered from inside the application. The only way out of an expired licence was blocked by the expiry itself.",
     "When a licence expires the application switches to read-only mode, which disables every action button so nothing can be changed until it is renewed. That rule was applied to the licence activation button as well, which is the one button that has to keep working. Activation is now exempt.",
