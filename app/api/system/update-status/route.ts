@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.38.1': [
+    'Refreshed the app logos across the suite. The marks are redrawn as solid shapes instead of thin outlines - the old ones were 1.5-2.5px strokes that thinned out and lost definition at the size the header actually renders them. Colours are unchanged, and every place a mark appears (header, launcher tiles, suite-health pills, login screen) now uses the same drawing.',
+  ],
   '1.38.0': [
     'The Circuits export now offers Excel (.xlsx) as well as CSV. The Export button opens a short menu to choose between them.',
     'In the Excel file the monthly cost is a real number rather than text, so totals and filters work on it directly, and the columns are sized to their contents. There is also no question of commas inside addresses or comments splitting across cells, which is a genuine consideration here - most circuits have a comma somewhere in those fields.',

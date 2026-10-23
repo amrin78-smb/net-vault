@@ -427,14 +427,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }}>
           {/* Logo + tagline — single-line wordmark, divider, inline tagline (suite pattern) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 185 46" height="44" style={{ display: 'block' }}>
-              <line x1="19" y1="5" x2="4" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="19" y1="5" x2="34" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="4" y1="37" x2="34" y2="37" stroke="#C8102E" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="19" cy="5" r="3" fill="#C8102E"/>
-              <circle cx="4" cy="37" r="3" fill="#C8102E"/>
-              <circle cx="34" cy="37" r="3" fill="#C8102E"/>
-              <text x="50" y="32" fontSize="26" fontWeight="700" letterSpacing="-0.3" fontFamily="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 46" height="44" style={{ display: 'block' }}>
+              {/* Rack stack under a magnifier (asset discovery). The lens clearance
+                  is a MASK, not a shell-coloured disc — a navy-filled knock-out is
+                  cheaper and silently wrong on any other ground (login gradient,
+                  PDF cover). Flat fills, no gradient: the shell is dark in both
+                  themes. Keep in sync with /netvault-logo.svg. */}
+              <defs>
+                <mask id="nv-hdr-lens">
+                  <rect x="0" y="0" width="200" height="46" fill="#fff"/>
+                  <circle cx="27.5" cy="28.5" r="11.2" fill="#000"/>
+                </mask>
+              </defs>
+              <g fill="#C8102E" mask="url(#nv-hdr-lens)">
+                <rect x="3" y="7" width="30" height="8.5" rx="2.5"/>
+                <rect x="3" y="18" width="30" height="8.5" rx="2.5" opacity="0.82"/>
+                <rect x="3" y="29" width="30" height="8.5" rx="2.5" opacity="0.64"/>
+              </g>
+              <g fill="#ffffff" mask="url(#nv-hdr-lens)">
+                <circle cx="8.5" cy="11.25" r="1.5"/>
+                <circle cx="8.5" cy="22.25" r="1.5" opacity="0.9"/>
+                <circle cx="8.5" cy="33.25" r="1.5" opacity="0.8"/>
+              </g>
+              <circle cx="27.5" cy="28.5" r="8.2" fill="none" stroke="#C8102E" strokeWidth="3"/>
+              <line x1="33.6" y1="34.6" x2="38.6" y2="39.6" stroke="#C8102E" strokeWidth="3.2" strokeLinecap="round"/>
+              <text x="52" y="32" fontSize="26" fontWeight="700" letterSpacing="-0.3" fontFamily="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">
                 <tspan fill="#ffffff">Net</tspan>
                 <tspan fill="#C8102E">Vault</tspan>
               </text>

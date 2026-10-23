@@ -1,4 +1,27 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 190 46">
-  <line x1="19" y1="4" x2="4" y2="36" stroke="#C8102E" stroke-width="2" stroke-linecap="round"/><line x1="19" y1="4" x2="34" y2="36" stroke="#C8102E" stroke-width="2" stroke-linecap="round"/><line x1="4" y1="36" x2="34" y2="36" stroke="#C8102E" stroke-width="2" stroke-linecap="round"/><circle cx="19" cy="4" r="3" fill="#C8102E"/><circle cx="4" cy="36" r="3" fill="#C8102E"/><circle cx="34" cy="36" r="3" fill="#C8102E"/>
-  <text x="50" y="30" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Net</tspan><tspan fill="#C8102E">Vault</tspan></text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 46" role="img" aria-label="NetVault">
+  <!-- Mark: a three-unit rack stack under a magnifier (asset discovery).
+       The magnifier's clearance is a MASK, not a navy-filled disc: painting
+       the knock-out in the shell colour is a pixel cheaper and silently wrong
+       the moment the mark sits on anything that is not that flat fill - a
+       login gradient, a PDF cover, a customer slide. Same rule as SecVault's
+       BrandMark. Flat fills, no gradient, for the same reason. -->
+  <defs>
+    <mask id="nv-lens-clear">
+      <rect x="0" y="0" width="200" height="46" fill="#fff"/>
+      <circle cx="27.5" cy="28.5" r="11.2" fill="#000"/>
+    </mask>
+  </defs>
+  <g fill="#C8102E" mask="url(#nv-lens-clear)">
+    <rect x="3" y="7"  width="30" height="8.5" rx="2.5"/>
+    <rect x="3" y="18" width="30" height="8.5" rx="2.5" opacity="0.82"/>
+    <rect x="3" y="29" width="30" height="8.5" rx="2.5" opacity="0.64"/>
+  </g>
+  <g fill="#ffffff" mask="url(#nv-lens-clear)">
+    <circle cx="8.5" cy="11.25" r="1.5"/>
+    <circle cx="8.5" cy="22.25" r="1.5" opacity="0.9"/>
+    <circle cx="8.5" cy="33.25" r="1.5" opacity="0.8"/>
+  </g>
+  <circle cx="27.5" cy="28.5" r="8.2" fill="none" stroke="#C8102E" stroke-width="3"/>
+  <line x1="33.6" y1="34.6" x2="38.6" y2="39.6" stroke="#C8102E" stroke-width="3.2" stroke-linecap="round"/>
+  <text x="52" y="30" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Net</tspan><tspan fill="#C8102E">Vault</tspan></text>
 </svg>

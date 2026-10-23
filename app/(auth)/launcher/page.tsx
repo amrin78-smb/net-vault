@@ -91,37 +91,65 @@ function AppIcon({ name }: { name: string }) {
   switch (name) {
     case 'NetVault':
       return (
-        <svg viewBox="0 0 38 42" width="20" height="22" style={{ flexShrink: 0 }}>
-          <line x1="19" y1="4" x2="4" y2="36" stroke="#C8102E" strokeWidth="2.5" strokeLinecap="round" />
-          <line x1="19" y1="4" x2="34" y2="36" stroke="#C8102E" strokeWidth="2.5" strokeLinecap="round" />
-          <line x1="4" y1="36" x2="34" y2="36" stroke="#C8102E" strokeWidth="2.5" strokeLinecap="round" />
-          <circle cx="19" cy="4" r="3" fill="#C8102E" />
-          <circle cx="4" cy="36" r="3" fill="#C8102E" />
-          <circle cx="34" cy="36" r="3" fill="#C8102E" />
+        <svg viewBox="0 0 42 42" width="22" height="22" style={{ flexShrink: 0 }}>
+          {/* Lens clearance is a mask, never a shell-coloured disc. */}
+          <defs>
+            <mask id="nv-pill-lens">
+              <rect x="0" y="0" width="42" height="42" fill="#fff" />
+              <circle cx="29" cy="30" r="11" fill="#000" />
+            </mask>
+          </defs>
+          <g fill="#C8102E" mask="url(#nv-pill-lens)">
+            <rect x="3" y="5" width="30" height="8.5" rx="2.5" />
+            <rect x="3" y="16.5" width="30" height="8.5" rx="2.5" opacity="0.82" />
+            <rect x="3" y="28" width="30" height="8.5" rx="2.5" opacity="0.64" />
+          </g>
+          <circle cx="29" cy="30" r="8" fill="none" stroke="#C8102E" strokeWidth="3" />
+          <line x1="34.8" y1="35.8" x2="39.4" y2="40.4" stroke="#C8102E" strokeWidth="3.2" strokeLinecap="round" />
         </svg>
       )
     case 'LogVault':
       return (
-        <svg viewBox="0 0 32 46" width="16" height="22" style={{ flexShrink: 0 }}>
-          <rect x="2" y="6" width="3" height="34" rx="1.5" fill="#2563eb" />
-          <rect x="9" y="7" width="20" height="3" rx="1.5" fill="#2563eb" />
-          <rect x="9" y="15" width="14" height="3" rx="1.5" fill="#2563eb" opacity="0.7" />
-          <rect x="9" y="23" width="18" height="3" rx="1.5" fill="#2563eb" opacity="0.85" />
-          <rect x="9" y="31" width="10" height="3" rx="1.5" fill="#2563eb" opacity="0.6" />
+        <svg viewBox="0 0 48 46" width="23" height="22" style={{ flexShrink: 0 }}>
+          <g fill="#2563eb">
+            <path d="M18 5 L34 12 L18 19 L2 12 Z" />
+            <path d="M18 17 L34 24 L18 31 L2 24 Z" opacity="0.8" />
+            <path d="M18 29 L34 36 L18 43 L2 36 Z" opacity="0.6" />
+          </g>
+          <g fill="#2563eb">
+            <rect x="37" y="9" width="4" height="4" rx="1" />
+            <rect x="43" y="15" width="3" height="3" rx="0.8" opacity="0.75" />
+            <rect x="37" y="21" width="4" height="4" rx="1" opacity="0.85" />
+            <rect x="44" y="27" width="3" height="3" rx="0.8" opacity="0.6" />
+            <rect x="37" y="32" width="4" height="4" rx="1" opacity="0.7" />
+          </g>
         </svg>
       )
     case 'DDIVault':
       return (
-        <svg viewBox="0 0 38 44" width="20" height="22" style={{ flexShrink: 0 }}>
-          <circle cx="19" cy="22" r="15" fill="none" stroke="#d97706" strokeWidth="2" />
-          <ellipse cx="19" cy="22" rx="7" ry="15" fill="none" stroke="#d97706" strokeWidth="1.5" />
-          <line x1="4" y1="22" x2="34" y2="22" stroke="#d97706" strokeWidth="1.5" />
+        <svg viewBox="0 0 40 44" width="20" height="22" style={{ flexShrink: 0 }}>
+          <g fill="none" stroke="#d97706" strokeWidth="2.4">
+            <circle cx="20" cy="22" r="16" />
+            <ellipse cx="20" cy="22" rx="7.5" ry="16" />
+          </g>
+          <line x1="4" y1="22" x2="36" y2="22" stroke="#d97706" strokeWidth="2.4" />
+          <g fill="#d97706">
+            <circle cx="20" cy="6" r="3.6" />
+            <circle cx="6.1" cy="30" r="3.6" />
+            <circle cx="33.9" cy="30" r="3.6" />
+          </g>
         </svg>
       )
     case 'SpanVault':
       return (
-        <svg viewBox="0 0 40 46" width="22" height="22" style={{ flexShrink: 0 }}>
-          <path d="M1,23 L7,23 L11,8 L16,38 L21,8 L26,38 L30,23 L38,23" fill="none" stroke="#16a34a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        <svg viewBox="0 0 41 46" width="20" height="22" style={{ flexShrink: 0 }}>
+          <g fill="#16a34a">
+            <rect x="2" y="18" width="5" height="10" rx="2.5" opacity="0.55" />
+            <rect x="10" y="12" width="5" height="22" rx="2.5" opacity="0.75" />
+            <rect x="18" y="4" width="5" height="38" rx="2.5" />
+            <rect x="26" y="10" width="5" height="26" rx="2.5" opacity="0.85" />
+            <rect x="34" y="16" width="5" height="14" rx="2.5" opacity="0.65" />
+          </g>
         </svg>
       )
     default:
