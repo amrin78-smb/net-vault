@@ -1,27 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 46" role="img" aria-label="NetVault">
-  <!-- Mark: a three-unit rack stack under a magnifier (asset discovery).
-       The magnifier's clearance is a MASK, not a navy-filled disc: painting
-       the knock-out in the shell colour is a pixel cheaper and silently wrong
-       the moment the mark sits on anything that is not that flat fill - a
-       login gradient, a PDF cover, a customer slide. Same rule as SecVault's
-       BrandMark. Flat fills, no gradient, for the same reason. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 206 46" role="img" aria-label="NetVault">
   <defs>
-    <mask id="nv-lens-clear">
-      <rect x="0" y="0" width="200" height="46" fill="#fff"/>
-      <circle cx="27.5" cy="28.5" r="11.2" fill="#000"/>
+    <linearGradient id="nvFace" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FF7187"/><stop offset="55%" stop-color="#D4162F"/><stop offset="100%" stop-color="#8E0A20"/>
+    </linearGradient>
+    <linearGradient id="nvEdge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.34"/><stop offset="45%" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="nvLens">
+      <rect x="0" y="0" width="206" height="46" fill="#fff"/>
+      <circle cx="30" cy="31" r="11.6" fill="#000"/>
     </mask>
   </defs>
-  <g fill="#C8102E" mask="url(#nv-lens-clear)">
-    <rect x="3" y="7"  width="30" height="8.5" rx="2.5"/>
-    <rect x="3" y="18" width="30" height="8.5" rx="2.5" opacity="0.82"/>
-    <rect x="3" y="29" width="30" height="8.5" rx="2.5" opacity="0.64"/>
+  <!-- three rack units: flat faces with bay LEDs, not isometric slabs, so this
+       cannot be mistaken for LogVault's data stack -->
+  <g mask="url(#nvLens)">
+    <g>
+      <rect x="3" y="5"  width="31" height="9.4" rx="2.4" fill="url(#nvFace)"/>
+      <rect x="3" y="5"  width="31" height="9.4" rx="2.4" fill="url(#nvEdge)"/>
+      <rect x="3" y="17.3" width="31" height="9.4" rx="2.4" fill="url(#nvFace)" opacity="0.88"/>
+      <rect x="3" y="17.3" width="31" height="9.4" rx="2.4" fill="url(#nvEdge)"/>
+      <rect x="3" y="29.6" width="31" height="9.4" rx="2.4" fill="url(#nvFace)" opacity="0.74"/>
+      <rect x="3" y="29.6" width="31" height="9.4" rx="2.4" fill="url(#nvEdge)"/>
+    </g>
+    <g fill="#FFD2D9">
+      <circle cx="8.4" cy="9.7"  r="1.5"/><rect x="12.5" y="8.8" width="9" height="1.8" rx="0.9" opacity="0.5"/>
+      <circle cx="8.4" cy="22"   r="1.5" opacity="0.9"/><rect x="12.5" y="21.1" width="9" height="1.8" rx="0.9" opacity="0.42"/>
+      <circle cx="8.4" cy="34.3" r="1.5" opacity="0.8"/><rect x="12.5" y="33.4" width="9" height="1.8" rx="0.9" opacity="0.34"/>
+    </g>
   </g>
-  <g fill="#ffffff" mask="url(#nv-lens-clear)">
-    <circle cx="8.5" cy="11.25" r="1.5"/>
-    <circle cx="8.5" cy="22.25" r="1.5" opacity="0.9"/>
-    <circle cx="8.5" cy="33.25" r="1.5" opacity="0.8"/>
-  </g>
-  <circle cx="27.5" cy="28.5" r="8.2" fill="none" stroke="#C8102E" stroke-width="3"/>
-  <line x1="33.6" y1="34.6" x2="38.6" y2="39.6" stroke="#C8102E" stroke-width="3.2" stroke-linecap="round"/>
-  <text x="52" y="30" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Net</tspan><tspan fill="#C8102E">Vault</tspan></text>
+  <circle cx="30" cy="31" r="8.6" fill="#8E0A20" fill-opacity="0.22"/>
+  <circle cx="30" cy="31" r="8.6" fill="none" stroke="#FF7187" stroke-width="3.1"/>
+  <line x1="36.2" y1="37.2" x2="41.4" y2="42.4" stroke="#FF7187" stroke-width="3.4" stroke-linecap="round"/>
+  <text x="54" y="30" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Net</tspan><tspan fill="#C8102E">Vault</tspan></text>
 </svg>

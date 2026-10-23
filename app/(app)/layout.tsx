@@ -427,30 +427,38 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       }}>
           {/* Logo + tagline — single-line wordmark, divider, inline tagline (suite pattern) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 46" height="44" style={{ display: 'block' }}>
-              {/* Rack stack under a magnifier (asset discovery). The lens clearance
-                  is a MASK, not a shell-coloured disc — a navy-filled knock-out is
-                  cheaper and silently wrong on any other ground (login gradient,
-                  PDF cover). Flat fills, no gradient: the shell is dark in both
-                  themes. Keep in sync with /netvault-logo.svg. */}
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 206 46" height="44" style={{ display: 'block' }}>
               <defs>
-                <mask id="nv-hdr-lens">
-                  <rect x="0" y="0" width="200" height="46" fill="#fff"/>
-                  <circle cx="27.5" cy="28.5" r="11.2" fill="#000"/>
-                </mask>
+              <linearGradient id="nv-hdr-nvFace" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#FF7187"/><stop offset="55%" stopColor="#D4162F"/><stop offset="100%" stopColor="#8E0A20"/>
+              </linearGradient>
+              <linearGradient id="nv-hdr-nvEdge" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.34"/><stop offset="45%" stopColor="#ffffff" stopOpacity="0"/>
+              </linearGradient>
+              <mask id="nv-hdr-nvLens">
+              <rect x="0" y="0" width="206" height="46" fill="#fff"/>
+              <circle cx="30" cy="31" r="11.6" fill="#000"/>
+              </mask>
               </defs>
-              <g fill="#C8102E" mask="url(#nv-hdr-lens)">
-                <rect x="3" y="7" width="30" height="8.5" rx="2.5"/>
-                <rect x="3" y="18" width="30" height="8.5" rx="2.5" opacity="0.82"/>
-                <rect x="3" y="29" width="30" height="8.5" rx="2.5" opacity="0.64"/>
+              {/* three rack units: flat faces with bay LEDs, not isometric slabs, so this cannot be mistaken for LogVault's data stack */}
+              <g mask="url(#nv-hdr-nvLens)">
+              <g>
+              <rect x="3" y="5"  width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvFace)"/>
+              <rect x="3" y="5"  width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvEdge)"/>
+              <rect x="3" y="17.3" width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvFace)" opacity="0.88"/>
+              <rect x="3" y="17.3" width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvEdge)"/>
+              <rect x="3" y="29.6" width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvFace)" opacity="0.74"/>
+              <rect x="3" y="29.6" width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvEdge)"/>
               </g>
-              <g fill="#ffffff" mask="url(#nv-hdr-lens)">
-                <circle cx="8.5" cy="11.25" r="1.5"/>
-                <circle cx="8.5" cy="22.25" r="1.5" opacity="0.9"/>
-                <circle cx="8.5" cy="33.25" r="1.5" opacity="0.8"/>
+              <g fill="#FFD2D9">
+              <circle cx="8.4" cy="9.7"  r="1.5"/><rect x="12.5" y="8.8" width="9" height="1.8" rx="0.9" opacity="0.5"/>
+              <circle cx="8.4" cy="22"   r="1.5" opacity="0.9"/><rect x="12.5" y="21.1" width="9" height="1.8" rx="0.9" opacity="0.42"/>
+              <circle cx="8.4" cy="34.3" r="1.5" opacity="0.8"/><rect x="12.5" y="33.4" width="9" height="1.8" rx="0.9" opacity="0.34"/>
               </g>
-              <circle cx="27.5" cy="28.5" r="8.2" fill="none" stroke="#C8102E" strokeWidth="3"/>
-              <line x1="33.6" y1="34.6" x2="38.6" y2="39.6" stroke="#C8102E" strokeWidth="3.2" strokeLinecap="round"/>
+              </g>
+              <circle cx="30" cy="31" r="8.6" fill="#8E0A20" fillOpacity="0.22"/>
+              <circle cx="30" cy="31" r="8.6" fill="none" stroke="#FF7187" strokeWidth="3.1"/>
+              <line x1="36.2" y1="37.2" x2="41.4" y2="42.4" stroke="#FF7187" strokeWidth="3.4" strokeLinecap="round"/>
               <text x="52" y="32" fontSize="26" fontWeight="700" letterSpacing="-0.3" fontFamily="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">
                 <tspan fill="#ffffff">Net</tspan>
                 <tspan fill="#C8102E">Vault</tspan>

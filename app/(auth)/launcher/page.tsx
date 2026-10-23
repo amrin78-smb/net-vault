@@ -91,64 +91,122 @@ function AppIcon({ name }: { name: string }) {
   switch (name) {
     case 'NetVault':
       return (
-        <svg viewBox="0 0 42 42" width="22" height="22" style={{ flexShrink: 0 }}>
-          {/* Lens clearance is a mask, never a shell-coloured disc. */}
+        <svg viewBox="0 0 46 46" width="22" height="22" style={{ flexShrink: 0 }}>
           <defs>
-            <mask id="nv-pill-lens">
-              <rect x="0" y="0" width="42" height="42" fill="#fff" />
-              <circle cx="29" cy="30" r="11" fill="#000" />
-            </mask>
+          <linearGradient id="pill-net-nvFace" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#FF7187"/><stop offset="55%" stopColor="#D4162F"/><stop offset="100%" stopColor="#8E0A20"/>
+          </linearGradient>
+          <linearGradient id="pill-net-nvEdge" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.34"/><stop offset="45%" stopColor="#ffffff" stopOpacity="0"/>
+          </linearGradient>
+          <mask id="pill-net-nvLens">
+          <rect x="0" y="0" width="206" height="46" fill="#fff"/>
+          <circle cx="30" cy="31" r="11.6" fill="#000"/>
+          </mask>
           </defs>
-          <g fill="#C8102E" mask="url(#nv-pill-lens)">
-            <rect x="3" y="5" width="30" height="8.5" rx="2.5" />
-            <rect x="3" y="16.5" width="30" height="8.5" rx="2.5" opacity="0.82" />
-            <rect x="3" y="28" width="30" height="8.5" rx="2.5" opacity="0.64" />
+          {/* three rack units: flat faces with bay LEDs, not isometric slabs, so this cannot be mistaken for LogVault's data stack */}
+          <g mask="url(#pill-net-nvLens)">
+          <g>
+          <rect x="3" y="5"  width="31" height="9.4" rx="2.4" fill="url(#pill-net-nvFace)"/>
+          <rect x="3" y="5"  width="31" height="9.4" rx="2.4" fill="url(#pill-net-nvEdge)"/>
+          <rect x="3" y="17.3" width="31" height="9.4" rx="2.4" fill="url(#pill-net-nvFace)" opacity="0.88"/>
+          <rect x="3" y="17.3" width="31" height="9.4" rx="2.4" fill="url(#pill-net-nvEdge)"/>
+          <rect x="3" y="29.6" width="31" height="9.4" rx="2.4" fill="url(#pill-net-nvFace)" opacity="0.74"/>
+          <rect x="3" y="29.6" width="31" height="9.4" rx="2.4" fill="url(#pill-net-nvEdge)"/>
           </g>
-          <circle cx="29" cy="30" r="8" fill="none" stroke="#C8102E" strokeWidth="3" />
-          <line x1="34.8" y1="35.8" x2="39.4" y2="40.4" stroke="#C8102E" strokeWidth="3.2" strokeLinecap="round" />
+          <g fill="#FFD2D9">
+          <circle cx="8.4" cy="9.7"  r="1.5"/><rect x="12.5" y="8.8" width="9" height="1.8" rx="0.9" opacity="0.5"/>
+          <circle cx="8.4" cy="22"   r="1.5" opacity="0.9"/><rect x="12.5" y="21.1" width="9" height="1.8" rx="0.9" opacity="0.42"/>
+          <circle cx="8.4" cy="34.3" r="1.5" opacity="0.8"/><rect x="12.5" y="33.4" width="9" height="1.8" rx="0.9" opacity="0.34"/>
+          </g>
+          </g>
+          <circle cx="30" cy="31" r="8.6" fill="#8E0A20" fillOpacity="0.22"/>
+          <circle cx="30" cy="31" r="8.6" fill="none" stroke="#FF7187" strokeWidth="3.1"/>
+          <line x1="36.2" y1="37.2" x2="41.4" y2="42.4" stroke="#FF7187" strokeWidth="3.4" strokeLinecap="round"/>
         </svg>
       )
     case 'LogVault':
       return (
-        <svg viewBox="0 0 48 46" width="23" height="22" style={{ flexShrink: 0 }}>
-          <g fill="#2563eb">
-            <path d="M18 5 L34 12 L18 19 L2 12 Z" />
-            <path d="M18 17 L34 24 L18 31 L2 24 Z" opacity="0.8" />
-            <path d="M18 29 L34 36 L18 43 L2 36 Z" opacity="0.6" />
+        <svg viewBox="0 0 52 46" width="25" height="22" style={{ flexShrink: 0 }}>
+          <defs>
+          <linearGradient id="pill-log-lvTop" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#7FB2FF"/><stop offset="100%" stopColor="#2563eb"/>
+          </linearGradient>
+          <linearGradient id="pill-log-lvSide" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#2E6BEE"/><stop offset="100%" stopColor="#143F91"/>
+          </linearGradient>
+          </defs>
+          <g>
+          <path d="M20 29 L35 36.2 L20 43.4 L5 36.2 Z" fill="url(#pill-log-lvTop)" opacity="0.62"/>
+          <path d="M5 36.2 L20 43.4 L20 40.2 L5 33 Z" fill="url(#pill-log-lvSide)" opacity="0.62"/>
+          <path d="M35 36.2 L20 43.4 L20 40.2 L35 33 Z" fill="url(#pill-log-lvSide)" opacity="0.45"/>
+          <path d="M20 17 L35 24.2 L20 31.4 L5 24.2 Z" fill="url(#pill-log-lvTop)" opacity="0.82"/>
+          <path d="M5 24.2 L20 31.4 L20 28.2 L5 21 Z" fill="url(#pill-log-lvSide)" opacity="0.82"/>
+          <path d="M35 24.2 L20 31.4 L20 28.2 L35 21 Z" fill="url(#pill-log-lvSide)" opacity="0.6"/>
+          <path d="M20 5 L35 12.2 L20 19.4 L5 12.2 Z" fill="url(#pill-log-lvTop)"/>
+          <path d="M5 12.2 L20 19.4 L20 16.2 L5 9 Z" fill="url(#pill-log-lvSide)"/>
+          <path d="M35 12.2 L20 19.4 L20 16.2 L35 9 Z" fill="url(#pill-log-lvSide)" opacity="0.75"/>
+          <path d="M20 5 L35 12.2 L20 19.4 L5 12.2 Z" fill="none" stroke="#BBD5FF" strokeOpacity="0.55" strokeWidth="0.8"/>
           </g>
-          <g fill="#2563eb">
-            <rect x="37" y="9" width="4" height="4" rx="1" />
-            <rect x="43" y="15" width="3" height="3" rx="0.8" opacity="0.75" />
-            <rect x="37" y="21" width="4" height="4" rx="1" opacity="0.85" />
-            <rect x="44" y="27" width="3" height="3" rx="0.8" opacity="0.6" />
-            <rect x="37" y="32" width="4" height="4" rx="1" opacity="0.7" />
+          <g fill="#5A9BFF">
+          <rect x="38.5" y="7"  width="4.6" height="4.6" rx="1.1"/>
+          <rect x="45.5" y="12" width="3.4" height="3.4" rx="0.9" opacity="0.8"/>
+          <rect x="38.5" y="17" width="4"   height="4"   rx="1"   opacity="0.9"/>
+          <rect x="46.5" y="22" width="3"   height="3"   rx="0.8" opacity="0.62"/>
+          <rect x="39"   y="26" width="3.4" height="3.4" rx="0.9" opacity="0.72"/>
+          <rect x="45"   y="31" width="2.6" height="2.6" rx="0.7" opacity="0.5"/>
           </g>
         </svg>
       )
     case 'DDIVault':
       return (
-        <svg viewBox="0 0 40 44" width="20" height="22" style={{ flexShrink: 0 }}>
-          <g fill="none" stroke="#d97706" strokeWidth="2.4">
-            <circle cx="20" cy="22" r="16" />
-            <ellipse cx="20" cy="22" rx="7.5" ry="16" />
+        <svg viewBox="0 0 44 46" width="21" height="22" style={{ flexShrink: 0 }}>
+          <defs>
+          <radialGradient id="pill-ddi-ddiSphere" cx="36%" cy="28%" r="80%">
+          <stop offset="0%"   stopColor="#FFC266"/>
+          <stop offset="45%"  stopColor="#EE8B0B"/>
+          <stop offset="100%" stopColor="#9A4E02"/>
+          </radialGradient>
+          <linearGradient id="pill-ddi-ddiSheen" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%"  stopColor="#ffffff" stopOpacity="0.40"/>
+          <stop offset="60%" stopColor="#ffffff" stopOpacity="0"/>
+          </linearGradient>
+          </defs>
+          <circle cx="22" cy="23" r="15" fill="url(#pill-ddi-ddiSphere)"/>
+          <ellipse cx="22" cy="16" rx="11.5" ry="6.5" fill="url(#pill-ddi-ddiSheen)"/>
+          <g fill="none" stroke="#FFD9A3" strokeWidth="1.7" strokeOpacity="0.95">
+          <ellipse cx="22" cy="23" rx="19" ry="8" transform="rotate(-24 22 23)"/>
+          <ellipse cx="22" cy="23" rx="19" ry="8" transform="rotate(36 22 23)"/>
           </g>
-          <line x1="4" y1="22" x2="36" y2="22" stroke="#d97706" strokeWidth="2.4" />
-          <g fill="#d97706">
-            <circle cx="20" cy="6" r="3.6" />
-            <circle cx="6.1" cy="30" r="3.6" />
-            <circle cx="33.9" cy="30" r="3.6" />
+          <g>
+          <circle cx="38.4" cy="15.9" r="3.2" fill="#ffffff"/><circle cx="38.4" cy="15.9" r="1.4" fill="#EE8B0B"/>
+          <circle cx="5.6"  cy="30.1" r="3.2" fill="#ffffff"/><circle cx="5.6"  cy="30.1" r="1.4" fill="#EE8B0B"/>
+          <circle cx="6.6"  cy="13.6" r="2.8" fill="#ffffff"/><circle cx="6.6"  cy="13.6" r="1.2" fill="#EE8B0B"/>
+          <circle cx="37.4" cy="32.4" r="2.8" fill="#ffffff"/><circle cx="37.4" cy="32.4" r="1.2" fill="#EE8B0B"/>
           </g>
         </svg>
       )
     case 'SpanVault':
       return (
-        <svg viewBox="0 0 41 46" width="20" height="22" style={{ flexShrink: 0 }}>
-          <g fill="#16a34a">
-            <rect x="2" y="18" width="5" height="10" rx="2.5" opacity="0.55" />
-            <rect x="10" y="12" width="5" height="22" rx="2.5" opacity="0.75" />
-            <rect x="18" y="4" width="5" height="38" rx="2.5" />
-            <rect x="26" y="10" width="5" height="26" rx="2.5" opacity="0.85" />
-            <rect x="34" y="16" width="5" height="14" rx="2.5" opacity="0.65" />
+        <svg viewBox="0 0 44 46" width="21" height="22" style={{ flexShrink: 0 }}>
+          <defs>
+          <linearGradient id="pill-spa-svBand" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#6EE7B7"/><stop offset="48%" stopColor="#16a34a"/><stop offset="100%" stopColor="#065F2E"/>
+          </linearGradient>
+          <linearGradient id="pill-spa-svGhost" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#6EE7B7" stopOpacity="0.42"/><stop offset="100%" stopColor="#16a34a" stopOpacity="0.12"/>
+          </linearGradient>
+          </defs>
+          {/* ghost pass, offset up: gives the band its sculpted depth */}
+          <path d="M2 19 C8 3, 15.5 3, 21 17 C26.5 31, 34 31, 40 13 L40 19.5
+          C34 37.5, 26.5 37.5, 21 23.5 C15.5 9.5, 8 9.5, 2 25.5 Z" fill="url(#pill-spa-svGhost)"/>
+          {/* main band: thick, clear peaks */}
+          <path d="M2 26 C8 8, 15.5 8, 21 24 C26.5 40, 34 40, 40 20 L40 29
+          C34 49, 26.5 49, 21 33 C15.5 17, 8 17, 2 35 Z" fill="url(#pill-spa-svBand)"/>
+          <g>
+          <circle cx="2"  cy="30.5" r="3.6" fill="#6EE7B7"/>
+          <circle cx="21" cy="28.5" r="3.2" fill="#A7F3D0"/>
+          <circle cx="40" cy="24.5" r="3.6" fill="#34D399"/>
           </g>
         </svg>
       )

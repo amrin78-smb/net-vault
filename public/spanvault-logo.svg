@@ -1,12 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 46" role="img" aria-label="SpanVault">
-  <!-- Mark: a telemetry waveform as solid bars (was a 2.5px polyline that
-       thinned out at sidebar size). -->
-  <g fill="#16a34a">
-    <rect x="2"  y="18" width="5" height="10" rx="2.5" opacity="0.55"/>
-    <rect x="10" y="12" width="5" height="22" rx="2.5" opacity="0.75"/>
-    <rect x="18" y="4"  width="5" height="38" rx="2.5"/>
-    <rect x="26" y="10" width="5" height="26" rx="2.5" opacity="0.85"/>
-    <rect x="34" y="16" width="5" height="14" rx="2.5" opacity="0.65"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 212 46" role="img" aria-label="SpanVault">
+  <defs>
+    <linearGradient id="svBand" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6EE7B7"/><stop offset="48%" stop-color="#16a34a"/><stop offset="100%" stop-color="#065F2E"/>
+    </linearGradient>
+    <linearGradient id="svGhost" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6EE7B7" stop-opacity="0.42"/><stop offset="100%" stop-color="#16a34a" stop-opacity="0.12"/>
+    </linearGradient>
+  </defs>
+  <!-- ghost pass, offset up: gives the band its sculpted depth -->
+  <path d="M2 19 C8 3, 15.5 3, 21 17 C26.5 31, 34 31, 40 13 L40 19.5
+           C34 37.5, 26.5 37.5, 21 23.5 C15.5 9.5, 8 9.5, 2 25.5 Z" fill="url(#svGhost)"/>
+  <!-- main band: thick, clear peaks -->
+  <path d="M2 26 C8 8, 15.5 8, 21 24 C26.5 40, 34 40, 40 20 L40 29
+           C34 49, 26.5 49, 21 33 C15.5 17, 8 17, 2 35 Z" fill="url(#svBand)"/>
+  <g>
+    <circle cx="2"  cy="30.5" r="3.6" fill="#6EE7B7"/>
+    <circle cx="21" cy="28.5" r="3.2" fill="#A7F3D0"/>
+    <circle cx="40" cy="24.5" r="3.6" fill="#34D399"/>
   </g>
-  <text x="50" y="30" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Span</tspan><tspan fill="#16a34a">Vault</tspan></text>
+  <text x="54" y="30" font-size="26" font-weight="700" letter-spacing="-0.3" font-family="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif"><tspan fill="#ffffff">Span</tspan><tspan fill="#16a34a">Vault</tspan></text>
 </svg>
