@@ -318,9 +318,22 @@ export default function DashboardPage() {
         .nv-row:hover { background:var(--surface-subtle) !important; }
         .nv-spin { animation: nvSpin 0.8s linear infinite; }
         @keyframes nvSpin { to { transform: rotate(360deg) } }
+        /* Below 900px these three grids kept their multi-column tracks, so
+           the cards stayed at their natural width and pushed the page
+           sideways - 138px past a 360px viewport. */
+        @media (max-width: 900px) {
+          .nv-sec2, .nv-sec4 { grid-template-columns: 1fr !important; }
+          .nv-stats { grid-template-columns: repeat(2, minmax(0,1fr)) !important; }
+        }
+        @media (max-width: 520px) {
+          .nv-stats { grid-template-columns: 1fr !important; }
+        }
+        /* Recharts measures its parent, so the parent must be allowed to be
+           narrower than the chart's natural size. */
+        .nv-sec2 > *, .nv-sec4 > *, .nv-stats > * { min-width: 0; }
         @media (max-width: 1100px) {
           .nv-sec2, .nv-sec4 { grid-template-columns: 1fr !important; }
-          .nv-stats { grid-template-columns: repeat(2,1fr) !important; }
+          .nv-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
           .nv-health { flex-direction: column !important; }
           .nv-health-right { width: 100% !important; }
         }
@@ -445,7 +458,7 @@ export default function DashboardPage() {
         {/* LEFT — Fleet Health donut */}
         <div style={cardStyleCompact}>
           <h2 style={cardTitle}>Fleet Health</h2>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 24, alignItems: 'center', marginTop: 8 }}>
+          <div className="nv-fleet-row" style={{ display: 'flex', flexDirection: 'row', gap: 24, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
             {/* pie — left */}
             <div style={{ position: 'relative', width: 190, height: 180, flexShrink: 0 }}>
               {loading ? (
@@ -567,7 +580,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ===================== SECTION 3 — stats row ================= */}
-      <div className="nv-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 16, marginBottom: 20 }}>
+      <div className="nv-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 16, marginBottom: 20 }}>
         {statCards.map((s, i) => (
           <Link key={i} href={s.href} style={{ textDecoration: 'none' }}>
             <div className="nv-row" style={{ ...cardStyle, padding: 14, cursor: 'pointer', height: '100%' }}>

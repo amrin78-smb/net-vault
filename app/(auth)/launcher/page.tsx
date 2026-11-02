@@ -517,8 +517,8 @@ function LauncherInner() {
         @keyframes nvDrawerIn { from { transform: translateX(100%) } to { transform: translateX(0) } }
         .nv-drawer { animation: nvDrawerIn 0.22s ease-out }
         .nv-search-input::placeholder { color: var(--text-muted) }
-        @media (max-width: 1100px) { .nv-top-grid { grid-template-columns: 1fr !important } .nv-app-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-server-grid { grid-template-columns: repeat(2, 1fr) !important } .nv-kpi-grid { grid-template-columns: repeat(3, 1fr) !important } }
-        @media (max-width: 640px) { .nv-app-grid { grid-template-columns: 1fr !important } .nv-server-grid { grid-template-columns: 1fr !important } .nv-kpi-grid { grid-template-columns: repeat(2, 1fr) !important } }
+        @media (max-width: 1100px) { .nv-top-grid { grid-template-columns: 1fr !important } .nv-app-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important } .nv-server-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important } .nv-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important } }
+        @media (max-width: 640px) { .nv-app-grid { grid-template-columns: 1fr !important } .nv-server-grid { grid-template-columns: 1fr !important } .nv-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important } }
       `}</style>
 
       {/* Top bar */}
@@ -640,7 +640,7 @@ function LauncherInner() {
         </div>
 
         {/* App cards */}
-        <div className="nv-app-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '18px', marginBottom: '24px' }}>
+        <div className="nv-app-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '18px', marginBottom: '24px' }}>
           {cards.map(card => {
             const st = healthFor(card.name)
             const isLic = isLicensed(card.slug)
@@ -759,7 +759,7 @@ function LauncherInner() {
           </div>
 
           {/* KPI strip */}
-          <div className="nv-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px', marginBottom: '16px' }}>
+          <div className="nv-kpi-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: '14px', marginBottom: '16px' }}>
             {[
               { lab: 'Fleet Health', val: hubKpis ? fmtKpi(hubKpis.fleetHealth.score) : '—', unit: hubKpis?.fleetHealth.score != null ? '/100' : '', sub: hubKpis?.fleetHealth.delta7d != null ? `${hubKpis.fleetHealth.delta7d >= 0 ? '▲ +' : '▼ '}${hubKpis.fleetHealth.delta7d} vs 7d` : (hubKpis?.fleetHealth.grade ? `grade ${hubKpis.fleetHealth.grade}` : ''), color: scoreColorVal(hubKpis?.fleetHealth.score) },
               { lab: 'Availability', val: hubKpis ? fmtKpi(hubKpis.availability.pct, '%') : '—', unit: '', sub: hubKpis?.availability.devices != null ? `${hubKpis.availability.devices} devices · ${hubKpis.availability.alerts ?? 0} alerts` : '', color: '#16a34a' },
@@ -844,7 +844,7 @@ function LauncherInner() {
               {serverError && !s ? (
                 <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Server metrics unavailable</div>
               ) : (
-                <div className="nv-server-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '28px' }}>
+                <div className="nv-server-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '28px' }}>
                   {/* DISK */}
                   <div>
                     <div style={SS_LABEL}>Disk</div>

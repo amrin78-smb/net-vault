@@ -80,7 +80,7 @@ export default function CompliancePage() {
       </div>
 
       {/* Two score cards: Risk/Compliance + Data Completeness */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(340px, 100%), 1fr))', gap: '16px', marginBottom: '28px' }}>
         {/* Risk / Compliance */}
         {noData ? (
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '24px 28px', display: 'flex', alignItems: 'center', gap: '24px' }}>
@@ -171,7 +171,7 @@ function Section({ title, subtitle, children }: { title: string; subtitle: strin
         <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{title}</h2>
         <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '2px 0 0' }}>{subtitle}</p>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '14px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(320px, 100%), 1fr))', gap: '14px' }}>
         {children}
       </div>
     </div>

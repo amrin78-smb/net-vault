@@ -315,12 +315,15 @@ export default function DevicesPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
+      {/* flexWrap + gap: the title and the four action buttons sat on one
+          non-wrapping row, which alone pushed this page ~150px past a
+          360px viewport. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Devices</h1>
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>IT asset inventory</p>
         </div>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Export */}
           <button onClick={exportCSV} title={hasFilters ? 'Export filtered CSV' : 'Export CSV'}
             style={{ padding: '7px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}
@@ -599,7 +602,7 @@ export default function DevicesPage() {
       )}
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
+      <div className="stat-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px', marginBottom: '20px' }}>
         {[
           { label: 'Total devices', value: stats.total.toLocaleString(), color: 'var(--text-primary)', bg: 'var(--surface-subtle)', border: 'var(--border)', href: '/devices', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
           { label: 'Active', value: stats.active.toLocaleString(), color: 'var(--tint-success-fg)', bg: 'var(--tint-success)', border: 'var(--tint-success)', href: '/devices?status=Active', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },

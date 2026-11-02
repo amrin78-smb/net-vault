@@ -136,7 +136,7 @@ export default function CircuitsPage() {
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px', marginBottom: '20px' }}>
         {[
           { label: 'Total circuits', value: circuits.length, color: 'var(--text-secondary)', bg: 'var(--surface-subtle)', border: 'var(--border)', href: '/circuits', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M4 6h16M4 12h16M4 18h16" strokeLinecap="round"/><circle cx="8" cy="6" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="10" cy="18" r="2"/></svg> },
           { label: 'Primary / Main', value: mainCount, color: 'var(--tint-success-fg)', bg: 'var(--tint-success)', border: 'var(--border)', href: '/circuits?usage=Main', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },

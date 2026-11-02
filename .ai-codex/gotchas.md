@@ -148,3 +148,31 @@ EOL equal the hero KPIs exactly. Before, "Healthy" meant `NOT IN (Decommed,
 Spare)` and so counted faulty hardware as healthy, and the two halves of the
 page disagreed. If you change a bucket, change `lib/healthScore.ts` with it or
 the dashboard starts contradicting itself again.
+
+
+## Responsive / theming (1.45.x)
+
+**`repeat(N, 1fr)` bursts its container.** `1fr` means `minmax(auto, 1fr)`,
+and the `auto` MINIMUM refuses to shrink below the track's content - so a
+grid of cards overflows its own box on a narrow screen instead of squeezing.
+16 grids across the app had this. Use `repeat(N, minmax(0, 1fr))`; it is
+identical at desktop widths.
+
+**An inline style beats a stylesheet rule, including `:focus-visible`.**
+`components/GlobalSearch.tsx` set `outline: 'none'` inline, which made the
+header search the only control in the tab order with no visible focus ring.
+Never set `outline: none` inline; if a control needs a custom ring, define it
+in globals.css where the focus-visible rule can be overridden deliberately.
+
+**Chart legends and fixed-width donuts need an explicit wrap.** The fleet
+donut is a hard 190px; paired with its legend on one non-wrapping row it put
+the dashboard 70px past a 360px viewport. Long series labels also need to be
+able to shrink - a label change alone ("Decommissioned" -> "Decommed") moved
+the overflow by 33px.
+
+**Sweep method that found all of this:** load every page at
+1440/1280/1024/768/390/360 and compare
+`documentElement.scrollWidth` with `clientWidth`. Then, for any page that
+overflows, walk the DOM for elements whose right edge exceeds the viewport
+AND that have no ancestor with a non-visible `overflow-x` - that filters out
+the legitimate table scrollers and names the real culprit.

@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.44.1': [
+    'The whole application now fits a phone or tablet screen. Nine pages were running off the side of the screen at narrow widths and no longer do.',
+    'The search box in the top bar now shows a focus outline when you reach it with the keyboard - it was the one control in the page that did not.',
+    'Dark mode and the square-corner style were checked on every page; status badges and cards now follow both correctly.',
+    'Animations stop for anyone whose system asks for reduced motion.',
+  ],
   '1.44.0': [
     'Agent rows can now be expanded with the keyboard. The expand control was a clickable table row, which a pointer could use but a keyboard could not reach at all.',
     'The Add agent and Agent logs windows are now proper dialogs: they trap focus, close on Escape and return focus to the button that opened them.',

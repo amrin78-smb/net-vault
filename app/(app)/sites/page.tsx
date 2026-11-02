@@ -80,7 +80,7 @@ export default function SitesPage() {
       )}
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px', marginBottom: '20px' }}>
         {[
           { label: 'Total sites', value: filtered.length, color: 'var(--text-secondary)', bg: 'var(--surface-subtle)', border: 'var(--border)', href: '/sites', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg> },
           { label: 'Total devices', value: totalDevices.toLocaleString(), color: 'var(--tint-success-fg)', bg: 'var(--tint-success)', border: 'var(--tint-success-fg)', href: '/devices', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
@@ -152,7 +152,7 @@ export default function SitesPage() {
                       </div>
 
                       {/* Device count row */}
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '6px', marginBottom: '12px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '6px', marginBottom: '12px' }}>
                         {[
                           { label: 'Total', value: site.total, color: 'var(--text-primary)' },
                           { label: 'Active', value: site.active, color: 'var(--tint-success-fg)' },

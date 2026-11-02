@@ -1186,3 +1186,38 @@ h1.page-title { margin: 0; font-size: var(--text-xl); line-height: 1.2; }
 @media (max-width: 520px) {
   .card, .stat-card, .kpi-card { min-width: 0 !important; }
 }
+
+/* The suite wordmark is ~142px wide; on a 360px phone that alone pushed the
+   header 15px past the viewport once every other control had collapsed. */
+@media (max-width: 420px) {
+  .suite-header img { height: 24px; }
+}
+
+/* Pager controls are a single row of Previous / page / Next plus a page-size
+   select — about 340px, which does not fit a phone. */
+.pager-controls { flex-wrap: wrap; }
+@media (max-width: 520px) {
+  .pager { flex-direction: column; align-items: stretch; gap: 10px; }
+  .pager-controls { justify-content: space-between; }
+}
+
+/* On a phone the dashboard's hero KPI tiles go one per row rather than
+   trying to fit two 150px tiles plus gaps into ~330px of usable width. */
+@media (max-width: 520px) {
+  .nv-health-right > * { flex: 1 1 100% !important; min-width: 0 !important; }
+}
+
+/* Four KPI cards do not fit a phone; two rows of two do. */
+@media (max-width: 700px) { .stat-grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)) !important; } }
+@media (max-width: 400px) { .stat-grid-4 { grid-template-columns: minmax(0,1fr) !important; } }
+
+/* Chart legends: let a long series label shrink rather than push the page. */
+.nv-legend-row { min-width: 0; }
+.nv-legend-row > span:first-of-type { overflow: hidden; text-overflow: ellipsis; }
+
+/* The fleet donut is a fixed 190px; below ~430px it and the legend cannot
+   share a row, so the legend moves underneath instead of overflowing. */
+@media (max-width: 430px) {
+  .nv-fleet-row > div:first-child { width: 100% !important; }
+  .nv-fleet-row > div { flex-basis: 100%; }
+}

@@ -81,7 +81,7 @@ export default function EolPage() {
 
       {tab === 'hardware' && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px', marginBottom: '20px' }}>
             <a href="/devices?lifecycle=EOL+%2F+EOS" style={{ textDecoration: 'none' }}>
               <div style={{ background: 'var(--tint-danger)', borderRadius: 'var(--radius)', border: '1px solid var(--tint-danger-fg)', padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
                 onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 12px rgba(0,0,0,0.1)' }}
@@ -137,7 +137,7 @@ export default function EolPage() {
 
       {tab === 'software' && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px', marginBottom: '20px' }}>
             <div style={{ background: 'var(--tint-danger)', borderRadius: 'var(--radius)', border: '1px solid var(--tint-danger-fg)', padding: '16px' }}>
               <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-danger-fg)', marginBottom: '4px', fontWeight: '600', opacity: 0.8 }}>OS EOL expired</div>
               <div style={{ fontSize: 'var(--text-2xl)', fontWeight: '700', color: 'var(--tint-danger-fg)' }}>{swExpired.length}</div>

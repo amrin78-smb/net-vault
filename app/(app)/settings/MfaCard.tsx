@@ -132,7 +132,7 @@ export default function MfaCard() {
             they are stored hashed and cannot be displayed again. Without them, losing your phone means
             asking an administrator to reset your two-factor setup.
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-md)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-md)' }}>
             {codes.map(c => <div key={c}>{c}</div>)}
           </div>
           <button style={{ ...btnGhost, marginTop: 12 }} onClick={() => setCodes(null)}>I have saved them</button>

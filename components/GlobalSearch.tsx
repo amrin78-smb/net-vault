@@ -100,7 +100,12 @@ export default function GlobalSearch() {
             borderRadius: 'var(--radius)',
             color: 'rgba(255,255,255,0.9)',
             fontSize: 'var(--text-base)',
-            outline: 'none',
+            // No inline `outline: none`. An inline style beats the
+            // :focus-visible rule in globals.css, so this input was the one
+            // control in the whole tab order with no visible focus
+            // indicator - and it is the second stop a keyboard user reaches.
+            // The border/background change on focus is a hover-style cue, not
+            // a focus ring.
             boxSizing: 'border-box',
             transition: 'border-color 0.15s, background 0.15s',
             fontFamily: 'inherit',

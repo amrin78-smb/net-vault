@@ -59,7 +59,7 @@ export async function GET() {
         { label: 'EOL / EOS',       count: eol,             pct: pct(eol),             color: '#C8102E' },
         { label: 'Faulty',          count: faulty,          pct: pct(faulty),          color: '#ea580c' },
         { label: 'Spare',           count: spare,           pct: pct(spare),           color: '#94a3b8' },
-        { label: 'Decommissioned',  count: decommissioned,  pct: pct(decommissioned),  color: '#f59e0b' },
+        { label: 'Decommed',        count: decommissioned,  pct: pct(decommissioned),  color: '#f59e0b' },
       ],
       last_updated: new Date().toISOString(),
     })
