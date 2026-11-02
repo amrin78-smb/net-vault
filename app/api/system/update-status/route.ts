@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.50.0': [
+    'The Audit Log now shows what actually changed. Open any entry to see the before and after values - the system has always recorded them, but nothing displayed them, so the log could tell you that a device changed without telling you what.',
+    'Compliance leads with the work: a summary of how many policy checks are failing and across how many devices, with the checks themselves ordered worst-first instead of by an internal key.',
+  ],
   '1.49.0': [
     'Adding or editing a user now opens in a focused side panel instead of pushing the user table down the page. It closes with Escape and returns you to where you were.',
   ],

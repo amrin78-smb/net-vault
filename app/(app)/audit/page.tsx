@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { FilterChips, PageHead, Pager } from '@/components/system'
-type Log = { id: string; field_name: string; changed_at: string; changed_by_name: string; changed_by_email: string; device_name: string }
+import { Dialog, FilterChips, PageHead, Pager } from '@/components/system'
+type Log = { id: string; field_name: string; changed_at: string; changed_by_name: string; changed_by_email: string; device_name: string; old_value?: string | null; new_value?: string | null }
 type User = { id: string; name: string }
 
 const ACTION_LABELS: Record<string, string> = {
@@ -17,6 +17,7 @@ const AUDIT_PAGE_SIZE = 50
 export default function AuditPage() {
   const [logs, setLogs] = useState<Log[]>([])
   const [total, setTotal] = useState(0)
+  const [detail, setDetail] = useState<Log | null>(null)
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
   const [users, setUsers] = useState<User[]>([])
@@ -111,16 +112,27 @@ export default function AuditPage() {
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No audit records found</div>
         ) : (
           <table>
-            <thead><tr><th>When</th><th>Action</th><th>Device</th><th>Changed by</th></tr></thead>
+            <thead><tr><th>When</th><th>Action</th><th>Device</th><th>Changed by</th><th>Details</th></tr></thead>
             <tbody>
               {logs.map(log => (
-                <tr key={log.id}>
+                <tr key={log.id} className="clickable" style={{ cursor: 'pointer' }}
+                    onClick={() => setDetail(log)}>
                   <td style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{new Date(log.changed_at).toLocaleString()}</td>
                   <td><span className="badge" style={{ background: actionBg[log.field_name] || 'var(--surface-subtle)', color: actionColor[log.field_name] || 'var(--text-secondary)' }}>{ACTION_LABELS[log.field_name] || log.field_name}</span></td>
                   <td style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{log.device_name || '—'}</td>
                   <td style={{ fontSize: 'var(--text-sm)' }}>
                     <div style={{ fontWeight: '500' }}>{log.changed_by_name}</div>
                     <div style={{ color: 'var(--text-muted)' }}>{log.changed_by_email}</div>
+                  </td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
+                    {/* A real button: the row click is a convenience for the
+                        mouse, but a <tr onClick> is unreachable by keyboard. */}
+                    <button type="button" className="btn btn-secondary"
+                      style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }}
+                      onClick={e => { e.stopPropagation(); setDetail(log) }}
+                      aria-label={`View details of the ${ACTION_LABELS[log.field_name] || log.field_name} change${log.device_name ? ` to ${log.device_name}` : ''}`}>
+                      Details
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -137,6 +149,56 @@ export default function AuditPage() {
           <Pager page={page} limit={AUDIT_PAGE_SIZE} total={total} onPage={setPage} loading={loading} />
         )}
       </div>
+
+      {/* Detail drawer.
+
+          The API has always returned old_value and new_value; nothing
+          rendered them, so the log could tell you THAT a device changed but
+          never WHAT changed. For an audit trail that is most of the point. */}
+      <Dialog
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        variant="drawer"
+        title={detail ? (ACTION_LABELS[detail.field_name] || detail.field_name) : ''}
+        description={detail ? new Date(detail.changed_at).toLocaleString() : ''}
+        footer={<button className="btn" onClick={() => setDetail(null)}>Close</button>}
+      >
+        {detail && (
+          <div style={{ marginTop: 12 }}>
+            <dl className="dl">
+              <div style={{ display: 'contents' }}><dt>Device</dt><dd>{detail.device_name || '\u2014'}</dd></div>
+              <div style={{ display: 'contents' }}><dt>Changed by</dt><dd>{detail.changed_by_name}{detail.changed_by_email ? ` (${detail.changed_by_email})` : ''}</dd></div>
+              <div style={{ display: 'contents' }}><dt>When</dt><dd>{new Date(detail.changed_at).toLocaleString()}</dd></div>
+            </dl>
+
+            <div style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: 8 }}>
+                Change
+              </div>
+              {(detail.old_value ?? detail.new_value) == null ? (
+                <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: 0 }}>
+                  This entry does not record before and after values.
+                </p>
+              ) : (
+                <div style={{ display: 'grid', gap: 10 }}>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 3 }}>Before</div>
+                    <div className="mono" style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '8px 11px', borderRadius: 'var(--radius-sm)', overflowWrap: 'anywhere' }}>
+                      {detail.old_value || '(empty)'}
+                    </div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: 3 }}>After</div>
+                    <div className="mono" style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', padding: '8px 11px', borderRadius: 'var(--radius-sm)', overflowWrap: 'anywhere' }}>
+                      {detail.new_value || '(empty)'}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </Dialog>
     </div>
   )
 }

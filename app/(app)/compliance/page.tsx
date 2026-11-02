@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
-import { ErrorBox, PageHead } from '@/components/system'
+import { Alert, ErrorBox, PageHead } from '@/components/system'
 import Link from 'next/link'
 
 type Check = {
@@ -71,7 +71,22 @@ export default function CompliancePage() {
   const complColor = completenessScore >= 80 ? 'var(--tint-success-fg)' : completenessScore >= 60 ? 'var(--tint-warn-fg)' : 'var(--tint-danger-fg)'
   const complBar   = completenessScore >= 80 ? 'var(--green)' : completenessScore >= 60 ? 'var(--yellow)' : 'var(--red)'
 
-  const riskChecks = checks.filter(c => c.activeInRisk)
+  // Ordered worst-first: the checks with the most failures come first, then
+  // by the proportion failing. The brief's point is that this page should
+  // lead with the work rather than the totals - a compliance report sorted
+  // by an arbitrary internal key makes the reader hunt for what is broken.
+  const riskChecks = checks
+    .filter(c => c.activeInRisk)
+    .slice()
+    .sort((a, b) => {
+      const af = a.fail ?? -1, bf = b.fail ?? -1
+      if (bf !== af) return bf - af
+      const ap = a.pct ?? 101, bp = b.pct ?? 101   // unscored sink to the end
+      return ap - bp
+    })
+
+  const failingCount = riskChecks.filter(c => (c.fail ?? 0) > 0).length
+  const totalFailures = riskChecks.reduce((n, c) => n + (c.fail ?? 0), 0)
   const completenessChecks = checks.filter(c => c.kind === 'completeness')
   const notTracked = checks.filter(c => c.kind === 'risk' && (!c.available || !c.tracked))
 
@@ -143,6 +158,18 @@ export default function CompliancePage() {
       </div>
 
       {/* Risk checks */}
+      {/* Lead with what needs doing. */}
+      {failingCount > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <Alert
+            tone={totalFailures > 0 ? 'warn' : 'info'}
+            title={`${failingCount} policy check${failingCount === 1 ? '' : 's'} failing across ${totalFailures.toLocaleString()} device${totalFailures === 1 ? '' : 's'}`}
+          >
+            Listed worst-first below. Checks with no populated data to score against are shown separately.
+          </Alert>
+        </div>
+      )}
+
       {riskChecks.length > 0 && (
         <Section title="Policy risk checks" subtitle="Real violations counted in the Risk / Compliance score">
           {riskChecks.map(check => <CheckCard key={check.key} check={check} />)}
