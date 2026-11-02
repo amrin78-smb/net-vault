@@ -1,6 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
-import { DensityToggle, ErrorBox, FilterChips, PageHead, useDensity } from '@/components/system'
+import { DensityToggle, ErrorBox, FilterChips, PageHead, Pager, useDensity } from '@/components/system'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
@@ -37,6 +37,11 @@ export default function CircuitsPage() {
   const [loading, setLoading] = useState(true)
   const [density, setDensity] = useDensity()
   const [loadError, setLoadError] = useState(false)
+  // Paged in the browser: /api/circuits returns the whole set in one call
+  // and this page already filters client-side, so slicing here keeps the
+  // filtering identical while stopping 100+ rows rendering at once.
+  const [page, setPage] = useState(1)
+  const [limit, setLimit] = useState(50)
   const [search, setSearch] = useState('')
   const [isp, setIsp] = useState('')
   const [usage, setUsage] = useState('')
@@ -59,7 +64,7 @@ export default function CircuitsPage() {
     return () => document.removeEventListener('click', close)
   }, [exportMenu])
 
-  useEffect(() => { fetchCircuits() }, [search, isp, usage, technology, country, site])
+  useEffect(() => { fetchCircuits(); setPage(1) }, [search, isp, usage, technology, country, site])
 
   async function fetchCircuits() {
     setLoading(true)
@@ -344,7 +349,7 @@ export default function CircuitsPage() {
               </tr>
             </thead>
               <tbody>
-                {circuits.map(c => (
+                {circuits.slice((page - 1) * limit, page * limit).map(c => (
                   <tr key={c.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
                     <td style={{ padding: '10px 14px', fontWeight: '500', color: 'var(--text-primary)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <Link href={`/circuits/${c.id}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }} title={c.site || c.site_name_raw}>
@@ -378,10 +383,14 @@ export default function CircuitsPage() {
             </table>
           </div>
         )}
-        {!loading && (
-          <div style={{ padding: '10px 16px', borderTop: '1px solid var(--border-light)', fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>
-            {circuits.length} circuit{circuits.length !== 1 ? 's' : ''} shown
-          </div>
+        {!loading && !loadError && (
+          <Pager
+            page={page}
+            limit={limit}
+            total={circuits.length}
+            onPage={setPage}
+            onLimit={n => { setLimit(n); setPage(1) }}
+          />
         )}
       </div>
     </div>

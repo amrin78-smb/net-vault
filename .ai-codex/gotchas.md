@@ -182,3 +182,9 @@ JSX *expression container* a `{/* ... */}` is a nested expression, not a
 comment node, and the parse fails with "Expected corresponding closing tag".
 Put the comment on the line ABOVE the conditional. This has bitten twice in
 one pass (agents Dialog, audit Pager) — it looks completely ordinary.
+
+
+**Sites is deliberately NOT paginated.** It groups by region/country and the
+brief asks for that grouping to be retained; slicing a flat list would split
+a country across two pages. 52 grouped cards browse fine. Devices, Circuits
+and Audit all use the shared Pager; Sites is the documented exception.
