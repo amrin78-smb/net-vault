@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
-import { DensityToggle, ErrorBox, FilterChips, Icon, PageHead, Pager, StatusPill, useDensity } from '@/components/system'
+import { DensityToggle, DropdownMenu, ErrorBox, FilterChips, Icon, MenuLabel, MenuSeparator, PageHead, Pager, StatusPill, useDensity } from '@/components/system'
 
 
 type Device = {
@@ -16,6 +16,20 @@ type Device = {
 }
 
 type Duplicate = { field: string; value: string; count: number; classification: string; color: string; severity?: string; devices: { id: string; name: string; site: string; device_type: string; serial: string }[] }
+
+// Optional columns only. Name and Actions are excluded on purpose: the
+// device name is the record's identity and Actions holds the only link to
+// its detail page, and neither may be hidden.
+const OPTIONAL_COLS = [
+  { key: 'type',      label: 'Type' },
+  { key: 'model',     label: 'Brand / Model' },
+  { key: 'ip',        label: 'IP address' },
+  { key: 'site',      label: 'Site' },
+  { key: 'region',    label: 'Region' },
+  { key: 'lifecycle', label: 'Lifecycle' },
+  { key: 'status',    label: 'Status' },
+  { key: 'support',   label: 'Support End' },
+]
 
 export default function DevicesPage() {
   const { data: session } = useSession()
@@ -36,6 +50,28 @@ export default function DevicesPage() {
   const [limit, setLimit] = useState(50)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
+  /**
+   * Optional columns the viewer has hidden.
+   *
+   * Name and Actions are deliberately NOT optional: the brief is explicit
+   * that the only path to a record's details must never be hideable.
+   */
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('netvault-devices-hidden-cols')
+      if (raw) setHiddenCols(new Set(JSON.parse(raw)))
+    } catch { /* ignore */ }
+  }, [])
+  function toggleCol(key: string) {
+    setHiddenCols(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      try { localStorage.setItem('netvault-devices-hidden-cols', JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
+  }
+  const showCol = (k: string) => !hiddenCols.has(k)
   const [search, setSearch] = useState('')
   const [region, setRegion] = useState('')
   const [site, setSite] = useState('')
@@ -774,6 +810,32 @@ export default function DevicesPage() {
             {loading ? 'Loading…' : `${total.toLocaleString()} device${total === 1 ? '' : 's'}`}
           </span>
           <DensityToggle density={density} onChange={changeDensity} />
+          <DropdownMenu
+            label="Columns"
+            trigger={({ toggle, open, ref }) => (
+              <button ref={ref} type="button" className="btn" onClick={toggle}
+                aria-haspopup="menu" aria-expanded={open}>
+                Columns{hiddenCols.size > 0 ? ` (${OPTIONAL_COLS.length - hiddenCols.size}/${OPTIONAL_COLS.length})` : ''}
+              </button>
+            )}
+          >
+            <MenuLabel>Show columns</MenuLabel>
+            {OPTIONAL_COLS.map(c => (
+              <label key={c.key} className="menu-item" style={{ cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={!hiddenCols.has(c.key)}
+                  onChange={() => toggleCol(c.key)}
+                  style={{ margin: 0 }}
+                />
+                {c.label}
+              </label>
+            ))}
+            <MenuSeparator />
+            <div style={{ padding: '4px 10px 6px', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+              Name and Actions always show.
+            </div>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -815,8 +877,16 @@ export default function DevicesPage() {
               <thead>
                 <tr>
                   {isAdmin && <th style={{ width: '40px' }}><input type="checkbox" aria-label="Select all devices on this page" checked={selected.size === devices.length && devices.length > 0} onChange={toggleAll} /></th>}
-                  <th>Name</th><th>Type</th><th>Brand / Model</th><th>IP address</th>
-                  <th>Site</th><th>Region</th><th>Lifecycle</th><th>Status</th><th>Support End</th><th>Actions</th>
+                  <th>Name</th>
+                  {showCol('type') && <th>Type</th>}
+                  {showCol('model') && <th>Brand / Model</th>}
+                  {showCol('ip') && <th>IP address</th>}
+                  {showCol('site') && <th>Site</th>}
+                  {showCol('region') && <th>Region</th>}
+                  {showCol('lifecycle') && <th>Lifecycle</th>}
+                  {showCol('status') && <th>Status</th>}
+                  {showCol('support') && <th>Support End</th>}
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -829,13 +899,14 @@ export default function DevicesPage() {
                     <td style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
                       <Link href={`/devices/${d.id}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }}>{d.name || '—'}</Link>
                     </td>
-                    <td>{d.device_type}</td>
-                    <td title={`${d.brand} ${d.model}`}>{d.brand} {d.model}</td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{d.ip_address || '—'}</td>
-                    <td>{d.site}</td>
-                    <td><span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{d.region}</span></td>
-                    <td><LifecycleBadge status={d.lifecycle_status} /></td>
-                    <td><StatusBadge status={d.device_status} /></td>
+                    {showCol('type') && <td>{d.device_type}</td>}
+                    {showCol('model') && <td title={`${d.brand} ${d.model}`}>{d.brand} {d.model}</td>}
+                    {showCol('ip') && <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{d.ip_address || '—'}</td>}
+                    {showCol('site') && <td>{d.site}</td>}
+                    {showCol('region') && <td><span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{d.region}</span></td>}
+                    {showCol('lifecycle') && <td><LifecycleBadge status={d.lifecycle_status} /></td>}
+                    {showCol('status') && <td><StatusBadge status={d.device_status} /></td>}
+                    {showCol('support') && (
                     <td>{(() => {
                       if (!d.support_end_date) return null
                       const end = new Date(d.support_end_date)
@@ -845,6 +916,7 @@ export default function DevicesPage() {
                       if (end <= in90) return <span style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600', whiteSpace: 'nowrap' }}>Expiring Soon</span>
                       return <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{end.toLocaleDateString()}</span>
                     })()}</td>
+                    )}
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <Link href={`/devices/${d.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link>

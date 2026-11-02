@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { PageHead } from '@/components/system'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Breadcrumb from '@/components/Breadcrumb'
@@ -200,32 +201,22 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
               <button className="btn-secondary" onClick={() => { setEditingSite(false); setSiteForm({ name: site.site, code: site.code }) }}>Cancel</button>
             </div>
           ) : (
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                {/* Not a PageHead: this header has an inline edit mode for
-                    the site name and code wrapped around it. It uses the
-                    shared .page-title class so the typography matches the
-                    rest of the app even though the structure differs. */}
-                <h1 className="page-title">{site.site}</h1>
-                {isAdmin && (
-                  <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', cursor: 'pointer', color: 'var(--text-secondary)' }}>Edit</button>
-                )}
-              </div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{site.country}</span>
-                <span style={{ color: 'var(--text-muted)' }}>·</span>
-                <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{site.region}</span>
+            <PageHead
+              title={site.site}
+              description={[site.country, site.region].filter(Boolean).join(' \u00b7 ')}
+              status={<>
                 {site.code && <span className="badge badge-gray">{site.code}</span>}
-              </div>
-            </div>
+                {site?.site_status === 'Decommed' && <span className="badge badge-decommed">Decommed site</span>}
+              </>}
+              actions={isAdmin ? (
+                <button className="btn btn-secondary" onClick={() => setEditingSite(true)}>Edit</button>
+              ) : undefined}
+            />
           )}
         </div>
         {!editingSite && (
           <div style={{ display: 'flex', gap: '8px' }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-              {site?.site_status === 'Decommed' && (
-                <span style={{ background: 'var(--surface-subtle)', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: '600', padding: '4px 12px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--border)' }}>Decommed site</span>
-              )}
               {isAdmin && (
                 <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: 'var(--text-base)', padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? 'var(--tint-success-fg)' : 'var(--tint-danger-fg)', borderColor: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)', background: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)' }}>
                   {togglingDecomm ? 'Updating...' : site?.site_status === 'Decommed' ? 'Reactivate site' : 'Decommission site'}
