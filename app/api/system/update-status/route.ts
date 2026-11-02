@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.45.0': [
+    'Subscription and Licensing now lists which suite modules this installation is entitled to - NetVault, LogVault, DDIVault, SpanVault and EOL Intelligence - and the device limit where the licence states one. Previously that only appeared on a fully activated licence, so on a trial, in grace, or after expiry there was no way to see it, which is exactly when people look.',
+  ],
   '1.44.2': [
     'Read-only mode fix: destructive buttons introduced earlier in this release were not covered by the expired-licence lockout, so a delete could still be clicked on an expired licence. They are now blocked like every other write, and licence activation stays available as before.',
   ],

@@ -1223,6 +1223,73 @@ export default function SettingsPage() {
                   </div>
                 )}
 
+                {/* Module entitlements + capacity.
+
+                    Previously the only place modules appeared was inside the
+                    block below, which renders ONLY for status === 'active'
+                    WITH a customer - so on a trial, in grace, or on an
+                    expired licence there was no way to see what the install
+                    is actually entitled to, which is exactly when someone
+                    goes looking. This renders for every state.
+
+                    An empty `modules` array is shown as "all modules", which
+                    is what the licence check itself treats it as - not as
+                    "nothing is licensed". */}
+                <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border-light)' }}>
+                  <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: 10 }}>
+                    Module entitlements
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(190px, 100%), 1fr))', gap: 8 }}>
+                    {[
+                      ['netvault',  'NetVault',  'Network asset management'],
+                      ['logvault',  'LogVault',  'Syslog and log analysis'],
+                      ['ddivault',  'DDIVault',  'DNS, DHCP and IPAM'],
+                      ['spanvault', 'SpanVault', 'Network monitoring'],
+                      ['eol',       'EOL Intelligence', 'Lifecycle enrichment add-on'],
+                    ].map(([slug, name, desc]) => {
+                      const all = (licenseInfo.modules?.length ?? 0) === 0
+                      const on = all || licenseInfo.modules.includes(slug)
+                      return (
+                        <div key={slug} style={{
+                          display: 'flex', alignItems: 'flex-start', gap: 8,
+                          padding: '10px 12px', borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border)',
+                          background: on ? 'var(--tint-success)' : 'var(--surface-subtle)',
+                        }}>
+                          <span aria-hidden style={{ display: 'flex', flexShrink: 0, marginTop: 1, color: on ? 'var(--tint-success-fg)' : 'var(--text-muted)' }}>
+                            {on
+                              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+                              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>}
+                          </span>
+                          <span style={{ minWidth: 0 }}>
+                            <span style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 600, color: on ? 'var(--tint-success-fg)' : 'var(--text-muted)' }}>
+                              {name}
+                            </span>
+                            <span style={{ display: 'block', fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>
+                              {on ? desc : 'Not licensed'}
+                            </span>
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Capacity. Rendered only when the licence actually states
+                      a device limit - no invented denominator. */}
+                  {licenseInfo.maxDevices !== null && licenseInfo.maxDevices !== undefined && (
+                    <div style={{ marginTop: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, fontSize: 'var(--text-base)' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Device capacity</span>
+                        <span className="tnum" style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {licenseInfo.maxDevices === 0
+                            ? 'Unlimited'
+                            : `${licenseInfo.maxDevices.toLocaleString()} devices permitted`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* Active license details */}
                 {licenseInfo.status === 'active' && licenseInfo.customer && (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: 'var(--text-base)' }}>
