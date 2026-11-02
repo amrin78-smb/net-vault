@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { Icon } from '@/components/system'
 import Link from 'next/link'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
@@ -36,7 +37,7 @@ function UpdatedNotice() {
         border: '1px solid rgba(22,163,74,0.30)',
       }}
     >
-      <span aria-hidden>✓</span>
+      <span aria-hidden style={{ display: 'inline-flex' }}><Icon.check size={12} /></span>
       <span style={{ flex: 1 }}>NetVault updated successfully</span>
       <button
         onClick={() => setShow(false)}

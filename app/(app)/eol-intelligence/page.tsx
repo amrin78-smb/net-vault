@@ -1019,7 +1019,7 @@ export default function EolIntelligencePage() {
                 <div style={subCard}>
                   <div style={subTitle}>Dateless inventory by brand</div>
                   {coverage.datelessByBrand.length === 0 ? (
-                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No dateless devices. 🎉</div>
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>No dateless devices.</div>
                   ) : (
                     <>
                       {datelessRows.map(d => {
@@ -1307,7 +1307,7 @@ export default function EolIntelligencePage() {
           {shouldBeEol.length > 0 && (
             <div style={{ marginBottom: possiblyIncorrect.length > 0 ? '24px' : 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>⚠️ Devices Past EOL — Status Update Recommended</div>
+                <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>Devices Past EOL — Status Update Recommended</div>
                 <button className="btn-danger" style={{ padding: '6px 12px', fontSize: 'var(--text-sm)' }} onClick={() => void bulkRecommendation('accept_all', 'should_be_eol')}>Mark all as EOL</button>
               </div>
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>These devices are marked Active but vendor confirms EOL date has passed. Review and update status.</p>
@@ -1354,7 +1354,7 @@ export default function EolIntelligencePage() {
           {possiblyIncorrect.length > 0 && (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>ℹ️ Devices Marked EOL — Vendor Confirms Support</div>
+                <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>Devices Marked EOL — Vendor Confirms Support</div>
                 <button className="btn-primary" style={{ padding: '6px 12px', fontSize: 'var(--text-sm)' }} onClick={() => void bulkRecommendation('accept_all', 'possibly_incorrect')}>Revert all to Active</button>
               </div>
               <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 12px' }}>These devices are marked EOL/EOS but vendor data shows they are still within support period.</p>
@@ -1407,7 +1407,7 @@ export default function EolIntelligencePage() {
         ) : discUnavailable ? (
           <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>Discrepancy review is currently unavailable.</div>
         ) : discrepancies.length === 0 ? (
-          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No pending discrepancies. 🎉</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: 'var(--text-base)', padding: '8px 0' }}>No pending discrepancies.</div>
         ) : (
           <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius)', overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>

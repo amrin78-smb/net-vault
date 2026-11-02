@@ -10,6 +10,9 @@ export async function GET() {
   const duplicates: {
     field: string; value: string; count: number;
     classification: string; color: string;
+    /** 'ok' | 'review' | 'high'. Added so the UI does not have to detect
+     *  severity by string-matching an emoji prefix on `classification`. */
+    severity: string;
     devices: { id: string; name: string; site: string; device_type: string; serial: string }[]
   }[] = []
 
@@ -50,25 +53,25 @@ export async function GET() {
     let color = ''
 
     if (siteCount > 1 && uniqueSerials >= siteCount) {
-      classification = '🟢 Different sites — likely valid IP reuse'
+      classification = 'Different sites — likely valid IP reuse'
       color = '#dcfce7'
     } else if (isGatewayIp && siteCount > 1) {
-      classification = '🟢 Gateway IP reused across sites — valid'
+      classification = 'Gateway IP reused across sites — valid'
       color = '#dcfce7'
     } else if (serialCount > 0 && uniqueSerials === parseInt(row.count) && nameCount <= 2) {
-      classification = '🟡 Stack or cluster — same IP, different serials'
+      classification = 'Stack or cluster — same IP, different serials'
       color = '#fef9c3'
     } else if (nameCount === 1 && uniqueSerials < parseInt(row.count)) {
-      classification = '🔴 Same name, same site — likely real duplicate'
+      classification = 'Same name, same site — likely real duplicate'
       color = '#fee2e2'
     } else if (siteCount === 1 && uniqueSerials < parseInt(row.count) && uniqueSerials <= 1) {
-      classification = '🔴 Same site, same serial — likely real duplicate'
+      classification = 'Same site, same serial — likely real duplicate'
       color = '#fee2e2'
     } else if (siteCount === 1) {
-      classification = '🟡 Same site — review if stack/cluster or duplicate'
+      classification = 'Same site — review if stack/cluster or duplicate'
       color = '#fef9c3'
     } else {
-      classification = '🟡 Needs manual review'
+      classification = 'Needs manual review'
       color = '#fef9c3'
     }
 
@@ -78,6 +81,7 @@ export async function GET() {
       count: parseInt(row.count),
       classification,
       color,
+      severity: color === '#fee2e2' ? 'high' : color === '#fef9c3' ? 'review' : 'ok',
       devices: row.device_ids.map((id: string, i: number) => ({
         id,
         name: row.names[i],
@@ -116,16 +120,16 @@ export async function GET() {
     let color = ''
 
     if (nameCount === 1 && siteCount === 1) {
-      classification = '🔴 Same name, same site, same serial — exact duplicate'
+      classification = 'Same name, same site, same serial — exact duplicate'
       color = '#fee2e2'
     } else if (siteCount === 1 && nameCount > 1) {
-      classification = '🔴 Same site, different names, same serial — renamed device or duplicate'
+      classification = 'Same site, different names, same serial — renamed device or duplicate'
       color = '#fee2e2'
     } else if (siteCount > 1) {
-      classification = '🔴 Same serial across multiple sites — data entry error'
+      classification = 'Same serial across multiple sites — data entry error'
       color = '#fee2e2'
     } else {
-      classification = '🟡 Needs manual review'
+      classification = 'Needs manual review'
       color = '#fef9c3'
     }
 
@@ -135,6 +139,7 @@ export async function GET() {
       count: parseInt(row.count),
       classification,
       color,
+      severity: color === '#fee2e2' ? 'high' : color === '#fef9c3' ? 'review' : 'ok',
       devices: row.device_ids.map((id: string, i: number) => ({
         id,
         name: row.names[i],
@@ -146,9 +151,12 @@ export async function GET() {
   }
 
   // Summary counts
-  const red = duplicates.filter(d => d.classification.startsWith('🔴')).length
-  const yellow = duplicates.filter(d => d.classification.startsWith('🟡')).length
-  const green = duplicates.filter(d => d.classification.startsWith('🟢')).length
+  // Counted off `severity`, not an emoji prefix on the text. The prefixes are
+  // gone: they were display decoration living inside a data field, which made
+  // the wording of a sentence load-bearing for the arithmetic below.
+  const red = duplicates.filter(d => d.severity === 'high').length
+  const yellow = duplicates.filter(d => d.severity === 'review').length
+  const green = duplicates.filter(d => d.severity === 'ok').length
 
   return NextResponse.json({ duplicates, summary: { red, yellow, green, total: duplicates.length } })
 }

@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.46.3': [
+    'Replaced decorative emoji in the operational screens with proper icons - the update progress glyphs, the duplicate-device severity markers and the EOL Intelligence headings.',
+    'Duplicate detection now reports its severity as a real field rather than hiding it in a coloured circle at the start of a sentence, and the summary badges read correctly in dark mode.',
+  ],
   '1.46.2': [
     'Fixed: clicking Users & Access, Subscription & Licensing or System Settings in the sidebar changed the address but left the page showing whatever section was already open. All three now switch properly.',
     'The user list no longer shows an error screen to someone without permission to see it - it says plainly that the page is for administrators.',

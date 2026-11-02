@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
-import { FilterChips, PageHead, Pager } from '@/components/system'
+import { FilterChips, PageHead, Pager, StatusPill } from '@/components/system'
 
 const DENSITY_KEY = 'netvault-density'
 function subscribeDensity(cb: () => void) {
@@ -24,7 +24,7 @@ type Device = {
   support_end_date: string | null
 }
 
-type Duplicate = { field: string; value: string; count: number; classification: string; color: string; devices: { id: string; name: string; site: string; device_type: string; serial: string }[] }
+type Duplicate = { field: string; value: string; count: number; classification: string; color: string; severity?: string; devices: { id: string; name: string; site: string; device_type: string; serial: string }[] }
 
 export default function DevicesPage() {
   const { data: session } = useSession()
@@ -394,14 +394,20 @@ export default function DevicesPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {/* Summary */}
               {(() => {
-                const red = duplicates.filter(d => d.classification?.startsWith('🔴')).length
-                const yellow = duplicates.filter(d => d.classification?.startsWith('🟡')).length
-                const green = duplicates.filter(d => d.classification?.startsWith('🟢')).length
+                // Severity comes from the API as its own field now, rather
+                // than being detected from an emoji prefix on the sentence.
+                const red = duplicates.filter(d => d.severity === 'high').length
+                const yellow = duplicates.filter(d => d.severity === 'review').length
+                const green = duplicates.filter(d => d.severity === 'ok').length
                 return (
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '14px', flexWrap: 'wrap' as const }}>
-                    {red > 0 && <span style={{ background: '#fee2e2', color: '#991b1b', padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🔴 {red} likely duplicates</span>}
-                    {yellow > 0 && <span style={{ background: '#fef9c3', color: '#92400e', padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🟡 {yellow} needs review</span>}
-                    {green > 0 && <span style={{ background: '#dcfce7', color: '#166534', padding: '4px 10px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-sm)', fontWeight: '600' }}>🟢 {green} likely valid</span>}
+                    {/* Shared badge classes, not literal hex: the old pastel
+                        values stayed light in dark mode, the same bug the
+                        status badges had. The coloured dot inside StatusPill
+                        is a second cue, never the only one. */}
+                    {red > 0 && <StatusPill tone="danger">{red} likely duplicates</StatusPill>}
+                    {yellow > 0 && <StatusPill tone="warn">{yellow} needs review</StatusPill>}
+                    {green > 0 && <StatusPill tone="success">{green} likely valid</StatusPill>}
                   </div>
                 )
               })()}

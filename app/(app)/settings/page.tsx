@@ -1,6 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
-import { PageHead } from '@/components/system'
+import { Icon, PageHead } from '@/components/system'
 import { RoleBadge } from '@/components/Badges'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
@@ -338,7 +338,7 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
   let statusLine = 'Starting update…'
   if (phase === 'down') statusLine = 'Services restarting…'
   else if (phase === 'confirming') statusLine = 'Services are responding — confirming the update actually applied…'
-  else if (phase === 'back_up') statusLine = `✓ Services are back online. Reloading in ${countdown} second${countdown === 1 ? '' : 's'}…`
+  else if (phase === 'back_up') statusLine = `Services are back online. Reloading in ${countdown} second${countdown === 1 ? '' : 's'}…`
   else if (phase === 'rolled_back') statusLine = `The update failed at ${stageLabel} and was automatically rolled back — NetVault is running normally on the previous version.${schemaNote}`
   else if (phase === 'rollback_failed') statusLine = `CRITICAL: The update failed at ${stageLabel} and the automatic rollback ALSO failed — NetVault may be DOWN or unstable.${schemaNote} Do not rely on an automatic reload; manual intervention may be required.`
   else if (phase === 'verify_failed') statusLine = 'Services restarted, but the version did not change. The update may not have applied — try again or check the server logs.'
@@ -357,12 +357,12 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
     <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.78)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
       <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 1px 2px rgba(0,0,0,0.04)', padding: 28, maxWidth: 440, width: '100%', textAlign: 'center', border: isRollbackFailed ? '2px solid #7f1d1d' : undefined }}>
         {showSpinner && (
-          <div style={{ fontSize: 44, lineHeight: 1, display: 'inline-block', animation: 'spin 1s linear infinite' }}>⟳</div>
+          <div style={{ display: 'inline-flex', color: 'var(--primary)', animation: 'spin 1s linear infinite' }} aria-hidden><Icon.refresh size={44} /></div>
         )}
-        {phase === 'back_up' && <div style={{ fontSize: 44, lineHeight: 1 }}>✓</div>}
-        {isRolledBack && <div style={{ fontSize: 44, lineHeight: 1, color: '#b45309' }}>⚠</div>}
-        {isRollbackFailed && <div style={{ fontSize: 52, lineHeight: 1, color: '#7f1d1d' }}>⛔</div>}
-        {isError && <div style={{ fontSize: 44, lineHeight: 1 }}>⚠</div>}
+        {phase === 'back_up' && <div style={{ display: 'inline-flex', color: 'var(--status-success)' }} aria-hidden><Icon.check size={44} /></div>}
+        {isRolledBack && <div style={{ display: 'inline-flex', color: 'var(--status-warn)' }} aria-hidden><Icon.alert size={44} /></div>}
+        {isRollbackFailed && <div style={{ display: 'inline-flex', color: 'var(--status-danger)' }} aria-hidden><Icon.alert size={52} /></div>}
+        {isError && <div style={{ display: 'inline-flex', color: 'var(--status-danger)' }} aria-hidden><Icon.alert size={44} /></div>}
         <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, marginTop: 14 }}>Updating NetVault…</div>
         <p style={{ color: 'var(--text-muted)', marginTop: 6 }}>Pulling latest code and restarting services. Do not close this window.</p>
         <p style={{
