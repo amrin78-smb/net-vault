@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.46.2': [
+    'Fixed: clicking Users & Access, Subscription & Licensing or System Settings in the sidebar changed the address but left the page showing whatever section was already open. All three now switch properly.',
+    'The user list no longer shows an error screen to someone without permission to see it - it says plainly that the page is for administrators.',
+    'Page headings are now consistent across Devices, Sites, Circuits, Users, Settings and EOL Intelligence.',
+    'The licence banner states the licence state, what it means for you right now, and one clear next step, instead of a single run-on sentence with a warning emoji.',
+  ],
   '1.46.0': [
     'Two-factor setup now shows which step you are on, and the backup codes can be copied, downloaded or printed rather than transcribed by hand - they are only ever shown once. A confirmation appears once it is switched on.',
     'Adding or editing a user now shows an Effective access summary before you save, spelling out what that person will actually be able to see and do - including a warning when a site admin has no sites assigned, which would let them sign in and see nothing.',

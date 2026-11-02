@@ -1,9 +1,10 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
+import { PageHead } from '@/components/system'
 import { RoleBadge } from '@/components/Badges'
-import { useState, useEffect, useRef } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { STAGE_LABELS } from '@/app/components/UpdateFailureBanner'
 import { useEscape } from '@/components/ui'
 import MfaCard from './MfaCard'
@@ -400,7 +401,7 @@ type Country = { id: number; name: string; iso_code: string; region: string }
 
 const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS']
 
-export default function SettingsPage() {
+function SettingsInner() {
   const { showToast } = useToast()
   const { confirm } = useConfirm()
   const { data: session } = useSession()
@@ -418,6 +419,9 @@ export default function SettingsPage() {
   // for having no factor, and the only page that could give them one would be
   // shut. Every other tab remains admin-gated exactly as before.
   const canSeeAdminTabs = user?.role === 'admin' || user?.role === 'super_admin'
+
+  const searchParams = useSearchParams()
+  const urlTab = searchParams.get('tab')
 
   const [activeTab, setActiveTab] = useState<'general'|'users'|'sites'|'security'|'license'|'updates'|'about'>('general')
 
@@ -439,7 +443,7 @@ export default function SettingsPage() {
   // mount-only effect would decide this before the role is known.
   useEffect(() => {
     if (!user) return
-    const t = new URLSearchParams(window.location.search).get('tab')
+    const t = urlTab
     if (!t) return
     const allowed = canSeeAdminTabs
       ? ['general', 'users', 'sites', 'security', 'license', 'updates', 'about']
@@ -447,7 +451,12 @@ export default function SettingsPage() {
     if (allowed.includes(t)) {
       setActiveTab(t as 'general' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about')
     }
-  }, [user, canSeeAdminTabs])
+    // Depends on urlTab, NOT just [user]: the three Administration rows in
+    // the sidebar are query-string variants of THIS SAME route, so moving
+    // between them changes the URL without remounting the page. Reading the
+    // tab only on mount made every Administration link look dead - the
+    // address bar updated and the panel stayed exactly where it was.
+  }, [user, canSeeAdminTabs, urlTab])
   /**
    * Switch section AND reflect it in the URL.
    *
@@ -748,8 +757,10 @@ export default function SettingsPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Settings</h1>
-        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>Manage users, sites and licensing</p>
+        <PageHead
+          title="Settings"
+          description="System configuration, who can access it, your subscription, and your own account security."
+        />
       </div>
 
       {/* Grouped settings sub-navigation.
@@ -1537,5 +1548,15 @@ export default function SettingsPage() {
       {updatingApp && <UpdatingOverlay preVersion={updateStatus?.current_commit || ''} />}
 
     </div>
+  )
+}
+
+// useSearchParams (for ?tab=) needs a Suspense boundary to be prerender-safe,
+// the same way the launcher wraps its ?denied read.
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsInner />
+    </Suspense>
   )
 }

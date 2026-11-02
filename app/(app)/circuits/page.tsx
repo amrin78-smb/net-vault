@@ -1,6 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
-import { FilterChips } from '@/components/system'
+import { FilterChips, PageHead } from '@/components/system'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
@@ -130,10 +130,10 @@ export default function CircuitsPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>WAN Circuits</h1>
-        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>Circuit inventory across all sites</p>
-      </div>
+      <PageHead
+        title="WAN Circuits"
+        description="Provider links across every site, with the circuit reference, type and monthly cost."
+      />
 
       {/* Stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '12px', marginBottom: '20px' }}>

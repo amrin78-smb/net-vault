@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
-import { Pager, FilterChips } from '@/components/system'
+import { FilterChips, PageHead, Pager } from '@/components/system'
 
 const DENSITY_KEY = 'netvault-density'
 function subscribeDensity(cb: () => void) {
@@ -339,15 +339,10 @@ export default function DevicesPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      {/* flexWrap + gap: the title and the four action buttons sat on one
-          non-wrapping row, which alone pushed this page ~150px past a
-          360px viewport. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Devices</h1>
-          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>IT asset inventory</p>
-        </div>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <PageHead
+        title="Devices"
+        description="Every switch, router, firewall, access point and server on record, with its lifecycle and support state."
+        actions={<>
           {/* Export */}
           <button onClick={exportCSV} title={hasFilters ? 'Export filtered CSV' : 'Export CSV'}
             style={{ padding: '7px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}
@@ -381,8 +376,8 @@ export default function DevicesPage() {
               </button>
             </Link>
           </>}
-        </div>
-      </div>
+        </>}
+      />
 
       {/* Duplicates panel */}
       {showDuplicates && (

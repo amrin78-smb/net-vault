@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Icon } from '@/components/system/icons'
 
 // Standardized NocVault-suite license banner for NetVault. Mirrors DDIVault's
 // LicenseBanner (frontend/src/components/LicenseGuard.tsx) in colors, text,
@@ -65,28 +66,40 @@ export default function LicenseBanner() {
   const days = license.daysRemaining
   const plural = (n: number) => (n !== 1 ? 's' : '')
 
-  const banners: Record<string, { bg: string; message: string }> = {
+  // State / impact / action, per the suite banner contract.
+  //
+  // The background colours stay as they are: they are the NocVault
+  // suite-standard licence palette and the three satellites use the same
+  // values, so tokenising them here would make NetVault the odd one out.
+  // What changed is the content - an emoji and one run-on sentence became an
+  // icon, a stated STATE, the concrete IMPACT, and a single next action.
+  const banners: Record<string, { bg: string; state: string; impact: string }> = {
     trial: {
       bg: '#1d4ed8',
-      message: `Trial license — ${days} day${plural(days)} remaining. Activate a full license to continue using NetVault.`,
+      state: `Trial licence \u2014 ${days} day${plural(days)} remaining`,
+      impact: 'Everything works until the trial ends. Activate a full licence to keep using NetVault.',
     },
     grace: {
       bg: '#b45309',
-      message: `License expired — ${Math.abs(days)} day${plural(Math.abs(days))} into grace period. Write operations disabled. Renew now to restore full access.`,
+      state: `Licence expired \u2014 ${Math.abs(days)} day${plural(Math.abs(days))} into the grace period`,
+      impact: 'Saving, editing and deleting are already disabled. Renew to restore them.',
     },
     disabled: {
       bg: '#b91c1c',
-      message: 'NetVault license has expired and the grace period has ended. Please renew your NocVault license to restore access.',
+      state: 'Licence expired and the grace period has ended',
+      impact: 'NetVault is read-only: you can still view everything, but nothing can be changed until a licence is activated.',
     },
     unreachable: {
       bg: '#374151',
-      message: 'License status unavailable — unable to read the current license state.',
+      state: 'Licence status unavailable',
+      impact: 'The current licence state could not be read, so this install may be running under restrictions.',
     },
   }
   if (mode === 'active' && days <= 30) {
     banners.expiring = {
       bg: '#92400e',
-      message: `License expires in ${days} day${plural(days)}. Renew now to avoid service interruption.`,
+      state: `Licence expires in ${days} day${plural(days)}`,
+      impact: 'Renew before it lapses to avoid NetVault dropping into read-only.',
     }
   }
 
@@ -94,24 +107,42 @@ export default function LicenseBanner() {
   if (!banner) return null
 
   return (
-    <div style={{
-      background: banner.bg, color: '#fff',
-      padding: '10px 20px', display: 'flex', alignItems: 'center',
-      justifyContent: 'space-between', fontSize: 'var(--text-base)', fontWeight: 500,
-      flexShrink: 0, zIndex: 100,
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span>⚠️</span>
-        <span>{banner.message}</span>
-        {license.customer && (
-          <span style={{ opacity: 0.7, marginLeft: 8 }}>· Licensed to: {license.customer}</span>
-        )}
+    <div
+      role={mode === 'disabled' || mode === 'grace' ? 'alert' : 'status'}
+      style={{
+        background: banner.bg, color: '#fff',
+        padding: '10px 20px', display: 'flex', alignItems: 'center',
+        justifyContent: 'space-between', gap: 16, flexWrap: 'wrap',
+        fontSize: 'var(--text-base)', flexShrink: 0, zIndex: 100,
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, minWidth: 0 }}>
+        <span aria-hidden style={{ display: 'flex', flexShrink: 0, marginTop: 1 }}>
+          {mode === 'unreachable' ? <Icon.info size={17} /> : <Icon.alert size={17} />}
+        </span>
+        <span style={{ minWidth: 0 }}>
+          <span style={{ display: 'block', fontWeight: 600 }}>
+            {banner.state}
+            {license.customer && (
+              <span style={{ opacity: 0.75, fontWeight: 400 }}> \u00b7 Licensed to {license.customer}</span>
+            )}
+          </span>
+          <span style={{ display: 'block', opacity: 0.9, fontSize: 'var(--text-sm)', marginTop: 1 }}>
+            {banner.impact}
+          </span>
+        </span>
       </div>
       <a
         href="/settings/license"
-        style={{ color: '#fff', textDecoration: 'underline', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap', marginLeft: 16 }}
+        style={{
+          color: '#fff', textDecoration: 'none', fontSize: 'var(--text-sm)', fontWeight: 600,
+          whiteSpace: 'nowrap', flexShrink: 0,
+          border: '1px solid rgba(255,255,255,0.45)', borderRadius: 'var(--radius-sm)',
+          padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6,
+        }}
       >
-        Manage License →
+        {mode === 'trial' || banner === banners.expiring ? 'Activate a licence' : 'Manage licence'}
+        <Icon.chevronRight size={13} />
       </a>
     </div>
   )

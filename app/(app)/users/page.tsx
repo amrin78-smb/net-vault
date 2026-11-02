@@ -1,5 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
+import { ErrorBox, NoAccessBox, PageHead } from '@/components/system'
 import { RoleBadge } from '@/components/Badges'
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
@@ -24,6 +25,7 @@ export default function UsersPage() {
   useEffect(() => { if (user) router.push('/settings') }, [user, router])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<'forbidden' | 'error' | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editUser, setEditUser] = useState<User | null>(null)
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'viewer' })
@@ -32,7 +34,25 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
 
-  function fetchUsers() { fetch('/api/users').then(r => r.json()).then(d => { setUsers(d); setLoading(false) }) }
+  /**
+   * Load the user list.
+   *
+   * `/api/users` answers an error OBJECT, not an array, to a caller who is
+   * not an admin - and this used to hand that object straight to setUsers,
+   * so the next render threw "users.map is not a function" and the page died
+   * with a generic crash screen instead of saying "you cannot see this".
+   * Anything that is not an array is now treated as a refusal.
+   */
+  function fetchUsers() {
+    fetch('/api/users')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d)) { setUsers(d); setLoadError(null) }
+        else setLoadError(d?.error === 'Forbidden' || d?.error === 'Unauthorized' ? 'forbidden' : 'error')
+      })
+      .catch(() => setLoadError('error'))
+      .finally(() => setLoading(false))
+  }
   useEffect(() => { fetchUsers() }, [])
 
   function openAdd() { setForm({ name: '', email: '', password: '', role: 'viewer' }); setAppSlugs([...ALL_SLUGS]); setEditUser(null); setShowForm(true); setError('') }
@@ -75,13 +95,14 @@ export default function UsersPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Users</h1>
-          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>Manage who can access this system</p>
-        </div>
-        <button className="btn-primary" onClick={openAdd}>+ Add user</button>
-      </div>
+      <PageHead
+        title="Users"
+        description="Who can sign in, what they can reach, and which sites they are scoped to."
+        actions={<button className="btn btn-primary" onClick={openAdd}>Add user</button>}
+      />
+      {loadError === 'forbidden' && <NoAccessBox message="User management is available to administrators only." />}
+      {loadError === 'error' && <ErrorBox message="The user list could not be loaded." onRetry={() => { setLoading(true); fetchUsers() }} />}
+      {!loadError && (<>
       {showForm && (
         <div className="card" style={{ marginBottom: '20px' }}>
           <h2 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>{editUser ? 'Edit user' : 'Add new user'}</h2>
@@ -164,6 +185,7 @@ export default function UsersPage() {
           </table>
         )}
       </div>
+    </>)}
     </div>
   )
 }

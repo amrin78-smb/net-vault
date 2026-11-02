@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { FilterChips } from '@/components/system'
+import { FilterChips, PageHead } from '@/components/system'
 import Link from 'next/link'
 import SitesImportModal from './SitesImportModal'
 
@@ -61,19 +61,18 @@ export default function SitesPage() {
 
   return (
     <div style={{ padding: '24px 28px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Sites</h1>
-          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>{filtered.length} sites · {totalDevices.toLocaleString()} devices · {totalEol.toLocaleString()} EOL</p>
-        </div>
-        <button onClick={() => setShowImport(true)} title="Import sites from Excel / CSV"
+      <PageHead
+        title="Sites"
+        description="Every location in the estate, grouped by country, with its device count and lifecycle risk."
+        status={<span className="badge badge-gray tnum">{filtered.length} shown</span>}
+        actions={<button onClick={() => setShowImport(true)} title="Import sites from Excel / CSV"
           style={{ padding: '7px 10px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}
           onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-subtle)')}
           onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-card)')}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
           Import Sites
-        </button>
-      </div>
+        </button>}
+      />
 
       {showImport && (
         <SitesImportModal onClose={() => setShowImport(false)} onImported={fetchSites} />

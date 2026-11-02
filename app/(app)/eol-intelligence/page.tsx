@@ -1,5 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
+import { Icon, PageHead } from '@/components/system'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
@@ -780,17 +781,35 @@ export default function EolIntelligencePage() {
   if (!entitled) {
     return (
       <div style={{ padding: '24px 28px' }}>
-        <div style={{ ...cardStyle, maxWidth: '560px', textAlign: 'center', padding: '40px 24px' }}>
-          <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 12 }}>🔒</div>
-          <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>EOL Intelligence is a licensed add-on</div>
-          <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: '0 0 16px' }}>
-            This feature isn&apos;t enabled on this install. Contact your NocVault representative to license the
-            EOL Intelligence module, then activate the new key under Settings &rarr; License.
-          </p>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 20px' }}>
-            Server ID: <code style={{ fontFamily: 'var(--font-mono)' }}>{licServerId || '—'}</code>
-          </p>
-          <button className="btn-secondary" onClick={() => router.push('/settings/license')}>Go to License</button>
+        {/* The unlicensed state is still a page: it keeps its heading so the
+            document has an h1 and the nav reads coherently, and the padlock
+            emoji is replaced by the shared icon set. */}
+        <PageHead
+          title="EOL Intelligence"
+          description="The curated model catalogue that lifecycle dates are matched from."
+        />
+        <div style={{ ...cardStyle, maxWidth: '560px', padding: '32px 28px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <span aria-hidden style={{ display: 'flex', flexShrink: 0, color: 'var(--text-muted)', marginTop: 2 }}>
+              <Icon.lock size={28} />
+            </span>
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>
+                This is a licensed add-on
+              </h2>
+              <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: '0 0 14px' }}>
+                EOL Intelligence is not enabled on this install. Contact your NocVault
+                representative to license the module, then activate the new key under
+                Subscription &amp; licensing.
+              </p>
+              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '0 0 18px' }}>
+                Server ID: <code className="mono">{licServerId || '\u2014'}</code>
+              </p>
+              <button className="btn btn-secondary" onClick={() => router.push('/settings?tab=license')}>
+                Go to Subscription &amp; licensing
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     )
@@ -870,8 +889,10 @@ export default function EolIntelligencePage() {
             <span className="crumb-sep">/</span>
             <button onClick={() => router.push('/eol')} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-muted)', fontSize: 'var(--text-sm)' }}>View EOL / Risk report →</button>
           </div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>EOL Intelligence</h1>
-          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>Enrich device lifecycle data from the curated EOL seed dataset</p>
+          <PageHead
+            title="EOL Intelligence"
+            description="The curated model catalogue that lifecycle dates are matched from, and the enrichment runs that apply them to devices."
+          />
         </div>
       </div>
 
