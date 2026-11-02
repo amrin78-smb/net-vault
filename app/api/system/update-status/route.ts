@@ -75,12 +75,15 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.40.1': [
+    'Build fix: a stray apostrophe in a release note broke the update-status file and would have failed the next build.',
+  ],
   '1.40.0': [
     'Sign-in page: the Platform Status indicator and the version label now show the real values from the health endpoint. The status was previously a fixed green Operational that stayed green whatever the platform was doing, and the version had been frozen at v1.2.0 for dozens of releases.',
     'Removed the Forgot password link on the sign-in page. It pointed nowhere and there is no self-service reset; the page now says plainly to contact your administrator.',
     'Sign-in: added a show/hide control for the password, proper autofill support, and a clearer two-factor step that tells you the password was accepted and lets you go back.',
     'The animated sign-in background now holds still for anyone whose system asks for reduced motion.',
-    'Server infrastructure on the suite home (hostname, disk, CPU, memory) is now collapsed by default and shown only to administrators - it used to sit open above everyone's applications.',
+    'Server infrastructure on the suite home (hostname, disk, CPU, memory) is now collapsed by default and shown only to administrators - it used to sit open above the user applications.',
   ],
   '1.39.0': [
     'Navigation is now grouped and role-aware: Overview, Inventory, Lifecycle & Assurance, Operations and Administration, instead of one flat list. Who can see what is unchanged.',
