@@ -23,7 +23,9 @@ export default function EolPage() {
   const [tab, setTab] = useState<'hardware' | 'software'>('hardware')
 
   const load = useCallback(() => {
-    setLoadError(false)
+    // The error flag is cleared on SUCCESS, not synchronously here: a
+    // setState in the body of an effect-invoked callback costs an extra
+    // render pass for no benefit, and the flag is already false on mount.
     Promise.all([
       // r.ok is checked explicitly: a 503 carrying a JSON error body still
       // RESOLVES r.json(), so Promise.all succeeded and the catch below never
@@ -54,6 +56,7 @@ export default function EolPage() {
         }))
         .sort((a: SoftwareRow, b: SoftwareRow) => new Date(a.os_eol_date).getTime() - new Date(b.os_eol_date).getTime())
       setSoftwareRows(sw)
+      setLoadError(false)
       setLoading(false)
     })
     .catch(() => {
