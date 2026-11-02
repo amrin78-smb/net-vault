@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.46.4': [
+    'Row density (Comfortable / Compact) is now a single preference shared by the Devices and WAN Circuits tables rather than a per-page setting, and both keep their column headers visible while scrolling.',
+    'The Audit Log uses the same pagination control as the rest of the app.',
+  ],
   '1.46.3': [
     'Replaced decorative emoji in the operational screens with proper icons - the update progress glyphs, the duplicate-device severity markers and the EOL Intelligence headings.',
     'Duplicate detection now reports its severity as a real field rather than hiding it in a coloured circle at the start of a sentence, and the summary badges read correctly in dark mode.',

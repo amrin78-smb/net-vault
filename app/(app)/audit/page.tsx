@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { PageHead } from '@/components/system'
+import { PageHead, Pager } from '@/components/system'
 type Log = { id: string; field_name: string; changed_at: string; changed_by_name: string; changed_by_email: string; device_name: string }
 type User = { id: string; name: string }
 
@@ -10,6 +10,9 @@ const ACTION_LABELS: Record<string, string> = {
 }
 const actionColor: Record<string, string> = { created: 'var(--tint-success-fg)', updated: 'var(--tint-info-fg)', deleted: 'var(--tint-danger-fg)' }
 const actionBg: Record<string, string> = { created: 'var(--tint-success)', updated: 'var(--tint-info)', deleted: 'var(--tint-danger)' }
+
+// Fixed server-side in app/api/audit/route.ts; see the Pager note below.
+const AUDIT_PAGE_SIZE = 50
 
 export default function AuditPage() {
   const [logs, setLogs] = useState<Log[]>([])
@@ -44,7 +47,7 @@ export default function AuditPage() {
   }
 
   const hasFilters = !!(action || userId || dateFrom || dateTo)
-  const totalPages = Math.ceil(total / 50)
+  const totalPages = Math.ceil(total / AUDIT_PAGE_SIZE)
 
   return (
     <div style={{ padding: '24px 28px' }}>
@@ -107,14 +110,14 @@ export default function AuditPage() {
             </tbody>
           </table>
         )}
-        {total > 50 && (
-          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>Page {page} of {totalPages} - {total.toLocaleString()} entries</span>
-            <div style={{ display: 'flex', gap: '6px' }}>
-              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: 'var(--text-sm)' }} onClick={() => setPage(p => p-1)} disabled={page === 1}>Prev</button>
-              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: 'var(--text-sm)' }} onClick={() => setPage(p => p+1)} disabled={page >= totalPages}>Next</button>
-            </div>
-          </div>
+        {/* Shared Pager, deliberately WITHOUT a page-size selector.
+            /api/audit fixes its page size at 50 server-side and reserves
+            ?limit= for a different recent-activity feed mode capped at 25 -
+            so offering 100-per-page here would quietly return 25 rows.
+            A JSX comment cannot be the first child of a {cond && (...)}
+            expression, so it lives out here. */}
+        {total > AUDIT_PAGE_SIZE && (
+          <Pager page={page} limit={AUDIT_PAGE_SIZE} total={total} onPage={setPage} loading={loading} />
         )}
       </div>
     </div>

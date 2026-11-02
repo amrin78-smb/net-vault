@@ -176,3 +176,9 @@ the overflow by 33px.
 overflows, walk the DOM for elements whose right edge exceeds the viewport
 AND that have no ancestor with a non-visible `overflow-x` - that filters out
 the legitimate table scrollers and names the real culprit.
+
+**A JSX comment cannot be the first child of `{cond && ( ... )}`.** Inside a
+JSX *expression container* a `{/* ... */}` is a nested expression, not a
+comment node, and the parse fails with "Expected corresponding closing tag".
+Put the comment on the line ABOVE the conditional. This has bitten twice in
+one pass (agents Dialog, audit Pager) — it looks completely ordinary.

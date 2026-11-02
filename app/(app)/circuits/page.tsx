@@ -1,6 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
-import { FilterChips, PageHead } from '@/components/system'
+import { DensityToggle, FilterChips, PageHead, useDensity } from '@/components/system'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
@@ -35,6 +35,7 @@ export default function CircuitsPage() {
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin' || user?.role === 'site_admin'
   const [circuits, setCircuits] = useState<Circuit[]>([])
   const [loading, setLoading] = useState(true)
+  const [density, setDensity] = useDensity()
   const [search, setSearch] = useState('')
   const [isp, setIsp] = useState('')
   const [usage, setUsage] = useState('')
@@ -282,9 +283,12 @@ export default function CircuitsPage() {
 
       {/* Toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-        <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>
-          {loading ? 'Loading...' : `${circuits.length.toLocaleString()} circuits`}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="tnum" style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }} aria-live="polite">
+            {loading ? 'Loading…' : `${circuits.length.toLocaleString()} circuit${circuits.length === 1 ? '' : 's'}`}
+          </span>
+          <DensityToggle density={density} onChange={setDensity} />
+        </div>
         {isAdmin && (
           <Link href="/circuits/new">
             <button style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
@@ -308,7 +312,8 @@ export default function CircuitsPage() {
                 clipped or spill over its neighbours. With auto layout plus a
                 minWidth the identifier takes the room it needs and the
                 container's existing overflowX scrolls. */}
-            <table style={{ fontSize: 'var(--text-base)', borderCollapse: 'collapse', width: '100%', tableLayout: 'auto', minWidth: 1180 }}>
+            <table className={`data-table sticky${density === 'compact' ? ' compact' : ''}`}
+              style={{ fontSize: 'var(--text-base)', borderCollapse: 'collapse', width: '100%', tableLayout: 'auto', minWidth: 1180 }}>
               <thead>
               <tr>
                 <th style={{ padding: '10px 14px', background: 'var(--bg-card)', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', width: '13%' }}>Site</th>

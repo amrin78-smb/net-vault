@@ -5,6 +5,8 @@ import { Icon } from './icons'
 export { Icon } from './icons'
 export { Dialog } from './Dialog'
 export { DropdownMenu, MenuItem, MenuLabel, MenuSeparator } from './Menu'
+export { useDensity, type Density } from './useDensity'
+export { DensityToggle } from './DensityToggle'
 
 /* ── Buttons ──────────────────────────────────────────────────── */
 
