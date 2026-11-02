@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
-import { DensityToggle, FilterChips, PageHead, Pager, StatusPill, useDensity } from '@/components/system'
+import { DensityToggle, FilterChips, Icon, PageHead, Pager, StatusPill, useDensity } from '@/components/system'
 
 
 type Device = {
@@ -461,7 +461,7 @@ export default function DevicesPage() {
               a.href = url; a.download = 'NetVault_Import_Template.csv'; a.click()
               URL.revokeObjectURL(url)
             }} style={{ fontSize: 'var(--text-sm)', whiteSpace: 'nowrap', marginLeft: '16px', flexShrink: 0 }}>
-              ⬇ Download template
+              Download template
             </button>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '12px' }}>
@@ -483,11 +483,11 @@ export default function DevicesPage() {
               </div>
               <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '10px', flexWrap: 'wrap' as const }}>
                 <button className="btn-secondary" onClick={() => runImport(true)} disabled={importLoading}>
-                  {importLoading && dryRunResult === null ? 'Validating...' : '🔍 Validate (dry run)'}
+                  {importLoading && dryRunResult === null ? 'Validating...' : 'Validate (dry run)'}
                 </button>
                 {dryRunResult && (
                   <span style={{ fontSize: 'var(--text-base)', color: dryRunResult.skipped > 0 ? 'var(--tint-warn-fg)' : 'var(--tint-success-fg)', fontWeight: '500' }}>
-                    ✓ {dryRunResult.inserted} will be inserted, {dryRunResult.updated || 0} will be updated, {dryRunResult.skipped} will be skipped
+                    {dryRunResult.inserted} will be inserted, {dryRunResult.updated || 0} will be updated, {dryRunResult.skipped} will be skipped
                   </span>
                 )}
                 <button className="btn-primary" onClick={confirmImport} disabled={importLoading}>
@@ -772,7 +772,7 @@ export default function DevicesPage() {
           </div>
         ) : devices.length === 0 ? (
           <div style={{ padding: '60px 40px', textAlign: 'center' }}>
-            <div style={{ fontSize: 'var(--text-2xl)', marginBottom: '12px' }}>🔍</div>
+            <div style={{ fontSize: 'var(--text-2xl)', marginBottom: '12px', display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }} aria-hidden><Icon.search size={30} /></div>
             <div style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '6px' }}>No devices found</div>
             <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>
               {hasFilters ? 'Try adjusting or clearing your filters.' : 'No devices have been added yet.'}

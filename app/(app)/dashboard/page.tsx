@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Icon } from '@/components/system'
+import { Icon, PageHead } from '@/components/system'
 import Link from 'next/link'
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
@@ -343,32 +343,24 @@ export default function DashboardPage() {
       <UpdatedNotice />
 
       {/* ============================ HEADER ========================= */}
-      <header className="page-head">
-        <div>
-          <h1>Dashboard</h1>
-          <p className="page-desc">Fleet health, lifecycle risk and inventory across every site.</p>
-          {/* A dashboard with no stated data age invites an operator to trust
-              whatever is on screen indefinitely. */}
-          <div className="page-meta">
-            {loading ? 'Loading…' : refreshedAt ? `Updated ${refreshedAt.toLocaleTimeString()}` : ''}
-            {unavailable.size > 0 && !loading && (
-              <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>
-                {' · '}{unavailable.size} section{unavailable.size === 1 ? '' : 's'} unavailable
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="page-actions">
+      <PageHead
+        title="Dashboard"
+        description="Fleet health, lifecycle risk and inventory across every site."
+        status={unavailable.size > 0 && !loading
+          ? <span className="badge badge-yellow">{unavailable.size} section{unavailable.size === 1 ? '' : 's'} unavailable</span>
+          : undefined}
+        updatedAt={loading ? null : refreshedAt}
+        actions={<>
           <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
-            <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--text-primary)' }}>{clock || '—'}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ICT · Asia/Bangkok</div>
+            <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--text-primary)' }}>{clock || '\u2014'}</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ICT \u00b7 Asia/Bangkok</div>
           </div>
           <button className="btn" onClick={() => { setLoading(true); loadAll() }} disabled={loading}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            <span aria-hidden style={{ display: 'inline-flex' }}><Icon.refresh size={14} /></span>
             Refresh
           </button>
-        </div>
-      </header>
+        </>}
+      />
 
       {/* ============== SECTION 1 — HEALTH SCORE (navy) ============== */}
       <div style={{ background: NAVY, borderRadius: 'var(--radius)', padding: 18, color: 'white', marginBottom: 20, boxShadow: CARD_SHADOW }}>

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Dialog } from '@/components/system'
+import { Dialog, Icon } from '@/components/system'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useToast, useConfirm } from '@/app/providers'
@@ -718,7 +718,7 @@ export default function AgentsPage() {
           background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
           maxWidth: 560, textAlign: 'center', padding: '40px 24px', boxShadow: 'var(--shadow-sm)',
         }}>
-          <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }} aria-hidden><Icon.lock size={30} /></div>
           <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Access restricted</div>
           <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: '0 0 20px' }}>
             Agent fleet management is available to super administrators only.

@@ -130,7 +130,7 @@ export default function SitesImportModal({ onClose, onImported }: { onClose: () 
         {/* Template + file input */}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' as const, marginBottom: '16px' }}>
           <button className="btn-secondary" onClick={downloadTemplate} style={{ fontSize: 'var(--text-base)', whiteSpace: 'nowrap' as const }}>
-            ⬇ Download template
+            Download template
           </button>
           <input type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ fontSize: 'var(--text-base)' }} />
           {previewLoading && <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>Reading file…</span>}
@@ -183,14 +183,14 @@ export default function SitesImportModal({ onClose, onImported }: { onClose: () 
             {/* Actions */}
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '12px', flexWrap: 'wrap' as const }}>
               <button className="btn-secondary" onClick={() => runImport(true)} disabled={importLoading}>
-                {importLoading && dryResult === null && result === null ? 'Validating…' : '🔍 Dry run'}
+                {importLoading && dryResult === null && result === null ? 'Validating…' : 'Dry run'}
               </button>
               <button className="btn-primary" onClick={() => runImport(false)} disabled={importLoading}>
                 {importLoading ? 'Importing…' : 'Import'}
               </button>
               {dryResult && !result && (
                 <span style={{ fontSize: 'var(--text-base)', color: dryResult.skipped > 0 ? 'var(--tint-warn-fg)' : 'var(--tint-success-fg)', fontWeight: '500' }}>
-                  ✓ {dryResult.created} will be created, {dryResult.updated} will be filled, {dryResult.skipped} skipped
+                  {dryResult.created} will be created, {dryResult.updated} will be filled, {dryResult.skipped} skipped
                 </span>
               )}
             </div>

@@ -763,7 +763,7 @@ export default function EolIntelligencePage() {
     return (
       <div style={{ padding: '24px 28px' }}>
         <div style={{ ...cardStyle, maxWidth: '560px', textAlign: 'center', padding: '40px 24px' }}>
-          <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 12 }}>🔒</div>
+          <div style={{ fontSize: 44, lineHeight: 1, marginBottom: 12, display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }} aria-hidden><Icon.lock size={30} /></div>
           <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Access restricted</div>
           <p style={{ fontSize: 'var(--text-md)', color: 'var(--text-secondary)', margin: '0 0 20px' }}>
             EOL Intelligence is available to super administrators only.

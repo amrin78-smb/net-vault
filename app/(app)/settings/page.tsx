@@ -1370,7 +1370,7 @@ function SettingsInner() {
                 className="btn-secondary"
                 style={{ padding: '10px 16px', whiteSpace: 'nowrap', flexShrink: 0 }}
               >
-                {copiedServerId ? '✓ Copied!' : 'Copy'}
+                {copiedServerId ? 'Copied' : 'Copy'}
               </button>
             </div>
           </div>
@@ -1437,7 +1437,7 @@ function SettingsInner() {
                 {updateStatus.up_to_date ? (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--tint-success-fg)', background: 'var(--tint-success)', border: '1px solid var(--tint-success-fg)', borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 'var(--text-base)', fontWeight: '500', marginBottom: 10 }}>
-                      <span>✓</span><span>NetVault is up to date</span>
+                      <span>NetVault is up to date</span>
                     </div>
                     <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: 0 }}>
                       Current version: <code style={{ fontWeight: 600 }}>v{updateStatus.current_version}</code>
@@ -1448,8 +1448,8 @@ function SettingsInner() {
                   <div>
                     <p style={{ fontWeight: 700, fontSize: 'var(--text-lg)', margin: '0 0 8px' }}>
                       {updateStatus.current_version === updateStatus.latest_version
-                        ? <>🔄 Patches available since v{updateStatus.current_version}</>
-                        : <>🔄 Update available: v{updateStatus.current_version} → v{updateStatus.latest_version}</>}
+                        ? <>Patches available since v{updateStatus.current_version}</>
+                        : <>Update available: v{updateStatus.current_version} → v{updateStatus.latest_version}</>}
                     </p>
                     <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: '0 0 10px' }}>
                       Current: v{updateStatus.current_version}
@@ -1476,7 +1476,7 @@ function SettingsInner() {
                       </p>
                     )}
                     <p style={{ fontSize: 'var(--text-base)', color: 'var(--tint-warn-fg)', margin: '10px 0 0' }}>
-                      ⚠ Services will restart during the update — you may lose connection for 30–60 seconds.
+                      Services will restart during the update — you may lose connection for 30–60 seconds.
                     </p>
                   </div>
                 )}
@@ -1497,7 +1497,7 @@ function SettingsInner() {
             {applyUpdateErr && (
               /license|expire/i.test(applyUpdateErr) ? (
                 <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', border: '1px solid var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginTop: '10px' }}>
-                  ⚠ License expired — updates disabled. Renew your license to receive updates.{' '}
+                  License expired — updates disabled. Renew your license to receive updates.{' '}
                   <a href={`${process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || ''}/settings/license`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>Manage License →</a>
                 </div>
               ) : (

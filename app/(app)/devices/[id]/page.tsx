@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { RecordSection, FieldPair } from '@/components/system'
+import { FieldPair, PageHead, RecordSection } from '@/components/system'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -153,21 +153,19 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
             ]
       } />
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>{device.name}</h1>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <StatusBadge status={device.device_status} />
-            <LifecycleBadge status={device.lifecycle_status} />
-            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>{device.device_type} · {device.brand} {device.model}</span>
-          </div>
-        </div>
-        {isAdmin && (
+      <PageHead
+        title={device.name}
+        description={[device.device_type, [device.brand, device.model].filter(Boolean).join(' ')].filter(Boolean).join(' \u00b7 ')}
+        status={<>
+          <StatusBadge status={device.device_status} />
+          <LifecycleBadge status={device.lifecycle_status} />
+        </>}
+        actions={isAdmin ? (
           <Link href={`/devices/${id}/edit${fromSite ? `?from=site&siteId=${fromSiteId}&siteName=${encodeURIComponent(fromSiteName)}` : ''}`}>
-            <button className="btn-primary">Edit device</button>
+            <button className="btn btn-primary">Edit device</button>
           </Link>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         <div>

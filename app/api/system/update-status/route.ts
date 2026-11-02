@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.47.0': [
+    'Every page now uses the same page header, so titles, descriptions and action buttons sit in the same place throughout the app.',
+    'Removed the last of the decorative emoji from the operational screens - download arrows, tick marks, magnifiers, padlocks and refresh symbols are now proper icons.',
+    'Circuit and site detail pages use the standard status badges, which previously kept light-mode colours in dark mode.',
+  ],
   '1.46.5': [
     'The EOL / Risk page now tells you when it could not load, with a retry. It previously showed empty tables on a failure, which read as a fleet with no end-of-life devices at all.',
     'Compliance uses the same error treatment, announced to screen readers and with a retry button instead of asking you to refresh the page yourself.',

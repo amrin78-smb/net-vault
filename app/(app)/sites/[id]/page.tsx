@@ -77,7 +77,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
       if (!isDecommed) {
         // Show prominent reminder about devices
         await confirm({
-          title: '⚠ Action required — Devices',
+          title: 'Action required — Devices',
           message: `"${site?.site}" has been decommissioned. Please go to the Devices tab and bulk update any active devices at this site to Decommed status. Devices will NOT be automatically updated.`,
           confirmLabel: 'Got it',
           danger: false
@@ -202,7 +202,11 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           ) : (
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
-                <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>{site.site}</h1>
+                {/* Not a PageHead: this header has an inline edit mode for
+                    the site name and code wrapped around it. It uses the
+                    shared .page-title class so the typography matches the
+                    rest of the app even though the structure differs. */}
+                <h1 className="page-title">{site.site}</h1>
                 {isAdmin && (
                   <button onClick={() => setEditingSite(true)} style={{ padding: '3px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', cursor: 'pointer', color: 'var(--text-secondary)' }}>Edit</button>
                 )}
@@ -211,7 +215,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                 <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{site.country}</span>
                 <span style={{ color: 'var(--text-muted)' }}>·</span>
                 <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>{site.region}</span>
-                {site.code && <span style={{ fontSize: 'var(--text-xs)', background: 'var(--surface-subtle)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 'var(--radius-pill)' }}>{site.code}</span>}
+                {site.code && <span className="badge badge-gray">{site.code}</span>}
               </div>
             </div>
           )}
@@ -220,7 +224,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
           <div style={{ display: 'flex', gap: '8px' }}>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
               {site?.site_status === 'Decommed' && (
-                <span style={{ background: 'var(--surface-subtle)', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: '600', padding: '4px 12px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--border)' }}>⚠ Decommed site</span>
+                <span style={{ background: 'var(--surface-subtle)', color: 'var(--text-secondary)', fontSize: 'var(--text-sm)', fontWeight: '600', padding: '4px 12px', borderRadius: 'var(--radius-pill)', border: '1px solid var(--border)' }}>Decommed site</span>
               )}
               {isAdmin && (
                 <button onClick={toggleDecomm} disabled={togglingDecomm} style={{ fontSize: 'var(--text-base)', padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid', cursor: 'pointer', fontWeight: '500', color: site?.site_status === 'Decommed' ? 'var(--tint-success-fg)' : 'var(--tint-danger-fg)', borderColor: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)', background: site?.site_status === 'Decommed' ? 'var(--tint-success)' : 'var(--tint-danger)' }}>

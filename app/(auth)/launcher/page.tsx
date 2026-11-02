@@ -1,5 +1,6 @@
 'use client'
 import { useSession, signOut } from 'next-auth/react'
+import { Icon } from '@/components/system'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useState, Suspense } from 'react'
 import ThemeToggle from '@/components/ThemeToggle'
@@ -561,7 +562,7 @@ function LauncherInner() {
               <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
             </svg>
             <span style={{ flex: 1, fontWeight: 500 }}>You don’t have access to {name}. Contact an administrator if you need it.</span>
-            <button onClick={() => setDeniedDismissed(true)} aria-label="Dismiss" style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '2px 4px', flexShrink: 0 }}>✕</button>
+            <button onClick={() => setDeniedDismissed(true)} aria-label="Dismiss" style={{ background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '16px', lineHeight: 1, padding: '2px 4px', flexShrink: 0 }}><Icon.close size={13} /></button>
           </div>
         )
       })()}
@@ -904,7 +905,7 @@ function LauncherInner() {
                 <div style={{ fontSize: '18px', fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{asset?.device?.name || assetLabel}</div>
                 <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-mono)' }}>{asset?.device?.ip || ''}</div>
               </div>
-              <button onClick={() => setAssetOpen(false)} aria-label="Close" style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 'var(--radius-sm)', color: '#fff', width: '30px', height: '30px', cursor: 'pointer', fontSize: '15px', flexShrink: 0, lineHeight: 1 }}>✕</button>
+              <button onClick={() => setAssetOpen(false)} aria-label="Close" style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 'var(--radius-sm)', color: '#fff', width: '30px', height: '30px', cursor: 'pointer', fontSize: '15px', flexShrink: 0, lineHeight: 1 }}><Icon.close size={13} /></button>
             </div>
             {/* Tabs */}
             <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)' }}>

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { RecordSection, FieldPair } from '@/components/system'
+import { FieldPair, PageHead, RecordSection } from '@/components/system'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Breadcrumb from '@/components/Breadcrumb'
@@ -97,38 +97,35 @@ export default function CircuitDetailPage({ params }: { params: Promise<{ id: st
         ]} />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 6px' }}>
-            {circuit.circuit_id && circuit.circuit_id !== 'nan' ? circuit.circuit_id : circuit.isp ? `${circuit.isp} — ${circuit.site || circuit.site_name_raw}` : 'Unnamed circuit'}
-          </h1>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)' }}>{circuit.isp}</span>
-            <span style={{ color: 'var(--text-muted)' }}>·</span>
-            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>{circuit.site || circuit.site_name_raw}</span>
-            <span style={{ color: 'var(--text-muted)' }}>·</span>
-            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>{circuit.country}</span>
-            {circuit.usage && (
-              <span className="badge" style={{ background: circuit.usage?.toLowerCase() === 'main' ? '#e0f2fe' : '#f3f4f6', color: circuit.usage?.toLowerCase() === 'main' ? '#075985' : '#6b7280' }}>{circuit.usage}</span>
-            )}
-            {circuit.technology && circuit.technology !== 'nan' && (
-              <span className="badge" style={{ background: '#ede9fe', color: '#5b21b6' }}>{circuit.technology}</span>
-            )}
-          </div>
-        </div>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            {editing ? (
-              <>
-                <button className="btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
-                <button className="btn-secondary" onClick={() => { setEditing(false); setForm(circuit) }}>Cancel</button>
-              </>
-            ) : (
-              <button className="btn-primary" onClick={() => setEditing(true)}>Edit circuit</button>
-            )}
-          </div>
-        )}
-      </div>
+      <PageHead
+        title={circuit.circuit_id && circuit.circuit_id !== 'nan'
+          ? circuit.circuit_id
+          : circuit.isp
+            ? `${circuit.isp} \u2014 ${circuit.site || circuit.site_name_raw}`
+            : 'Unnamed circuit'}
+        description={[circuit.isp, circuit.site || circuit.site_name_raw, circuit.country].filter(Boolean).join(' \u00b7 ')}
+        status={<>
+          {/* Shared badge classes, not literal hex: the previous pastel
+              values stayed light on a dark card, the same bug the status
+              badges had elsewhere. */}
+          {circuit.usage && (
+            <span className={`badge ${circuit.usage?.toLowerCase() === 'main' ? 'badge-blue' : 'badge-gray'}`}>{circuit.usage}</span>
+          )}
+          {circuit.technology && circuit.technology !== 'nan' && (
+            <span className="badge badge-purple">{circuit.technology}</span>
+          )}
+        </>}
+        actions={isAdmin ? (
+          editing ? (
+            <>
+              <button className="btn btn-primary" onClick={save} disabled={saving}>{saving ? 'Saving\u2026' : 'Save'}</button>
+              <button className="btn btn-secondary" onClick={() => { setEditing(false); setForm(circuit) }}>Cancel</button>
+            </>
+          ) : (
+            <button className="btn btn-primary" onClick={() => setEditing(true)}>Edit circuit</button>
+          )
+        ) : undefined}
+      />
 
       {editing ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
