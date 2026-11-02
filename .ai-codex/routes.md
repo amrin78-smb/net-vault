@@ -107,6 +107,7 @@ GET /api/search [auth] [db] — global search across devices/sites/circuits
 
 ## server-stats
 GET /api/server-stats [auth] [none] — live OS server metrics (disk/CPU/mem/uptime)
+  ROLE-GATED 1.40.0: admin/super_admin only (403 otherwise). Host infra detail is operator-only; the launcher panel that consumes it is admin-only and collapsed, and a UI gate alone would leave the data one fetch away.
 
 ## settings
 POST /api/settings/logo [auth] [db] — upload branding logo (super_admin)

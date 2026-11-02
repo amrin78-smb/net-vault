@@ -51,6 +51,14 @@ function LoginBackground() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
+    // Respect "reduce motion". The constellation is decorative, so when the
+    // OS asks for less movement we paint ONE static frame and never start the
+    // RAF loop - the look survives, the drifting does not. Removing the
+    // backdrop entirely is not the answer: it is deliberate brand treatment
+    // for this page (see CLAUDE.md "UI design").
+    const reduceMotion = typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
     const NODE_COUNT = 80
     let w = 0
     let h = 0
@@ -104,7 +112,7 @@ function LoginBackground() {
         ctx.fill()
       }
 
-      raf = requestAnimationFrame(draw)
+      if (!reduceMotion) raf = requestAnimationFrame(draw)
     }
     draw()
 
@@ -346,6 +354,9 @@ function LoginForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [mfaStage, setMfaStage] = useState(false)
+  const [showPw, setShowPw] = useState(false)
+  const [health, setHealth] = useState<'unknown' | 'ok' | 'down'>('unknown')
+  const [version, setVersion] = useState<string | null>(null)
   const [totp, setTotp] = useState('')
   const totpRef = useRef<HTMLInputElement>(null)
 
@@ -357,6 +368,21 @@ function LoginForm() {
   // missing code. That endpoint issues nothing; authorize() re-checks the
   // password AND the code regardless of what the browser did here, so skipping
   // or faking step 1 gains nothing.
+  // Real platform health + version for the two indicators on this page.
+  // /api/health is unauthenticated by design, so it is readable before login.
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/health')
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
+      .then(j => {
+        if (cancelled) return
+        setHealth(j?.status === 'ok' ? 'ok' : 'down')
+        if (j?.version) setVersion(j.version)
+      })
+      .catch(() => { if (!cancelled) setHealth('down') })
+    return () => { cancelled = true }
+  }, [])
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -431,17 +457,34 @@ function LoginForm() {
 
       <LoginBackground />
 
-      {/* Platform status — top-right of the page */}
-      <div className="nv-status-badge" style={{ position: 'fixed', top: 24, right: 32, zIndex: 2, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%' /* intentional: platform-status dot — squaring it would look broken */, background: '#22c55e', boxShadow: '0 0 8px #22c55e' }} />
-        <span style={{ color: 'rgba(255,255,255,0.45)' }}>Platform Status</span>
-        <span style={{ color: '#22c55e', fontWeight: 600 }}>Operational</span>
-      </div>
+      {/* Platform status. This used to be a hardcoded green "Operational" that
+          was true whatever the platform was actually doing - the one state in
+          which a status indicator matters is the one it could never show.
+          /api/health is real and unauthenticated, so it is read for real;
+          until it answers, nothing is claimed. */}
+      {health !== 'unknown' && (
+        <div className="nv-status-badge" style={{ position: 'fixed', top: 24, right: 32, zIndex: 2, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'rgba(255,255,255,0.55)' }}>
+          <span style={{
+            width: 8, height: 8,
+            borderRadius: '50%' /* intentional: platform-status dot — squaring it would look broken */,
+            background: health === 'ok' ? '#22c55e' : '#f59e0b',
+            boxShadow: `0 0 8px ${health === 'ok' ? '#22c55e' : '#f59e0b'}`,
+          }} />
+          <span style={{ color: 'rgba(255,255,255,0.45)' }}>Platform status</span>
+          <span style={{ color: health === 'ok' ? '#22c55e' : '#f59e0b', fontWeight: 600 }}>
+            {health === 'ok' ? 'Operational' : 'Unavailable'}
+          </span>
+        </div>
+      )}
 
-      {/* Version — fixed bottom-left of the page */}
-      <div style={{ position: 'fixed', bottom: 20, left: 32, zIndex: 2, fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
-        NocVault v1.2.0  •  Build 2026.06.11
-      </div>
+      {/* Version — real value from /api/health, not a literal. The old label
+          read "NocVault v1.2.0 - Build 2026.06.11" and had not moved in
+          dozens of releases. */}
+      {version && (
+        <div style={{ position: 'fixed', bottom: 20, left: 32, zIndex: 2, fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
+          NetVault v{version}
+        </div>
+      )}
 
       {/* Logo + suite name — fixed top-left */}
       <div style={{ position: 'fixed', top: 24, left: 32, zIndex: 2 }}>
@@ -503,40 +546,92 @@ function LoginForm() {
               </svg>
             </div>
 
+            {/* The heading changes with the step. Previously both steps said
+                "Welcome Back / Sign in to access NocVault" while the fields
+                underneath swapped to a 6-digit code box, so the only cue that
+                the password had been accepted was the box itself. */}
             <div style={{ textAlign: 'center', marginBottom: 28 }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>Welcome Back</div>
-              <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>Sign in to access NocVault</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: '-0.5px' }}>
+                {mfaStage ? 'Two-factor verification' : 'Welcome Back'}
+              </div>
+              <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>
+                {mfaStage
+                  ? 'Enter the 6-digit code from your authenticator app'
+                  : 'Sign in to access NocVault'}
+              </div>
+              {mfaStage && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 14, fontSize: 12, color: 'rgba(255,255,255,0.45)' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#22c55e' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5"/></svg>
+                    Password
+                  </span>
+                  <span aria-hidden style={{ width: 18, height: 1, background: 'rgba(255,255,255,0.2)' }} />
+                  <span style={{ color: '#fff', fontWeight: 600 }}>Code</span>
+                </div>
+              )}
             </div>
 
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: 18 }}>
-                <label style={labelStyle}>Email address</label>
+                <label htmlFor="login-email" style={labelStyle}>Email address</label>
                 <input
+                  id="login-email"
+                  name="email"
                   type="email"
+                  autoComplete="username"
                   className="nv-login-input"
                   style={inputStyle}
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   placeholder="you@company.com"
                   required
+                  disabled={mfaStage}
+                  aria-invalid={error ? true : undefined}
+                  aria-describedby={error ? 'login-error' : undefined}
                   autoFocus
                 />
               </div>
 
               <div style={{ marginBottom: 18 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <label style={labelStyle}>Password</label>
-                  <a href="#" style={{ fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600, textDecoration: 'none' }}>Forgot password?</a>
+                {/* No "Forgot password?" link. There is no self-service reset
+                    backend, and the old one was href="#" - it looked like a
+                    way out and did nothing. Recovery really is "ask an
+                    administrator", which the footer says plainly. */}
+                <label htmlFor="login-password" style={labelStyle}>Password</label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    id="login-password"
+                    name="password"
+                    type={showPw ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    className="nv-login-input"
+                    style={{ ...inputStyle, paddingRight: 44 }}
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    required
+                    disabled={mfaStage}
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? 'login-error' : undefined}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPw(v => !v)}
+                    aria-label={showPw ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPw}
+                    disabled={mfaStage}
+                    style={{
+                      position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                      width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'none', border: 'none', cursor: mfaStage ? 'not-allowed' : 'pointer',
+                      color: 'rgba(255,255,255,0.5)', borderRadius: 6,
+                    }}
+                  >
+                    {showPw
+                      ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-10-8-10-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><path d="M2 2l20 20"/></svg>
+                      : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M2 12s3.64-7 10-7 10 7 10 7-3.64 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>}
+                  </button>
                 </div>
-                <input
-                  type="password"
-                  className="nv-login-input"
-                  style={inputStyle}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
               </div>
 
               {mfaStage && (
@@ -570,19 +665,23 @@ function LoginForm() {
                   type="checkbox"
                   checked={remember}
                   onChange={e => setRemember(e.target.checked)}
+                  disabled={mfaStage}
                   style={{ width: 15, height: 15, accentColor: RED, cursor: 'pointer' }}
                 />
                 Remember me
               </label>
 
               {reason === 'timeout' && (
-                <div style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+                <div role="status" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
                   Your session expired due to inactivity.
                 </div>
               )}
 
+              {/* id is referenced by aria-describedby on the inputs, and
+                  role=alert announces the failure instead of leaving a
+                  screen-reader user on a form that silently did nothing. */}
               {error && (
-                <div style={{ background: 'rgba(200,16,46,0.12)', border: '1px solid rgba(200,16,46,0.35)', color: '#f87171', padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+                <div id="login-error" role="alert" style={{ background: 'rgba(200,16,46,0.12)', border: '1px solid rgba(200,16,46,0.35)', color: '#f87171', padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
                   {error}
                 </div>
               )}
@@ -590,6 +689,7 @@ function LoginForm() {
               <button
                 type="submit"
                 disabled={loading}
+                aria-busy={loading}
                 style={{
                   width: '100%',
                   height: 48,
@@ -610,12 +710,29 @@ function LoginForm() {
                 onMouseEnter={e => { if (!loading) e.currentTarget.style.background = '#a00d24' }}
                 onMouseLeave={e => { e.currentTarget.style.background = RED }}
               >
-                {loading ? 'Signing in…' : <>Sign In <span style={{ fontSize: 17 }}>→</span></>}
+                {loading
+                  ? (mfaStage ? 'Verifying…' : 'Signing in…')
+                  : mfaStage
+                    ? 'Verify code'
+                    : <>Sign In <span style={{ fontSize: 17 }}>→</span></>}
               </button>
             </form>
 
-          <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
-            Need help? Contact your IT administrator
+          {mfaStage && (
+            <div style={{ textAlign: 'center', marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => { setMfaStage(false); setTotp(''); setError('') }}
+                style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', textDecoration: 'underline' }}
+              >
+                Use a different account
+              </button>
+            </div>
+          )}
+
+          <div style={{ textAlign: 'center', marginTop: 24, fontSize: 12, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>
+            Lost your password or your authenticator?<br />
+            Contact your NocVault administrator to have it reset.
           </div>
         </div>
       </div>

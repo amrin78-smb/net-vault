@@ -141,6 +141,15 @@ async function diskForecastDays(usedBytes: number, freeBytes: number): Promise<n
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  // Host infrastructure (hostname, disk, CPU, memory, uptime) is operator
+  // detail, not something every signed-in viewer needs. The launcher now
+  // shows it only to admins, and per this repo's own rule a UI gate is not a
+  // boundary on its own - the route has to agree, or the data is still one
+  // fetch away. The launcher is the only consumer.
+  const role = (session.user as { role?: string } | undefined)?.role
+  if (role !== 'admin' && role !== 'super_admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
   try {
     const disk = readDisk()
     const cpu = await cpuPercent()

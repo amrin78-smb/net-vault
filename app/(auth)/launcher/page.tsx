@@ -293,6 +293,8 @@ function DEmpty({ app }: { app: string }) {
 
 function LauncherInner() {
   const { data: session, status } = useSession()
+  const viewerRole = (session?.user as { role?: string } | undefined)?.role
+  const isAdminUser = viewerRole === 'admin' || viewerRole === 'super_admin'
   const router = useRouter()
   const searchParams = useSearchParams()
   // Per-user SSO access denial → ?denied=<slug> (set by the SSO route on refusal).
@@ -332,7 +334,10 @@ function LauncherInner() {
   }, [])
 
   // Server status — fetch on load, auto-refresh every 30s. Never crash the page.
+  // Only admins see the panel and the route now returns 403 to anyone else, so
+  // a viewer must not poll it every 30 seconds for a guaranteed rejection.
   useEffect(() => {
+    if (!isAdminUser) return
     let alive = true
     const load = () => {
       fetch('/api/server-stats')
@@ -352,7 +357,7 @@ function LauncherInner() {
     load()
     const id = setInterval(load, 30000)
     return () => { alive = false; clearInterval(id) }
-  }, [])
+  }, [isAdminUser])
 
   // Live clock — Asia/Bangkok (ICT), refresh every minute.
   useEffect(() => {
@@ -796,8 +801,15 @@ function LauncherInner() {
           </div>
         </div>
 
-        {/* Server Status */}
-        {(() => {
+        {/* Server Status.
+
+            Infrastructure detail, so it is admin-only and collapsed by
+            default: it used to be an always-expanded four-column panel of
+            disk/CPU/memory gauges that every role saw on every visit, which
+            put the host's storage headroom above the user's own applications
+            in the visual order. <details> gives the disclosure for free,
+            including keyboard operation. */}
+        {isAdminUser && (() => {
           const loading = serverLoading && !serverStats
           const s = serverStats
           const memPct = s?.memory.percent ?? 0
@@ -814,14 +826,20 @@ function LauncherInner() {
             fcColor = fc < 30 ? '#dc2626' : fc < 90 ? '#d97706' : 'var(--text-muted)'
           }
           return (
-            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: '20px 24px', marginBottom: '8px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <details style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: '16px 24px', marginBottom: '8px' }}>
+              <summary style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', listStyle: 'none' }}>
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, color: 'var(--text-primary)' }}>
                   <rect x="2" y="3" width="20" height="7" rx="2" /><rect x="2" y="14" width="20" height="7" rx="2" /><line x1="6" y1="6.5" x2="6.01" y2="6.5" /><line x1="6" y1="17.5" x2="6.01" y2="17.5" />
                 </svg>
-                <div style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Server Status</div>
-              </div>
-              <div style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '4px 0 18px' }}>{(s?.host || (typeof window !== 'undefined' ? window.location.hostname : 'localhost'))} — shared infrastructure for all suite apps</div>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>Server infrastructure</span>
+                  <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    {(s?.host || (typeof window !== 'undefined' ? window.location.hostname : 'localhost'))} — shared by all suite apps
+                  </span>
+                </span>
+                <span aria-hidden style={{ color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>Show</span>
+              </summary>
+              <div style={{ height: 18 }} />
 
               {serverError && !s ? (
                 <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px' }}>Server metrics unavailable</div>
@@ -864,7 +882,7 @@ function LauncherInner() {
                   </div>
                 </div>
               )}
-            </div>
+            </details>
           )
         })()}
 
