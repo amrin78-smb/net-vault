@@ -83,6 +83,10 @@ export default function GlobalSearch() {
         </svg>
         <input
           ref={inputRef}
+          // A placeholder is not a label: it disappears the moment you type,
+          // and screen readers may not announce it at all.
+          aria-label="Search devices, sites and circuits"
+          role="searchbox"
           value={q}
           onChange={onChange}
           onKeyDown={onKeyDown}

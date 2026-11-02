@@ -628,7 +628,7 @@ export default function DevicesPage() {
 
       {/* Search + Filter bar */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
-        <input className="input" style={{ flex: '1', maxWidth: '400px' }} placeholder="Search name, IP, model, serial..." value={search}
+        <input className="input" style={{ flex: '1', maxWidth: '400px' }} placeholder="Search name, IP, model, serial..." aria-label="Search devices" value={search}
           onChange={e => { setSearch(e.target.value); setPage(1) }}
           onBlur={e => pushFilters({ search: e.target.value })}
           onKeyDown={e => { if (e.key === 'Enter') pushFilters({ search: (e.target as HTMLInputElement).value }) }} />
@@ -775,7 +775,7 @@ export default function DevicesPage() {
             <table>
               <thead>
                 <tr>
-                  {isAdmin && <th style={{ width: '40px' }}><input type="checkbox" checked={selected.size === devices.length && devices.length > 0} onChange={toggleAll} /></th>}
+                  {isAdmin && <th style={{ width: '40px' }}><input type="checkbox" aria-label="Select all devices on this page" checked={selected.size === devices.length && devices.length > 0} onChange={toggleAll} /></th>}
                   <th>Name</th><th>Type</th><th>Brand / Model</th><th>IP address</th>
                   <th>Site</th><th>Region</th><th>Lifecycle</th><th>Status</th><th>Support End</th><th>Actions</th>
                 </tr>
@@ -783,7 +783,10 @@ export default function DevicesPage() {
               <tbody>
                 {devices.map(d => (
                   <tr key={d.id} style={{ background: selected.has(d.id) ? 'var(--surface-subtle)' : undefined }}>
-                    {isAdmin && <td><input type="checkbox" checked={selected.has(d.id)} onChange={() => toggleSelect(d.id)} /></td>}
+                    {/* Named per row: 50 identical unlabelled checkboxes read out as
+                        "checkbox" fifty times over, with no way to tell which
+                        device each one selects. */}
+                    {isAdmin && <td><input type="checkbox" aria-label={`Select ${d.name}`} checked={selected.has(d.id)} onChange={() => toggleSelect(d.id)} /></td>}
                     <td style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
                       <Link href={`/devices/${d.id}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }}>{d.name || '—'}</Link>
                     </td>

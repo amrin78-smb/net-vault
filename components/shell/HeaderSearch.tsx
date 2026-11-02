@@ -41,7 +41,7 @@ export default function HeaderSearch() {
   }, [])
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', flex: 1, maxWidth: 520, minWidth: 140 }}>
+    <div ref={wrapRef} style={{ position: 'relative', flex: 1, maxWidth: 520, minWidth: 0 }}>
       <GlobalSearch />
       <span aria-hidden className="kbd-hint" style={{
         position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',

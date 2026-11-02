@@ -87,7 +87,10 @@ export function PageHeader({ title, subtitle, children }: {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
       <div>
-        <div className="page-title">{title}</div>
+        {/* A real <h1>, not a styled div. Pages using this component had no
+            level-1 heading at all, so assistive tech had nothing to announce
+            as the page title and heading-order navigation skipped them. */}
+        <h1 className="page-title">{title}</h1>
         {subtitle && <div className="page-subtitle">{subtitle}</div>}
       </div>
       {children && (

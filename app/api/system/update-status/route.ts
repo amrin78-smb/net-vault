@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.44.0': [
+    'Agent rows can now be expanded with the keyboard. The expand control was a clickable table row, which a pointer could use but a keyboard could not reach at all.',
+    'The Add agent and Agent logs windows are now proper dialogs: they trap focus, close on Escape and return focus to the button that opened them.',
+    'Every page now has a proper top-level heading, and search boxes, filters and the device selection checkboxes have accessible names for screen readers.',
+    'EOL, Compliance and Audit pages use the standard page header, with clearer descriptions of what each one covers.',
+  ],
   '1.43.0': [
     'Settings is now organised into System, Access, Billing and Personal sections down the side instead of one long row of seven tabs. Every existing settings link still works, and switching section now updates the address bar so you can bookmark or share the section you are on.',
     'The device form keeps its Save and Cancel buttons in view at the bottom of the screen instead of only at the end of eight sections, shows when you have unsaved changes, and warns before you close the tab with edits pending.',

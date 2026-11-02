@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { PageHead } from '@/components/system'
 type Log = { id: string; field_name: string; changed_at: string; changed_by_name: string; changed_by_email: string; device_name: string }
 type User = { id: string; name: string }
 
@@ -48,14 +49,17 @@ export default function AuditPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '20px' }}>
-        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Audit log</h1>
-        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>Full history of all changes - {total.toLocaleString()} entries</p>
+        <PageHead
+          title="Audit Log"
+          description="Every recorded change, newest first. Filter by action, user or device to narrow the history."
+          status={<span className="badge badge-gray tnum">{total.toLocaleString()} entries</span>}
+        />
       </div>
 
       <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '14px 16px', marginBottom: '16px', display: 'flex', gap: '10px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)', marginBottom: '4px', fontWeight: '500' }}>Action</div>
-          <select className="select" style={{ width: 'auto', minWidth: '140px' }} value={action} onChange={e => { setAction(e.target.value); setPage(1) }}>
+          <select className="select" aria-label="Filter audit log" style={{ width: 'auto', minWidth: '140px' }} value={action} onChange={e => { setAction(e.target.value); setPage(1) }}>
             <option value="">All actions</option>
             {Object.entries(ACTION_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>

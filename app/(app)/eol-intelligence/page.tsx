@@ -1162,7 +1162,7 @@ export default function EolIntelligencePage() {
         <div style={{ marginBottom: '14px' }}>
           <input
             className="input input-md"
-            placeholder="Search all seed entries by vendor, model, or alias…"
+            placeholder="Search all seed entries by vendor, model, or alias…" aria-label="Search seed entries"
             value={seedSearch}
             onChange={e => setSeedSearch(e.target.value)}
           />

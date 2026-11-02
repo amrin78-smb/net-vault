@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { PageHead } from '@/components/system'
 import Link from 'next/link'
 
 type Check = {
@@ -72,10 +73,10 @@ export default function CompliancePage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>Compliance Dashboard</h1>
-        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-          Policy risk and inventory completeness across {total.toLocaleString()} active devices
-        </p>
+        <PageHead
+          title="Compliance"
+          description={`Policy risk and inventory completeness across ${total.toLocaleString()} active devices. Decommissioned and spare devices are excluded.`}
+        />
       </div>
 
       {/* Two score cards: Risk/Compliance + Data Completeness */}

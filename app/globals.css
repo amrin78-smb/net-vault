@@ -1162,3 +1162,27 @@ th.ident, .data-table th.ident {
   .settings-nav-label { padding: 0 4px 0 0; }
   .settings-nav-item { width: auto; }
 }
+
+/* .page-title is now rendered as an <h1> (components/ui.tsx); reset the UA
+   margin and font-size so the visual result is unchanged. */
+h1.page-title { margin: 0; font-size: var(--text-xl); line-height: 1.2; }
+
+/* ── Responsive fixes found by sweeping every page at 1440/1280/1024/768/390/360 ── */
+
+/* The dashboard's four hero KPI tiles are fixed-width and did not wrap, so
+   the navy band ran 40px past the viewport at 1280. */
+.nv-health-right { flex-wrap: wrap; }
+@media (max-width: 1360px) {
+  .nv-health-right > * { flex: 1 1 160px; width: auto !important; min-width: 150px; }
+}
+
+/* A filter select with a fixed width pushed the page sideways on a phone. */
+@media (max-width: 520px) {
+  .select, .input { max-width: 100% !important; }
+  select.select { width: 100% !important; min-width: 0 !important; }
+}
+
+/* Any fixed-width card should become fluid before it overflows. */
+@media (max-width: 520px) {
+  .card, .stat-card, .kpi-card { min-width: 0 !important; }
+}

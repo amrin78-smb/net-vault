@@ -157,7 +157,7 @@ export default function CircuitsPage() {
 
       {/* Search + Filter bar */}
       <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', alignItems: 'center' }}>
-        <input className="input" style={{ flex: '1', maxWidth: '400px' }} placeholder="Search circuit ID, ISP, subnet..."
+        <input className="input" style={{ flex: '1', maxWidth: '400px' }} placeholder="Search circuit ID, ISP, subnet..." aria-label="Search circuits"
           value={search} onChange={e => setSearch(e.target.value)} />
         <button onClick={() => setShowFilterPanel(f => !f)}
           style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '7px 14px', background: showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : 'var(--bg-card)', color: showFilterPanel || !!(isp||usage||technology||country||site) ? 'white' : 'var(--text-secondary)', border: '1px solid ' + (showFilterPanel || !!(isp||usage||technology||country||site) ? '#1a2744' : 'var(--border)'), borderRadius: 'var(--radius-sm)', cursor: 'pointer', fontSize: 'var(--text-base)', fontWeight: '500', whiteSpace: 'nowrap' as const }}>

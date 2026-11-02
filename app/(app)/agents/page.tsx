@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { Dialog } from '@/components/system'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useToast, useConfirm } from '@/app/providers'
@@ -260,11 +261,30 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
         {/* Agent */}
         <td style={{ maxWidth: 260 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
-              strokeLinecap="round" strokeLinejoin="round"
-              style={{ color: 'var(--text-muted)', flexShrink: 0, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
-              <polyline points="9 18 15 12 9 6" />
-            </svg>
+            {/* A real button, not just the row's onClick.
+                The row handler stays for mouse users, but a <tr onClick> is
+                invisible to the keyboard: there was no way to expand an agent
+                without a pointer. stopPropagation so a click on the button
+                does not ALSO fire the row handler and toggle twice. */}
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); onToggleExpand() }}
+              aria-expanded={expanded}
+              aria-controls={`agent-detail-${agent.id}`}
+              aria-label={`${expanded ? 'Collapse' : 'Expand'} details for ${agent.name}`}
+              style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 20, height: 20, flexShrink: 0, padding: 0,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-muted)', borderRadius: 'var(--radius-sm)',
+              }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                strokeLinecap="round" strokeLinejoin="round" aria-hidden
+                style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, color: 'var(--text-primary)', ...cellMuted }}>{agent.name}</div>
               <div className="mono" style={{ color: 'var(--text-muted)', fontSize: 'var(--text-xs)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -309,7 +329,7 @@ function AgentRow({ agent, expanded, onToggleExpand, onToggleModule, onRevoke, o
       </tr>
 
       {expanded && (
-        <tr>
+        <tr id={`agent-detail-${agent.id}`}>
           <td colSpan={7} style={{ background: 'var(--bg-primary)', padding: 0, maxWidth: 'none', whiteSpace: 'normal' }}>
             <div style={{ padding: '16px 20px 20px 34px', display: 'flex', gap: 32, flexWrap: 'wrap' }}>
               {/* Facts */}
@@ -796,27 +816,17 @@ export default function AgentsPage() {
         )}
       </div>
 
-      {/* ── Add-agent modal ── */}
+      {/* ── Add-agent modal ──
+           Shared Dialog: role=dialog, aria-modal, focus trap, Escape and
+           focus restored to whatever opened it. The hand-rolled overlay had
+           none of those - a keyboard user could tab straight out of it into
+           the page behind. */}
       {showAdd && (
-        <div className="modal-overlay" onClick={closeAdd}>
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: 'var(--bg-card)', borderRadius: 'var(--radius)', width: '100%', maxWidth: 520,
-              boxShadow: 'var(--shadow-lg)', maxHeight: '90vh', overflowY: 'auto',
-            }}
-          >
-            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-              <div>
-                <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Add agent</h2>
-                <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  Generate a one-time enrollment token, then run the install command on the remote host.
-                </p>
-              </div>
-              <button className="btn btn-secondary" onClick={closeAdd} style={{ padding: '6px 10px' }} aria-label="Close">✕</button>
-            </div>
-
-            <div style={{ padding: '20px 24px' }}>
+        <Dialog open={showAdd} onClose={closeAdd} maxWidth={520}
+          title="Add agent"
+          description="Generate a one-time enrollment token, then run the install command on the remote host."
+        >
+            <div style={{ paddingTop: 6 }}>
               {!token ? (
                 <>
                   <div className="form-field" style={{ marginBottom: 16 }}>
@@ -898,33 +908,16 @@ export default function AgentsPage() {
                 </>
               )}
             </div>
-          </div>
-        </div>
+        </Dialog>
       )}
 
-      {/* ── Fetch-logs modal ── */}
+      {/* ── Fetch-logs modal (shared Dialog, as above) ── */}
       {logsAgent && (
-        <div className="modal-overlay" onClick={closeLogs}>
-          <div
-            onClick={e => e.stopPropagation()}
-            style={{
-              background: 'var(--bg-card)', borderRadius: 'var(--radius)', width: '100%', maxWidth: 720,
-              boxShadow: 'var(--shadow-lg)', maxHeight: '90vh', display: 'flex', flexDirection: 'column',
-            }}
-          >
-            <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border-light)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-              <div>
-                <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
-                  Agent logs — {logsAgent.name}
-                </h2>
-                <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '4px 0 0' }}>
-                  Last ~200 lines, fetched over the poll-carried command channel.
-                </p>
-              </div>
-              <button className="btn btn-secondary" onClick={closeLogs} style={{ padding: '6px 10px' }} aria-label="Close">✕</button>
-            </div>
-
-            <div style={{ padding: '20px 24px', overflowY: 'auto' }}>
+        <Dialog open={!!logsAgent} onClose={closeLogs} maxWidth={720}
+          title={`Agent logs \u2014 ${logsAgent.name}`}
+          description="Last ~200 lines, fetched over the poll-carried command channel."
+        >
+            <div style={{ paddingTop: 6, overflowY: 'auto' }}>
               {logsAgent.status === 'offline' && logsState === 'polling' && (
                 <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: 14 }}>
                   This agent appears offline — the log request is queued and will run when it reconnects, so this may time out.
@@ -968,14 +961,13 @@ export default function AgentsPage() {
               )}
             </div>
 
-            <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 14, marginTop: 14, borderTop: '1px solid var(--border-light)' }}>
               <button className="btn btn-secondary" onClick={() => fetchLogs(logsAgent)} disabled={logsState === 'polling'}>
                 {logsState === 'polling' ? 'Fetching…' : 'Fetch again'}
               </button>
               <button className="btn btn-primary" onClick={closeLogs}>Close</button>
             </div>
-          </div>
-        </div>
+        </Dialog>
       )}
     </div>
   )

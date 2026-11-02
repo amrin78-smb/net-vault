@@ -32,7 +32,7 @@ export default function HelpMenu({ version }: { version?: string | null }) {
       <DropdownMenu
         label="Help"
         trigger={({ toggle, open, ref }) => (
-          <button ref={ref} type="button" className="icon-btn" onClick={toggle}
+          <button ref={ref} type="button" className="icon-btn help-trigger" onClick={toggle}
             aria-label="Help" aria-haspopup="menu" aria-expanded={open}>
             <Icon.help size={19} />
           </button>

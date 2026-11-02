@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { PageHead } from '@/components/system'
 import Link from 'next/link'
 
 type SiteRow = { region: string; country: string; site: string; eol_count: number; total_count: number }
@@ -62,8 +63,10 @@ export default function EolPage() {
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: '700', color: 'var(--text-primary)', margin: 0 }}>EOL / Risk report</h1>
-        <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>Hardware lifecycle and software EOL tracking</p>
+        <PageHead
+          title="EOL / Risk"
+          description="Hardware past end-of-life or end-of-support, and software approaching its own EOL date. Work the highest-risk sites first."
+        />
       </div>
 
       {/* Tabs */}
@@ -101,7 +104,7 @@ export default function EolPage() {
             </div>
           </div>
           <div style={{ marginBottom: '16px' }}>
-            <select className="select" style={{ width: 'auto', minWidth: '130px' }} value={region} onChange={e => setRegion(e.target.value)}>
+            <select className="select" aria-label="Filter EOL report" style={{ width: 'auto', minWidth: '130px' }} value={region} onChange={e => setRegion(e.target.value)}>
               <option value="">All regions</option>
               {regions.map(r => <option key={r}>{r}</option>)}
             </select>

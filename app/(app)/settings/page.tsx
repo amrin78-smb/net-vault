@@ -1026,7 +1026,7 @@ export default function SettingsPage() {
       {activeTab === 'sites' && (
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <input className="input input-md" placeholder="Search sites or countries..." value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
+            <input className="input input-md" placeholder="Search sites or countries..." aria-label="Search sites" value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
             <button className="btn-primary" onClick={() => { setEditSite(null); setShowSiteForm(true); setSiteError('') }}>+ Add site</button>
           </div>
 

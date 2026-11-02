@@ -100,7 +100,7 @@ export default function SuiteHeader({
         label="Switch application"
         align="left"
         trigger={({ toggle, open, ref }) => (
-          <button ref={ref} type="button" className="icon-btn" onClick={toggle}
+          <button ref={ref} type="button" className="icon-btn app-switcher-trigger" onClick={toggle}
             aria-label="Switch application" aria-haspopup="menu" aria-expanded={open}>
             <Icon.grid size={18} />
           </button>
@@ -191,7 +191,18 @@ export default function SuiteHeader({
           .desktop-only { display: none; }
           .product-identity, .product-divider { display: none; }
         }
-        @media (max-width: 620px) { .account-name { display: none; } }
+        /* Below 620px the bar cannot hold every control at once; it was
+           overflowing the viewport by ~90px and taking the page with it.
+           The app switcher and help both have equivalents elsewhere (Suite
+           Home in the nav, help inside Settings), so they give way first and
+           search keeps the room. */
+        @media (max-width: 620px) {
+          .account-name { display: none; }
+          .suite-header .app-switcher-trigger { display: none; }
+        }
+        @media (max-width: 480px) {
+          .suite-header .help-trigger { display: none; }
+        }
       `}</style>
     </header>
   )
