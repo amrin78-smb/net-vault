@@ -75,6 +75,14 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.39.0': [
+    'Navigation is now grouped and role-aware: Overview, Inventory, Lifecycle & Assurance, Operations and Administration, instead of one flat list. Who can see what is unchanged.',
+    'Header search now searches devices, sites AND circuits with keyboard navigation, and opens with Ctrl+K or Cmd+K. It previously only pushed whatever you typed at the device list, so searching for a site or a circuit found nothing.',
+    'Help no longer opens the Compliance page. It now lists the keyboard shortcuts, your security settings and system info.',
+    'Status badges are readable in dark mode again - they were using fixed light-mode colours, so every badge kept a pale fill on a dark card.',
+    'Confirmation dialogs can be dismissed with Escape, keep keyboard focus inside them, and show destructive actions in a distinct red that no longer looks identical to Save.',
+    'The app is usable on a phone or tablet: the navigation becomes a drawer, and there is a skip-to-content link for keyboard users.',
+  ],
   '1.38.2': [
     'Second pass on the suite logos: the marks are now dimensional rather than flat - a lit sphere for NocVault, rack units with a scanning lens for NetVault, a layered data stack dissolving into pixels for LogVault, a sculpted waveform for SpanVault, and an orbital globe for DDIVault. Brand colours are unchanged. The shading stays within each brand colour rather than fading to navy, so the marks stay legible on the dark header and on a white page or printed report.',
   ],

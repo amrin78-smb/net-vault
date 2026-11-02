@@ -41,7 +41,7 @@ export default function HeaderSearch() {
   }, [])
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', flex: 1, maxWidth: 520, minWidth: 0 }}>
+    <div ref={wrapRef} style={{ position: 'relative', flex: 1, maxWidth: 520, minWidth: 140 }}>
       <GlobalSearch />
       <span aria-hidden className="kbd-hint" style={{
         position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
@@ -52,7 +52,7 @@ export default function HeaderSearch() {
       }}>
         {mac ? '⌘K' : 'Ctrl K'}
       </span>
-      <style>{`@media (max-width: 720px) { .kbd-hint { display: none } }`}</style>
+      <style>{`@media (max-width: 1100px) { .kbd-hint { display: none } }`}</style>
     </div>
   )
 }

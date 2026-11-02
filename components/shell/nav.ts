@@ -6,6 +6,8 @@ export type NavItem = {
   href: string
   label: string
   icon: IconName
+  /** Suite-standard nav chip tint: [icon colour, chip background]. */
+  tint: [string, string]
   /** Matched against `?tab=` so a Settings deep-link highlights the right row. */
   tab?: string
   adminOnly?: boolean
@@ -45,39 +47,39 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     label: 'Overview',
     items: [
-      { href: '/launcher',  label: 'Suite Home',        icon: 'home', suite: true },
-      { href: '/dashboard', label: 'NetVault Dashboard', icon: 'dashboard', hideForSiteAdmin: true },
+      { href: '/launcher',  label: 'Suite Home',        icon: 'home', tint: ['#fda4af', 'rgba(200,16,46,0.25)'], suite: true },
+      { href: '/dashboard', label: 'NetVault Dashboard', icon: 'dashboard', tint: ['#f87171', 'rgba(200,16,46,0.25)'], hideForSiteAdmin: true },
     ],
   },
   {
     label: 'Inventory',
     items: [
-      { href: '/sites',    label: 'Sites',    icon: 'site' },
-      { href: '/devices',  label: 'Devices',  icon: 'device' },
-      { href: '/circuits', label: 'Circuits', icon: 'circuit' },
+      { href: '/sites',    label: 'Sites',    icon: 'site', tint: ['#34d399', 'rgba(29,158,117,0.25)'] },
+      { href: '/devices',  label: 'Devices',  icon: 'device', tint: ['#60a5fa', 'rgba(55,138,221,0.25)'] },
+      { href: '/circuits', label: 'Circuits', icon: 'circuit', tint: ['#a78bfa', 'rgba(127,119,221,0.25)'] },
     ],
   },
   {
     label: 'Lifecycle & Assurance',
     items: [
-      { href: '/eol',              label: 'EOL / Risk',       icon: 'risk', hideForSiteAdmin: true },
-      { href: '/eol-intelligence', label: 'EOL Intelligence', icon: 'intelligence', superAdminOnly: true },
-      { href: '/compliance',       label: 'Compliance',       icon: 'compliance', adminOnly: true },
+      { href: '/eol',              label: 'EOL / Risk',       icon: 'risk', tint: ['#fbbf24', 'rgba(186,117,23,0.25)'], hideForSiteAdmin: true },
+      { href: '/eol-intelligence', label: 'EOL Intelligence', icon: 'intelligence', tint: ['#c084fc', 'rgba(147,86,220,0.25)'], superAdminOnly: true },
+      { href: '/compliance',       label: 'Compliance',       icon: 'compliance', tint: ['#06b6d4', 'rgba(6,182,212,0.2)'], adminOnly: true },
     ],
   },
   {
     label: 'Operations',
     items: [
-      { href: '/agents', label: 'Agents',    icon: 'agent', superAdminOnly: true },
-      { href: '/audit',  label: 'Audit Log', icon: 'audit', adminOnly: true },
+      { href: '/agents', label: 'Agents',    icon: 'agent', tint: ['#2dd4bf', 'rgba(13,148,136,0.25)'], superAdminOnly: true },
+      { href: '/audit',  label: 'Audit Log', icon: 'audit', tint: ['#f472b6', 'rgba(212,83,126,0.25)'], adminOnly: true },
     ],
   },
   {
     label: 'Administration',
     items: [
-      { href: '/settings?tab=users',   label: 'Users & Access',          icon: 'users',    tab: 'users',   adminOnly: true },
-      { href: '/settings?tab=license', label: 'Subscription & Licensing', icon: 'license', tab: 'license', adminOnly: true },
-      { href: '/settings?tab=general', label: 'System Settings',          icon: 'settings', tab: 'general' },
+      { href: '/settings?tab=users',   label: 'Users & Access',          icon: 'users', tint: ['#38bdf8', 'rgba(56,189,248,0.2)'],    tab: 'users',   adminOnly: true },
+      { href: '/settings?tab=license', label: 'Subscription & Licensing', icon: 'license', tint: ['#fcd34d', 'rgba(217,119,6,0.25)'], tab: 'license', adminOnly: true },
+      { href: '/settings?tab=general', label: 'System Settings',          icon: 'settings', tint: ['#9ca3af', 'rgba(136,135,128,0.25)'], tab: 'general' },
     ],
   },
 ]

@@ -8,7 +8,7 @@ Breadcrumb  crumbs — page breadcrumb trail, default export [components/Breadcr
 (c) DeviceForm  initialData, deviceId — full add/edit device form (identity, network, location, lifecycle, procurement, support contract, software), default export [components/DeviceForm.tsx]. "Technical debt" is a READ-ONLY derived display computed via calcTechnicalDebt() — never an input; the write routes ignore any client-supplied value.
   (internal, module-level, not exported) Field  label, required, span, children — labeled form field wrapper
   (internal, module-level, not exported) Section  title, children — card-wrapped form section w/ grid
-(c) GlobalSearch  (none) — navy-bar omnibox search across devices/sites/circuits w/ keyboard nav (/, arrows, Enter, Esc), default export [components/GlobalSearch.tsx]
+(c) GlobalSearch  (none) — navy-bar omnibox search across devices/sites/circuits w/ keyboard nav (/, arrows, Enter, Esc), default export [components/GlobalSearch.tsx]. Mounted by components/shell/HeaderSearch.tsx. Was DEAD CODE until 1.39.0 — fully built, imported by nothing, while the header carried its own input that only pushed /devices?search=<q>.
 (c) IdleTimeout  (none) — session idle-timeout watcher + "stay logged in" warning modal, signs out via next-auth, default export [components/IdleTimeout.tsx]
 (c) LicenseBanner  (none) — reads own GET /api/license, shows trial/grace/expired/expiring banner, display-only (no enforcement), default export [components/LicenseBanner.tsx]
 (c) ThemeToggle  (none) — sun/moon theme switcher for navy top bar, default export [components/ThemeToggle.tsx]
@@ -45,3 +45,36 @@ Real, actively-imported second location — not dead code: UpdateNotifier and Up
 ## app/(app)/eol-intelligence/page.tsx (page-local, module-level)
 CoverageDonut  dated, total — two-segment SVG coverage ring. REPLACED a recharts <PieChart>: recharts was imported into this route for this one 120x120 graphic and cost ~386 KB across two chunks vs the page's own ~50 KB, and was the main reason the page felt slow to open. Geometry mirrors the old chart (r=48 + 16px stroke == innerRadius 40/outerRadius 56; rotate(-90) == startAngle 90). Do NOT reintroduce a charting library here for a single shape.
 QuickEolLookup  (none) — debounced model/vendor search over /api/admin/eol-seed?search=, rendered high on the page. Deliberately self-contained (own state + fetch) so it does not collide with the seed-catalog accordion search further down, which drives a different view. 2-character minimum: one character matches most of a ~7,900-row catalog.
+
+
+## components/system/ — shared UI primitives (added 1.39.0)
+Build pages out of these rather than new inline-style one-offs. They render the
+classes defined in app/globals.css; see that file for the token vocabulary.
+(c) Button  variant(default|primary|navy|secondary|destructive), icon, ...button — standard button [components/system/index.tsx]
+(c) IconButton  label(REQUIRED — becomes the accessible name), icon, ...button — icon-only button [components/system/index.tsx]
+(c) PageHead  title, description, breadcrumbs, updatedAt, status, actions, titleId — standard page header. `updatedAt` renders ONLY when passed; a page that does not know its data age must not pass one [components/system/index.tsx]
+(c) Breadcrumbs  items[{label,href}] — ordered crumb trail, last is aria-current [components/system/index.tsx]
+(c) Section  title, description, actions, children, id — titled page section [components/system/index.tsx]
+(c) Card  title, actions, children, padded, className — bordered card [components/system/index.tsx]
+(c) StatusPill  tone(success|warn|danger|info|neutral), children, icon — status badge; ALWAYS renders text, the dot is a second cue only [components/system/index.tsx]
+(c) Alert  tone, title, children, action, icon — inline alert/banner; role=alert for danger, else status [components/system/index.tsx]
+(c) Stat  label, value, sub, tone, href, loading — one metric. value null/undefined renders an em dash + "Unavailable", which is deliberately NOT the same as a real 0 [components/system/index.tsx]
+(c) DescriptionList  items[{label,value,mono}] — responsive dl, collapses to one column under 620px [components/system/index.tsx]
+(c) EmptyBox / ErrorBox / NoAccessBox  — empty, error (role=alert, optional retry) and permission-denied states [components/system/index.tsx]
+(c) Toolbar  children — filter/action bar wrapper [components/system/index.tsx]
+(c) FilterChips  filters[{key,label,value}], onClear, onClearAll — removable active-filter chips [components/system/index.tsx]
+(c) Tabs  tabs[{id,label,count}], active, onChange, label — ARIA tablist w/ arrow-key roving focus [components/system/index.tsx]
+(c) Pager  page, limit, total, onPage, onLimit, loading — THE pagination. Computes its range from the real page size [components/system/index.tsx]
+(c) Dialog  open, onClose, title, description, children, footer, variant(dialog|drawer), dismissible, initialFocus, maxWidth — modal with role=dialog, aria-modal, focus trap, Escape, scroll lock and focus restoration [components/system/Dialog.tsx]
+(c) DropdownMenu  trigger({open,toggle,ref}), children, align, label — menu w/ roving arrow-key focus, Escape, outside-click [components/system/Menu.tsx]
+(c) MenuItem / MenuLabel / MenuSeparator  — menu contents; MenuItem takes href or onSelect, plus destructive/disabled/icon [components/system/Menu.tsx]
+Icon  — local inline SVG set (Icon.device, Icon.site, …), 24x24 viewBox, currentColor, aria-hidden [components/system/icons.tsx]
+
+## components/shell/ — application shell (added 1.39.0)
+(c) SuiteHeader  productName, productSubtitle, userName, userRole, userApps, version, collapsed, onToggleCollapsed, onToggleSidebar, onChangePassword, sidebarTriggerRef — navy suite bar: brand, app switcher, product identity, search, theme, help, account menu [components/shell/SuiteHeader.tsx]
+  SUITE_APPS — the 4 apps with their REAL launch hrefs (/dashboard, /api/sso/<app>)
+  canAccessApp(slug, apps) — mirrors the launcher rule exactly: netvault always allowed; empty/absent list means all
+(c) Sidebar  role, collapsed, mobileOpen, onCloseMobile, triggerRef — grouped role-aware nav; mobile drawer is a focus-trapped role=dialog [components/shell/Sidebar.tsx]
+(c) HeaderSearch  (none) — mounts GlobalSearch + binds Ctrl/Cmd+K [components/shell/HeaderSearch.tsx]
+(c) HelpMenu  version — real help menu (shortcuts dialog, security, about). Replaced a Help link that pointed at /compliance [components/shell/HelpMenu.tsx]
+nav.ts — NAV_GROUPS, canSee(), visibleGroups(), isCurrent(). Role gates live HERE now; they are carried over verbatim from the old flat list and each is commented with why.

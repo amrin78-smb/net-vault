@@ -63,7 +63,7 @@ export default function Sidebar({
         aria-label={mobileOpen ? 'Navigation menu' : 'Main'}
         {...(mobileOpen ? { role: 'dialog', 'aria-modal': true } : {})}
       >
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '10px 10px 0' }} className="sidebar-mobile-close">
+        <div className="sidebar-mobile-close">
           <button type="button" className="icon-btn" onClick={onCloseMobile}
             aria-label="Close navigation" style={{ color: 'rgba(255,255,255,0.7)' }}>
             <Icon.close size={18} />
@@ -87,7 +87,15 @@ export default function Sidebar({
                         title={collapsed ? item.label : undefined}
                         onClick={onCloseMobile}
                       >
-                        <span aria-hidden style={{ display: 'flex', flexShrink: 0 }}><I size={16} /></span>
+                        {/* Suite-standard nav chip: 28x28, radius 8, per-route
+                            tint, and ONLY the active row is coloured - the same
+                            treatment the other three NocVault apps use. */}
+                        <span aria-hidden className="nav-chip" style={{
+                          background: current ? item.tint[1] : 'transparent',
+                          color: current ? item.tint[0] : 'rgba(255,255,255,0.55)',
+                        }}>
+                          <I size={16} />
+                        </span>
                         <span className="nav-label" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {item.label}
                         </span>
@@ -108,7 +116,7 @@ export default function Sidebar({
         </div>
       </nav>
       <style>{`
-        .sidebar-mobile-close { display: none; }
+        .sidebar-mobile-close { display: none; justify-content: flex-end; padding: 10px 10px 0; }
         @media (max-width: 860px) { .sidebar-mobile-close { display: flex; } }
       `}</style>
     </>

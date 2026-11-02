@@ -156,7 +156,7 @@ export default function SuiteHeader({
             }}>
             {/* intentional: 50% — a true circular avatar, never squared */}
             <span aria-hidden style={{
-              width: 32, height: 32, borderRadius: '50%', background: 'var(--primary)',
+              width: 34, height: 34, borderRadius: '50%', background: 'var(--primary)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 'var(--text-base)', fontWeight: 700, color: '#fff', flexShrink: 0,
             }}>{initial}</span>

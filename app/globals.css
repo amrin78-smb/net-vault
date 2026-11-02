@@ -1035,3 +1035,16 @@ td.ident, .data-table td.ident {
 }
 .tab:hover { color: var(--text-primary); }
 .tab[aria-selected="true"] { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+
+/* ── Suite-standard nav chip ──────────────────────────────────────
+   28x28 / radius 8 / per-route tint, only the active row coloured.
+   Shared with the other three NocVault apps — see CLAUDE.md "UI design".
+   The radius is tokenized so the square corner style flattens it too. */
+.nav-chip {
+  width: 28px; height: 28px; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  transition: background 0.15s, color 0.15s;
+}
+.nav-link { font-size: var(--text-md); }
+.nav-link:hover .nav-chip { color: #fff; }

@@ -76,3 +76,51 @@
 - Deploys are manual (Amrin runs the updater) — Claude never deploys; verify only AFTER a deploy by checking `/api/health` version first.
 
 - ⛔ **Settings is NOT admin-only any more (1.33.3) — and filtering the tab STRIP is not enough on its own.** Each tab's body renders from its own `activeTab === '<name>'` block, so hiding a button leaves the content reachable via `/settings?tab=users`. The deep-link effect therefore role-checks the requested tab as well, and depends on `user` rather than `[]` because the session resolves after first paint. A non-admin gets exactly one tab: Security / 2FA. The reason the page opened up at all: two-factor enrolment lives there now, and a role named in `mfa_required_roles` whose members cannot self-enrol is locked out permanently — refused at login for having no factor, with the only page that could give them one closed to them.
+
+---
+
+## UI shell / design system (1.39.0)
+
+**`useSearchParams` in a Client Component needs a Suspense boundary or the
+production BUILD FAILS.** Not a warning — `next build` errors with "Missing
+Suspense boundary with useSearchParams". `components/shell/Sidebar.tsx` calls it
+to work out which Settings tab is active, which is why `app/(app)/layout.tsx`
+wraps it in `<Suspense>`. Same applies to any new client component that reads
+search params.
+
+**Custom properties: `:root` and `[data-theme="dark"]` have EQUAL specificity,
+so source order decides.** Appending a new `:root { --x }` block at the END of
+globals.css silently overrides the dark-theme value of `--x` and breaks dark
+mode in a way that looks like the token "just doesn't work". New tokens must be
+inserted INTO the existing `:root` and `[data-theme="dark"]` blocks, never
+appended after them.
+
+**Inline `style` beats a className, including a media query.** The mobile
+drawer's close button had both `className="sidebar-mobile-close"` (display:none
+on desktop) and an inline `display:'flex'`. The inline rule won and the X showed
+on every desktop page. If an element must respond to a breakpoint, ALL of its
+layout rules have to live in CSS — not half in a style prop.
+
+**Status badge fills must use the `--tint-*` tokens, never literal hex.** The
+`.badge-*` classes hardcoded light-mode values (`#dcfce7`/`#15803d`), so in dark
+mode every status badge kept a pale pastel fill against a dark card. Fixed in
+1.39.0. The tint tokens already existed for exactly this.
+
+**The base `td` rule clamps every cell to `max-width:220px` + nowrap +
+ellipsis.** Right for a description, wrong for an identifier — a truncated
+circuit ID or serial is useless and is usually the value someone came to copy.
+Opt a column out with `className="ident"` (mono, no clamp) or `"wrap"` (wraps).
+
+**A destructive confirmation must render `.btn-destructive`, not
+`.btn-primary`.** Those were the same red, so a delete and a save looked
+identical at the moment of confirmation. `useConfirm({ danger: true })` now
+picks the destructive style automatically.
+
+**Don't generate ids with `Math.random()` during render.** It is impure and
+differs between the server and client passes — a hydration mismatch, and in the
+Dialog's case on the very attribute that names the dialog. Use `useId()`.
+
+**Nav chips are a SUITE-WIDE standard, not a NetVault choice.** 28x28, radius 8
+(tokenized so the square-corner style flattens it), per-route tint, and only the
+active row is coloured — the other three NocVault apps do the same. Tints live
+with the route in `components/shell/nav.ts`. See CLAUDE.md "UI design".

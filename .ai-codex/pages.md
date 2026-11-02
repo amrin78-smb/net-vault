@@ -42,4 +42,16 @@ client /settings/eol-intelligence — EolIntelligenceRedirect — redirect only,
 
 ## Pages — (app) route group / Dashboard & legacy
 client /dashboard — DashboardPage — main infrastructure overview: health gauge, fleet charts, stats, activity
-client /users — UsersPage — user management UI; NOT in sidebar nav (dead-ish route, redirects to /settings on load) — edit settings/page.tsx instead for user-form changes
+client /users — UsersPage — user management UI; NOT in sidebar nav (dead-ish route, redirects to /settings on load) — edit settings/page.tsx instead for user-form changes. The 1.39.0 nav's "Users & Access" row deliberately points at /settings?tab=users, not here, so the canonical destination has exactly one visible label.
+
+
+## Shell (app/(app)/layout.tsx) — rewritten 1.39.0
+Renders components/shell/SuiteHeader + Sidebar instead of an inline header/nav.
+It still owns, unchanged: the unauthenticated -> /login redirect; the site_admin
+bounce off /dashboard and /eol to /sites; the settings + licence fetches; the
+body[data-readonly] flag that drives the .license-action CSS; LicenseBanner;
+UpdateFailureBanner (admin only); UpdateNotifier; IdleTimeout; and the change
+-password dialog.
+GOTCHA: Sidebar calls useSearchParams (to resolve which Settings tab is active),
+so it MUST stay inside the <Suspense> boundary in the layout — without one the
+production build fails with "Missing Suspense boundary with useSearchParams".
