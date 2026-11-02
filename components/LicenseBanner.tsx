@@ -124,7 +124,7 @@ export default function LicenseBanner() {
           <span style={{ display: 'block', fontWeight: 600 }}>
             {banner.state}
             {license.customer && (
-              <span style={{ opacity: 0.75, fontWeight: 400 }}> \u00b7 Licensed to {license.customer}</span>
+              <span style={{ opacity: 0.75, fontWeight: 400 }}> · Licensed to {license.customer}</span>
             )}
           </span>
           <span style={{ display: 'block', opacity: 0.9, fontSize: 'var(--text-sm)', marginTop: 1 }}>

@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.53.2': [
+    'Fixed: the licence banner at the top of every page read "Licence expires in 4 days \\u00b7 Licensed to ..." - a raw escape code instead of the separator dot. The dashboard clock had the same problem ("ICT \\u00b7 Asia/Bangkok").',
+  ],
   '1.53.1': [
     'Fixed: the Add/Edit user drawer and the change-password dialog could not be typed into. Every keystroke moved the cursor back to the first field, so typing an email address scattered the characters across two boxes. Any dialog whose form sits on the page behind it was affected.',
     'Fixed: the dashboard\u2019s "Sites Requiring Attention" badge showed 5 while the tile above it said 32 sites at risk - it was counting the rows in a top-five list rather than the sites. It now shows the real figure, and a dash when that figure could not be read.',

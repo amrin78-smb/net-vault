@@ -360,7 +360,7 @@ export default function DashboardPage() {
         actions={<>
           <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
             <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--text-primary)' }}>{clock || '\u2014'}</div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ICT \u00b7 Asia/Bangkok</div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ICT · Asia/Bangkok</div>
           </div>
           <button className="btn" onClick={() => { setLoading(true); loadAll() }} disabled={loading}>
             <span aria-hidden style={{ display: 'inline-flex' }}><Icon.refresh size={14} /></span>

@@ -225,3 +225,9 @@ clean type-check and a screenshot all pass it. Type into a dialog before calling
 - **No `<button>` inside `<Link>`.** Interactive content nested in an anchor is invalid HTML and
   gives every row action two tab stops. `/devices` shipped 101 instances and `/circuits` 51; they
   are now styled `<Link>`s. Use `className="btn ..."` or the same inline style on the Link itself.
+- **`\uXXXX` is a JavaScript STRING escape, not a JSX TEXT escape.** `<span>a · b</span>`
+  renders the six literal characters; `join(' · ')` inside quotes renders the dot. The
+  licence banner shown on every page read "Licence expires in 4 days · Licensed to …" in
+  production, and the dashboard clock read "ICT · Asia/Bangkok". Put the character itself in
+  JSX text, or wrap it in an expression (`{'·'}`). Checked across all four suite apps —
+  netvault was the only one affected.
