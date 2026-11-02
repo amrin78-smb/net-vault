@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.44.2': [
+    'Read-only mode fix: destructive buttons introduced earlier in this release were not covered by the expired-licence lockout, so a delete could still be clicked on an expired licence. They are now blocked like every other write, and licence activation stays available as before.',
+  ],
   '1.44.1': [
     'The whole application now fits a phone or tablet screen. Nine pages were running off the side of the screen at narrow widths and no longer do.',
     'The search box in the top bar now shows a focus outline when you reach it with the keyboard - it was the one control in the page that did not.',

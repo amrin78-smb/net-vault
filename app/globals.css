@@ -661,7 +661,15 @@ table thead tr th {
    must carry `.license-action`. Nothing else should. */
 body[data-readonly="true"] .btn-primary:not(.license-action),
 body[data-readonly="true"] button[type="submit"]:not(.license-action),
-body[data-readonly="true"] .btn-danger:not(.license-action) {
+body[data-readonly="true"] .btn-danger:not(.license-action),
+/* .btn-destructive was added in the UI pass to give destructive
+   confirmations their own style, replacing .btn-primary in the confirm
+   dialog's danger branch. It MUST be listed here too: without it, adding
+   that class silently un-disabled every destructive confirmation in
+   read-only mode - a delete stayed clickable on an expired licence
+   precisely because it had been given a clearer style. Any new button
+   class that performs a WRITE belongs in this list. */
+body[data-readonly="true"] .btn-destructive:not(.license-action) {
   opacity: 0.4;
   pointer-events: none;
   cursor: not-allowed;
