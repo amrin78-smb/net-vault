@@ -1,23 +1,37 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { PageHead } from '@/components/system'
+import { useCallback, useEffect, useState } from 'react'
+import { ErrorBox, PageHead } from '@/components/system'
 import Link from 'next/link'
 
 type SiteRow = { region: string; country: string; site: string; eol_count: number; total_count: number }
 type SoftwareRow = { id: string; name: string; site: string; device_type: string; os_type: string; os_version: string; os_eol_date: string }
 
+async function fetchOk(url: string) {
+  const r = await fetch(url)
+  if (!r.ok) throw new Error(`HTTP ${r.status}`)
+  const j = await r.json()
+  if (j && typeof j === 'object' && 'error' in j && !('devices' in j)) throw new Error(String(j.error))
+  return j
+}
+
 export default function EolPage() {
   const [rows, setRows] = useState<SiteRow[]>([])
   const [softwareRows, setSoftwareRows] = useState<SoftwareRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [region, setRegion] = useState('')
   const [tab, setTab] = useState<'hardware' | 'software'>('hardware')
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoadError(false)
     Promise.all([
-      fetch('/api/devices?lifecycle=EOL+%2F+EOS&limit=3000').then(r => r.json()),
-      fetch('/api/devices?limit=3000').then(r => r.json()),
-      fetch('/api/devices?os_eol=past_or_soon&limit=3000').then(r => r.json()),
+      // r.ok is checked explicitly: a 503 carrying a JSON error body still
+      // RESOLVES r.json(), so Promise.all succeeded and the catch below never
+      // ran - the page rendered empty tables as though the fleet had no EOL
+      // devices at all. Same trap the dashboard had.
+      fetchOk('/api/devices?lifecycle=EOL+%2F+EOS&limit=3000'),
+      fetchOk('/api/devices?limit=3000'),
+      fetchOk('/api/devices?os_eol=past_or_soon&limit=3000'),
     ]).then(([eolData, allData, swData]) => {
       const sites: Record<string, SiteRow> = {}
       for (const dev of allData.devices || []) {
@@ -42,7 +56,14 @@ export default function EolPage() {
       setSoftwareRows(sw)
       setLoading(false)
     })
+    .catch(() => {
+      // Without this the page sat on "Loading…" indefinitely on any failure.
+      setLoadError(true)
+      setLoading(false)
+    })
   }, [])
+
+  useEffect(() => { load() }, [load])
 
   const filtered = region ? rows.filter(r => r.region === region) : rows
   const regions = [...new Set(rows.map(r => r.region))]
@@ -68,6 +89,12 @@ export default function EolPage() {
           description="Hardware past end-of-life or end-of-support, and software approaching its own EOL date. Work the highest-risk sites first."
         />
       </div>
+      {loadError ? (
+        <ErrorBox
+          message="The EOL register could not be loaded."
+          onRetry={() => { setLoading(true); load() }}
+        />
+      ) : (<>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>
@@ -184,6 +211,7 @@ export default function EolPage() {
           </div>
         </>
       )}
+    </>)}
     </div>
   )
 }

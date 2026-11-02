@@ -1,6 +1,6 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { PageHead } from '@/components/system'
+import { useCallback, useEffect, useState } from 'react'
+import { ErrorBox, PageHead } from '@/components/system'
 import Link from 'next/link'
 
 type Check = {
@@ -27,7 +27,7 @@ export default function CompliancePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
+  const load = useCallback(() => {
     fetch('/api/compliance')
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
       .then(d => {
@@ -42,10 +42,15 @@ export default function CompliancePage() {
       })
   }, [])
 
+  useEffect(() => { load() }, [load])
+
   if (loading) return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading compliance report...</div>
+  // Shared ErrorBox: carries role="alert" and offers a retry, rather than a
+  // tinted div telling the reader to refresh the page themselves.
   if (error) return (
-    <div style={{ padding: '40px', textAlign: 'center' }}>
-      <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '16px 20px', borderRadius: 'var(--radius)', display: 'inline-block', fontSize: 'var(--text-md)' }}>{error}</div>
+    <div style={{ padding: '24px 28px' }}>
+      <PageHead title="Compliance" description="Policy risk and inventory completeness." />
+      <ErrorBox message={error} onRetry={() => { setError(''); setLoading(true); load() }} />
     </div>
   )
   if (!data) return null

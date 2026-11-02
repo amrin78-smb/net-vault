@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.46.5': [
+    'The EOL / Risk page now tells you when it could not load, with a retry. It previously showed empty tables on a failure, which read as a fleet with no end-of-life devices at all.',
+    'Compliance uses the same error treatment, announced to screen readers and with a retry button instead of asking you to refresh the page yourself.',
+  ],
   '1.46.4': [
     'Row density (Comfortable / Compact) is now a single preference shared by the Devices and WAN Circuits tables rather than a per-page setting, and both keep their column headers visible while scrolling.',
     'The Audit Log uses the same pagination control as the rest of the app.',
