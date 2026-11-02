@@ -17,6 +17,14 @@ import { query } from '@/lib/db'
  *    "EOL Assets" counted every device with an EOL lifecycle, so the two EOL
  *    figures differed too.
  *
+ * `IS DISTINCT FROM`, not `<>`: both columns are nullable (devices.lifecycle_status
+ * is typed `string | null` in lib/eolEnrich.ts and lib/compliance.ts guards for
+ * NULL explicitly). With `<>`, a NULL compares to NULL rather than true, so a
+ * device with no lifecycle recorded would match NO bucket at all — it would
+ * vanish from the donut and from `total`, which is the very invariant this
+ * partition exists to hold. `NOT IN (...)` has the same NULL trap, hence the
+ * expanded form on the Faulty bucket.
+ *
  * The buckets below are a strict partition in this precedence:
  *     EOL / EOS  >  Decommed  >  Spare  >  Faulty  >  Healthy
  * EOL first so the EOL slice equals the hero's eol_assets exactly, and
@@ -35,10 +43,10 @@ export async function GET() {
     const res = await query(`
       SELECT
         COUNT(*) FILTER (WHERE lifecycle_status = 'EOL / EOS') AS eol,
-        COUNT(*) FILTER (WHERE lifecycle_status <> 'EOL / EOS' AND device_status = 'Decommed') AS decommed,
-        COUNT(*) FILTER (WHERE lifecycle_status <> 'EOL / EOS' AND device_status = 'Spare') AS spare,
-        COUNT(*) FILTER (WHERE lifecycle_status <> 'EOL / EOS' AND device_status NOT IN ('Decommed','Spare','Active')) AS faulty,
-        COUNT(*) FILTER (WHERE lifecycle_status <> 'EOL / EOS' AND device_status = 'Active') AS healthy
+        COUNT(*) FILTER (WHERE lifecycle_status IS DISTINCT FROM 'EOL / EOS' AND device_status = 'Decommed') AS decommed,
+        COUNT(*) FILTER (WHERE lifecycle_status IS DISTINCT FROM 'EOL / EOS' AND device_status = 'Spare') AS spare,
+        COUNT(*) FILTER (WHERE lifecycle_status IS DISTINCT FROM 'EOL / EOS' AND device_status IS DISTINCT FROM 'Decommed' AND device_status IS DISTINCT FROM 'Spare' AND device_status IS DISTINCT FROM 'Active') AS faulty,
+        COUNT(*) FILTER (WHERE lifecycle_status IS DISTINCT FROM 'EOL / EOS' AND device_status = 'Active') AS healthy
       FROM v_devices_flat ${vFilter}
     `)
     const row = res.rows[0] || {}

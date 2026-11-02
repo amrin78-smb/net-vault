@@ -293,7 +293,14 @@ export default function DashboardPage() {
     { icon: IconGlobe, value: stats.isp_providers, label: 'ISP Providers', sub: 'service partners', href: '/circuits' },
   ]
 
-  const sitesBadgeCount = topEol.length || overview.sites_at_risk
+  // The authoritative count, NOT topEol.length.
+  //
+  // /api/dashboard/top-eol-sites is `LIMIT 5`, so topEol.length is a page size,
+  // never a total: on this fleet it rendered a red "5" badge directly beneath a
+  // hero tile reading "32 Sites at Risk". Falling back to it when the overview
+  // read fails was wrong in the other direction too — both unavailable gave
+  // `0 || 0`, a confident zero on data nobody managed to read.
+  const sitesBadgeCount = overviewDown ? null : overview.sites_at_risk
   const maxType = Math.max(1, ...byType.map(t => t.count))
 
   /* ----------------------- health trend node ---------------------- */
@@ -302,9 +309,9 @@ export default function DashboardPage() {
   if (overview.trend_available && overview.trend !== null) {
     const t = overview.trend
     if (t > 0) {
-      trendNode = <span style={{ ...trendStyle, color: '#86efac' }}>▲ {t} points vs last month</span>
+      trendNode = <span style={{ ...trendStyle, color: '#86efac' }}>▲ {t} point{t === 1 ? '' : 's'} vs last month</span>
     } else if (t < 0) {
-      trendNode = <span style={{ ...trendStyle, color: '#fca5a5' }}>▼ {Math.abs(t)} points vs last month</span>
+      trendNode = <span style={{ ...trendStyle, color: '#fca5a5' }}>▼ {Math.abs(t)} point{Math.abs(t) === 1 ? '' : 's'} vs last month</span>
     } else {
       trendNode = <span style={{ ...trendStyle, color: 'rgba(255,255,255,0.6)' }}>→ No change vs last month</span>
     }
@@ -537,7 +544,7 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <h2 style={cardTitle}>Sites Requiring Attention</h2>
             <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 22, height: 22, padding: '0 6px', borderRadius: 'var(--radius-pill)', background: RED, color: 'white', fontSize: 'var(--text-sm)', fontWeight: 700 }}>
-              {sitesBadgeCount}
+              {sitesBadgeCount === null ? '\u2014' : sitesBadgeCount.toLocaleString()}
             </span>
           </div>
           <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>

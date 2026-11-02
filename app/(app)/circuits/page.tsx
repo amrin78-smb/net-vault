@@ -303,11 +303,9 @@ export default function CircuitsPage() {
           <DensityToggle density={density} onChange={setDensity} />
         </div>
         {isAdmin && (
-          <Link href="/circuits/new">
-            <button style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
+          <Link href="/circuits/new" style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
               Add circuit
-            </button>
           </Link>
         )}
       </div>
@@ -315,7 +313,7 @@ export default function CircuitsPage() {
       {/* Table */}
       <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
         {loadError ? (
-          <ErrorBox message="The circuit list could not be loaded." onRetry={() => { setLoading(true); fetchCircuits() }} />
+          <ErrorBox message="The circuit list could not be loaded." onRetry={() => { setLoadError(false); setLoading(true); fetchCircuits() }} />
         ) : loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading circuits...</div>
         ) : circuits.length === 0 ? (
@@ -368,9 +366,7 @@ export default function CircuitsPage() {
                     <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', whiteSpace: 'nowrap' }}>{formatCost(c.cost_month, c.currency)}</td>
                     <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <Link href={`/circuits/${c.id}`}>
-                          <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button>
-                        </Link>
+                        <Link href={`/circuits/${c.id}`} style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-block', textDecoration: 'none', lineHeight: 1.6 }}>View</Link>
                         {isAdmin && (
                           <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', border: '1px solid var(--tint-danger-fg)', borderRadius: 'var(--radius-sm)', cursor: 'pointer' }}
                             onClick={() => deleteCircuit(c.id, c.circuit_id)}>Delete</button>

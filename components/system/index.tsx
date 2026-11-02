@@ -338,17 +338,28 @@ export function Tabs({ tabs, active, onChange, label }: {
   onChange: (id: string) => void
   label: string
 }) {
+  // Focus has to FOLLOW selection in an automatic tablist. Changing `active`
+  // alone moves the roving tabIndex but leaves the browser focus on the tab
+  // the user arrowed away from — so the focus ring sits on one tab while a
+  // different one is selected, and a screen reader never announces the move.
+  function select(e: React.KeyboardEvent, id: string) {
+    e.preventDefault()
+    onChange(id)
+    const el = e.currentTarget.querySelector<HTMLElement>(`[role="tab"][data-tab-id="${CSS.escape(id)}"]`)
+    el?.focus()
+  }
   function onKeyDown(e: React.KeyboardEvent) {
+    if (!tabs.length) return
     const i = tabs.findIndex(t => t.id === active)
-    if (e.key === 'ArrowRight') { e.preventDefault(); onChange(tabs[(i + 1) % tabs.length].id) }
-    if (e.key === 'ArrowLeft')  { e.preventDefault(); onChange(tabs[(i - 1 + tabs.length) % tabs.length].id) }
-    if (e.key === 'Home') { e.preventDefault(); onChange(tabs[0].id) }
-    if (e.key === 'End')  { e.preventDefault(); onChange(tabs[tabs.length - 1].id) }
+    if (e.key === 'ArrowRight') select(e, tabs[(i + 1) % tabs.length].id)
+    else if (e.key === 'ArrowLeft') select(e, tabs[(i - 1 + tabs.length) % tabs.length].id)
+    else if (e.key === 'Home') select(e, tabs[0].id)
+    else if (e.key === 'End') select(e, tabs[tabs.length - 1].id)
   }
   return (
     <div className="tabs" role="tablist" aria-label={label} onKeyDown={onKeyDown}>
       {tabs.map(t => (
-        <button key={t.id} role="tab" type="button" className="tab"
+        <button key={t.id} role="tab" type="button" className="tab" data-tab-id={t.id}
           aria-selected={t.id === active}
           tabIndex={t.id === active ? 0 : -1}
           onClick={() => onChange(t.id)}>

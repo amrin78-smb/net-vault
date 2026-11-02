@@ -188,3 +188,40 @@ one pass (agents Dialog, audit Pager) — it looks completely ordinary.
 brief asks for that grouping to be retained; slicing a flat list would split
 a country across two pages. 52 grouped cards browse fine. Devices, Circuits
 and Audit all use the shared Pager; Sites is the documented exception.
+
+## Shared primitives (1.54.0 sweep)
+
+⛔ **A `Dialog`/drawer focus effect must key on `open` ALONE — never on a callback prop.**
+`components/system/Dialog.tsx`'s focus effect depended on `close`, which depended on the
+`onClose` prop. Every call site passes an inline arrow (`onClose={() => setShowUserForm(false)}`),
+so `onClose` is a new function on each parent render — and when the dialog's form state lives in
+that same parent (the Add/Edit user drawer, the change-password modal), **every keystroke is a
+parent render**. The effect then tore down and re-ran mid-typing: the cleanup fired the
+focus-restore, sending focus back to the trigger, and the re-run's rAF focused the FIRST field.
+Measured on production: typing `abc` into the Add-user drawer's email field produced
+name=`bc`, email=`a` — the form could not be filled in at all. The live callbacks now sit in refs
+(`onCloseRef`/`dismissibleRef`/`initialFocusRef`) so the effect keys on `open`. `components/shell/Sidebar.tsx`'s
+mobile-drawer trap had the same shape (the layout's own polling re-rendered it and threw focus
+back to the first nav link) and got the same treatment. **This is the "input loses focus on every
+keystroke" bug arriving by a different route than the nested-component rule — a clean build, a
+clean type-check and a screenshot all pass it. Type into a dialog before calling it done.**
+
+- **A LIMIT-ed list's `.length` is a page size, never a count.** The dashboard's "Sites Requiring
+  Attention" badge was `topEol.length || overview.sites_at_risk`; `/api/dashboard/top-eol-sites`
+  is `LIMIT 5`, so it rendered a red **5** directly beneath a hero tile reading **32 Sites at
+  Risk**. The `||` was wrong in the other direction too — both reads failing gave `0 || 0`, a
+  confident zero on data nobody managed to read.
+- **`<>`/`NOT IN` against a nullable column silently drops rows from a partition.** The
+  fleet-health donut bucketed on `lifecycle_status <> 'EOL / EOS'`; the column is nullable, so a
+  device with no lifecycle recorded would match NO bucket and vanish from both the donut and its
+  `total` — the exact invariant that partition exists to hold. Use `IS DISTINCT FROM`.
+- **Clearing an error flag only on success makes the retry button look dead.** `/eol`, `/circuits`
+  and `/sites` render `loadError` BEFORE `loading`, so a retry kept the error box on screen for the
+  whole request (three `limit=3000` fetches on /eol) with no sign the click registered. The retry
+  call sites clear the flag; `/devices` is the counter-example — it checks `loading` first.
+- **Focus must FOLLOW selection in an automatic tablist.** The shared `Tabs` arrow-key handler
+  changed `active` but never moved DOM focus, so the focus ring sat on the tab the user arrowed
+  away from and a screen reader never announced the move.
+- **No `<button>` inside `<Link>`.** Interactive content nested in an anchor is invalid HTML and
+  gives every row action two tab stops. `/devices` shipped 101 instances and `/circuits` 51; they
+  are now styled `<Link>`s. Use `className="btn ..."` or the same inline style on the Link itself.

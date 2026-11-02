@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.53.1': [
+    'Fixed: the Add/Edit user drawer and the change-password dialog could not be typed into. Every keystroke moved the cursor back to the first field, so typing an email address scattered the characters across two boxes. Any dialog whose form sits on the page behind it was affected.',
+    'Fixed: the dashboard\u2019s "Sites Requiring Attention" badge showed 5 while the tile above it said 32 sites at risk - it was counting the rows in a top-five list rather than the sites. It now shows the real figure, and a dash when that figure could not be read.',
+    'Fixed: the "Try again" button on the EOL, Circuits and Sites pages gave no sign it had been pressed, leaving the error message on screen for the whole retry.',
+    'Fixed: the fleet-health donut could silently omit any device with no lifecycle recorded, so the ring no longer added up to the fleet total.',
+    'Accessibility: row actions on Devices, Circuits and site pages are proper links instead of buttons nested inside links (two tab stops each, and invalid markup); arrow keys on a tab strip now move the focus ring with the selection; the mobile navigation drawer no longer loses your place when the page refreshes its counters in the background.',
+  ],
   '1.53.0': [
     'WAN Circuits is now paged like the Devices list, with a page-size choice, instead of rendering every circuit at once - there are over 120 on this installation.',
   ],

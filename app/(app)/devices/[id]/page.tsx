@@ -161,9 +161,7 @@ export default function DeviceDetailPage({ params }: { params: Promise<{ id: str
           <LifecycleBadge status={device.lifecycle_status} />
         </>}
         actions={isAdmin ? (
-          <Link href={`/devices/${id}/edit${fromSite ? `?from=site&siteId=${fromSiteId}&siteName=${encodeURIComponent(fromSiteName)}` : ''}`}>
-            <button className="btn btn-primary">Edit device</button>
-          </Link>
+          <Link href={`/devices/${id}/edit${fromSite ? `?from=site&siteId=${fromSiteId}&siteName=${encodeURIComponent(fromSiteName)}` : ''}`} className="btn btn-primary">Edit device</Link>
         ) : undefined}
       />
 

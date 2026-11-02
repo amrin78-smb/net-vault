@@ -14,6 +14,23 @@ async function fetchOk(url: string) {
   return j
 }
 
+/**
+ * Software-EOL badge.
+ *
+ * Module scope, not nested inside EolPage: a component declared inside another
+ * component is a NEW type on every parent render, so React unmounts and
+ * remounts the whole subtree instead of updating it. CLAUDE.md forbids it
+ * outright — it is the cause of the "input loses focus on every keystroke"
+ * class of bug. `now`/`in90` come in as props because that closure is the only
+ * reason it was written inline.
+ */
+function OsStatus({ date, now, in90 }: { date: string; now: Date; in90: Date }) {
+  const d = new Date(date)
+  if (d < now) return <span style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expired</span>
+  if (d <= in90) return <span style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expiring Soon</span>
+  return <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{d.toLocaleDateString()}</span>
+}
+
 export default function EolPage() {
   const [rows, setRows] = useState<SiteRow[]>([])
   const [softwareRows, setSoftwareRows] = useState<SoftwareRow[]>([])
@@ -26,6 +43,10 @@ export default function EolPage() {
     // The error flag is cleared on SUCCESS, not synchronously here: a
     // setState in the body of an effect-invoked callback costs an extra
     // render pass for no benefit, and the flag is already false on mount.
+    // The RETRY path is the exception and clears it at the call site — this
+    // page renders `loadError` before `loading`, so leaving the flag set kept
+    // the error box on screen for the whole retry (three limit=3000 fetches)
+    // and the Try again button looked dead.
     Promise.all([
       // r.ok is checked explicitly: a 503 carrying a JSON error body still
       // RESOLVES r.json(), so Promise.all succeeded and the catch below never
@@ -77,13 +98,6 @@ export default function EolPage() {
   const swExpired  = softwareRows.filter(r => new Date(r.os_eol_date) < now)
   const swExpiring = softwareRows.filter(r => { const d = new Date(r.os_eol_date); return d >= now && d <= in90 })
 
-  function OsStatus({ date }: { date: string }) {
-    const d = new Date(date)
-    if (d < now) return <span style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expired</span>
-    if (d <= in90) return <span style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', padding: '2px 8px', borderRadius: 'var(--radius-pill)', fontSize: 'var(--text-xs)', fontWeight: '600' }}>Expiring Soon</span>
-    return <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{d.toLocaleDateString()}</span>
-  }
-
   return (
     <div style={{ padding: '24px 28px' }}>
       <div style={{ marginBottom: '24px' }}>
@@ -95,7 +109,7 @@ export default function EolPage() {
       {loadError ? (
         <ErrorBox
           message="The EOL register could not be loaded."
-          onRetry={() => { setLoading(true); load() }}
+          onRetry={() => { setLoadError(false); setLoading(true); load() }}
         />
       ) : (<>
 
@@ -215,7 +229,7 @@ export default function EolPage() {
                       <td>{row.os_type || '—'}</td>
                       <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{row.os_version || '—'}</td>
                       <td>{row.os_eol_date ? new Date(row.os_eol_date).toLocaleDateString() : '—'}</td>
-                      <td><OsStatus date={row.os_eol_date} /></td>
+                      <td><OsStatus date={row.os_eol_date} now={now} in90={in90} /></td>
                     </tr>
                   ))}
                 </tbody>

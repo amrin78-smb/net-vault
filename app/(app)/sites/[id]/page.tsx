@@ -222,8 +222,8 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                   {togglingDecomm ? 'Updating...' : site?.site_status === 'Decommed' ? 'Reactivate site' : 'Decommission site'}
                 </button>
               )}
-              {isAdmin && <Link href="/devices/new"><button className="btn-primary">+ Add device</button></Link>}
-              {isAdmin && <Link href={`/circuits/new?site_id=${site.id}&site=${encodeURIComponent(site.site)}`}><button className="btn-secondary">+ Add circuit</button></Link>}
+              {isAdmin && <Link href="/devices/new" className="btn btn-primary">+ Add device</Link>}
+              {isAdmin && <Link href={`/circuits/new?site_id=${site.id}&site=${encodeURIComponent(site.site)}`} className="btn btn-secondary">+ Add circuit</Link>}
             </div>
           </div>
         )}
@@ -365,7 +365,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                         <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{d.ip_address || '—'}</td>
                         <td><LifecycleBadge status={d.lifecycle_status} /></td>
                         <td><StatusBadge status={d.device_status} /></td>
-                        {isAdmin && <td><Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Edit</button></Link></td>}
+                        {isAdmin && <td><Link href={`/devices/${d.id}/edit`} style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-block', textDecoration: 'none', lineHeight: 1.6 }}>Edit</Link></td>}
                       </tr>
                     ))}
                   </tbody>
@@ -399,7 +399,7 @@ export default function SiteDetailPage({ params }: { params: Promise<{ id: strin
                             <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{c.public_subnet && c.public_subnet !== '-' && c.public_subnet !== 'nan' ? c.public_subnet : '—'}</td>
                             <td style={{ fontSize: 'var(--text-sm)' }}>{c.cost_month ? `${c.currency || 'THB'} ${parseFloat(c.cost_month).toLocaleString()}` : '—'}</td>
                             
-                            <td><Link href={`/circuits/${c.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link></td>
+                            <td><Link href={`/circuits/${c.id}`} style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-block', textDecoration: 'none', lineHeight: 1.6 }}>View</Link></td>
                           </tr>
                         ))}
                       </tbody>

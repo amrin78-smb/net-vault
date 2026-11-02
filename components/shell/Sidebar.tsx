@@ -28,13 +28,22 @@ export default function Sidebar({
    * and focus returns to the hamburger that opened it. On desktop it is
    * ordinary page furniture and none of this applies.
    */
+  // Same rule as Dialog: this effect must run once per open, so the callbacks
+  // it closes over live in refs. `onCloseMobile` is an inline arrow in the
+  // layout, and the layout re-renders on its own polling (alert count, licence
+  // status, the clock) — with it in the dependency list, a poll landing while
+  // the drawer was open re-ran the effect and its rAF threw focus back to the
+  // first nav link, losing the user's place mid-keyboard-navigation.
+  const onCloseMobileRef = useRef(onCloseMobile)
+  useEffect(() => { onCloseMobileRef.current = onCloseMobile })
+
   useEffect(() => {
     if (!mobileOpen) return
     const nav = navRef.current
     const raf = requestAnimationFrame(() => nav?.querySelector<HTMLElement>(FOCUSABLE)?.focus())
 
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') { onCloseMobile(); triggerRef?.current?.focus(); return }
+      if (e.key === 'Escape') { onCloseMobileRef.current(); triggerRef?.current?.focus(); return }
       if (e.key !== 'Tab' || !nav) return
       const items = Array.from(nav.querySelectorAll<HTMLElement>(FOCUSABLE))
       if (!items.length) return
@@ -50,7 +59,8 @@ export default function Sidebar({
       document.removeEventListener('keydown', onKey, true)
       document.body.style.overflow = prev
     }
-  }, [mobileOpen, onCloseMobile, triggerRef])
+    // `mobileOpen` only — see the ref above.
+  }, [mobileOpen, triggerRef])
 
   return (
     <>

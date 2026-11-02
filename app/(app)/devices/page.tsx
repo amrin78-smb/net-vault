@@ -175,8 +175,13 @@ export default function DevicesPage() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data = await res.json()
       if (data?.error) throw new Error(String(data.error))
-      setDevices(data.devices || [])
-      setTotal(data.total || 0)
+      // Shape-checked like the circuits list: a 200 whose body is missing
+      // `devices` would otherwise render an empty table under a real total
+      // ("Showing 0 of 2,482"), which reads as a fleet that vanished rather
+      // than as the failed read it is.
+      if (!Array.isArray(data?.devices)) throw new Error('unexpected payload')
+      setDevices(data.devices)
+      setTotal(Number(data.total) || 0)
       setLoadError(false)
     } catch {
       setDevices([]); setTotal(0); setLoadError(true)
@@ -409,11 +414,9 @@ export default function DevicesPage() {
               {dupLoading ? 'Checking...' : 'Duplicates'}
             </button>
             {/* Add device */}
-            <Link href="/devices/new">
-              <button style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
+            <Link href="/devices/new" style={{ padding: '7px 14px', background: 'var(--primary)', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)', cursor: 'pointer', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '6px', fontSize: 'var(--text-base)', fontWeight: '500' }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
                 Add device
-              </button>
             </Link>
           </>}
         </>}
@@ -927,9 +930,9 @@ export default function DevicesPage() {
                     )}
                     <td className="cell-actions">
                       <div style={{ display: 'flex', gap: '6px' }}>
-                        <Link href={`/devices/${d.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link>
+                        <Link href={`/devices/${d.id}`} style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-block', textDecoration: 'none', lineHeight: 1.6 }}>View</Link>
                         {isAdmin && <>
-                          <Link href={`/devices/${d.id}/edit`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>Edit</button></Link>
+                          <Link href={`/devices/${d.id}/edit`} style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'inline-block', textDecoration: 'none', lineHeight: 1.6 }}>Edit</Link>
                           <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => deleteDevice(d.id, d.name)}>Delete</button>
                         </>}
                       </div>

@@ -127,7 +127,7 @@ export default function SitesPage() {
       />
 
       {loadError ? (
-        <ErrorBox message="The site list could not be loaded." onRetry={() => { setLoading(true); fetchSites() }} />
+        <ErrorBox message="The site list could not be loaded." onRetry={() => { setLoadError(false); setLoading(true); fetchSites() }} />
       ) : loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading sites...</div>
       ) : (

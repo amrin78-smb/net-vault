@@ -43,14 +43,36 @@ export function Dialog({
   // mismatch on the very attribute that names the dialog.
   const titleId = useId()
 
-  const close = useCallback(() => { if (dismissible) onClose() }, [dismissible, onClose])
+  // The focus effect below must run EXACTLY ONCE per open/close, so nothing it
+  // depends on may change identity between renders.
+  //
+  // It used to depend on `close`, which depended on `onClose`. Every caller
+  // passes an inline arrow (`onClose={() => setShowUserForm(false)}`), so
+  // `onClose` is a new function on every parent render — and when the dialog's
+  // form state lives in that same parent, every keystroke is a parent render.
+  // The effect then tore down and re-ran mid-typing: the cleanup fired the
+  // focus-restore (sending focus back to the trigger) and the re-run's rAF
+  // focused the FIRST field again. Typing "abc" into the Add-user drawer's
+  // email field actually produced name="bc", email="a" — the form could not
+  // be filled in at all. Keeping the live values in refs lets the effect key
+  // on `open` alone while still calling the current callback.
+  const onCloseRef = useRef(onClose)
+  const dismissibleRef = useRef(dismissible)
+  const initialFocusRef = useRef(initialFocus)
+  useEffect(() => {
+    onCloseRef.current = onClose
+    dismissibleRef.current = dismissible
+    initialFocusRef.current = initialFocus
+  })
+
+  const close = useCallback(() => { if (dismissibleRef.current) onCloseRef.current() }, [])
 
   useEffect(() => {
     if (!open) return
     restoreRef.current = document.activeElement as HTMLElement | null
 
     const panel = panelRef.current
-    const target = initialFocus?.current
+    const target = initialFocusRef.current?.current
       || panel?.querySelector<HTMLElement>(FOCUSABLE)
       || panel
     // rAF: the panel has just mounted, and focusing before paint is ignored
@@ -80,7 +102,9 @@ export function Dialog({
       document.body.style.overflow = prevOverflow
       restoreRef.current?.focus?.()
     }
-  }, [open, close, initialFocus])
+    // `open` ONLY — see the refs above. Adding `close`/`initialFocus` back
+    // here reintroduces the focus-stealing bug.
+  }, [open, close])
 
   if (!open) return null
 
