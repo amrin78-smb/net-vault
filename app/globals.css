@@ -925,10 +925,19 @@ td.num, th.num { text-align: right; }
 td.wrap, .data-table td.wrap {
   max-width: none; white-space: normal; overflow: visible; text-overflow: clip;
 }
-td.ident, .data-table td.ident {
-  max-width: none; white-space: nowrap; overflow: visible;
+/* An identifier column must CLAIM the width it needs and let the table
+   scroll sideways. `overflow: visible` was wrong: inside a width-constrained
+   table the text simply painted over the neighbouring columns, which is worse
+   than the truncation it was meant to replace. */
+td.ident, .data-table td.ident,
+th.ident, .data-table th.ident {
+  max-width: none; white-space: nowrap; overflow: hidden;
+  width: 1%;              /* shrink-to-fit under table-layout: auto */
   font-family: var(--font-mono); font-size: var(--text-sm);
 }
+/* A table carrying an .ident column stops compressing at this width and
+   hands over to the horizontal scroller on its container instead. */
+.table-wide { min-width: 1180px; }
 
 .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 

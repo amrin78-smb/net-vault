@@ -278,11 +278,22 @@ export default function CircuitsPage() {
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No circuits found</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ fontSize: 'var(--text-base)', borderCollapse: 'collapse', width: '100%', tableLayout: 'fixed' }}>
+            {/* tableLayout auto, not fixed: under `fixed` a column can never be
+                widened by its content, so the circuit ID could only ever be
+                clipped or spill over its neighbours. With auto layout plus a
+                minWidth the identifier takes the room it needs and the
+                container's existing overflowX scrolls. */}
+            <table style={{ fontSize: 'var(--text-base)', borderCollapse: 'collapse', width: '100%', tableLayout: 'auto', minWidth: 1180 }}>
               <thead>
               <tr>
                 <th style={{ padding: '10px 14px', background: 'var(--bg-card)', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', width: '13%' }}>Site</th>
-                <th style={{ padding: '10px 14px', background: 'var(--bg-card)', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', width: '8%' }}>Country</th>
+                {/* The circuit ID was not displayed at all. It is the value
+                    an operator quotes to the provider when a link is down -
+                    the single most useful identifier on this page - and it
+                    does not get clamped (see the .ident rule in globals.css:
+                    a half-shown circuit ID is worse than no column). */}
+                <th style={{ padding: '10px 14px', background: 'var(--bg-card)', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)' }} className="ident">Circuit ID</th>
+                <th style={{ padding: '10px 14px', background: 'var(--bg-card)', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', width: '7%' }}>Country</th>
                 <th style={{ padding: '10px 14px', background: 'var(--bg-card)', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', width: '13%' }}>ISP</th>
                 <th style={{ padding: '10px 14px', background: 'var(--bg-card)', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', width: '10%' }}>Usage</th>
                 <th style={{ padding: '10px 14px', background: 'var(--bg-card)', textAlign: 'left', fontSize: 'var(--text-xs)', fontWeight: '600', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', width: '12%' }}>Product</th>
@@ -299,6 +310,9 @@ export default function CircuitsPage() {
                       <Link href={`/circuits/${c.id}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }} title={c.site || c.site_name_raw}>
                         {c.site || c.site_name_raw}
                       </Link>
+                    </td>
+                    <td className="ident" style={{ padding: '10px 14px', color: 'var(--text-primary)' }}>
+                      {c.circuit_id && c.circuit_id !== 'nan' ? c.circuit_id : <span style={{ color: 'var(--text-muted)', fontFamily: 'inherit' }}>—</span>}
                     </td>
                     <td style={{ padding: '10px 14px', fontSize: 'var(--text-sm)', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{c.country}</td>
                     <td style={{ padding: '10px 14px', fontWeight: '500', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={c.isp}>{c.isp}</td>

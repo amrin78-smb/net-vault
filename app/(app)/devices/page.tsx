@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
+import { Pager } from '@/components/system'
 
 type Device = {
   id: string; name: string; brand: string; model: string; device_type: string
@@ -652,38 +653,14 @@ export default function DevicesPage() {
         </div>
       )}
 
-      {/* Toolbar */}
+      {/* Toolbar. Page controls live in the single Pager below the table;
+          this row carries the result count and the active filters. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>
-            {loading ? 'Loading...' : `Showing ${total === 0 ? 0 : ((page-1)*limit)+1}–${Math.min(page*limit, total)} of ${total.toLocaleString()} devices`}
+          <span className="tnum" style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }} aria-live="polite">
+            {loading ? 'Loading…' : `${total.toLocaleString()} device${total === 1 ? '' : 's'}`}
           </span>
-          <select value={limit} onChange={e => { setLimit(parseInt(e.target.value)); setPage(1) }}
-            style={{ padding: '4px 8px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', background: 'var(--bg-card)', cursor: 'pointer' }}>
-            <option value={25}>25 / page</option>
-            <option value={50}>50 / page</option>
-            <option value={100}>100 / page</option>
-            <option value={200}>200 / page</option>
-          </select>
         </div>
-        {!loading && totalPages > 1 && (
-          <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === 1 ? 'default' : 'pointer', color: page === 1 ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(1)} disabled={page === 1}>First</button>
-            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === 1 ? 'default' : 'pointer', color: page === 1 ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(p => Math.max(1,p-1))} disabled={page === 1}>← Prev</button>
-            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-              const start = Math.max(1, Math.min(page - 2, totalPages - 4))
-              const p = start + i
-              return p <= totalPages ? (
-                <button key={p} onClick={() => setPage(p)}
-                  style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', cursor: 'pointer', background: p === page ? 'var(--primary)' : 'var(--bg-card)', color: p === page ? 'white' : 'var(--text-secondary)', fontWeight: p === page ? '600' : '400' }}>
-                  {p}
-                </button>
-              ) : null
-            })}
-            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === totalPages ? 'default' : 'pointer', color: page === totalPages ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page === totalPages}>Next →</button>
-            <button style={{ padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', fontSize: 'var(--text-sm)', cursor: page === totalPages ? 'default' : 'pointer', color: page === totalPages ? 'var(--text-muted)' : 'var(--text-secondary)' }} onClick={() => setPage(totalPages)} disabled={page === totalPages}>Last</button>
-          </div>
-        )}
       </div>
 
       {/* Table */}
@@ -760,14 +737,21 @@ export default function DevicesPage() {
             </table>
           </div>
         )}
-        {!loading && totalPages > 1 && (
-          <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }}>Showing {((page-1)*50)+1}–{Math.min(page*50, total)} of {total.toLocaleString()}</span>
-            <div style={{ display: 'flex', gap: '4px' }}>
-              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: 'var(--text-sm)' }} onClick={() => setPage(p => Math.max(1,p-1))} disabled={page===1}>← Prev</button>
-              <button className="btn-secondary" style={{ padding: '5px 10px', fontSize: 'var(--text-sm)' }} onClick={() => setPage(p => Math.min(totalPages,p+1))} disabled={page===totalPages}>Next →</button>
-            </div>
-          </div>
+        {/* One pagination implementation, from components/system.
+
+            There were two: this one and another above the table. They
+            disagreed - this copy computed its range from a literal 50 while
+            the page-size selector above it offered 25/100/200, so choosing
+            100 per page displayed a hundred rows under the words
+            "Showing 1-50 of 2,482". */}
+        {!loading && (
+          <Pager
+            page={page}
+            limit={limit}
+            total={total}
+            onPage={setPage}
+            onLimit={n => { setLimit(n); setPage(1) }}
+          />
         )}
       </div>
     </div>

@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.41.1': [
+    'Devices list: the row count under the table was computed from a fixed 50 regardless of the page size you picked, so choosing 100 per page showed a hundred rows above the words Showing 1-50. There were also two separate sets of page controls that disagreed; there is now one.',
+    'WAN Circuits now has a Circuit ID column. The circuit ID - the reference you quote to the provider when a link is down - was not shown anywhere in the table, and it is displayed in full rather than cut short.',
+  ],
   '1.41.0': [
     'Fixed the dashboard contradicting itself. The Fleet Health chart counted faulty hardware in its green Healthy slice, and measured EOL differently from the KPI directly above it, so the same fleet was described two ways on one screen. Healthy now means the same thing in both places and faulty devices have their own slice.',
     'The dashboard no longer reports an all-clear when it cannot read the data. A failure used to come back as 0 EOL assets, 0 sites at risk and a 100 percent compliance score; those tiles now say Unavailable, and the page states how many sections failed to load.',

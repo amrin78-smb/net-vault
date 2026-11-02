@@ -124,3 +124,27 @@ Dialog's case on the very attribute that names the dialog. Use `useId()`.
 (tokenized so the square-corner style flattens it), per-route tint, and only the
 active row is coloured — the other three NocVault apps do the same. Tints live
 with the route in `components/shell/nav.ts`. See CLAUDE.md "UI design".
+
+
+**`table-layout: fixed` means content can NEVER widen a column.** The circuits
+table used it with percentage widths summing to 100%, so a long identifier
+could only be clipped or - with `overflow: visible` - painted straight over
+the neighbouring columns, which looks far worse. An identifier column needs
+`table-layout: auto`, a `minWidth` on the table, and the container's
+`overflow-x: auto` to take over. Use `className="ident"`; do not reach for
+`overflow: visible` inside a width-constrained table.
+
+**Dashboard endpoints answer 503, not a zero payload, when they fail.**
+`/api/dashboard/overview` and `/api/dashboard/fleet-health` used to catch
+their own errors and return 200 with every count at zero (overview's included
+`compliance_score: 100`), which the page rendered as a real, healthy fleet.
+The page's `safeFetch` now returns null on a non-ok response and the page
+tracks an `unavailable` set. If you add a dashboard section, fail it loudly -
+never into zeros.
+
+**Fleet-health buckets are a strict partition in a fixed precedence**
+(EOL/EOS > Decommed > Spare > Faulty > Healthy) so the donut's Healthy and
+EOL equal the hero KPIs exactly. Before, "Healthy" meant `NOT IN (Decommed,
+Spare)` and so counted faulty hardware as healthy, and the two halves of the
+page disagreed. If you change a bucket, change `lib/healthScore.ts` with it or
+the dashboard starts contradicting itself again.
