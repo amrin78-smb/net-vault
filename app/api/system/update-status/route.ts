@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.49.0': [
+    'Adding or editing a user now opens in a focused side panel instead of pushing the user table down the page. It closes with Escape and returns you to where you were.',
+  ],
   '1.48.0': [
     'EOL / Risk opens with a summary of how many devices are past end-of-life, how many sites are affected, and how much software is already expired or expires within 90 days.',
     'The Agents fleet summary is now the same style of card used elsewhere instead of a sentence of coloured numbers.',

@@ -1,6 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
-import { Icon, PageHead } from '@/components/system'
+import { Dialog, Icon, PageHead } from '@/components/system'
 import { RoleBadge } from '@/components/Badges'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
@@ -830,9 +830,28 @@ function SettingsInner() {
             <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: 0 }}>Manage who can access this system</p>
             <button className="btn-primary" onClick={openAddUser}>+ Add user</button>
           </div>
-          {showUserForm && (
-            <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '16px' }}>
-              <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', marginBottom: '16px' }}>{editUser ? 'Edit user' : 'Add new user'}</h3>
+          {/* The add/edit form is a focused drawer rather than a panel that
+              pushes the user table down the page. It is the shared Dialog,
+              so it gets role=dialog, aria-modal, a focus trap, Escape and
+              focus restored to the button that opened it. The form markup
+              itself is unchanged. */}
+          <Dialog
+            open={showUserForm}
+            onClose={() => setShowUserForm(false)}
+            variant="drawer"
+            dismissible={!savingUser}
+            title={editUser ? `Edit ${editUser.name}` : 'Add user'}
+            description={editUser ? 'Change this account\u2019s role, site scope and application access.' : 'Create an account and set what it can reach.'}
+            footer={
+              <>
+                <button className="btn btn-secondary" onClick={() => setShowUserForm(false)} disabled={savingUser}>Cancel</button>
+                <button className="btn btn-primary" onClick={saveUser} disabled={savingUser}>
+                  {savingUser ? 'Saving\u2026' : editUser ? 'Save changes' : 'Create user'}
+                </button>
+              </>
+            }
+          >
+            <div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
                 {[
                   { label: 'Full name', field: 'name', type: 'text', placeholder: 'e.g. John Smith' },
@@ -983,12 +1002,8 @@ function SettingsInner() {
               </div>
 
               {userError && <div role="alert" style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{userError}</div>}
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn-primary" onClick={saveUser} disabled={savingUser}>{savingUser ? 'Saving...' : editUser ? 'Save changes' : 'Create user'}</button>
-                <button className="btn-secondary" onClick={() => setShowUserForm(false)}>Cancel</button>
-              </div>
             </div>
-          )}
+          </Dialog>
           {/* overflow: hidden clipped the Actions column once the settings
               panel became a grid track rather than the full page width -
               the Delete button was cut off at the right edge. The card keeps
