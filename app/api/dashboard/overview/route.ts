@@ -42,20 +42,11 @@ export async function GET() {
     })
   } catch (err) {
     console.error('[dashboard/overview GET]', err)
-    return NextResponse.json({
-      health_score: 0,
-      health_grade: 'F',
-      overall_status: 'Critical',
-      status_description: 'Immediate action required',
-      healthy_devices: 0,
-      healthy_devices_pct: 0,
-      eol_assets: 0,
-      eol_assets_pct: 0,
-      sites_at_risk: 0,
-      compliance_score: 100,
-      trend: null,
-      trend_available: false,
-      health_trend: 0,
-    })
+    // 503 rather than a zero payload. This used to answer 200 with
+    // healthy_devices 0, eol_assets 0, sites_at_risk 0 and compliance_score
+    // 100 - so a database failure was presented to an operator as a fleet
+    // with nothing wrong with it, which is the single worst thing a health
+    // endpoint can say. The dashboard now shows those tiles as unavailable.
+    return NextResponse.json({ error: 'overview_unavailable' }, { status: 503 })
   }
 }

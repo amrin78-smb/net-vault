@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.41.0': [
+    'Fixed the dashboard contradicting itself. The Fleet Health chart counted faulty hardware in its green Healthy slice, and measured EOL differently from the KPI directly above it, so the same fleet was described two ways on one screen. Healthy now means the same thing in both places and faulty devices have their own slice.',
+    'The dashboard no longer reports an all-clear when it cannot read the data. A failure used to come back as 0 EOL assets, 0 sites at risk and a 100 percent compliance score; those tiles now say Unavailable, and the page states how many sections failed to load.',
+    'The compliance caption no longer says Good standing at every score - it reflects the actual score.',
+    'Each dashboard KPI now links to the list of what it counts, and the page shows when it was last refreshed, with a Refresh button.',
+  ],
   '1.40.1': [
     'Build fix: a stray apostrophe in a release note broke the update-status file and would have failed the next build.',
   ],

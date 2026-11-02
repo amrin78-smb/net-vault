@@ -109,14 +109,24 @@ const FALLBACK: DashData = {
   activity: [],
 }
 
-async function safeFetch<T>(url: string, fallback: T): Promise<T> {
+/**
+ * Fetch one dashboard section, returning null when it could not be read.
+ *
+ * It used to swallow every failure into a zero-filled fallback, which the
+ * page then rendered as real numbers - a dead database looked like a fleet
+ * with 0 EOL assets, 0 sites at risk and a 100% compliance score. An
+ * operations console must never answer "everything is fine" with data it does
+ * not have. Callers now get null and render an explicit unavailable state.
+ */
+async function safeFetch<T>(url: string): Promise<T | null> {
   try {
     const r = await fetch(url, { cache: 'no-store' })
-    if (!r.ok) return fallback
+    if (!r.ok) return null
     const j = await r.json()
-    return (j ?? fallback) as T
+    if (j && typeof j === 'object' && 'error' in j) return null
+    return (j ?? null) as T | null
   } catch {
-    return fallback
+    return null
   }
 }
 
@@ -191,19 +201,31 @@ function ChartTooltip({ active, payload, label }: any) {
 /* ============================== PAGE =============================== */
 export default function DashboardPage() {
   const [data, setData] = useState<DashData>(FALLBACK)
+  // Which sections could not be read. Rendered as "Unavailable", never as 0.
+  const [unavailable, setUnavailable] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [clock, setClock] = useState('')
+  const [refreshedAt, setRefreshedAt] = useState<Date | null>(null)
 
   const loadAll = useCallback(async () => {
     const [overview, fleet, byRegion, byType, topEol, stats, activity] = await Promise.all([
-      safeFetch<Overview>('/api/dashboard/overview', FALLBACK.overview),
-      safeFetch<FleetHealth>('/api/dashboard/fleet-health', FALLBACK.fleet),
-      safeFetch<RegionRow[]>('/api/dashboard/devices-by-region', FALLBACK.byRegion),
-      safeFetch<TypeRow[]>('/api/dashboard/devices-by-type', FALLBACK.byType),
-      safeFetch<EolSite[]>('/api/dashboard/top-eol-sites', FALLBACK.topEol),
-      safeFetch<StatsRow>('/api/dashboard/stats-row', FALLBACK.stats),
-      safeFetch<ActivityRow[]>('/api/dashboard/recent-activity', FALLBACK.activity),
+      safeFetch<Overview>('/api/dashboard/overview'),
+      safeFetch<FleetHealth>('/api/dashboard/fleet-health'),
+      safeFetch<RegionRow[]>('/api/dashboard/devices-by-region'),
+      safeFetch<TypeRow[]>('/api/dashboard/devices-by-type'),
+      safeFetch<EolSite[]>('/api/dashboard/top-eol-sites'),
+      safeFetch<StatsRow>('/api/dashboard/stats-row'),
+      safeFetch<ActivityRow[]>('/api/dashboard/recent-activity'),
     ])
+    const missing = new Set<string>()
+    if (!overview) missing.add('overview')
+    if (!fleet) missing.add('fleet')
+    if (!Array.isArray(byRegion)) missing.add('byRegion')
+    if (!Array.isArray(byType)) missing.add('byType')
+    if (!Array.isArray(topEol)) missing.add('topEol')
+    if (!stats) missing.add('stats')
+    if (!Array.isArray(activity)) missing.add('activity')
+    setUnavailable(missing)
     setData({
       overview: overview ?? FALLBACK.overview,
       fleet: fleet ?? FALLBACK.fleet,
@@ -213,6 +235,7 @@ export default function DashboardPage() {
       stats: stats ?? FALLBACK.stats,
       activity: Array.isArray(activity) ? activity : FALLBACK.activity,
     })
+    setRefreshedAt(new Date())
     setLoading(false)
   }, [])
 
@@ -240,11 +263,24 @@ export default function DashboardPage() {
   const dashOffset = loading ? C : C * (1 - pct)
 
   /* ------------------------- tiles config -------------------------- */
+  // overviewDown: the figures below are not just zero, they are unknown. Each
+  // tile renders an em dash and the word Unavailable instead of a number, so
+  // a failed read can never be mistaken for a clean fleet.
+  const overviewDown = unavailable.has('overview')
+
+  // The compliance caption used to be the literal string 'Good standing' at
+  // every score, so a 62% compliance sat under the word "Critical" still
+  // claiming good standing. It is derived now.
+  const complianceCaption =
+    overview.compliance_score >= 90 ? 'Good standing'
+    : overview.compliance_score >= 75 ? 'Needs attention'
+    : 'Action required'
+
   const tiles = [
-    { icon: IconMonitor, value: overview.healthy_devices, label: 'Healthy Devices', sub: `${overview.healthy_devices_pct}% of fleet`, color: GREEN },
-    { icon: IconWarning, value: overview.eol_assets, label: 'EOL Assets', sub: `${overview.eol_assets_pct}% action needed`, color: RED },
-    { icon: IconShield, value: overview.sites_at_risk, label: 'Sites at Risk', sub: 'High impact', color: AMBER },
-    { icon: IconClipboard, value: `${overview.compliance_score}%`, label: 'Compliance Score', sub: 'Good standing', color: BLUE },
+    { icon: IconMonitor, value: overview.healthy_devices, label: 'Healthy Devices', sub: `${overview.healthy_devices_pct}% of fleet`, color: GREEN, href: '/devices?status=Active' },
+    { icon: IconWarning, value: overview.eol_assets, label: 'EOL Assets', sub: `${overview.eol_assets_pct}% action needed`, color: RED, href: '/eol' },
+    { icon: IconShield, value: overview.sites_at_risk, label: 'Sites at Risk', sub: 'High impact', color: AMBER, href: '/sites' },
+    { icon: IconClipboard, value: `${overview.compliance_score}%`, label: 'Compliance Score', sub: complianceCaption, color: BLUE, href: '/compliance' },
   ]
 
   /* --------------------------- stats row --------------------------- */
@@ -293,18 +329,32 @@ export default function DashboardPage() {
       <UpdatedNotice />
 
       {/* ============================ HEADER ========================= */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 22, flexWrap: 'wrap' }}>
+      <header className="page-head">
         <div>
-          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Dashboard</h1>
-          <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '4px 0 0' }}>Infrastructure overview</p>
+          <h1>Dashboard</h1>
+          <p className="page-desc">Fleet health, lifecycle risk and inventory across every site.</p>
+          {/* A dashboard with no stated data age invites an operator to trust
+              whatever is on screen indefinitely. */}
+          <div className="page-meta">
+            {loading ? 'Loading…' : refreshedAt ? `Updated ${refreshedAt.toLocaleTimeString()}` : ''}
+            {unavailable.size > 0 && !loading && (
+              <span style={{ color: 'var(--yellow)', fontWeight: 600 }}>
+                {' · '}{unavailable.size} section{unavailable.size === 1 ? '' : 's'} unavailable
+              </span>
+            )}
+          </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="page-actions">
           <div style={{ textAlign: 'right', lineHeight: 1.3 }}>
             <div style={{ fontSize: 'var(--text-base)', fontWeight: 700, color: 'var(--text-primary)' }}>{clock || '—'}</div>
             <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>ICT · Asia/Bangkok</div>
           </div>
+          <button className="btn" onClick={() => { setLoading(true); loadAll() }} disabled={loading}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+            Refresh
+          </button>
         </div>
-      </div>
+      </header>
 
       {/* ============== SECTION 1 — HEALTH SCORE (navy) ============== */}
       <div style={{ background: NAVY, borderRadius: 'var(--radius)', padding: 18, color: 'white', marginBottom: 20, boxShadow: CARD_SHADOW }}>
@@ -353,22 +403,38 @@ export default function DashboardPage() {
 
           {/* RIGHT — metric tiles in a row */}
           <div className="nv-health-right" style={{ display: 'flex', flexWrap: 'wrap', gap: 12, flexShrink: 0 }}>
-            {tiles.map((t, i) => (
-              <div key={i} style={{ width: 180, flexShrink: 0, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 'var(--radius)', padding: '10px 12px', display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {t.icon(32, t.color)}
-                </span>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  {loading ? <Shimmer w={50} h={26} light /> : (
-                    <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'white', lineHeight: 1 }}>
-                      {typeof t.value === 'number' ? t.value.toLocaleString() : t.value}
+            {tiles.map((t, i) => {
+              const body = (
+                <>
+                  <span style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    {t.icon(32, overviewDown ? 'rgba(255,255,255,0.3)' : t.color)}
+                  </span>
+                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                    {loading ? <Shimmer w={50} h={26} light /> : (
+                      <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 800, color: overviewDown ? 'rgba(255,255,255,0.45)' : 'white', lineHeight: 1 }}>
+                        {overviewDown ? '—' : typeof t.value === 'number' ? t.value.toLocaleString() : t.value}
+                      </div>
+                    )}
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.6)' }}>{t.label}</div>
+                    <div style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.45)' }}>
+                      {loading ? '' : overviewDown ? 'Unavailable' : t.sub}
                     </div>
-                  )}
-                  <div style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.6)' }}>{t.label}</div>
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.45)' }}>{t.sub}</div>
-                </div>
-              </div>
-            ))}
+                  </div>
+                </>
+              )
+              const tileStyle: React.CSSProperties = {
+                width: 180, flexShrink: 0, background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.08)', borderRadius: 'var(--radius)',
+                padding: '10px 12px', display: 'flex', flexDirection: 'row',
+                alignItems: 'center', gap: 12, textDecoration: 'none',
+              }
+              // Each KPI links to the view that lists what it counts - but not
+              // while the number is unknown, which would promise a filtered
+              // view of nothing.
+              return (loading || overviewDown)
+                ? <div key={i} style={tileStyle}>{body}</div>
+                : <Link key={i} href={t.href} style={tileStyle}>{body}</Link>
+            })}
           </div>
         </div>
       </div>
@@ -384,8 +450,16 @@ export default function DashboardPage() {
             <div style={{ position: 'relative', width: 190, height: 180, flexShrink: 0 }}>
               {loading ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}><Shimmer w={150} h={150} r={75} /></div>
+              ) : unavailable.has('fleet') ? (
+                // Deliberately distinct from "no devices". The old copy said
+                // "No data" for both, so a failed read looked like an empty
+                // inventory.
+                <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 4, color: 'var(--text-muted)', fontSize: 'var(--text-base)', textAlign: 'center', padding: '0 10px' }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>Unavailable</strong>
+                  <span style={{ fontSize: 'var(--text-sm)' }}>Fleet health could not be loaded.</span>
+                </div>
               ) : fleet.segments.length === 0 ? (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>No data</div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', fontSize: 'var(--text-base)' }}>No devices recorded</div>
               ) : (
                 <>
                   <ResponsiveContainer width="100%" height="100%">
