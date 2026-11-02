@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSession } from 'next-auth/react'
 import { useToast } from '@/app/providers'
@@ -42,6 +42,11 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
   const [lookups, setLookups] = useState<Lookups | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  // Snapshot of the form as first rendered, so "has anything changed?" is a
+  // comparison rather than a flag every onChange has to remember to set.
+  const initialSnapshot = useRef<string | null>(null)
+  const [dirty, setDirty] = useState(false)
+  const savedRef = useRef(false)
   const [form, setForm] = useState({ name: '', brand: '', model: '', serial_number: '', device_type: '', device_type_other: '', ip_address: '', mgmt_protocol: '', mgmt_url: '', site: '', location_detail: '', lifecycle_status: 'Unknown', device_status: 'Active', risk_score: '', technical_debt: '', remark: '', cost: '', purchase_date: '', purchase_vendor: '', ma_vendor: '', support_contract_number: '', support_vendor: '', support_start_date: '', support_end_date: '', support_cost: '', support_currency: 'THB', os_type: '', os_version: '', os_eol_date: '', ...initialData })
 
   useEffect(() => {
@@ -55,6 +60,33 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   function set(field: string, value: string) { setForm(f => ({ ...f, [field]: value })) }
+
+  // Take the snapshot once, after the first render with real initialData.
+  useEffect(() => {
+    if (initialSnapshot.current === null) initialSnapshot.current = JSON.stringify(form)
+  })
+
+  useEffect(() => {
+    if (initialSnapshot.current === null) return
+    setDirty(JSON.stringify(form) !== initialSnapshot.current)
+  }, [form])
+
+  /**
+   * Warn before losing edits to a tab close or a reload.
+   *
+   * This is the browser-native guard only. It deliberately does NOT try to
+   * intercept in-app navigation: the App Router gives no supported way to
+   * cancel a client-side route change, and the usual workarounds (patching
+   * history, hijacking link clicks) break the back button in ways that are
+   * worse than the problem. Cancel is explicit, and submitting clears the
+   * flag before the redirect.
+   */
+  useEffect(() => {
+    if (!dirty || savedRef.current) return
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [dirty])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -75,6 +107,10 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
       } else {
         showToast('Device updated successfully')
       }
+      // Clear the guard before navigating, or a successful save trips the
+      // unsaved-changes warning on its own redirect.
+      savedRef.current = true
+      setDirty(false)
       router.push('/devices')
       router.refresh()
     } else {
@@ -263,10 +299,19 @@ export default function DeviceForm({ initialData, deviceId }: DeviceFormProps) {
           </Field>
         </Section>
 
-        {error && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 'var(--text-md)', marginBottom: '16px' }}>{error}</div>}
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn-primary" type="submit" disabled={saving}>{saving ? 'Saving...' : deviceId ? 'Save changes' : 'Add device'}</button>
-          <button className="btn-secondary" type="button" onClick={() => router.back()}>Cancel</button>
+        {error && <div role="alert" style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 'var(--text-md)', marginBottom: '16px' }}>{error}</div>}
+
+        {/* Sticky footer. This form is eight sections long, so the Save button
+            was below the fold for most of the editing session and the only way
+            to reach it was to scroll back down past everything. */}
+        <div className="form-actions-sticky">
+          <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', flex: 1, minWidth: 0 }} aria-live="polite">
+            {saving ? 'Saving…' : dirty ? 'Unsaved changes' : ''}
+          </div>
+          <button className="btn btn-secondary" type="button" onClick={() => router.back()}>Cancel</button>
+          <button className="btn btn-primary" type="submit" disabled={saving}>
+            {saving ? 'Saving…' : deviceId ? 'Save changes' : 'Add device'}
+          </button>
         </div>
       <datalist id="vendors-list">
         {lookups.vendors.map(v => <option key={v} value={v} />)}

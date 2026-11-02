@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.43.0': [
+    'Settings is now organised into System, Access, Billing and Personal sections down the side instead of one long row of seven tabs. Every existing settings link still works, and switching section now updates the address bar so you can bookmark or share the section you are on.',
+    'The device form keeps its Save and Cancel buttons in view at the bottom of the screen instead of only at the end of eight sections, shows when you have unsaved changes, and warns before you close the tab with edits pending.',
+    'Importing devices now shows which stage you are at - Choose file, Preview, Validate, Committed - and says explicitly that a validation run has written nothing yet.',
+  ],
   '1.42.0': [
     'Devices, Sites and WAN Circuits now show the filters currently applied as removable chips, so you can see why a list is narrowed and drop one filter without clearing everything.',
     'Device, circuit and site detail pages now wrap long values such as serial numbers, subnets and contract references instead of cutting them off, and collapse to a single column on a phone.',

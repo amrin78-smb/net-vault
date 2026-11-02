@@ -448,6 +448,25 @@ export default function SettingsPage() {
       setActiveTab(t as 'general' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about')
     }
   }, [user, canSeeAdminTabs])
+  /**
+   * Switch section AND reflect it in the URL.
+   *
+   * ?tab= was already honoured on load (the sibling apps deep-link
+   * /settings/license here) but switching sections never updated the
+   * address, so the open section could not be linked or bookmarked and the
+   * sidebar's Administration rows could not tell which one was showing.
+   * replaceState, not push: flipping sections should not stack history
+   * entries for the back button to walk through.
+   */
+  function selectTab(tab: typeof activeTab) {
+    setActiveTab(tab)
+    try {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', tab)
+      window.history.replaceState(null, '', url.toString())
+    } catch { /* non-fatal: the section still switches */ }
+  }
+
   const [loadingSettings, setLoadingSettings] = useState(true)
 
   const [idleTimeout, setIdleTimeout] = useState('30')
@@ -733,25 +752,65 @@ export default function SettingsPage() {
         <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '2px 0 0' }}>Manage users, sites and licensing</p>
       </div>
 
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '24px', flexWrap: 'wrap' }}>
-        {(['general', 'users', 'sites', 'security', 'license', 'updates', 'about'] as const)
-          // Security / 2FA is the ONE tab a non-admin may see; everything else
-          // on this page is administrative. Filtering here rather than gating
-          // the whole page is what lets a viewer reach their own two-factor
-          // setup without being handed Users, Sites or Updates as well.
-          .filter(tab => tab === 'security' || canSeeAdminTabs)
-          .filter(tab => tab !== 'general' || isAdmin)
-          .filter(tab => tab !== 'license' || isSuperAdmin)
-          .filter(tab => tab !== 'updates' || isAdmin)
-          .map(tab => (
-          <button key={tab} onClick={() => setActiveTab(tab as typeof activeTab)} style={{ padding: '10px 18px', fontSize: 'var(--text-md)', fontWeight: activeTab === tab ? '600' : '400', color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)', background: 'none', border: 'none', borderBottom: activeTab === tab ? '2px solid var(--primary)' : '2px solid transparent', cursor: 'pointer', marginBottom: '-1px', textTransform: 'capitalize' }}>
-            {tab === 'general' ? 'General' : tab === 'users' ? `Users (${users.length})` : tab === 'sites' ? `Sites (${sites.length})` : tab === 'security' ? 'Security / 2FA' : tab === 'updates' ? 'Updates' : tab === 'about' ? 'About' : 'License'}
-            {tab === 'updates' && updateStatus?.update_available && (
-              <span title="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%' /* intentional: update-available status dot — squaring it would look broken */, background: '#dc2626', marginLeft: 6, verticalAlign: 'middle' }} />
-            )}
-          </button>
-        ))}
-      </div>
+      {/* Grouped settings sub-navigation.
+
+          Replaces a single horizontal strip of seven tabs. The grouping is
+          conceptual, not cosmetic: System, Access, Billing and Personal are
+          different kinds of setting with different audiences, and a viewer
+          only ever sees the Personal group.
+
+          The role filters below are carried over UNCHANGED - in particular,
+          Security / 2FA is the one entry a non-admin may see, which is what
+          lets someone reach their own two-factor setup without also being
+          handed Users, Sites or Updates. Each content block keeps its own
+          `activeTab === '<name>'` guard, so this is only the chrome. */}
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {([
+            ['System',   ['general', 'sites', 'updates', 'about']],
+            ['Access',   ['users']],
+            ['Billing',  ['license']],
+            ['Personal', ['security']],
+          ] as const).map(([group, tabs]) => {
+            const visible = (tabs as readonly string[])
+              .filter(tab => tab === 'security' || canSeeAdminTabs)
+              .filter(tab => tab !== 'general' || isAdmin)
+              .filter(tab => tab !== 'license' || isSuperAdmin)
+              .filter(tab => tab !== 'updates' || isAdmin)
+            if (visible.length === 0) return null
+            return (
+              <div key={group} className="settings-nav-group">
+                <div className="settings-nav-label">{group}</div>
+                {visible.map(tab => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => selectTab(tab as typeof activeTab)}
+                    aria-current={activeTab === tab ? 'page' : undefined}
+                    className="settings-nav-item"
+                  >
+                    <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+                      {tab === 'general' ? 'General'
+                        : tab === 'users' ? 'Users & access'
+                        : tab === 'sites' ? 'Organisation & sites'
+                        : tab === 'security' ? 'Security / 2FA'
+                        : tab === 'updates' ? 'Updates'
+                        : tab === 'about' ? 'About'
+                        : 'Subscription & licensing'}
+                    </span>
+                    {tab === 'users' && users.length > 0 && <span className="tnum settings-nav-count">{users.length}</span>}
+                    {tab === 'sites' && sites.length > 0 && <span className="tnum settings-nav-count">{sites.length}</span>}
+                    {tab === 'updates' && updateStatus?.update_available && (
+                      <span title="Update available" aria-label="Update available" style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%' /* intentional: update-available status dot */, background: '#dc2626', flexShrink: 0 }} />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )
+          })}
+        </nav>
+
+        <div className="settings-panel">
 
       {/* USERS TAB */}
       {activeTab === 'users' && (
@@ -876,8 +935,13 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+          {/* overflow: hidden clipped the Actions column once the settings
+              panel became a grid track rather than the full page width -
+              the Delete button was cut off at the right edge. The card keeps
+              its rounded corners via the wrapper; the inner div scrolls. */}
           <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
-            <table>
+           <div className="table-scroll">
+            <table className="data-table compact" style={{ minWidth: 720 }}>
               <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Site access</th><th>App access</th><th>Created</th><th>Actions</th></tr></thead>
               <tbody>
                 {users.map(u => (
@@ -913,6 +977,7 @@ export default function SettingsPage() {
                 ))}
               </tbody>
             </table>
+           </div>
           </div>
         </div>
       )}
@@ -1354,6 +1419,9 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+        </div>
+      </div>
 
       {confirmingUpdate && <UpdateConfirmModal onCancel={() => setConfirmingUpdate(false)} onConfirm={startUpdate} />}
       {updatingApp && <UpdatingOverlay preVersion={updateStatus?.current_commit || ''} />}

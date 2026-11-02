@@ -245,6 +245,22 @@ export default function DevicesPage() {
     }
   }
 
+  /**
+   * Which step of the import the user is on.
+   *
+   * Derived from the existing state rather than tracked separately, so the
+   * indicator cannot drift out of sync with what the import has actually
+   * done. The underlying dry-run / commit behaviour is unchanged - this only
+   * makes the stage visible, because previously "validate" and "write it for
+   * real" were two similar-looking buttons with nothing showing which had
+   * run or what the difference was.
+   */
+  const importStep: 1 | 2 | 3 | 4 =
+    importResult ? 4
+    : dryRunResult ? 3
+    : importPreview.length > 0 ? 2
+    : 1
+
   async function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -396,6 +412,36 @@ export default function DevicesPage() {
       {showImport && isAdmin && (
         <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '20px 24px', marginBottom: '16px' }}>
           <h3 style={{ fontSize: 'var(--text-md)', fontWeight: '600', color: 'var(--text-primary)', marginBottom: '12px' }}>Import devices from Excel / CSV</h3>
+
+          <ol className="import-steps" aria-label="Import progress">
+            {[
+              [1, 'Choose file'],
+              [2, 'Preview'],
+              [3, 'Validate'],
+              [4, 'Committed'],
+            ].map(([n, label]) => (
+              <li key={n as number}
+                  data-state={importStep > (n as number) ? 'done' : importStep === n ? 'current' : 'todo'}
+                  aria-current={importStep === n ? 'step' : undefined}>
+                <span className="import-step-dot">{importStep > (n as number) ? '\u2713' : n}</span>
+                <span>{label}</span>
+              </li>
+            ))}
+          </ol>
+          {importStep === 3 && (
+            <div className="alert" data-tone="warn" role="status" style={{ marginBottom: 14 }}>
+              <span aria-hidden style={{ display: 'flex', flexShrink: 0, marginTop: 1 }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+              </span>
+              <div>
+                <div className="alert-title">Nothing has been written yet</div>
+                <div className="alert-body">
+                  These are the results of a validation run. Choose
+                  &ldquo;Import for real&rdquo; below to commit them.
+                </div>
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: 0 }}>File must have columns: Name, Brand, Model, S/N, Type, IP Address, Site, Country, Lifecycle Status, Device Status</p>
             <button className="btn-secondary" onClick={() => {
