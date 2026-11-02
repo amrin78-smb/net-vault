@@ -1,131 +1,72 @@
 'use client'
-import { useSession, signOut } from 'next-auth/react'
+import { useSession } from 'next-auth/react'
 import { useRouter, usePathname } from 'next/navigation'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, Suspense, useCallback, useSyncExternalStore } from 'react'
 import Link from 'next/link'
 import IdleTimeout from '@/components/IdleTimeout'
 import UpdateNotifier from '@/app/components/UpdateNotifier'
 import UpdateFailureBanner from '@/app/components/UpdateFailureBanner'
-import ThemeToggle from '@/components/ThemeToggle'
-import CornersToggle from '@/components/CornersToggle'
 import LicenseBanner from '@/components/LicenseBanner'
+import SuiteHeader from '@/components/shell/SuiteHeader'
+import Sidebar from '@/components/shell/Sidebar'
+import { Dialog } from '@/components/system/Dialog'
+import { Icon } from '@/components/system/icons'
 
 type Settings = {
   app_name: string; app_subtitle: string; app_logo_url: string
   app_primary_color: string; app_navy_color: string
 }
 
-const navIcons: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
-  '/dashboard': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
-    color: '#f87171', bg: 'rgba(200,16,46,0.25)',
-  },
-  '/sites': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5s2.5 1.12 2.5 2.5S13.38 11.5 12 11.5z"/></svg>,
-    color: '#34d399', bg: 'rgba(29,158,117,0.25)',
-  },
-  '/devices': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="2" fill="none"/></svg>,
-    color: '#60a5fa', bg: 'rgba(55,138,221,0.25)',
-  },
-  '/circuits': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" fill="none"/><circle cx="8" cy="6" r="2.5"/><circle cx="16" cy="12" r="2.5"/><circle cx="10" cy="18" r="2.5"/></svg>,
-    color: '#a78bfa', bg: 'rgba(127,119,221,0.25)',
-  },
-  '/eol': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 20h20L12 2zm0 4l7.5 12h-15L12 6z"/><rect x="11" y="10" width="2" height="5" rx="1"/><rect x="11" y="16" width="2" height="2" rx="1"/></svg>,
-    color: '#fbbf24', bg: 'rgba(186,117,23,0.25)',
-  },
-  // Deliberately NOT the amber warning triangle used by /eol. That page is the
-  // risk report ("which of my devices are past end-of-life"); this one is the
-  // curation/enrichment engine behind it. Same subject, different job — a
-  // duplicate icon would make them look like the same page twice.
-  '/eol-intelligence': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="5.5" rx="8" ry="3"/><path d="M4 5.5v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" opacity="0.75"/><path d="M4 12.5v5c0 1.66 3.58 3 8 3s8-1.34 8-3v-5" opacity="0.5"/></svg>,
-    color: '#c084fc', bg: 'rgba(147,86,220,0.25)',
-  },
-  '/audit': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zm-1 7V3.5L18.5 9H13zm-4 4h8v1.5H9zm0 3h5v1.5H9z"/></svg>,
-    color: '#f472b6', bg: 'rgba(212,83,126,0.25)',
-  },
-  '/compliance': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>,
-    color: '#06b6d4', bg: 'rgba(6,182,212,0.2)',
-  },
-  '/agents': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><circle cx="7" cy="7" r="1.2"/><circle cx="7" cy="17" r="1.2"/></svg>,
-    color: '#2dd4bf', bg: 'rgba(13,148,136,0.25)',
-  },
-  '/settings': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.49.49 0 00-.59-.22l-2.39.96a7.02 7.02 0 00-1.62-.94l-.36-2.54A.484.484 0 0014 2h-4a.484.484 0 00-.48.41l-.36 2.54a7.38 7.38 0 00-1.62.94l-2.39-.96a.48.48 0 00-.59.22L2.74 8.87a.47.47 0 00.12.61l2.03 1.58c-.05.3-.07.62-.07.94s.02.64.07.94l-2.03 1.58a.47.47 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.36 1.04.67 1.62.94l.36 2.54c.05.24.27.41.48.41h4c.24 0 .44-.17.47-.41l.36-2.54a7.38 7.38 0 001.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.47.47 0 00-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>,
-    color: '#9ca3af', bg: 'rgba(136,135,128,0.25)',
-  },
-  '/users': {
-    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>,
-    color: '#38bdf8', bg: 'rgba(56,189,248,0.2)',
-  },
-}
-
-const navItems = [
-  { href: '/dashboard', label: 'Dashboard', hideForSiteAdmin: true },
-  { href: '/sites', label: 'Sites' },
-  { href: '/devices', label: 'Devices' },
-  { href: '/circuits', label: 'Circuits' },
-  { href: '/eol', label: 'EOL / Risk', hideForSiteAdmin: true },
-  // Promoted out of Settings: this is a separately licensed add-on (the 'eol'
-  // module) with its own entitlement gate, not a preference. Buried under
-  // Settings it was only findable by someone who already knew it existed —
-  // which is the wrong property for a paid feature. superAdminOnly matches the
-  // page's own gate; the page additionally shows a locked upsell when the
-  // module is not licensed, so the nav item stays visible to a super_admin on
-  // an unlicensed install rather than the feature being invisible to the one
-  // person who could buy it.
-  { href: '/eol-intelligence', label: 'EOL Intelligence', superAdminOnly: true },
-  { href: '/audit', label: 'Audit Log', adminOnly: true },
-  { href: '/compliance', label: 'Compliance', adminOnly: true },
-  { href: '/agents', label: 'Agents', superAdminOnly: true },
-  // NOT adminOnly any more: Settings is now the only route to a user's own
-  // two-factor setup (Security / 2FA tab), and every role must be able to reach
-  // it. The page itself shows a non-admin that one tab and nothing else.
-  { href: '/settings', label: 'Settings' },
-]
-
 const SIDEBAR_COLLAPSED_KEY = 'netvault-sidebar-collapsed'
-const SIDEBAR_EXPANDED_W = 240
-const SIDEBAR_COLLAPSED_W = 64
+
+function subscribeCollapsed(cb: () => void) {
+  window.addEventListener('storage', cb)
+  return () => window.removeEventListener('storage', cb)
+}
+function getCollapsed() {
+  try { return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true' } catch { return false }
+}
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { data: session, status } = useSession()
   const router = useRouter()
   const pathname = usePathname()
-  const user = session?.user as { role?: string; name?: string } | undefined
+  const user = session?.user as { role?: string; name?: string; apps?: string[] } | undefined
   const userRole = user?.role
+
   const [settings, setSettings] = useState<Settings>({
     app_name: 'NetVault', app_subtitle: 'Network Asset Management',
     app_logo_url: '', app_primary_color: '#C8102E', app_navy_color: '#1a2744',
   })
-  const [collapsed, setCollapsed] = useState(false)
+  // Persisted collapse preference. Read through useSyncExternalStore because
+  // localStorage is an external store: the server snapshot is `false`, so the
+  // markup matches on hydration and the stored value applies immediately
+  // afterwards, with no setState-inside-an-effect render cascade.
+  const storedCollapsed = useSyncExternalStore(subscribeCollapsed, getCollapsed, () => false)
+  const [collapsedOverride, setCollapsedOverride] = useState<boolean | null>(null)
+  const collapsed = collapsedOverride ?? storedCollapsed
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  // Close the drawer whenever the route changes. Adjusting state during
+  // render (React's documented pattern for state derived from a changing
+  // input) rather than in an effect, so it happens before paint instead of
+  // flashing the old drawer over the new page. Nav links also close it
+  // directly; this additionally covers browser back/forward.
+  const [lastPath, setLastPath] = useState(pathname)
   const [appVersion, setAppVersion] = useState<string | null>(null)
   const [licenseStatus, setLicenseStatus] = useState<string | null>(null)
   const [showPwModal, setShowPwModal] = useState(false)
-  const [showUserMenu, setShowUserMenu] = useState(false)
   const [pwForm, setPwForm] = useState({ current_password: '', new_password: '', confirm_password: '' })
   const [pwError, setPwError] = useState('')
   const [pwSuccess, setPwSuccess] = useState(false)
   const [pwSaving, setPwSaving] = useState(false)
-  const [alertCount, setAlertCount] = useState(0)
+  const [alertCount, setAlertCount] = useState<number | null>(null)
   const settingsFetched = useRef(false)
-  const userMenuRef = useRef<HTMLDivElement>(null)
-  const searchRef = useRef<HTMLInputElement>(null)
-
-  // Hydrate collapsed state from localStorage after mount (avoids SSR mismatch)
-  useEffect(() => {
-    if (localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true') setCollapsed(true)
-  }, [])
+  const navTriggerRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/health').then(r => r.json()).then(j => { if (!cancelled) setAppVersion(j.version || null) }).catch(() => {})
+    fetch('/api/health').then(r => r.json())
+      .then(j => { if (!cancelled) setAppVersion(j.version || null) }).catch(() => {})
     return () => { cancelled = true }
   }, [])
 
@@ -133,6 +74,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     if (status === 'unauthenticated') router.push('/login')
   }, [status, router])
 
+  // Site-scoped admins have no fleet-wide view; these two pages contradict
+  // their scope, so they are bounced to their own landing page.
   useEffect(() => {
     if (status === 'authenticated' && userRole === 'site_admin') {
       const restricted = ['/dashboard', '/eol']
@@ -152,7 +95,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [status])
 
-  // Alert count — fetched from dashboard overview, reused for nav + header bell badges
+  // Attention count. Real data from the dashboard overview, not a synthetic
+  // notification feed: it is the EOL asset count, and the indicator links to
+  // the page that lists them. Left null (and therefore hidden) when the call
+  // fails, so a failed fetch never renders as a reassuring zero.
   useEffect(() => {
     if (status !== 'authenticated') return
     let cancelled = false
@@ -162,71 +108,30 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         if (cancelled || !d || d.error) return
         const count = typeof d.eol_assets === 'number' ? d.eol_assets
           : typeof d.sites_at_risk === 'number' ? d.sites_at_risk
-          : 0
+          : null
         setAlertCount(count)
       })
       .catch(() => {})
     return () => { cancelled = true }
   }, [status])
 
-  // Global "/" shortcut → focus header search; Escape → blur
+  // Read-only mode flag consumed by the `.license-action` rules in globals.css.
   useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const t = e.target as HTMLElement | null
-      const typing = !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
-      if (e.key === '/' && !typing) {
-        e.preventDefault()
-        searchRef.current?.focus()
-      } else if (e.key === 'Escape' && document.activeElement === searchRef.current) {
-        searchRef.current?.blur()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
-  // Apply / remove data-readonly on body based on license status
-  useEffect(() => {
-    if (licenseStatus === 'expired') {
-      document.body.dataset.readonly = 'true'
-    } else {
-      delete document.body.dataset.readonly
-    }
+    if (licenseStatus === 'expired') document.body.dataset.readonly = 'true'
+    else delete document.body.dataset.readonly
     return () => { delete document.body.dataset.readonly }
   }, [licenseStatus])
 
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setShowUserMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
+  const toggleCollapsed = useCallback(() => {
+    const next = !(collapsedOverride ?? getCollapsed())
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next))
+    setCollapsedOverride(next)
+  }, [collapsedOverride])
 
-  function toggleCollapsed() {
-    setCollapsed(c => {
-      const next = !c
-      localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next))
-      return next
-    })
-  }
-
-  function onSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') {
-      const q = (e.target as HTMLInputElement).value.trim()
-      if (q) router.push('/devices?search=' + encodeURIComponent(q))
-    } else if (e.key === 'Escape') {
-      searchRef.current?.blur()
-    }
-  }
-
-  function openPwModal() {
+  const openPwModal = useCallback(() => {
     setPwForm({ current_password: '', new_password: '', confirm_password: '' })
     setPwError(''); setPwSuccess(false); setShowPwModal(true)
-    setShowUserMenu(false)
-  }
+  }, [])
 
   async function changePassword() {
     if (!pwForm.current_password || !pwForm.new_password || !pwForm.confirm_password) {
@@ -250,8 +155,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     else setPwError(data.error || 'Failed to change password')
   }
 
+  if (pathname !== lastPath) {
+    setLastPath(pathname)
+    if (mobileNavOpen) setMobileNavOpen(false)
+  }
+
   if (status === 'loading') return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--canvas)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
         {/* intentional: 50% — a true circle (loading spinner), never squared */}
         <div style={{ width: 28, height: 28, border: '2.5px solid var(--border)', borderTopColor: 'var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
@@ -261,451 +171,123 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   )
   if (!session) return null
 
-  const navy = settings.app_navy_color || '#1a2744'
-  const primary = settings.app_primary_color || '#C8102E'
-  const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U'
-  const sidebarWidth = collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_EXPANDED_W
+  const isAdmin = userRole === 'admin' || userRole === 'super_admin'
+  // The attention indicator points at /eol, so it is only offered to roles
+  // that are allowed to open that page.
+  const showAttention = alertCount !== null && alertCount > 0 && userRole !== 'site_admin'
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+    <div className="app-shell">
+      <a href="#main-content" className="skip-link">Skip to main content</a>
 
-      {/* ── Fixed sidebar ── */}
-      <div style={{
-        position: 'fixed', top: 'var(--header-height)', left: 0, bottom: 0,
-        width: sidebarWidth,
-        background: navy,
-        display: 'flex', flexDirection: 'column',
-        zIndex: 100,
-        overflowX: 'hidden',
-        overflowY: 'auto',
-        transition: 'width 0.18s ease',
-        boxShadow: '1px 0 0 rgba(255,255,255,0.05)',
-      }}>
+      <SuiteHeader
+        productName={settings.app_name || 'NetVault'}
+        productSubtitle={settings.app_subtitle || 'Network Asset Management'}
+        userName={user?.name || 'User'}
+        userRole={userRole}
+        userApps={user?.apps}
+        version={appVersion}
+        collapsed={collapsed}
+        onToggleCollapsed={toggleCollapsed}
+        onToggleSidebar={() => setMobileNavOpen(o => !o)}
+        onChangePassword={openPwModal}
+        sidebarTriggerRef={navTriggerRef}
+      />
 
-        {/* Section label — only when expanded */}
-        {!collapsed && (
-          <div style={{ padding: '14px 20px 6px', fontSize: 'var(--text-xs)', fontWeight: 700, letterSpacing: '0.1em', color: 'rgba(255,255,255,0.25)', textTransform: 'uppercase' }}>
-            Navigation
-          </div>
-        )}
-        {collapsed && <div style={{ height: 14 }} />}
+      {/* useSearchParams (used to resolve the active Settings tab) must sit
+          inside a Suspense boundary or the production build fails with
+          "Missing Suspense boundary with useSearchParams". */}
+      <Suspense fallback={<nav className="app-sidebar" aria-label="Main" data-collapsed={collapsed ? 'true' : 'false'} />}>
+        <Sidebar
+          role={userRole}
+          collapsed={collapsed}
+          mobileOpen={mobileNavOpen}
+          onCloseMobile={() => setMobileNavOpen(false)}
+          triggerRef={navTriggerRef}
+        />
+      </Suspense>
 
-        {/* Navigation items */}
-        <nav style={{ flex: 1, padding: '0 8px', paddingBottom: 8 }}>
-          {navItems.map(item => {
-            if (item.adminOnly && userRole !== 'admin' && userRole !== 'super_admin') return null
-            if ((item as any).superAdminOnly && userRole !== 'super_admin') return null
-            if ((item as any).hideForSiteAdmin && userRole === 'site_admin') return null
-            const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
-            const ic = navIcons[item.href]
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={collapsed ? item.label : undefined}
-                style={{ textDecoration: 'none', display: 'block' }}
-              >
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  justifyContent: collapsed ? 'center' : 'flex-start',
-                  padding: collapsed ? '10px 0' : '8px 10px',
-                  margin: '1px 0',
-                  borderRadius: 'var(--radius)',
-                  background: active ? `${primary}20` : 'transparent',
-                  position: 'relative',
-                  transition: 'background 0.15s',
-                  cursor: 'pointer',
-                }}
-                  onMouseEnter={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'rgba(255,255,255,0.06)' }}
-                  onMouseLeave={e => { if (!active) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
-                >
-                  {/* Active left-bar indicator */}
-                  {/* intentional: decorative 3px accent sliver — the '0 3px 3px 0'
-                      rounded-cap shape IS the indicator; tokenizing would deform it */}
-                  {active && (
-                    <div style={{
-                      position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-                      width: 3, height: 20, background: primary, borderRadius: '0 3px 3px 0' /* intentional: 3px decorative active-nav sliver */,
-                    }} />
-                  )}
-                  {/* Colored icon box */}
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 'var(--radius)', flexShrink: 0,
-                    background: active ? ic?.bg : 'rgba(255,255,255,0.07)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: active ? ic?.color : 'rgba(255,255,255,0.4)',
-                    transition: 'all 0.15s',
-                    position: 'relative',
-                  }}>
-                    {ic?.icon}
-                    {/* Collapsed alert dot */}
-                    {(item as any).showAlertBadge && alertCount > 0 && collapsed && (
-                      /* intentional: 50% — a true circular alert dot */
-                      <span style={{
-                        position: 'absolute', top: -2, right: -2,
-                        width: 9, height: 9, borderRadius: '50%',
-                        background: 'var(--primary)', border: `1.5px solid ${navy}`,
-                      }} />
-                    )}
-                  </div>
-                  {/* Label — hidden when collapsed */}
-                  {!collapsed && (
-                    <span style={{
-                      fontSize: 'var(--text-md)', fontWeight: active ? 600 : 500,
-                      color: active ? 'white' : 'rgba(255,255,255,0.55)',
-                      whiteSpace: 'nowrap', letterSpacing: '-0.1px',
-                    }}>
-                      {item.label}
-                    </span>
-                  )}
-                  {/* Expanded alert count badge — pushed to the right */}
-                  {(item as any).showAlertBadge && alertCount > 0 && !collapsed && (
-                    <span style={{
-                      marginLeft: 'auto',
-                      minWidth: 18, height: 18, padding: '0 5px',
-                      borderRadius: 'var(--radius-pill)',
-                      background: 'var(--primary)', color: 'white',
-                      fontSize: 'var(--text-xs)', fontWeight: 700,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      lineHeight: 1,
-                    }}>
-                      {alertCount > 99 ? '99+' : alertCount}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* ── Collapse toggle button (exact DDIVault style) ── */}
-        <button
-          onClick={toggleCollapsed}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 10,
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            margin: '4px 10px',
-            padding: collapsed ? '10px 0' : '10px 12px',
-            width: 'calc(100% - 20px)',
-            background: 'transparent', border: 'none', borderRadius: 'var(--radius)',
-            cursor: 'pointer',
-            color: 'rgba(255,255,255,0.4)', fontSize: 'var(--text-sm)',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'white' }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.4)' }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}>
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-          {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>Collapse</span>}
-        </button>
-
-        {/* Footer */}
-        {!collapsed && (
-          <div style={{ padding: '6px 20px 10px', fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.2)', whiteSpace: 'nowrap' }}>
-            <div>NocVault Suite</div>
-            <div style={{ marginTop: 2 }}>NetVault{appVersion ? ` v${appVersion}` : ''}</div>
-          </div>
-        )}
-        {collapsed && <div style={{ height: 8 }} />}
-      </div>
-
-      {/* ── Top header — fixed full-width, unaffected by sidebar ── */}
-      <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0,
-        height: 'var(--header-height)',
-        background: navy,
-        display: 'flex', alignItems: 'center',
-        padding: '0 24px', gap: 20,
-        zIndex: 150,
-        boxShadow: '0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.2)',
-      }}>
-          {/* Logo + tagline — single-line wordmark, divider, inline tagline (suite pattern) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 206 46" height="44" style={{ display: 'block' }}>
-              <defs>
-              <linearGradient id="nv-hdr-nvFace" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#FF7187"/><stop offset="55%" stopColor="#D4162F"/><stop offset="100%" stopColor="#8E0A20"/>
-              </linearGradient>
-              <linearGradient id="nv-hdr-nvEdge" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.34"/><stop offset="45%" stopColor="#ffffff" stopOpacity="0"/>
-              </linearGradient>
-              <mask id="nv-hdr-nvLens">
-              <rect x="0" y="0" width="206" height="46" fill="#fff"/>
-              <circle cx="30" cy="31" r="11.6" fill="#000"/>
-              </mask>
-              </defs>
-              {/* three rack units: flat faces with bay LEDs, not isometric slabs, so this cannot be mistaken for LogVault's data stack */}
-              <g mask="url(#nv-hdr-nvLens)">
-              <g>
-              <rect x="3" y="5"  width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvFace)"/>
-              <rect x="3" y="5"  width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvEdge)"/>
-              <rect x="3" y="17.3" width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvFace)" opacity="0.88"/>
-              <rect x="3" y="17.3" width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvEdge)"/>
-              <rect x="3" y="29.6" width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvFace)" opacity="0.74"/>
-              <rect x="3" y="29.6" width="31" height="9.4" rx="2.4" fill="url(#nv-hdr-nvEdge)"/>
-              </g>
-              <g fill="#FFD2D9">
-              <circle cx="8.4" cy="9.7"  r="1.5"/><rect x="12.5" y="8.8" width="9" height="1.8" rx="0.9" opacity="0.5"/>
-              <circle cx="8.4" cy="22"   r="1.5" opacity="0.9"/><rect x="12.5" y="21.1" width="9" height="1.8" rx="0.9" opacity="0.42"/>
-              <circle cx="8.4" cy="34.3" r="1.5" opacity="0.8"/><rect x="12.5" y="33.4" width="9" height="1.8" rx="0.9" opacity="0.34"/>
-              </g>
-              </g>
-              <circle cx="30" cy="31" r="8.6" fill="#8E0A20" fillOpacity="0.22"/>
-              <circle cx="30" cy="31" r="8.6" fill="none" stroke="#FF7187" strokeWidth="3.1"/>
-              <line x1="36.2" y1="37.2" x2="41.4" y2="42.4" stroke="#FF7187" strokeWidth="3.4" strokeLinecap="round"/>
-              <text x="52" y="32" fontSize="26" fontWeight="700" letterSpacing="-0.3" fontFamily="'Rubik','Helvetica Neue',Helvetica,Arial,sans-serif">
-                <tspan fill="#ffffff">Net</tspan>
-                <tspan fill="#C8102E">Vault</tspan>
-              </text>
-            </svg>
-            <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.15)' }} />
-            <div style={{ fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.45)', fontWeight: 600, letterSpacing: '1px', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-              Network Asset Management
-            </div>
-          </div>
-
-          {/* Global search */}
-          <div style={{ flex: 1, maxWidth: 400, position: 'relative' }}>
-            <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.4)', pointerEvents: 'none' }}
-              width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-            </svg>
-            <input
-              ref={searchRef}
-              type="text"
-              placeholder="Search devices, sites, circuits..."
-              onKeyDown={onSearchKeyDown}
-              style={{
-                width: '100%', padding: '9px 44px 9px 36px',
-                background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 'var(--radius-sm)',
-                color: 'white', fontSize: 'var(--text-base)',
-                outline: 'none', boxSizing: 'border-box',
-                fontFamily: 'inherit',
-                transition: 'border-color 0.15s, background 0.15s',
-              }}
-              onFocus={e => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.28)'
-                e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
-              }}
-              onBlur={e => {
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'
-                e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-              }}
-            />
-            <span style={{
-              position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-              padding: '2px 7px', borderRadius: 'var(--radius-sm)',
-              background: 'rgba(255,255,255,0.1)',
-              color: 'rgba(255,255,255,0.55)',
-              fontSize: 'var(--text-sm)', fontWeight: 600, lineHeight: 1,
-              pointerEvents: 'none',
-            }}>
-              /
-            </span>
-          </div>
-
-          <div style={{ flex: 1 }} />
-
-          {/* Theme toggle + Help ghost icon button. (The corner-style switcher
-              lives in the avatar dropdown below — see the note there.) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 6 }}>
-            <ThemeToggle />
-            <a
-              href="/compliance"
-              title="Help"
-              style={{
-                width: 36, height: 36, borderRadius: 'var(--radius)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: 'rgba(255,255,255,0.6)', textDecoration: 'none',
-                transition: 'background 0.15s, color 0.15s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = 'white' }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'rgba(255,255,255,0.6)' }}
-            >
-              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/>
-              </svg>
-            </a>
-          </div>
-
-          {/* User dropdown */}
-          <div ref={userMenuRef} style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowUserMenu(m => !m)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: showUserMenu ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 'var(--radius-sm)', padding: '6px 12px 6px 6px',
-                cursor: 'pointer', transition: 'background 0.15s',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.12)')}
-              onMouseLeave={e => { if (!showUserMenu) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-            >
-              {/* intentional: 50% — a true circular avatar, never squared */}
-              <div style={{
-                width: 34, height: 34, borderRadius: '50%',
-                background: 'var(--primary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 'var(--text-base)', fontWeight: 700, color: 'white', flexShrink: 0,
-                boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
-              }}>
-                {userInitial}
-              </div>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ color: 'white', fontSize: 'var(--text-base)', fontWeight: 600, lineHeight: 1.2 }}>
-                  {user?.name?.split(' ')[0] || 'User'}
-                </div>
-                <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 'var(--text-xs)', lineHeight: 1.2 }}>
-                  {user?.role?.replace(/_/g, ' ')}
-                </div>
-              </div>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{
-                color: 'rgba(255,255,255,0.35)',
-                transform: showUserMenu ? 'rotate(180deg)' : 'none',
-                transition: 'transform 0.2s',
-                marginLeft: 2,
-              }}>
-                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </button>
-
-            {showUserMenu && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 8px)', right: 0,
-                background: 'var(--bg-card)', border: '1px solid var(--border)',
-                borderRadius: 'var(--radius)', boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
-                minWidth: 220, overflow: 'hidden', zIndex: 999,
-                animation: 'fadeIn 0.15s ease',
-              }}>
-                <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border-light)' }}>
-                  <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name}</div>
-                  <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: 2 }}>{user?.role?.replace(/_/g, ' ')}</div>
-                </div>
-                <div style={{ padding: '6px 0' }}>
-                  <a
-                    href={process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || '/launcher'}
-                    onClick={() => setShowUserMenu(false)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', color: 'var(--text-secondary)', fontSize: 'var(--text-base)', fontWeight: 500, textDecoration: 'none', transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-primary)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
-                      <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>
-                    </svg>
-                    NocVault Hub
-                  </a>
-                  <button
-                    onClick={openPwModal}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: 'var(--text-secondary)', fontSize: 'var(--text-base)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-primary)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--text-muted)' }}>
-                      <rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>
-                    </svg>
-                    Change Password
-                  </button>
-                  <div style={{ height: 1, background: 'var(--border-light)', margin: '4px 0' }} />
-                  {/* Corner style (rounded/square) — a per-user preference, so it
-                      belongs with the other per-user items in this dropdown rather
-                      than in the navy top bar. Deliberately NOT on /settings: that
-                      page redirects non-admins to /dashboard, and every role must be
-                      able to reach this. */}
-                  <CornersToggle />
-                  <div style={{ height: 1, background: 'var(--border-light)', margin: '4px 0' }} />
-                  <button
-                    onClick={() => { setShowUserMenu(false); signOut({ callbackUrl: '/login' }) }}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px', width: '100%', color: '#dc2626', fontSize: 'var(--text-base)', fontWeight: 500, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', transition: 'background 0.1s' }}
-                    onMouseEnter={e => (e.currentTarget.style.background = 'var(--tint-danger)')}
-                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
-                    </svg>
-                    Sign Out
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-      {/* ── Main column — shifts with sidebar, starts below header ── */}
-      <div style={{
-        marginLeft: sidebarWidth,
-        flex: 1,
-        display: 'flex', flexDirection: 'column',
-        minHeight: '100vh',
-        paddingTop: 'var(--header-height)',
-        transition: 'margin-left 0.18s ease',
-      }}>
-
-        {/* Standardized suite license banner — full-width bar directly below the
-            header, in normal flow (avatar dropdown z-index 999 overlays it). */}
+      <div
+        className="app-main"
+        style={{ marginLeft: collapsed ? 'var(--shell-rail)' : 'var(--shell-sidebar)', padding: 0 }}
+      >
+        {/* Full-width suite banners stay above the page padding so they read
+            as shell chrome rather than page content. */}
         <LicenseBanner />
-
-        {/* NetVault is the suite hub (SSO/license) - a failed update needs to be
-            unmissable, so it's shown to any admin on every page, not tucked away
-            in Settings. Non-admins don't get the operational detail. */}
-        {(userRole === 'admin' || userRole === 'super_admin') && <UpdateFailureBanner />}
-
+        {isAdmin && <UpdateFailureBanner />}
         <UpdateNotifier />
 
-        {/* Page content */}
-        <div style={{ flex: 1, overflow: 'auto' }}>{children}</div>
+        {showAttention && (
+          <div style={{ padding: '12px var(--page-pad) 0' }}>
+            <Link href="/eol" className="alert" data-tone="warn" style={{ textDecoration: 'none' }}>
+              <span aria-hidden style={{ display: 'flex', flexShrink: 0, marginTop: 1 }}><Icon.alert size={18} /></span>
+              <span style={{ flex: 1 }}>
+                <span className="alert-title">
+                  {alertCount!.toLocaleString()} asset{alertCount === 1 ? '' : 's'} past end-of-life
+                </span>
+                <span className="alert-body" style={{ display: 'block' }}>Review the EOL / Risk register.</span>
+              </span>
+              <span aria-hidden style={{ display: 'flex', alignItems: 'center' }}><Icon.chevronRight size={16} /></span>
+            </Link>
+          </div>
+        )}
+
+        <main id="main-content" tabIndex={-1} style={{ padding: 'var(--page-pad)' }}>
+          {children}
+        </main>
       </div>
 
       <IdleTimeout />
 
-      {/* ── Change Password Modal ── */}
-      {showPwModal && (
-        <div className="modal-overlay">
-          <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '28px 32px', width: '100%', maxWidth: 400, boxShadow: 'var(--shadow-lg)' }}>
-            <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 4px' }}>Change password</h2>
-            <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', margin: '0 0 20px' }}>Enter your current password and choose a new one.</p>
-            {pwSuccess ? (
-              <div style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 'var(--text-md)', textAlign: 'center' }}>
-                Password changed successfully!
+      <Dialog
+        open={showPwModal}
+        onClose={() => setShowPwModal(false)}
+        title="Change password"
+        description="Enter your current password and choose a new one."
+        dismissible={!pwSaving}
+        footer={!pwSuccess ? (
+          <>
+            <button className="btn btn-secondary" onClick={() => setShowPwModal(false)} disabled={pwSaving}>Cancel</button>
+            <button className="btn btn-primary" onClick={changePassword} disabled={pwSaving}>
+              {pwSaving ? 'Saving…' : 'Change password'}
+            </button>
+          </>
+        ) : undefined}
+      >
+        {pwSuccess ? (
+          <div role="status" style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', padding: '12px 16px', borderRadius: 'var(--radius)', fontSize: 'var(--text-md)', textAlign: 'center', marginTop: 14 }}>
+            Password changed successfully.
+          </div>
+        ) : (
+          <div style={{ marginTop: 14 }}>
+            {[
+              { label: 'Current password', field: 'current_password', ac: 'current-password' },
+              { label: 'New password', field: 'new_password', ac: 'new-password' },
+              { label: 'Confirm new password', field: 'confirm_password', ac: 'new-password' },
+            ].map(f => (
+              <div key={f.field} className="form-field" style={{ marginBottom: 14 }}>
+                <label htmlFor={`pw-${f.field}`}>{f.label}</label>
+                <input
+                  id={`pw-${f.field}`}
+                  type="password"
+                  className="input"
+                  autoComplete={f.ac}
+                  aria-invalid={pwError ? true : undefined}
+                  aria-describedby={pwError ? 'pw-error' : undefined}
+                  value={pwForm[f.field as keyof typeof pwForm]}
+                  onChange={e => setPwForm(p => ({ ...p, [f.field]: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && changePassword()}
+                />
               </div>
-            ) : (
-              <>
-                {[
-                  { label: 'Current password', field: 'current_password' },
-                  { label: 'New password', field: 'new_password' },
-                  { label: 'Confirm new password', field: 'confirm_password' },
-                ].map(f => (
-                  <div key={f.field} className="form-field" style={{ marginBottom: 14 }}>
-                    <label>{f.label}</label>
-                    <input type="password" className="input"
-                      value={pwForm[f.field as keyof typeof pwForm]}
-                      onChange={e => setPwForm(p => ({ ...p, [f.field]: e.target.value }))}
-                      onKeyDown={e => e.key === 'Enter' && changePassword()}
-                    />
-                  </div>
-                ))}
-                {pwError && (
-                  <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: 14 }}>{pwError}</div>
-                )}
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn btn-primary" onClick={changePassword} disabled={pwSaving} style={{ flex: 1 }}>
-                    {pwSaving ? 'Saving…' : 'Change password'}
-                  </button>
-                  <button className="btn btn-secondary" onClick={() => setShowPwModal(false)} style={{ flex: 1 }}>Cancel</button>
-                </div>
-              </>
+            ))}
+            {pwError && (
+              <div id="pw-error" role="alert" style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)' }}>
+                {pwError}
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </Dialog>
     </div>
   )
 }

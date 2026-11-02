@@ -1,6 +1,7 @@
 'use client'
 import { SessionProvider } from 'next-auth/react'
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import { Dialog } from '@/components/system/Dialog'
 
 // ── Toast ──────────────────────────────────────────────────────
 type ToastType = 'success' | 'error' | 'info'
@@ -66,23 +67,34 @@ export default function Providers({ children }: { children: ReactNode }) {
             ))}
           </div>
 
-          {/* Confirm modal */}
-          {confirmState && (
-            <div className="modal-overlay" style={{ zIndex: 9998 }}>
-              <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', padding: '28px', width: '100%', maxWidth: '400px', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-                <h2 style={{ fontSize: '16px', fontWeight: '700', color: 'var(--text-primary)', margin: '0 0 8px' }}>{confirmState.options.title}</h2>
-                <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: '0 0 24px', lineHeight: '1.5' }}>{confirmState.options.message}</p>
-                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                  <button className="btn" onClick={() => handleConfirm(false)}>
-                    Cancel
-                  </button>
-                  <button className={confirmState.options.danger ? 'btn btn-primary' : 'btn btn-navy'} onClick={() => handleConfirm(true)}>
-                    {confirmState.options.confirmLabel || 'Confirm'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Confirm modal.
+
+              Uses the shared Dialog so it gets role="dialog", aria-modal, a
+              focus trap, Escape-to-cancel and focus restoration - none of
+              which the hand-rolled div had.
+
+              The destructive branch now renders .btn-destructive rather than
+              .btn-primary. Those were previously the same red button, so
+              "Delete 40 devices" and "Save changes" were visually identical
+              at the moment of confirmation. */}
+          <Dialog
+            open={!!confirmState}
+            onClose={() => handleConfirm(false)}
+            title={confirmState?.options.title}
+            description={confirmState?.options.message}
+            maxWidth={430}
+            footer={
+              <>
+                <button className="btn" onClick={() => handleConfirm(false)}>Cancel</button>
+                <button
+                  className={confirmState?.options.danger ? 'btn btn-destructive' : 'btn btn-navy'}
+                  onClick={() => handleConfirm(true)}
+                >
+                  {confirmState?.options.confirmLabel || 'Confirm'}
+                </button>
+              </>
+            }
+          />
         </ConfirmContext.Provider>
       </ToastContext.Provider>
     </SessionProvider>
