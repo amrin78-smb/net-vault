@@ -805,7 +805,9 @@ export default function DevicesPage() {
       {/* Toolbar. Page controls live in the single Pager below the table;
           this row carries the result count and the active filters. */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+        {/* flexWrap: the count, density switch and Columns menu together
+            exceed a 360px screen and were pushing the page sideways. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', minWidth: 0 }}>
           <span className="tnum" style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }} aria-live="polite">
             {loading ? 'Loading…' : `${total.toLocaleString()} device${total === 1 ? '' : 's'}`}
           </span>
@@ -873,7 +875,10 @@ export default function DevicesPage() {
           </div>
         ) : (
           <div className="table-container">
-            <table className={`data-table sticky${density === 'compact' ? ' compact' : ''}`}>
+            {/* table-cards: below 620px each row becomes a stacked card
+                (see globals.css). A 10-column row is unreadable on a phone
+                however far it scrolls sideways. */}
+            <table className={`data-table sticky table-cards${density === 'compact' ? ' compact' : ''}`}>
               <thead>
                 <tr>
                   {isAdmin && <th style={{ width: '40px' }}><input type="checkbox" aria-label="Select all devices on this page" checked={selected.size === devices.length && devices.length > 0} onChange={toggleAll} /></th>}
@@ -895,20 +900,23 @@ export default function DevicesPage() {
                     {/* Named per row: 50 identical unlabelled checkboxes read out as
                         "checkbox" fifty times over, with no way to tell which
                         device each one selects. */}
-                    {isAdmin && <td><input type="checkbox" aria-label={`Select ${d.name}`} checked={selected.has(d.id)} onChange={() => toggleSelect(d.id)} /></td>}
-                    <td style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
+                    {isAdmin && <td className="cell-select"><input type="checkbox" aria-label={`Select ${d.name}`} checked={selected.has(d.id)} onChange={() => toggleSelect(d.id)} /></td>}
+                    <td className="cell-title" style={{ fontWeight: '500', color: 'var(--text-primary)' }}>
                       <Link href={`/devices/${d.id}`} style={{ color: 'var(--text-primary)', textDecoration: 'none' }}>{d.name || '—'}</Link>
                     </td>
-                    {showCol('type') && <td>{d.device_type}</td>}
-                    {showCol('model') && <td title={`${d.brand} ${d.model}`}>{d.brand} {d.model}</td>}
-                    {showCol('ip') && <td style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{d.ip_address || '—'}</td>}
-                    {showCol('site') && <td>{d.site}</td>}
-                    {showCol('region') && <td><span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{d.region}</span></td>}
-                    {showCol('lifecycle') && <td><LifecycleBadge status={d.lifecycle_status} /></td>}
-                    {showCol('status') && <td><StatusBadge status={d.device_status} /></td>}
+                    {showCol('type') && <td data-label="Type">{d.device_type}</td>}
+                    {showCol('model') && <td data-label="Brand / Model" title={`${d.brand} ${d.model}`}>{d.brand} {d.model}</td>}
+                    {showCol('ip') && <td data-label="IP address" style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>{d.ip_address || '—'}</td>}
+                    {showCol('site') && <td data-label="Site">{d.site}</td>}
+                    {showCol('region') && <td data-label="Region"><span style={{ fontSize: 'var(--text-xs)', color: 'var(--text-secondary)' }}>{d.region}</span></td>}
+                    {showCol('lifecycle') && <td data-label="Lifecycle"><LifecycleBadge status={d.lifecycle_status} /></td>}
+                    {showCol('status') && <td data-label="Status"><StatusBadge status={d.device_status} /></td>}
                     {showCol('support') && (
-                    <td>{(() => {
-                      if (!d.support_end_date) return null
+                    <td data-label="Support End">{(() => {
+                      // An em dash, not null: in the phone card layout an
+                      // empty cell still renders its label, so returning
+                      // nothing left a labelled row with no value beside it.
+                      if (!d.support_end_date) return <span style={{ color: 'var(--text-muted)' }}>&mdash;</span>
                       const end = new Date(d.support_end_date)
                       const now = new Date()
                       const in90 = new Date(); in90.setDate(in90.getDate() + 90)
@@ -917,7 +925,7 @@ export default function DevicesPage() {
                       return <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>{end.toLocaleDateString()}</span>
                     })()}</td>
                     )}
-                    <td>
+                    <td className="cell-actions">
                       <div style={{ display: 'flex', gap: '6px' }}>
                         <Link href={`/devices/${d.id}`}><button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-secondary)', cursor: 'pointer' }}>View</button></Link>
                         {isAdmin && <>

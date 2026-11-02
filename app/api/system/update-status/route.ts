@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.52.0': [
+    'On a phone the Devices list now shows each device as a card with labelled fields instead of a ten-column table you had to scroll sideways through. On a tablet or desktop it stays a table.',
+  ],
   '1.51.0': [
     'The Devices table has a Columns menu for hiding the columns you do not need. Your choice is remembered. Name and Actions always stay visible.',
     'The site detail page now uses the same page header as everywhere else, while keeping its inline rename.',

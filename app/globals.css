@@ -1233,3 +1233,86 @@ h1.page-title { margin: 0; font-size: var(--text-xl); line-height: 1.2; }
 /* A segmented control that reports state via aria-pressed should look
    selected too, without every call site also remembering the .active class. */
 .segmented button[aria-pressed="true"] { background: var(--navy); color: #fff; }
+
+/* ── Tables as cards on a phone ───────────────────────────────────
+   Below 620px a wide operational table stops being a table and each row
+   becomes a stacked card, with the column name supplied by data-label.
+
+   This is opt-in per table (.table-cards) and applies ONLY at phone width;
+   a horizontal scroller is still the right answer for a dense table on a
+   tablet or desktop. The point is that a 10-column device row at 360px is
+   unreadable however far you scroll it sideways.
+
+   Cells carrying only controls opt out with .cell-actions so the buttons
+   do not get a redundant label. */
+@media (max-width: 620px) {
+  /* The <table> itself must become a block too. Left as display: table it
+     keeps sizing to its own min-content width even with every row blocked
+     out, and pushes the page sideways - which is the exact problem the card
+     layout exists to solve. min-width overrides any inline minWidth a page
+     set for its desktop scroller. */
+  .table-cards,
+  .table-cards tbody,
+  .table-cards tr,
+  .table-cards td { display: block; width: 100%; }
+  .table-cards { min-width: 0 !important; table-layout: auto; }
+
+  .table-cards thead { display: none; }
+
+  .table-cards tr {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    margin-bottom: 10px;
+    padding: 4px 2px;
+  }
+
+  .table-cards td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    max-width: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    border: none;
+    padding: 7px 14px;
+    text-align: right;
+  }
+
+  /* The column name, taken from the cell's own data-label. */
+  .table-cards td::before {
+    content: attr(data-label);
+    flex: 0 0 42%;
+    text-align: left;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .table-cards td:not([data-label])::before { content: none; }
+
+  /* The identity cell reads as the card's title, not a labelled row. */
+  .table-cards td.cell-title {
+    display: block;
+    text-align: left;
+    font-size: var(--text-md);
+    font-weight: 600;
+    padding-bottom: 2px;
+  }
+  .table-cards td.cell-title::before { content: none; }
+
+  .table-cards td.cell-actions { justify-content: flex-end; }
+  .table-cards td.cell-actions::before { content: none; }
+
+  /* A row-select checkbox belongs with the title, not on its own line. */
+  .table-cards td.cell-select { display: none; }
+}
+
+/* The list toolbars (result count + density + columns) must wrap on a phone. */
+@media (max-width: 520px) {
+  .segmented { flex-wrap: wrap; }
+  .segmented button { flex: 1 1 auto; }
+}
