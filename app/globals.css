@@ -1229,3 +1229,7 @@ h1.page-title { margin: 0; font-size: var(--text-xl); line-height: 1.2; }
   .nv-fleet-row > div:first-child { width: 100% !important; }
   .nv-fleet-row > div { flex-basis: 100%; }
 }
+
+/* A segmented control that reports state via aria-pressed should look
+   selected too, without every call site also remembering the .active class. */
+.segmented button[aria-pressed="true"] { background: var(--navy); color: #fff; }

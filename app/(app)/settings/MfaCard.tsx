@@ -45,6 +45,7 @@ export default function MfaCard() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
+  const [justFinished, setJustFinished] = useState(false)
 
   async function load() {
     try {
@@ -111,6 +112,32 @@ export default function MfaCard() {
         password. This covers NetVault, LogVault, DDIVault and SpanVault — they all sign in here.
       </p>
 
+      {/* Step indicator. Derived from the state that already exists rather
+          than tracked separately, so it cannot drift from where enrolment
+          actually is. Hidden once two-factor is on and settled. */}
+      {(!state.enabled || codes) && (
+        <ol className="import-steps" aria-label="Two-factor setup progress">
+          {([['Begin', 1], ['Scan', 2], ['Verify', 3], ['Save codes', 4]] as const).map(([label, n]) => {
+            const current = codes ? 4 : setup ? (token.length >= 6 ? 3 : 2) : 1
+            return (
+              <li key={label}
+                  data-state={current > n ? 'done' : current === n ? 'current' : 'todo'}
+                  aria-current={current === n ? 'step' : undefined}>
+                <span className="import-step-dot">{current > n ? '\u2713' : n}</span>
+                <span>{label}</span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+
+      {justFinished && state.enabled && !codes && (
+        <div role="status" style={{ background: 'var(--tint-success)', color: 'var(--tint-success-fg)', border: '1px solid var(--border)', padding: '11px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M20 6 9 17l-5-5"/></svg>
+          Two-factor authentication is on. You will be asked for a code the next time you sign in.
+        </div>
+      )}
+
       {state.required_for_your_role && !state.enabled && (
         <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', border: '1px solid var(--border)', padding: '9px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', marginBottom: 14 }}>
           Your role requires two-factor authentication. You will not be able to sign in again until you set it up.
@@ -135,7 +162,32 @@ export default function MfaCard() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, fontFamily: 'var(--font-mono)', fontSize: 'var(--text-md)' }}>
             {codes.map(c => <div key={c}>{c}</div>)}
           </div>
-          <button style={{ ...btnGhost, marginTop: 12 }} onClick={() => setCodes(null)}>I have saved them</button>
+          {/* Browser-native copy, download and print. These codes are shown
+              exactly once, so getting them off the screen must not depend on
+              the user selecting text accurately. */}
+          <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+            <button style={btnGhost} onClick={() => {
+              navigator.clipboard?.writeText(codes.join('\n'))
+                .then(() => setMsg('Backup codes copied to the clipboard.'))
+                .catch(() => setErr('Could not copy. Select the codes and copy them manually.'))
+            }}>Copy</button>
+            <button style={btnGhost} onClick={() => {
+              const blob = new Blob([`NocVault two-factor backup codes\n\n${codes.join('\n')}\n\nEach code works once. Keep them somewhere safe.\n`], { type: 'text/plain' })
+              const url = URL.createObjectURL(blob)
+              const a = document.createElement('a')
+              a.href = url; a.download = 'nocvault-backup-codes.txt'; a.click()
+              URL.revokeObjectURL(url)
+            }}>Download</button>
+            <button style={btnGhost} onClick={() => {
+              const w = window.open('', '_blank', 'width=520,height=640')
+              if (!w) { setErr('Your browser blocked the print window.'); return }
+              w.document.write(`<title>NocVault backup codes</title><h3>NocVault two-factor backup codes</h3><p>Each code works once. Keep this somewhere safe.</p><pre style="font-size:15px;line-height:1.9">${codes.join('\n')}</pre>`)
+              w.document.close(); w.focus(); w.print()
+            }}>Print</button>
+            <button style={btn} onClick={() => { setCodes(null); setJustFinished(true); setMsg('') }}>
+              I have saved them
+            </button>
+          </div>
         </div>
       )}
 
@@ -159,6 +211,8 @@ export default function MfaCard() {
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input style={input} value={token} onChange={e => setToken(e.target.value)}
+                   aria-label="Six-digit code from your authenticator app"
+                   autoComplete="one-time-code"
                    placeholder="000000" inputMode="numeric" maxLength={6} />
             <button style={btn} onClick={enable} disabled={busy || token.length < 6}>Verify and turn on</button>
             <button style={btnGhost} onClick={() => { setSetup(null); setToken(''); setErr('') }} disabled={busy}>Cancel</button>
@@ -176,6 +230,8 @@ export default function MfaCard() {
           {!state.required_for_your_role && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input style={{ ...input, width: 220, letterSpacing: 0, textAlign: 'left' }} type="password"
+                     aria-label="Confirm your password to turn off two-factor"
+                     autoComplete="current-password"
                      value={password} onChange={e => setPassword(e.target.value)}
                      placeholder="Confirm your password" />
               <button style={btnGhost} onClick={disable} disabled={busy || !password}>Turn off</button>

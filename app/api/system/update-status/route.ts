@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.46.0': [
+    'Two-factor setup now shows which step you are on, and the backup codes can be copied, downloaded or printed rather than transcribed by hand - they are only ever shown once. A confirmation appears once it is switched on.',
+    'Adding or editing a user now shows an Effective access summary before you save, spelling out what that person will actually be able to see and do - including a warning when a site admin has no sites assigned, which would let them sign in and see nothing.',
+    'The devices table has a Comfortable / Compact row setting that is remembered, and its column headers stay visible while you scroll.',
+  ],
   '1.45.0': [
     'Subscription and Licensing now lists which suite modules this installation is entitled to - NetVault, LogVault, DDIVault, SpanVault and EOL Intelligence - and the device limit where the licence states one. Previously that only appeared on a fully activated licence, so on a trial, in grace, or after expiry there was no way to see it, which is exactly when people look.',
   ],

@@ -928,7 +928,50 @@ export default function SettingsPage() {
                   <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '6px' }}>NetVault is always accessible. Unchecked apps are hidden from the launcher and blocked at login.</div>
                 </div>
               </div>
-              {userError && <div style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{userError}</div>}
+              {/* Effective access summary.
+
+                  Role, site scope and per-app entitlement are three separate
+                  controls whose combined result is not obvious - a site_admin
+                  with no sites assigned can sign in and see nothing, and that
+                  was only discoverable by saving and then looking at the
+                  table. This states the outcome in plain language before the
+                  save, and is derived from the form values so it always
+                  describes what is about to be written. */}
+              <div style={{ border: '1px solid var(--border)', background: 'var(--surface-subtle)', borderRadius: 'var(--radius-sm)', padding: '12px 14px', marginBottom: 12 }}>
+                <div style={{ fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', marginBottom: 7 }}>
+                  Effective access
+                </div>
+                <ul style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--text-base)', color: 'var(--text-secondary)', lineHeight: 1.75 }}>
+                  <li>
+                    {userForm.role === 'viewer' && 'Can read everything across all sites, but cannot change anything.'}
+                    {userForm.role === 'site_admin' && 'Can view and edit records, limited to their assigned sites.'}
+                    {userForm.role === 'admin' && 'Can view and edit everything across all sites, including settings.'}
+                    {userForm.role === 'super_admin' && 'Full access including user management, licensing, agents and deletes.'}
+                  </li>
+                  <li>
+                    {userForm.role === 'site_admin'
+                      ? (userForm.site_ids.length === 0
+                          ? <strong style={{ color: 'var(--yellow)' }}>No sites assigned — this account will be able to sign in but will see no devices, sites or circuits.</strong>
+                          : <>Scoped to {userForm.site_ids.length} site{userForm.site_ids.length === 1 ? '' : 's'}.</>)
+                      : 'All sites.'}
+                  </li>
+                  <li>
+                    {userForm.role === 'super_admin'
+                      ? 'All suite applications (super admins are never restricted).'
+                      : userForm.app_slugs.length >= ALL_SLUGS.length
+                        ? 'All suite applications: NetVault, LogVault, DDIVault and SpanVault.'
+                        : <>Can open {userForm.app_slugs.join(', ')}. NetVault is always available.</>}
+                  </li>
+                  {/* No two-factor line here deliberately: which roles
+                      require MFA is held in mfa_required_roles, which this
+                      form does not load. Stating it from a guess would be
+                      exactly the kind of invented status this page must not
+                      show - it is on the Security section, which does read
+                      the real value. */}
+                </ul>
+              </div>
+
+              {userError && <div role="alert" style={{ background: 'var(--tint-danger)', color: 'var(--tint-danger-fg)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginBottom: '12px' }}>{userError}</div>}
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button className="btn-primary" onClick={saveUser} disabled={savingUser}>{savingUser ? 'Saving...' : editUser ? 'Save changes' : 'Create user'}</button>
                 <button className="btn-secondary" onClick={() => setShowUserForm(false)}>Cancel</button>

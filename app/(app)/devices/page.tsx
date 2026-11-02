@@ -30,6 +30,19 @@ export default function DevicesPage() {
   const [devices, setDevices] = useState<Device[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
+  // Comfortable vs compact rows. A per-viewer convenience, so localStorage is
+  // the right home for it; wrapped because it throws in a private window.
+  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
+  useEffect(() => {
+    try {
+      const d = localStorage.getItem('netvault-density')
+      if (d === 'compact' || d === 'comfortable') setDensity(d)
+    } catch { /* ignore */ }
+  }, [])
+  function changeDensity(d: 'comfortable' | 'compact') {
+    setDensity(d)
+    try { localStorage.setItem('netvault-density', d) } catch { /* ignore */ }
+  }
   const [limit, setLimit] = useState(50)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -744,6 +757,15 @@ export default function DevicesPage() {
           <span className="tnum" style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)' }} aria-live="polite">
             {loading ? 'Loading…' : `${total.toLocaleString()} device${total === 1 ? '' : 's'}`}
           </span>
+          <div className="segmented" role="group" aria-label="Row density">
+            {(['comfortable', 'compact'] as const).map(d => (
+              <button key={d} type="button" onClick={() => changeDensity(d)}
+                aria-pressed={density === d}
+                className={density === d ? 'active' : undefined}>
+                {d === 'comfortable' ? 'Comfortable' : 'Compact'}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -775,7 +797,7 @@ export default function DevicesPage() {
           </div>
         ) : (
           <div className="table-container">
-            <table>
+            <table className={`data-table sticky${density === 'compact' ? ' compact' : ''}`}>
               <thead>
                 <tr>
                   {isAdmin && <th style={{ width: '40px' }}><input type="checkbox" aria-label="Select all devices on this page" checked={selected.size === devices.length && devices.length > 0} onChange={toggleAll} /></th>}
