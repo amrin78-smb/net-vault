@@ -1,11 +1,21 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useSyncExternalStore } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
 import { Pager, FilterChips } from '@/components/system'
+
+const DENSITY_KEY = 'netvault-density'
+function subscribeDensity(cb: () => void) {
+  window.addEventListener('storage', cb)
+  return () => window.removeEventListener('storage', cb)
+}
+function getDensity(): 'comfortable' | 'compact' {
+  try { return localStorage.getItem(DENSITY_KEY) === 'compact' ? 'compact' : 'comfortable' }
+  catch { return 'comfortable' }
+}
 
 type Device = {
   id: string; name: string; brand: string; model: string; device_type: string
@@ -32,16 +42,17 @@ export default function DevicesPage() {
   const [page, setPage] = useState(1)
   // Comfortable vs compact rows. A per-viewer convenience, so localStorage is
   // the right home for it; wrapped because it throws in a private window.
-  const [density, setDensity] = useState<'comfortable' | 'compact'>('comfortable')
-  useEffect(() => {
-    try {
-      const d = localStorage.getItem('netvault-density')
-      if (d === 'compact' || d === 'comfortable') setDensity(d)
-    } catch { /* ignore */ }
-  }, [])
+  //
+  // Read via useSyncExternalStore rather than setState-in-an-effect: it is an
+  // external store, the server snapshot is 'comfortable' so hydration matches,
+  // and the stored value applies immediately afterwards with no second render
+  // pass. Same pattern as the sidebar collapse preference in the app layout.
+  const storedDensity = useSyncExternalStore(subscribeDensity, getDensity, () => 'comfortable' as const)
+  const [densityOverride, setDensityOverride] = useState<'comfortable' | 'compact' | null>(null)
+  const density = densityOverride ?? storedDensity
   function changeDensity(d: 'comfortable' | 'compact') {
-    setDensity(d)
     try { localStorage.setItem('netvault-density', d) } catch { /* ignore */ }
+    setDensityOverride(d)
   }
   const [limit, setLimit] = useState(50)
   const [loading, setLoading] = useState(true)
