@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
+import { FilterChips } from '@/components/system'
 import Link from 'next/link'
 import SitesImportModal from './SitesImportModal'
 
@@ -110,6 +111,14 @@ export default function SitesPage() {
           <button className="btn-secondary" style={{ fontSize: 'var(--text-base)' }} onClick={() => { setSearch(''); setRegion('') }}>Clear</button>
         )}
       </div>
+
+      <FilterChips
+        filters={([['search', 'Search', search], ['region', 'Region', region]] as const)
+          .filter(([, , v]) => !!v)
+          .map(([key, label, value]) => ({ key, label, value: String(value) }))}
+        onClear={k => { if (k === 'search') setSearch(''); else setRegion('') }}
+        onClearAll={() => { setSearch(''); setRegion('') }}
+      />
 
       {loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading sites...</div>

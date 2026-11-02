@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
-import { Pager } from '@/components/system'
+import { Pager, FilterChips } from '@/components/system'
 
 type Device = {
   id: string; name: string; brand: string; model: string; device_type: string
@@ -121,6 +121,32 @@ export default function DevicesPage() {
   }, [page, limit, searchParams])
 
   useEffect(() => { fetchDevices() }, [fetchDevices])
+
+  // Active filters, derived from the SAME values pushFilters serialises -
+  // so a chip can never claim a filter that is not applied, or miss one that
+  // is. Clearing a chip re-pushes the set without that key.
+  const activeFilters = ([
+    ['search',         'Search',         search],
+    ['region',         'Region',         region],
+    ['site',           'Site',           site],
+    ['type',           'Type',           type],
+    ['status',         'Status',         status],
+    ['lifecycle',      'Lifecycle',      lifecycle],
+    ['brand',          'Brand',          brand],
+    ['model',          'Model',          model],
+    ['support_expiry', 'Support expiry', supportExpiry],
+    ['eol',            'EOL',            eol],
+  ] as const)
+    .filter(([, , v]) => !!v)
+    .map(([key, label, value]) => ({ key, label, value: String(value) }))
+
+  function clearFilter(key: string) {
+    if (key === 'search') setSearch('')
+    // Region owns Site: dropping a region with a site still set would leave a
+    // site filter the region list no longer offers.
+    if (key === 'region') { setSite(''); pushFilters({ region: '', site: '' }); return }
+    pushFilters({ [key]: '' })
+  }
 
   function pushFilters(overrides: Record<string, string> = {}) {
     const params = new URLSearchParams()
@@ -572,6 +598,15 @@ export default function DevicesPage() {
           </button>
         )}
       </div>
+
+      {/* What is actually filtering the list, and a way to drop any one of
+          them. The count on the Filters button said how many were applied but
+          not which, so narrowing a list to nothing gave no clue why. */}
+      <FilterChips
+        filters={activeFilters}
+        onClear={clearFilter}
+        onClearAll={() => router.push('/devices')}
+      />
 
       {/* Filter panel */}
       {showFilterPanel && (

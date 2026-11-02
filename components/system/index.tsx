@@ -409,3 +409,53 @@ export function Pager({ page, limit, total, onPage, onLimit, loading }: {
     </div>
   )
 }
+
+/* ── Record detail ────────────────────────────────────────────────
+   The shared shape for a devices/[id], sites/[id] or circuits/[id] page.
+   Each of those had its own near-identical Field + Section pair whose
+   markup was non-semantic divs on a hard two-column grid: long values
+   (a serial, a subnet, a contract number) overflowed rather than wrapped,
+   and the two columns never collapsed on a phone. */
+
+export function RecordSection({ title, children, columns = 2, actions }: {
+  title: string
+  children: React.ReactNode
+  columns?: 1 | 2
+  actions?: React.ReactNode
+}) {
+  return (
+    <section style={{
+      background: 'var(--surface)', borderRadius: 'var(--radius)',
+      border: '1px solid var(--border)', padding: '20px 24px', marginBottom: 16,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border-light)' }}>
+        <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{title}</h2>
+        {actions}
+      </div>
+      <dl className="record-grid" data-cols={columns}>{children}</dl>
+    </section>
+  )
+}
+
+/** One label/value pair inside a RecordSection. `display: contents` keeps the
+ *  dt/dd on the parent grid while staying valid inside a <dl>. */
+export function FieldPair({ label, value, mono, span }: {
+  label: string
+  value: React.ReactNode
+  mono?: boolean
+  span?: boolean
+}) {
+  const empty = value === null || value === undefined || value === ''
+    || value === '-' || value === 'nan'
+  return (
+    <div style={{ display: 'contents' }}>
+      <div className="record-field" data-span={span ? 'true' : undefined}>
+        <dt>{label}</dt>
+        <dd className={mono ? 'mono' : undefined}
+            style={{ color: empty ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+          {empty ? '\u2014' : value}
+        </dd>
+      </div>
+    </div>
+  )
+}

@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.42.0': [
+    'Devices, Sites and WAN Circuits now show the filters currently applied as removable chips, so you can see why a list is narrowed and drop one filter without clearing everything.',
+    'Device, circuit and site detail pages now wrap long values such as serial numbers, subnets and contract references instead of cutting them off, and collapse to a single column on a phone.',
+  ],
   '1.41.1': [
     'Devices list: the row count under the table was computed from a fixed 50 regardless of the page size you picked, so choosing 100 per page showed a hundred rows above the words Showing 1-50. There were also two separate sets of page controls that disagreed; there is now one.',
     'WAN Circuits now has a Circuit ID column. The circuit ID - the reference you quote to the provider when a link is down - was not shown anywhere in the table, and it is displayed in full rather than cut short.',

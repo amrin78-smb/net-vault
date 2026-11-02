@@ -1,5 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
+import { RecordSection, FieldPair } from '@/components/system'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import Breadcrumb from '@/components/Breadcrumb'
@@ -8,15 +9,13 @@ type Circuit = Record<string, any>
 
 const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS']
 
+// Delegates to the shared record primitive; see devices/[id] for why.
+// FieldPair already treats '-' and the string 'nan' (an artefact of the
+// spreadsheet imports) as empty.
+const CIRCUIT_MONO = ['Circuit ID', 'Public subnet', 'Max speed', 'Guaranteed speed']
+
 function CircuitField({ label, value }: { label: string; value: any }) {
-  return (
-    <div style={{ marginBottom: '14px' }}>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
-      <div style={{ fontSize: 'var(--text-md)', color: value && String(value) !== 'nan' && value !== '-' ? 'var(--text-primary)' : 'var(--text-muted)', fontFamily: ['Circuit ID','Public subnet','Max speed','Guaranteed speed'].includes(label) ? 'var(--font-mono)' : undefined }}>
-        {value && String(value) !== 'nan' && value !== '-' ? value : '—'}
-      </div>
-    </div>
-  )
+  return <FieldPair label={label} value={value} mono={CIRCUIT_MONO.includes(label)} />
 }
 
 function CircuitEditField({ label, field, form, setForm, type = 'text' }: { label: string; field: string; form: any; setForm: any; type?: string }) {
@@ -28,13 +27,10 @@ function CircuitEditField({ label, field, form, setForm, type = 'text' }: { labe
   )
 }
 
+// Must be the shared RecordSection, not a plain grid div: CircuitField now
+// renders dt/dd, which are only valid inside a <dl>.
 function CircuitSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '18px 22px', marginBottom: '16px' }}>
-      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>{title}</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>{children}</div>
-    </div>
-  )
+  return <RecordSection title={title}>{children}</RecordSection>
 }
 
 export default function CircuitDetailPage({ params }: { params: Promise<{ id: string }> }) {

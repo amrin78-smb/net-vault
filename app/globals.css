@@ -1057,3 +1057,24 @@ th.ident, .data-table th.ident {
 }
 .nav-link { font-size: var(--text-md); }
 .nav-link:hover .nav-chip { color: #fff; }
+
+/* ── Record detail grid ──────────────────────────────────────────
+   Stacked label-over-value pairs. Values WRAP (overflow-wrap: anywhere)
+   because the long ones here are serials, subnets and contract numbers —
+   exactly the values someone opened the record to read. */
+.record-grid { display: grid; gap: 4px 24px; }
+.record-grid[data-cols="2"] { grid-template-columns: 1fr 1fr; }
+.record-grid[data-cols="1"] { grid-template-columns: 1fr; }
+.record-field { margin-bottom: 12px; min-width: 0; }
+.record-field[data-span="true"] { grid-column: 1 / -1; }
+.record-field dt {
+  font-size: var(--text-xs); color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 3px;
+}
+.record-field dd {
+  font-size: var(--text-md); color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 640px) {
+  .record-grid[data-cols="2"] { grid-template-columns: 1fr; }
+}

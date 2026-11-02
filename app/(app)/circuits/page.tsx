@@ -1,5 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
+import { FilterChips } from '@/components/system'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
@@ -40,6 +41,10 @@ export default function CircuitsPage() {
   const [technology, setTechnology] = useState('')
   const [country, setCountry] = useState('')
   const [site, setSite] = useState('')
+
+  const clearAllCircuitFilters = () => {
+    setSearch(''); setIsp(''); setUsage(''); setTechnology(''); setCountry(''); setSite('')
+  }
   const [showFilterPanel, setShowFilterPanel] = useState(false)
   const [exportMenu, setExportMenu] = useState(false)
 
@@ -191,12 +196,32 @@ export default function CircuitsPage() {
           )}
         </div>
         {!!(search||isp||usage||technology||country||site) && (
-          <button onClick={() => { setSearch(''); setIsp(''); setUsage(''); setTechnology(''); setCountry(''); setSite('') }}
+          <button onClick={clearAllCircuitFilters}
             style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline', whiteSpace: 'nowrap' as const }}>
             Clear all
           </button>
         )}
       </div>
+
+      <FilterChips
+        filters={([
+          ['search',     'Search',     search],
+          ['isp',        'Provider',   isp],
+          ['usage',      'Usage',      usage],
+          ['technology', 'Technology', technology],
+          ['country',    'Country',    country],
+          ['site',       'Site',       site],
+        ] as const).filter(([, , v]) => !!v).map(([key, label, value]) => ({ key, label, value: String(value) }))}
+        onClear={k => {
+          if (k === 'search') setSearch('')
+          else if (k === 'isp') setIsp('')
+          else if (k === 'usage') setUsage('')
+          else if (k === 'technology') setTechnology('')
+          else if (k === 'country') setCountry('')
+          else if (k === 'site') setSite('')
+        }}
+        onClearAll={clearAllCircuitFilters}
+      />
 
       {/* Filter panel */}
       {showFilterPanel && (

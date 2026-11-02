@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { RecordSection, FieldPair } from '@/components/system'
 import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
@@ -93,24 +94,17 @@ function parseLogEntry(log: Log): { label: string; detail: string | null; dotCol
   }
 }
 
+// Thin wrappers over the shared record primitives so the ~40 call sites
+// below stay untouched. The shared versions are semantic dl/dt/dd, wrap long
+// values instead of overflowing, and collapse to one column on a phone.
+const MONO_FIELDS = ['IP address', 'Serial number', 'Support contract number']
+
 function DeviceField({ label, value }: { label: string; value: any }) {
-  return (
-    <div style={{ marginBottom: '12px' }}>
-      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '3px' }}>{label}</div>
-      <div style={{ fontSize: 'var(--text-md)', color: value ? 'var(--text-primary)' : 'var(--text-muted)', fontFamily: label === 'IP address' || label === 'Serial number' ? 'var(--font-mono)' : undefined }}>
-        {value || '—'}
-      </div>
-    </div>
-  )
+  return <FieldPair label={label} value={value} mono={MONO_FIELDS.includes(label)} />
 }
 
 function DeviceSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', padding: '20px 24px', marginBottom: '16px' }}>
-      <h2 style={{ fontSize: 'var(--text-base)', fontWeight: '600', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '16px', paddingBottom: '10px', borderBottom: '1px solid var(--border-light)' }}>{title}</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>{children}</div>
-    </div>
-  )
+  return <RecordSection title={title}>{children}</RecordSection>
 }
 
 export default function DeviceDetailPage({ params }: { params: Promise<{ id: string }> }) {
