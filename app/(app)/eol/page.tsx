@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
-import { ErrorBox, PageHead } from '@/components/system'
+import { ErrorBox, PageHead, Stat } from '@/components/system'
 import Link from 'next/link'
 
 type SiteRow = { region: string; country: string; site: string; eol_count: number; total_count: number }
@@ -98,6 +98,16 @@ export default function EolPage() {
           onRetry={() => { setLoading(true); load() }}
         />
       ) : (<>
+
+      {/* Summary. Every figure is derived from the rows already loaded, so
+          there is no extra request and nothing here can disagree with the
+          tables below it. */}
+      <div className="stat-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
+        <Stat label="EOL / EOS devices" value={totalEol} tone={totalEol > 0 ? 'danger' : 'success'} href="/devices?lifecycle=EOL+%2F+EOS" />
+        <Stat label="Sites affected" value={filtered.filter(r => r.eol_count > 0).length} sub={`of ${filtered.length} site${filtered.length === 1 ? '' : 's'}`} />
+        <Stat label="Software past EOL" value={swExpired.length} tone={swExpired.length > 0 ? 'danger' : 'success'} />
+        <Stat label="Software EOL within 90 days" value={swExpiring.length} tone={swExpiring.length > 0 ? 'warn' : undefined} />
+      </div>
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '4px', marginBottom: '20px', borderBottom: '1px solid var(--border)' }}>

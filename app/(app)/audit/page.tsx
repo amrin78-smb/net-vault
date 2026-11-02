@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { PageHead, Pager } from '@/components/system'
+import { FilterChips, PageHead, Pager } from '@/components/system'
 type Log = { id: string; field_name: string; changed_at: string; changed_by_name: string; changed_by_email: string; device_name: string }
 type User = { id: string; name: string }
 
@@ -86,6 +86,23 @@ export default function AuditPage() {
           <button className="btn-secondary" onClick={clearFilters} style={{ fontSize: 'var(--text-sm)' }}>Clear filters</button>
         )}
       </div>
+
+      <FilterChips
+        filters={([
+          ['action', 'Action', action ? (ACTION_LABELS[action as keyof typeof ACTION_LABELS] ?? action) : ''],
+          ['user',   'User',   userId ? (users.find(u => String(u.id) === String(userId))?.name ?? userId) : ''],
+          ['from',   'From',   dateFrom],
+          ['to',     'To',     dateTo],
+        ] as const).filter(([, , v]) => !!v).map(([key, label, value]) => ({ key, label, value: String(value) }))}
+        onClear={k => {
+          setPage(1)
+          if (k === 'action') setAction('')
+          else if (k === 'user') setUserId('')
+          else if (k === 'from') setDateFrom('')
+          else setDateTo('')
+        }}
+        onClearAll={clearFilters}
+      />
 
       <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
         {loading ? (

@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Dialog, Icon } from '@/components/system'
+import { Dialog, Icon, Stat } from '@/components/system'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useToast, useConfirm } from '@/app/providers'
@@ -746,14 +746,14 @@ export default function AgentsPage() {
         </button>
       </PageHeader>
 
-      {/* Summary line */}
+      {/* Fleet summary. Was a run-on sentence of coloured numbers; now the
+          same real counts in the shared Stat card used on every other page. */}
       {loaded && !error && enrolled > 0 && (
-        <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)', marginBottom: 16, marginTop: -6 }}>
-          <strong style={{ color: 'var(--text-secondary)' }}>{enrolled}</strong> enrolled
-          {' · '}<span style={{ color: 'var(--tint-success-fg)', fontWeight: 600 }}>{online} online</span>
-          {degraded > 0 && <>{' · '}<span style={{ color: 'var(--tint-warn-fg)', fontWeight: 600 }}>{degraded} degraded</span></>}
-          {' · '}<span style={{ color: offline > 0 ? 'var(--tint-danger-fg)' : 'var(--text-muted)', fontWeight: 600 }}>{offline} offline</span>
-          {revoked > 0 && <>{' · '}<span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{revoked} revoked</span></>}
+        <div className="stat-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12, marginBottom: 20 }}>
+          <Stat label="Enrolled" value={enrolled} />
+          <Stat label="Online" value={online} tone="success" sub={enrolled > 0 ? `${Math.round((online / enrolled) * 100)}% of fleet` : undefined} />
+          <Stat label="Degraded" value={degraded} tone={degraded > 0 ? 'warn' : undefined} />
+          <Stat label="Offline" value={offline} tone={offline > 0 ? 'danger' : undefined} sub={revoked > 0 ? `${revoked} revoked` : undefined} />
         </div>
       )}
 

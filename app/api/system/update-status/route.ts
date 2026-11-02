@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.48.0': [
+    'EOL / Risk opens with a summary of how many devices are past end-of-life, how many sites are affected, and how much software is already expired or expires within 90 days.',
+    'The Agents fleet summary is now the same style of card used elsewhere instead of a sentence of coloured numbers.',
+    'The Audit Log shows its active filters as removable chips, matching Devices, Sites and WAN Circuits.',
+  ],
   '1.47.1': [
     'Fixed the Devices page dying with a "This page could not load" screen when the device counts could not be read. It now shows a dash for the unknown counts and keeps working.',
     'Devices, WAN Circuits and Sites now say when their list could not be loaded, with a retry, instead of showing an empty list that looks like you simply have no devices, circuits or sites.',
