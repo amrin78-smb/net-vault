@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { FilterChips, PageHead } from '@/components/system'
+import { ErrorBox, FilterChips, PageHead } from '@/components/system'
 import Link from 'next/link'
 import SitesImportModal from './SitesImportModal'
 
@@ -15,11 +15,18 @@ export default function SitesPage() {
   const [loading, setLoading] = useState(true)
   const [region, setRegion] = useState('')
   const [search, setSearch] = useState('')
+  const [loadError, setLoadError] = useState(false)
   const [showImport, setShowImport] = useState(false)
 
   const fetchSites = useCallback(() => {
     setLoading(true)
-    return fetch('/api/sites').then(r => r.json()).then(d => { setSites(d); setLoading(false) })
+    return fetch('/api/sites')
+      .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
+      .then(d => {
+        if (!Array.isArray(d)) throw new Error('unexpected payload')
+        setSites(d); setLoadError(false); setLoading(false)
+      })
+      .catch(() => { setSites([]); setLoadError(true); setLoading(false) })
   }, [])
 
   useEffect(() => { fetchSites() }, [fetchSites])
@@ -119,7 +126,9 @@ export default function SitesPage() {
         onClearAll={() => { setSearch(''); setRegion('') }}
       />
 
-      {loading ? (
+      {loadError ? (
+        <ErrorBox message="The site list could not be loaded." onRetry={() => { setLoading(true); fetchSites() }} />
+      ) : loading ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading sites...</div>
       ) : (
         Object.values(grouped).map(group => (

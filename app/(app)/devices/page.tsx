@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { StatusBadge, LifecycleBadge } from '@/components/Badges'
 import { useToast, useConfirm } from '@/app/providers'
-import { DensityToggle, FilterChips, Icon, PageHead, Pager, StatusPill, useDensity } from '@/components/system'
+import { DensityToggle, ErrorBox, FilterChips, Icon, PageHead, Pager, StatusPill, useDensity } from '@/components/system'
 
 
 type Device = {
@@ -35,6 +35,7 @@ export default function DevicesPage() {
   const [density, changeDensity] = useDensity()
   const [limit, setLimit] = useState(50)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [search, setSearch] = useState('')
   const [region, setRegion] = useState('')
   const [site, setSite] = useState('')
@@ -46,6 +47,7 @@ export default function DevicesPage() {
   const [eol, setEol] = useState('')
   const [lookups, setLookups] = useState<{ regions: string[]; sites: {site:string;id:number;region:string}[]; deviceTypes: string[] }>({ regions: [], sites: [], deviceTypes: [] })
   const [stats, setStats] = useState({ total: 0, active: 0, eol: 0, decommed: 0 })
+  const [statsUnavailable, setStatsUnavailable] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [bulkField, setBulkField] = useState('device_status')
   const [bulkValue, setBulkValue] = useState('')
@@ -87,8 +89,21 @@ export default function DevicesPage() {
       fetch('/api/devices?lifecycle=EOL+%2F+EOS&limit=1').then(r => r.json()),
       fetch('/api/devices?status=Decommed&limit=1').then(r => r.json()),
     ]).then(([all, active, eol, decommed]) => {
-      setStats({ total: all.total, active: active.total, eol: eol.total, decommed: decommed.total })
-    })
+      // ?? 0 on every field, and a catch on the chain.
+      //
+      // These four responses were trusted to carry a `total`. When the API
+      // answers an error body instead, every field became undefined and the
+      // KPI row's stats.total.toLocaleString() threw - taking the WHOLE page
+      // down to the generic "This page couldn't load" screen, which is also
+      // why the list's own error state never got a chance to render.
+      setStats({
+        total: all?.total ?? 0,
+        active: active?.total ?? 0,
+        eol: eol?.total ?? 0,
+        decommed: decommed?.total ?? 0,
+      })
+      setStatsUnavailable(!(all?.total >= 0))
+    }).catch(() => setStatsUnavailable(true))
   }, [])
 
   const fetchDevices = useCallback(async () => {
@@ -116,10 +131,20 @@ export default function DevicesPage() {
     if (se) params.set('support_expiry', se)
     if (br) params.set('brand', br)
     if (el) params.set('eol', el)
-    const res = await fetch(`/api/devices?${params}`)
-    const data = await res.json()
-    setDevices(data.devices || [])
-    setTotal(data.total || 0)
+    // r.ok checked explicitly: a non-ok response carrying a JSON body still
+    // parses, so `data.devices || []` quietly rendered an EMPTY INVENTORY on
+    // a failure - indistinguishable from a fleet with no devices.
+    try {
+      const res = await fetch(`/api/devices?${params}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (data?.error) throw new Error(String(data.error))
+      setDevices(data.devices || [])
+      setTotal(data.total || 0)
+      setLoadError(false)
+    } catch {
+      setDevices([]); setTotal(0); setLoadError(true)
+    }
     setLoading(false)
   }, [page, limit, searchParams])
 
@@ -608,10 +633,10 @@ export default function DevicesPage() {
       {/* Stats */}
       <div className="stat-grid-4" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '12px', marginBottom: '20px' }}>
         {[
-          { label: 'Total devices', value: stats.total.toLocaleString(), color: 'var(--text-primary)', bg: 'var(--surface-subtle)', border: 'var(--border)', href: '/devices', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
-          { label: 'Active', value: stats.active.toLocaleString(), color: 'var(--tint-success-fg)', bg: 'var(--tint-success)', border: 'var(--tint-success)', href: '/devices?status=Active', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
-          { label: 'EOL / EOS', value: stats.eol.toLocaleString(), color: 'var(--tint-danger-fg)', bg: 'var(--tint-danger)', border: 'var(--tint-danger)', href: '/devices?lifecycle=EOL+%2F+EOS', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
-          { label: 'Decommed', value: stats.decommed.toLocaleString(), color: 'var(--tint-warn-fg)', bg: 'var(--tint-warn)', border: 'var(--tint-warn)', href: '/devices?status=Decommed', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> },
+          { label: 'Total devices', value: statsUnavailable ? '\u2014' : stats.total.toLocaleString(), color: 'var(--text-primary)', bg: 'var(--surface-subtle)', border: 'var(--border)', href: '/devices', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> },
+          { label: 'Active', value: statsUnavailable ? '\u2014' : stats.active.toLocaleString(), color: 'var(--tint-success-fg)', bg: 'var(--tint-success)', border: 'var(--tint-success)', href: '/devices?status=Active', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> },
+          { label: 'EOL / EOS', value: statsUnavailable ? '\u2014' : stats.eol.toLocaleString(), color: 'var(--tint-danger-fg)', bg: 'var(--tint-danger)', border: 'var(--tint-danger)', href: '/devices?lifecycle=EOL+%2F+EOS', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><path d="M12 2L2 20h20L12 2z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> },
+          { label: 'Decommed', value: statsUnavailable ? '\u2014' : stats.decommed.toLocaleString(), color: 'var(--tint-warn-fg)', bg: 'var(--tint-warn)', border: 'var(--tint-warn)', href: '/devices?status=Decommed', icon: <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" opacity="0.2"><polyline points="21 8 21 21 3 21 3 8"/><rect x="1" y="3" width="22" height="5"/><line x1="10" y1="12" x2="14" y2="12"/></svg> },
         ].map(s => (
           <Link key={s.label} href={s.href} style={{ textDecoration: 'none' }}>
             <div style={{ background: s.bg, borderRadius: 'var(--radius)', border: `1px solid ${s.border}`, padding: '16px', cursor: 'pointer', position: 'relative', overflow: 'hidden', transition: 'transform 0.1s, box-shadow 0.1s' }}
@@ -770,6 +795,12 @@ export default function DevicesPage() {
               </div>
             ))}
           </div>
+        ) : loadError ? (
+          /* BEFORE the empty state, not after: a failed load also leaves
+             devices.length === 0, so with the empty state first the page
+             said "No devices have been added yet" when the truth was that
+             it had not managed to ask. Order matters in this chain. */
+          <ErrorBox message="The device list could not be loaded." onRetry={() => { setLoading(true); fetchDevices() }} />
         ) : devices.length === 0 ? (
           <div style={{ padding: '60px 40px', textAlign: 'center' }}>
             <div style={{ fontSize: 'var(--text-2xl)', marginBottom: '12px', display: 'flex', justifyContent: 'center', color: 'var(--text-muted)' }} aria-hidden><Icon.search size={30} /></div>

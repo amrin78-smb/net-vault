@@ -1,6 +1,6 @@
 'use client'
 import { useToast, useConfirm } from '@/app/providers'
-import { DensityToggle, FilterChips, PageHead, useDensity } from '@/components/system'
+import { DensityToggle, ErrorBox, FilterChips, PageHead, useDensity } from '@/components/system'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
@@ -36,6 +36,7 @@ export default function CircuitsPage() {
   const [circuits, setCircuits] = useState<Circuit[]>([])
   const [loading, setLoading] = useState(true)
   const [density, setDensity] = useDensity()
+  const [loadError, setLoadError] = useState(false)
   const [search, setSearch] = useState('')
   const [isp, setIsp] = useState('')
   const [usage, setUsage] = useState('')
@@ -70,9 +71,16 @@ export default function CircuitsPage() {
       ...(country && { country }),
       ...(site && { site }),
     })
-    const res = await fetch(`/api/circuits?${params}`)
-    const data = await res.json()
-    setCircuits(Array.isArray(data) ? data : [])
+    try {
+      const res = await fetch(`/api/circuits?${params}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      if (!Array.isArray(data)) throw new Error('unexpected payload')
+      setCircuits(data)
+      setLoadError(false)
+    } catch {
+      setCircuits([]); setLoadError(true)
+    }
     setLoading(false)
   }
 
@@ -301,7 +309,9 @@ export default function CircuitsPage() {
 
       {/* Table */}
       <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-        {loading ? (
+        {loadError ? (
+          <ErrorBox message="The circuit list could not be loaded." onRetry={() => { setLoading(true); fetchCircuits() }} />
+        ) : loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>Loading circuits...</div>
         ) : circuits.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No circuits found</div>

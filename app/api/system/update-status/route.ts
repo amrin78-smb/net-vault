@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.47.1': [
+    'Fixed the Devices page dying with a "This page could not load" screen when the device counts could not be read. It now shows a dash for the unknown counts and keeps working.',
+    'Devices, WAN Circuits and Sites now say when their list could not be loaded, with a retry, instead of showing an empty list that looks like you simply have no devices, circuits or sites.',
+  ],
   '1.47.0': [
     'Every page now uses the same page header, so titles, descriptions and action buttons sit in the same place throughout the app.',
     'Removed the last of the decorative emoji from the operational screens - download arrows, tick marks, magnifiers, padlocks and refresh symbols are now proper icons.',
