@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.58.4': [
+    'The HTTPS cutover refused to run on the production server, correctly, because one console was registered with a slightly different command line by an older version of the installer. It now understands both spellings instead of refusing.',
+    'More importantly: two consoles on that server keep their web address in the Windows service itself, which overrides the configuration file the cutover rewrites. Switching to HTTPS would have left those two serving HTTPS while still believing they were on http \u2014 which turns every sign-in into a silent bounce back to the login page, on a site that otherwise looks completely healthy. The cutover now updates the address wherever it actually lives, preserving every other setting in that service untouched.',
+    'And a new final check reads back the address each console will really see and reverts the whole cutover if any of them is still http. The existing check could never have caught this: it asks for a healthy response, and the health endpoint does not depend on the web address.',
+  ],
   '1.58.3': [
     'Second fix from the same dry run: the build output of the hub is a near-complete copy of the application folder \u2014 it contains the same marker files, including the HTTPS front door\u2019s own program. So the previous fix still stopped inside it, and every check passed against the copy. The script now walks out to the outermost checkout and refuses any path inside a build output outright. Verified on the production server: all four applications now resolve to the right folder.',
   ],

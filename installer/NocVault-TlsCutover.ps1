@@ -288,8 +288,14 @@ if (-not $TlsGateOk) {
                 $snapshotOk = $false
             }
         } else {
-            if (-not ($c.PrevParams -match ('-p\s+' + $c.Public + '(\s|$)'))) {
-                Write-Warn "$($c.Service) AppParameters does not contain '-p $($c.Public)' - refusing the cutover rather than guessing its command line"
+            # ⛔ BOTH SPELLINGS. Next accepts `-p <n>` and `--port <n>`, and
+            # real installations carry both: measured on production, DDIVault
+            # and SpanVault were registered with `-p 3006` / `-p 3008` while
+            # LogVault, registered by an older build, runs
+            # `cmd.exe /c ...\next.cmd start --port 3004`. Matching only `-p`
+            # refused that console and so refused the whole cutover.
+            if (-not ($c.PrevParams -match ('(?:^|\s)(?:-p|--port)\s+' + $c.Public + '(?:\s|$)'))) {
+                Write-Warn "$($c.Service) AppParameters contains neither '-p $($c.Public)' nor '--port $($c.Public)' - refusing the cutover rather than guessing its command line"
                 $snapshotOk = $false
             }
         }
@@ -324,18 +330,67 @@ if (-not $TlsGateOk) {
             $null = & $nssmExe set $console.Service AppEnvironmentExtra ($out -join "`n") 2>&1
             if ($LASTEXITCODE -ne 0) { return $false }
         } else {
-            $newParams = $console.PrevParams -replace ('-p\s+' + $console.Public + '(?=\s|$)'), ("-p " + $console.Loopback + " -H 127.0.0.1")
+            $newParams = $console.PrevParams -replace ('(?:-p|--port)\s+' + $console.Public + '(?=\s|$)'), ("-p " + $console.Loopback + " -H 127.0.0.1")
             if ($newParams -eq $console.PrevParams) { return $false }
             $ErrorActionPreference = 'Continue'
             $null = & $nssmExe set $console.Service AppParameters $newParams 2>&1
             if ($LASTEXITCODE -ne 0) { return $false }
         }
+
+        $wantUrl = "https://" + $publicHost + ":" + $console.Public
+
+        # ⛔ A SERVICE ENVIRONMENT VARIABLE BEATS EVERY FILE, SO THE FILE ALONE
+        # IS NOT ENOUGH. Measured on production: LogVault-App and DDIVault-App
+        # (registered by an older build) pin NEXTAUTH_URL in AppEnvironmentExtra.
+        # Rewriting only the env file would leave those two consoles serving
+        # HTTPS while NextAuth still believed it was http - which bounces every
+        # sign-in back to the login page with nothing logged to say why, exactly
+        # as the note at the top of this function warns. And gate 3 would NOT
+        # have caught it: /api/health returns 200 regardless of NEXTAUTH_URL.
+        #
+        # ⛔ THE REWRITE IS LINE-BY-LINE AND KEEPS EVERY OTHER LINE VERBATIM.
+        # This string carries NETVAULT_DB_PASS and NEXTAUTH_SECRET; rebuilding
+        # it from a template would destroy credentials. Nothing is appended
+        # either: a console that does NOT pin NEXTAUTH_URL must keep reading it
+        # from its file, and adding a service pin here would create exactly the
+        # shadowing problem this block exists to undo.
+        if ($console.PrevEnvExtra -match '(?m)^\s*NEXTAUTH_URL\s*=') {
+            $lines = @($console.PrevEnvExtra -split "`r?`n" |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' })
+            if ($lines.Count -lt 1) { return $false }
+            $out = @()
+            foreach ($l in $lines) {
+                if ((($l -split '=', 2)[0]) -eq 'NEXTAUTH_URL') { $out += ("NEXTAUTH_URL=" + $wantUrl) }
+                else { $out += $l }
+            }
+            $ErrorActionPreference = 'Continue'
+            $null = & $nssmExe set $console.Service AppEnvironmentExtra ($out -join "`n") 2>&1
+            if ($LASTEXITCODE -ne 0) { return $false }
+        }
+
         foreach ($f in $console.EnvFiles) {
             if (Test-Path -LiteralPath $f) {
-                $null = Set-EnvFileKey $f 'NEXTAUTH_URL' ("https://" + $publicHost + ":" + $console.Public)
+                $null = Set-EnvFileKey $f 'NEXTAUTH_URL' $wantUrl
             }
         }
         return $true
+    }
+
+    # What NEXTAUTH_URL this console will ACTUALLY see: the service environment
+    # wins over the files, and the first file that carries it wins over the rest.
+    function Get-EffectiveNextAuthUrl($console, [string]$nssmExe) {
+        $extra = Get-NssmSetting $nssmExe $console.Service 'AppEnvironmentExtra'
+        foreach ($l in ($extra -split "`r?`n")) {
+            if ($l -match '^\s*NEXTAUTH_URL\s*=\s*(.+?)\s*$') { return $Matches[1] }
+        }
+        foreach ($f in $console.EnvFiles) {
+            if (-not (Test-Path -LiteralPath $f)) { continue }
+            foreach ($l in (Get-Content -LiteralPath $f -ErrorAction SilentlyContinue)) {
+                if ($l -match '^\s*NEXTAUTH_URL\s*=\s*(.+?)\s*$') { return $Matches[1] }
+            }
+        }
+        return ''
     }
 
     function Restore-ConsoleTransport($console, [string]$nssmExe) {
@@ -535,8 +590,36 @@ if (-not $TlsGateOk) {
                     $gate3 = $false
                 }
 
+                # ⛔ GATE 3b — THE ONE GATE 3 CANNOT SEE. Gate 3 asks for a 200
+                # on /api/health over HTTPS, and /api/health does not care what
+                # NEXTAUTH_URL says. So a console whose NEXTAUTH_URL is still
+                # http:// passes gate 3 perfectly and then bounces every single
+                # sign-in back to the login page with nothing logged to explain
+                # it - a suite that looks completely healthy and cannot be
+                # logged into. Found on production, where two consoles pinned
+                # NEXTAUTH_URL in their SERVICE ENVIRONMENT, which beats the
+                # file the cutover rewrites.
+                #
+                # This reads back what each console will ACTUALLY see, after the
+                # fact, from the same precedence the app uses. A gate that
+                # re-derives what we just wrote would prove nothing.
+                if ($gate3) {
+                    foreach ($c in $Consoles) {
+                        $eff = Get-EffectiveNextAuthUrl $c $NssmExe
+                        if ($eff -notlike 'https://*') {
+                            Write-Warn "$($c.App): NEXTAUTH_URL is still '$eff' after the cutover - sign-in would be broken on a console that otherwise looks healthy"
+                            $gate3 = $false
+                        } else {
+                            Write-OK "$($c.App): NEXTAUTH_URL is $eff"
+                        }
+                    }
+                    if (-not $gate3) {
+                        Write-Warn "GATE 3b FAIL - HTTPS works but at least one console would refuse every sign-in. Reverting."
+                    }
+                }
+
                 if (-not $gate3) {
-                    Undo-TlsCutover "the terminator did not prove itself on all four public ports" $Consoles $NssmExe
+                    Undo-TlsCutover "the terminator did not prove itself on all four public ports, or a console's NEXTAUTH_URL was still http" $Consoles $NssmExe
                 } else {
                     $script:TlsCutoverApplied = $true
                     Write-OK "GATE 3 PASS - NocVault-Tls is terminating TLS for every installed console"
