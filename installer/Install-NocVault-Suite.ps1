@@ -779,7 +779,22 @@ Write-OK "NetVault standalone .env.local written (incl. SERVER_IP, CRON_SECRET)"
 & $NssmExe remove NetVault confirm 2>$null
 & $NssmExe install NetVault "C:\Program Files\nodejs\node.exe" "$NVStandalone\server.js"
 & $NssmExe set NetVault AppDirectory        $NVStandalone
-& $NssmExe set NetVault AppEnvironmentExtra "PORT=3000`nHOSTNAME=0.0.0.0`nNODE_ENV=production`nDATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault`nNEXTAUTH_SECRET=$SharedSecret`nNEXTAUTH_URL=http://${ServerIP}:3000`nSSL_DISABLED=true`nSERVER_IP=$ServerIP`nCRON_SECRET=$CronSecret`nNOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$NocReadOnlyPass$NVWsHubNssm"
+# Runtime-settable keys are DELIBERATELY ABSENT from the AppEnvironmentExtra
+# below - do not "helpfully" add them back. NEXTAUTH_URL (the console address) is
+# changeable at runtime from the app's Settings page, which writes it to the
+# .env.local written just above. dotenv/loadEnvConfig never override a variable
+# that is ALREADY present in process.env, so any value pinned in the service
+# environment wins forever and the Settings write becomes a silent no-op that
+# only reappears after a reinstall. The env file is therefore the single
+# authority for these keys. What stays here is only what a customer cannot
+# change from Settings: PORT/HOSTNAME/NODE_ENV, the DB URL, and the secrets the
+# app has no other source for. The same rule will apply to TLS_CERT_PATH /
+# TLS_KEY_PATH / ENTRA_TENANT_ID / ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET once
+# Settings manages them - never pin those here either.
+# Existing installs: Update-NetVault.ps1 clears these keys out of the service
+# environment on upgrade, since NSSM persists them in the registry and a box
+# provisioned before this change would otherwise never converge.
+& $NssmExe set NetVault AppEnvironmentExtra "PORT=3000`nHOSTNAME=0.0.0.0`nNODE_ENV=production`nDATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault`nNEXTAUTH_SECRET=$SharedSecret`nSSL_DISABLED=true`nSERVER_IP=$ServerIP`nCRON_SECRET=$CronSecret`nNOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$NocReadOnlyPass$NVWsHubNssm"
 & $NssmExe set NetVault DisplayName         "NetVault - Network Asset Management"
 & $NssmExe set NetVault Description         "NocVault Suite - Network Asset Management"
 & $NssmExe set NetVault Start               SERVICE_AUTO_START
@@ -946,7 +961,11 @@ if ($InstallLogVault) {
     & $NssmExe remove LogVault-App confirm 2>$null
     & $NssmExe install LogVault-App $LVNextCmd "start -p 3004"
     & $NssmExe set LogVault-App AppDirectory        $LVFrontendDir
-    & $NssmExe set LogVault-App AppEnvironmentExtra "NODE_ENV=production`nLV_APP_PORT=3004`nNEXTAUTH_URL=http://${ServerIP}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    # NEXTAUTH_URL is deliberately NOT pinned here - it is runtime-settable from
+    # Settings and lives in $LVFrontendDir\.env.local (written above), which
+    # `next start` loads from its AppDirectory. See the long note on the NetVault
+    # service above for why a value here would shadow that file permanently.
+    & $NssmExe set LogVault-App AppEnvironmentExtra "NODE_ENV=production`nLV_APP_PORT=3004`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set LogVault-App DependOnService     $PgSvcName
     & $NssmExe set LogVault-App DisplayName         "LogVault - App"
     & $NssmExe set LogVault-App Start               SERVICE_AUTO_START
@@ -1120,7 +1139,11 @@ $$;
     & $NssmExe remove DDIVault-App confirm 2>$null
     & $NssmExe install DDIVault-App $DDINextCmd "start -p 3006"
     & $NssmExe set DDIVault-App AppDirectory        $DDIFrontendDir
-    & $NssmExe set DDIVault-App AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
+    # NEXTAUTH_URL is deliberately NOT pinned here - it is runtime-settable from
+    # Settings and lives in $DDIFrontendDir\.env.local (written above), which
+    # `next start` loads from its AppDirectory. See the long note on the NetVault
+    # service above for why a value here would shadow that file permanently.
+    & $NssmExe set DDIVault-App AppEnvironmentExtra "NODE_ENV=production`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass"
     & $NssmExe set DDIVault-App DependOnService     $PgSvcName
     & $NssmExe set DDIVault-App DisplayName         "DDIVault - App"
     & $NssmExe set DDIVault-App Start               SERVICE_AUTO_START

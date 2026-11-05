@@ -416,6 +416,61 @@ ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_last_step       BIGINT;
 ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_failed_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE users    ADD COLUMN IF NOT EXISTS mfa_locked_until    TIMESTAMPTZ;
 
+-- ── Directory (Entra ID) accounts ────────────────────────────────
+-- The hub owns SSO for all four apps, and all three satellites resolve identity
+-- by looking up THIS table (logvault and ddivault hard-fail without a row;
+-- spanvault silently falls back to 'viewer', which is worse). So a directory
+-- sign-in must have a `users` row — see lib/directoryUser.ts for the full
+-- reasoning and the refusals.
+--
+-- auth_provider: 'local' (a password in password_hash) or 'entra'.
+-- NOT NULL DEFAULT 'local' because every row that exists today IS a local
+-- account — the default states a fact rather than guessing one.
+--
+-- entra_oid is the Entra object id. ⛔ IT, NOT THE EMAIL, IS THE IDENTITY KEY. A
+-- UPN/email is a MUTABLE directory attribute a tenant administrator can change;
+-- keying on it would make "who this account is" reassignable, and would let a
+-- directory address claim a pre-existing privileged local account. The
+-- email-collision refusal in lib/directoryUser.ts is the other half of this.
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS auth_provider       TEXT NOT NULL DEFAULT 'local';
+ALTER TABLE users    ADD COLUMN IF NOT EXISTS entra_oid           TEXT;
+
+-- ⛔ A SEPARATE CREATE UNIQUE INDEX, NOT `ADD COLUMN ... UNIQUE`. This file is
+-- re-applied in full on every deploy, and `ADD COLUMN IF NOT EXISTS` tolerates
+-- an existing COLUMN while an inline UNIQUE would try to create the constraint
+-- again and abort the whole migration under ON_ERROR_STOP. Partial, because
+-- every local account leaves this NULL and there is no reason to index them.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_entra_oid
+    ON users(entra_oid) WHERE entra_oid IS NOT NULL;
+
+-- ── Directory group -> role mapping ──────────────────────────────
+-- Which Entra security group grants which hub role. ⛔ NOTHING IS GRANTED BY
+-- DEFAULT: with no rows here, no directory user can sign in at all. That is the
+-- opposite of this suite's usual "no rows means default-all" (user_apps) and it
+-- is deliberate — that pattern exists to avoid locking out an INSTALLED BASE on
+-- the deploy that delivers a feature, and there is no installed base of
+-- directory sign-ins to protect. Failing open would only create a hole.
+CREATE TABLE IF NOT EXISTS directory_role_mappings (
+    id           SERIAL PRIMARY KEY,
+    provider     TEXT NOT NULL DEFAULT 'entra',
+    -- The group's OBJECT ID (a GUID). Matched on; never the name.
+    group_key    TEXT NOT NULL,
+    -- ⛔ A LABEL ONLY, NEVER A MATCH KEY. A GUID is unreadable, so the panel is
+    -- unadministrable without one ("which of these four GUIDs is Firewall
+    -- Admins?" is not a question an operator can answer). But a display name is
+    -- mutable in Entra and two groups may share one, so it must not decide
+    -- anything.
+    display_name TEXT,
+    role         TEXT NOT NULL,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Case-insensitive on the key: Entra emits GUIDs in either case and the same
+-- group must not be mappable twice to two different roles, with row order
+-- deciding which wins.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_directory_mapping
+    ON directory_role_mappings(provider, lower(group_key));
+
 -- Backup codes: the recovery path when the authenticator device is lost.
 -- Deliberately placed AFTER the users table exists (created near the top of this
 -- file) — a FK naming a table defined later aborts a fresh install under
@@ -464,6 +519,33 @@ $$;
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
     CHECK (role IN ('admin', 'super_admin', 'site_admin', 'viewer'));
+
+-- Directory constraints, in the same drop-then-add shape as the role check
+-- above, because ADD CONSTRAINT is not idempotent and this file re-runs on
+-- every deploy.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_auth_provider_check;
+ALTER TABLE users ADD CONSTRAINT users_auth_provider_check
+    CHECK (auth_provider IN ('local', 'entra'));
+
+-- ⛔ A DIRECTORY ACCOUNT MUST CARRY AN OID, AND A LOCAL ONE MUST NOT. Without
+-- this, a row could claim provider 'entra' with a NULL oid — which no sign-in
+-- could ever match, so the account would exist, appear in the users list, and
+-- be unusable with no stated cause.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_entra_oid_presence_check;
+ALTER TABLE users ADD CONSTRAINT users_entra_oid_presence_check
+    CHECK ((auth_provider = 'entra') = (entra_oid IS NOT NULL));
+
+-- ⛔ site_admin IS DELIBERATELY ABSENT, AND THIS CONSTRAINT IS WHAT MAKES THE
+-- DECISION HOLD AGAINST A HAND-WRITTEN INSERT. A site administrator's visible
+-- sites come from user_sites, which a directory account has no rows in — so a
+-- directory site_admin signs in successfully and sees NO sites, an empty
+-- product with no explanation. lib/directoryUser.ts refuses it in code
+-- (DIRECTORY_PROVISIONABLE_ROLES) and this refuses it in the database.
+-- Lifting it means provisioning user_sites from the directory in the SAME
+-- change; both halves move together or neither does.
+ALTER TABLE directory_role_mappings DROP CONSTRAINT IF EXISTS directory_role_mappings_role_check;
+ALTER TABLE directory_role_mappings ADD CONSTRAINT directory_role_mappings_role_check
+    CHECK (role IN ('super_admin', 'admin', 'viewer'));
 
 -- ── v_devices_flat View ──────────────────────────────────────────
 -- Created AFTER the safe-migration ALTERs above so every column it selects
@@ -597,8 +679,23 @@ $$;
 -- table's block can no longer take down the other table's fix, and can no
 -- longer vanish unnoticed even without ON_ERROR_STOP (which the invoking
 -- scripts now also pass — see installer/Update-NetVault.ps1).
+-- ⛔ AN ALLOWLIST, SO A NEW users COLUMN IS HIDDEN FROM THE DIAGNOSTIC ROLES
+-- UNTIL IT IS NAMED HERE. That default is correct and must stay — do not
+-- "helpfully" widen this to SELECT *.
+--
+-- `auth_provider` IS listed: it carries no secret, and without it no diagnostic
+-- query can tell a local account from a directory one — which is the first
+-- question asked about any sign-in problem once Entra is enabled.
+--
+-- ⛔ `entra_oid` IS DELIBERATELY NOT LISTED. It is not a credential, but it is
+-- the identifier that joins a row to a person in the customer's directory, and
+-- `auth_provider` already answers the diagnostic question of which KIND of
+-- account this is. Fail closed: if a future diagnostic genuinely needs the oid,
+-- adding it here is a deliberate decision with this comment in front of it.
+-- Same reasoning as user_mfa_backup_codes — a new column is never covered by
+-- precedent, however unalarming it looks.
 CREATE OR REPLACE VIEW users_public AS
-SELECT id, name, email, role, created_at FROM users;
+SELECT id, name, email, role, auth_provider, created_at FROM users;
 
 CREATE OR REPLACE VIEW app_settings_public AS
 SELECT key, value FROM app_settings

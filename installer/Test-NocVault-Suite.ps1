@@ -491,6 +491,53 @@ if ($TestLogin) {
     Inf "Skipping live login (pass -TestLogin). Verify a real browser login + SSO into each app manually."
 }
 
+# --- Console address (NEXTAUTH_URL) must stay RUNTIME-SETTABLE from Settings ---
+# Two conditions, and both matter:
+#   1. the env FILE the service loads supplies it - otherwise the app has no
+#      value for it at all and sign-in/callback redirects break;
+#   2. the NSSM service environment does NOT pin it - dotenv/loadEnvConfig never
+#      override a variable that is already in process.env, so a value in
+#      AppEnvironmentExtra shadows the file permanently and a Settings change is
+#      a silent no-op that only reappears after a reinstall. The suite installer
+#      used to pin it on NetVault/LogVault-App/DDIVault-App; it no longer does,
+#      and each app's Update-*.ps1 clears it from the service environment on
+#      upgrade so field boxes converge. SpanVault has never had an
+#      AppEnvironmentExtra block at all - that is the reference shape.
+# When Settings starts managing TLS_CERT_PATH / TLS_KEY_PATH / ENTRA_TENANT_ID /
+# ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET, add them to $runtimeKeys in the SAME
+# change as the installer + updater edits.
+$runtimeKeys = @('NEXTAUTH_URL')
+foreach ($rsa in @(
+    @{ Svc='NetVault';      File=(Join-Path $InstallDir "NetVault\app\.next\standalone\.env.local") },
+    @{ Svc='LogVault-App';  File=(Join-Path $InstallDir "LogVault\app\frontend\.env.local") },
+    @{ Svc='DDIVault-App';  File=(Join-Path $InstallDir "DDIVault\app\frontend\.env.local") },
+    @{ Svc='SpanVault-App'; File=(Join-Path $InstallDir "SpanVault\app\frontend\.env.local") }
+)) {
+    $rsSvcEnv  = WsSvcEnv $rsa.Svc
+    $rsFileEnv = WsEnvFile $rsa.File
+    foreach ($rsk in $runtimeKeys) {
+        $rsPat     = "(?m)^\s*" + $rsk + "\s*=\s*\S"
+        $rsInFile  = ($rsFileEnv -match $rsPat)
+        $rsInSvc   = ($rsSvcEnv  -match $rsPat)
+        if ($rsInSvc -and $rsInFile) {
+            Bad ($rsa.Svc + ": " + $rsk + " is pinned in the NSSM service environment AND in " + $rsa.File + " - the service env wins, so changing it from Settings silently does nothing. Fix: re-run this app's updater (it clears the key), or inspect with 'nssm get " + $rsa.Svc + " AppEnvironmentExtra'")
+        }
+        elseif ($rsInSvc) {
+            Bad ($rsa.Svc + ": " + $rsk + " comes ONLY from the NSSM service environment - Settings cannot change it and " + $rsa.File + " does not supply it")
+        }
+        elseif ($rsInFile) {
+            if ($nssm) { Ok  ($rsa.Svc + ": " + $rsk + " is file-supplied only (" + $rsa.File + ") - runtime-settable from Settings") }
+            else       { Wn  ($rsa.Svc + ": " + $rsk + " found in " + $rsa.File + ", but nssm.exe was not located - could not confirm the service environment does not also pin it") }
+        }
+        elseif (-not (Test-Path -LiteralPath $rsa.File)) {
+            Wn ("Cannot verify " + $rsa.Svc + " " + $rsk + " - env file not found at " + $rsa.File)
+        }
+        else {
+            Bad ($rsa.Svc + ": " + $rsk + " is set NOWHERE (neither " + $rsa.File + " nor the NSSM service environment) - sign-in and callback redirects will break")
+        }
+    }
+}
+
 # ---------------------------------------------------------------
 Section "7. Scheduled Tasks (NetVault cron)"
 foreach ($t in @("NetVault-HealthSnapshot","NetVault-EnrichEol","NetVault-SyncEol")) {

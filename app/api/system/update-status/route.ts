@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.54.0': [
+    'Groundwork for signing in with a Microsoft work account (Entra ID) and for serving the console over HTTPS. Nothing is switched on by this release and nothing changes for anyone signing in today - the hostname, the certificate and the directory details will all be set from Settings rather than baked in at install, so each site can use its own.',
+    'The hub can now hold accounts that belong to your directory alongside its own local accounts, and a directory group decides which role such an account gets.',
+    'A local account must not use a directory email address: if one does, the directory sign-in is refused rather than quietly taking over the existing account. Remove or re-address the local account and the person is set up from the directory on their next sign-in.',
+    'Site-administrator accounts stay local for now. A directory group cannot grant that role, because the sites such an account is allowed to see are assigned per user and a directory account has none - it would sign in successfully and see nothing at all.',
+    'Fixed, found while building this: the suite installer wrote the console address into the Windows service environment, which takes precedence over the configuration file. Any setting changed from Settings would have been silently ignored. The installer no longer does this and an upgrade clears it from installations already in the field.',
+  ],
   '1.53.2': [
     'Fixed: the licence banner at the top of every page read "Licence expires in 4 days \\u00b7 Licensed to ..." - a raw escape code instead of the separator dot. The dashboard clock had the same problem ("ICT \\u00b7 Asia/Bangkok").',
   ],

@@ -11,6 +11,12 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
+    // `tests/*.test.ts` run under `node --test`, whose native TypeScript
+    // stripping resolves ESM specifiers literally and so requires the `.ts`
+    // extension. tsconfig's own `include` is `**/*.ts`, so the same files are
+    // type-checked by `next build` — this option is what lets one spelling
+    // satisfy both. Legal because `noEmit` is already set.
+    "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "incremental": true,
     "plugins": [

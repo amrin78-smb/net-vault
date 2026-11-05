@@ -1,12 +1,13 @@
 {
   "name": "netvault",
-  "version": "1.53.2",
+  "version": "1.54.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test tests/*.test.ts"
   },
   "dependencies": {
     "@types/bcryptjs": "^2.4.6",

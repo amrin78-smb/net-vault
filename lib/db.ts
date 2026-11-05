@@ -1,4 +1,12 @@
-import { Pool, PoolClient } from 'pg'
+// ⛔ `type PoolClient`, INLINE, NOT A PLAIN NAMED IMPORT. `PoolClient` is a
+// type-only export of `pg`. TypeScript elides it when compiling, so `tsc` and
+// `next build` are both happy either way — but Node's own type stripping (which
+// `node --test` uses to run `tests/*.test.ts`) only removes ANNOTATIONS; it does
+// no type-directed elision, so a plain named import survives into runtime and
+// fails with "The requested module 'pg' does not provide an export named
+// 'PoolClient'". That made this module, and transitively every module that
+// touches the database, unimportable from a test — while the build stayed green.
+import { Pool, type PoolClient } from 'pg'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
