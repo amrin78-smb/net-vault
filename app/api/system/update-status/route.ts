@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.56.1': [
+    'Fixed: the database update shipped in 1.56.0 stopped part-way through on an existing installation, so a few of its final steps were skipped on each upgrade. Nothing was lost and nothing was left insecure \u2014 those steps had already been applied by earlier updates and simply re-run each time \u2014 but the update reported a failure on every deploy until now.',
+  ],
   '1.56.0': [
     'Settings now has pages for the console address, the HTTPS certificate and Microsoft Entra ID sign-in. Each site enters its own hostname, uploads its own certificate and supplies its own directory details — nothing is fixed when the suite is installed.',
     'Changing the console address warns you, and asks again, if the name you typed points somewhere other than this server. That is the one mistake that leaves nobody able to reach the console afterwards.',
