@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.6': [
+    'The group mappings page now says that the Entra app registration has to be set to send group memberships. Microsoft does not include them unless asked, and without them every sign-in is refused \u2014 looking from the login page exactly like having no groups mapped, so an administrator who had just filled the table in correctly had no reason to suspect the app registration.',
+  ],
   '1.57.5': [
     'Fixed before release, found by opening the page rather than by a test: the new directory group mappings disappeared whenever the single sign-on settings above them could not be read. Those settings come from files on the server and the mappings come from the database, so an unrelated fault was hiding the group list at exactly the moment an administrator would be trying to fix a sign-in problem. The mappings now always show, and say plainly that the other fault does not affect them.',
   ],

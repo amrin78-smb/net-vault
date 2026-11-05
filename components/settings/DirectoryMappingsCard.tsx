@@ -268,6 +268,27 @@ export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolea
         </div>
       )}
 
+      {/* ⛔ ENTRA DOES NOT EMIT A GROUPS CLAIM BY DEFAULT, AND NOTHING ELSE IN
+          THIS PRODUCT SAYS SO. Without one, lib/directoryRoles.ts returns
+          GROUPS_UNREADABLE and refuses everybody — which looks from the login
+          page EXACTLY like "no group is mapped", so an administrator who has
+          just filled this table in correctly sees no change and has no reason
+          to suspect the app registration. The two causes are distinguished in
+          the server log; this note is what stops someone needing to find it. */}
+      <div style={{ marginBottom: 18 }}>
+        <Callout tone="info" title="The app registration must be set to send group memberships">
+          A mapping only works if the sign-in token actually carries the person’s groups, and Entra
+          does not include them unless asked. In the app registration, under Token configuration,
+          add a <strong>groups claim</strong> for the ID token.
+          <div style={{ marginTop: 6, fontSize: 'var(--text-sm)' }}>
+            Choose <em>Groups assigned to the application</em> rather than all groups. A person in
+            very many groups otherwise gets a token that lists none of them — Microsoft replaces the
+            list with a link — and NocVault refuses that sign-in rather than treating the person as
+            having no groups.
+          </div>
+        </Callout>
+      </div>
+
       <FieldLabel
         hint="The group's object ID (a GUID) from Entra — Groups → the group → Overview. It is the value Microsoft puts in the token, and the only thing matched on. Case does not matter."
       >
