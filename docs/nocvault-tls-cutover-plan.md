@@ -158,3 +158,86 @@ there is no way for an operator to deliberately turn HTTPS *off* after a
 successful cutover, short of removing the service by hand and editing four
 services' parameters back. A `-Disable` switch would be nearly free while the
 revert logic is being extracted anyway, and expensive to retrofit later.
+
+---
+
+# Addendum — the night of 2026-11-05/06
+
+What was planned above was built, and then six more defects were found by
+running it. Recording them here because the pattern matters more than any one
+of them.
+
+## Done
+
+- **Node 20 → v22.23.4 on production.** MSI checksum verified against
+  nodejs.org before installing; services stopped first (Windows will not
+  replace a mapped binary); all four consoles healthy afterwards. The native
+  modules — sharp, next-swc, the unrs resolver — are all N-API and survived, as
+  checked beforehand.
+- **`Enable-NocVaultTls.ps1` built**, with the preflight and cutover MOVED
+  byte-for-byte out of the installer into `NocVault-TlsPreflight.ps1` and
+  `NocVault-TlsCutover.ps1`, dot-sourced by both callers.
+- **`-Disable`**, the supported way back. The cutover's revert only ever
+  existed inside a run that failed; once one succeeded there was no way back
+  short of editing four services by hand.
+- **A staging rig**: a full suite install, the installer's own cutover (HTTPS
+  4/4), then LogVault re-registered in production's exact shape.
+
+## What the rig DISPROVED
+
+**Production's legacy service registrations are not what failed.** With
+LogVault re-registered as `cmd.exe /c next.cmd start --port 3004` and
+`NEXTAUTH_URL` pinned in its service environment — production's exact shape —
+the cutover succeeded, gate 3 and gate 3b both passing. Four hypotheses were
+tested against production directly and all four were wrong as well: the
+registration shape, the HTTP client under SYSTEM, the stop/start timing, and
+the `https://` URL plus a possible BOM. LogVault binds `127.0.0.1:13004` in
+**one second** when asked.
+
+So a production reinstall would normalise a box whose four consoles were
+registered by four different installer eras — worth doing on its own merits —
+but it is **not** the remedy for the failure that was actually hit.
+
+## The defects, and the one shape they share
+
+1. NSSM's `AppDirectory` is the service's **working** directory, not the repo
+   root.
+2. The standalone build output is a near-complete **copy** of the repo — `.git`,
+   `package.json` and `installer\terminator\start.mjs` all present — so the
+   first marker found identifies the copy, and the guard added to catch exactly
+   that passed against it too.
+3. The port matcher accepted only `-p`, not `--port`.
+4. `NEXTAUTH_URL` lives in the **service environment** on older installs, where
+   it beats every file — and **gate 3 could not see it**, because
+   `/api/health` returns 200 regardless. A cutover would have committed and
+   left a suite that looks perfectly healthy and cannot be signed into.
+5. The **revert** restored `AppEnvironmentExtra` only for standalone mode, so
+   widening the apply desynchronised it — and the revert left production in a
+   worse state than the failure it was recovering from.
+6. `Register-MaintenanceTask` exists only in the installer, so the standalone
+   cutover threw three errors and then printed `[OK]` anyway — silently
+   stopping the nightly health snapshot and both EOL jobs. `-Disable` had the
+   mirror of the same bug.
+
+Every one is the same shape: **a check satisfied by the wrong answer.** A
+marker that is copied is not an identity. A 200 on a health endpoint is not a
+working sign-in. An `[OK]` printed without reading anything back is not a
+result. The fix in each case was to read back what is actually true, from the
+live system, after the fact — which is now what gate 3b does, what the cron
+re-point does in both directions, and what the rig's fingerprint check does
+across a whole cycle.
+
+## Still unexplained
+
+Why LogVault did not answer on `127.0.0.1:13004` during the production
+cutover. It is not the registration shape, not the client, not the timing, not
+the URL. The remaining untested difference is that the production run was
+executed **as SYSTEM from a scheduled task** while every successful rig run was
+executed as an administrator over SSH.
+
+The next production attempt will not be a mystery either way: the loopback
+check now reports the service state, the live `AppParameters`, what is
+listening on both ports with the owning pid, the console's own stdout, and one
+final request whose response is printed verbatim — which separates "nothing is
+listening" from "listening and returning 500". Those need opposite fixes and
+the old message could not tell them apart.
