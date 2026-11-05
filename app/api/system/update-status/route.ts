@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.58.0': [
+    'HTTPS can now be turned on for an installation that is already running, with the new Enable-NocVaultTls.ps1. Until now only a fresh install could do it, so the only way to add HTTPS later was to re-run the whole installer \u2014 which rebuilds all four apps and rewrites their configuration from a template, silently discarding the Microsoft Entra ID settings and the console address along the way.',
+    'The new script shares the installer\u2019s own cutover code rather than repeating it, so there is one tested path and not two that can drift apart. It changes service settings and the handful of configuration keys it owns, and nothing else.',
+    'It has a dry-run mode that checks everything and reports what it would do without changing anything, and it still reverts the whole cutover and removes itself if HTTPS cannot be proved working on all four consoles afterwards.',
+  ],
   '1.57.8': [
     'Settings now warns when the Redirect URI it tells you to register is one Microsoft will refuse. Entra does not accept an IP address, and every installation starts on one \u2014 so until a hostname is set, the page was confidently showing a value that cannot be registered.',
     'It also warns when the address is not yet served over HTTPS, which Entra requires, and when it is a bare machine name with no domain. In each case it says what to change and where.',

@@ -1,0 +1,587 @@
+#
+# installer\NocVault-TlsCutover.ps1 — the shared TLS terminator cutover.
+#
+# ⛔ THIS FILE IS DOT-SOURCED, NOT RUN. It has no param() block and defines no
+# function: it executes in the CALLER'S SCOPE and reads the caller's variables
+# directly. That is the whole reason it can be shared without being rewritten —
+# the body below is byte-for-byte the code that was proven on real Windows
+# during the staging dry run, moved rather than retyped.
+#
+# Two callers:
+#   Install-NocVault-Suite.ps1   a fresh install, after STEP 12
+#   Enable-NocVaultTls.ps1       an installation that already exists
+#
+# ⛔ THE CALLER MUST SET ALL OF THESE FIRST. Dot-sourcing gives no signature to
+# check against, so a missing one is a $null that behaves like a decision:
+#
+#   $TlsGateOk            $true only if gates 1 and 2 passed (cert + Node)
+#   $TlsGateReason        why not, when $TlsGateOk is $false
+#   $NssmExe              path to nssm.exe
+#   $NVDir $NVAppDir      NetVault install root and repo root
+#   $LVAppDir $DDIAppDir $SVAppDir
+#   $InstallLogVault $InstallDDIVault $InstallSpanVault
+#   $ServerIP             the address the consoles were installed on
+#   $TlsPublicHostValue   the hostname to pin, or '' to use $ServerIP
+#   $NVEnvTail            the TLS_* lines appended to NetVault's .env
+#   $CronSecret           for the post-cutover health-snapshot call
+#   $OpenHttpRedirectPorts
+#
+# It sets $script:TlsCutoverApplied for the caller to read afterwards.
+#
+
+# ================================================================
+# STEP 12.5 — Shared TLS terminator + loopback cutover (GATE 3)
+# ================================================================
+# ⛔ THE ORDER OF THIS STEP IS THE ENTIRE SAFETY ARGUMENT. DO NOT REARRANGE IT,
+# AND DO NOT "SIMPLIFY" THE REVERT AWAY.
+#
+# Everything above this line has already produced a working, fully verified
+# plain-HTTP suite on 0.0.0.0. This step is the ONLY place that changes that,
+# and it is written as one transaction with exactly two outcomes:
+#
+#   commit  - all four consoles bound to 127.0.0.1:1300X, NocVault-Tls serving
+#             HTTPS on 3000/3004/3006/3008, PROVEN by a real HTTPS GET of each
+#             console's /api/health through the terminator.
+#   revert  - every console back on 0.0.0.0:300X, NEXTAUTH_URL back to http://,
+#             the suite probe URLs back as they were, NocVault-Tls removed
+#             entirely. Identical to never having run this step.
+#
+# It CANNOT half-apply, and the reason is structural rather than careful:
+#   * one function (Set-ConsoleTransport) performs BOTH halves - the loopback
+#     bind AND the https:// NEXTAUTH_URL - per console, so a scheme mismatch
+#     (which bounces every sign-in silently, with no error in any log) cannot
+#     be produced by a partial run;
+#   * one function (Restore-ConsoleTransport) undoes both from a snapshot taken
+#     before anything was touched, and it is called from EVERY failure path -
+#     a console that would not restart, a terminator that would not start, a
+#     missing HTTPS 200, the banner;
+#   * the terminator cannot be left behind by a revert, because the revert
+#     stops AND removes the service. A leftover auto-start NocVault-Tls would
+#     fight the apps for port 3000 on the next reboot.
+#
+# ⛔ WHY THE CONSOLES MOVE FIRST AND ARE PROVEN SECOND, RATHER THAN THE REVERSE.
+# It would be safer still to prove the terminator before moving anything, and
+# it is not possible: the terminator's public ports ARE 3000/3004/3006/3008,
+# the ports the four consoles are holding right now. Something has to let go
+# first. So the move is made reversible instead of avoidable, and the window in
+# which the consoles are not externally reachable is bounded by the health
+# polls below - on a fresh install, before any user exists.
+#
+# ⛔ GATE 3 IS AN HTTPS REQUEST THAT RETURNS 200, NOT "the service says Running".
+# NSSM reports Running for a process that bound nothing (start.mjs's own header
+# records that exact failure), and the terminator deliberately degrades a broken
+# certificate to plain HTTP rather than refusing to start - which would leave
+# the consoles reachable but UNENCRYPTED while every check that only looks at
+# service state passes. Only bytes off the socket settle it.
+#
+# Set once, here, and written ONLY on the commit path. STEP 13 and the closing
+# summary read it to decide what to verify and which URL scheme to print, so a
+# default of $false is what keeps a reverted run from advertising HTTPS.
+$script:TlsCutoverApplied = $false
+
+if (-not $TlsGateOk) {
+    Write-Step "Shared TLS terminator"
+    Write-Info "Not installed. $TlsGateReason"
+    Write-Info "Consoles remain on 0.0.0.0:3000/3004/3006/3008 (plain HTTP), NEXTAUTH_URL stays http:// - the shipping configuration."
+} else {
+    Write-Step "Shared TLS terminator (NocVault-Tls)"
+
+    # ---- helpers (local to this step) -----------------------------------
+    # nssm emits UTF-16 and the NULs survive the capture; '' means "could not
+    # read", which every caller treats as a reason not to proceed.
+    function Get-NssmSetting([string]$nssmExe, [string]$service, [string]$setting) {
+        $ErrorActionPreference = 'Continue'
+        $raw = ''
+        try { $raw = (& $nssmExe get $service $setting 2>&1 | Out-String) } catch { $raw = '' }
+        $raw = $raw -replace "`0", ''
+        return $raw.Trim()
+    }
+
+    # Rewrite one KEY=VALUE in place, leaving every other line untouched.
+    # Reads RAW and splits on \r?\n itself: this installer writes these files
+    # LF-only, but Settings and any later Add-Content write CRLF, and an
+    # anchored regex tested against a line still carrying its trailing \r
+    # silently stops matching.
+    function Set-EnvFileKey([string]$path, [string]$key, [string]$value) {
+        if (-not (Test-Path -LiteralPath $path)) { return $false }
+        $raw = ''
+        try { $raw = (Get-Content -LiteralPath $path -Raw -ErrorAction Stop) } catch { return $false }
+        if ($null -eq $raw) { $raw = '' }
+        $lines = @($raw -split "`r?`n")
+        $found = $false
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match ('^\s*' + [regex]::Escape($key) + '\s*=')) {
+                $lines[$i] = "$key=$value"
+                $found = $true
+            }
+        }
+        if (-not $found) { $lines = @($lines) + "$key=$value" }
+        try { ($lines -join "`n") | Out-File -FilePath $path -Encoding UTF8 -NoNewline } catch { return $false }
+        return $true
+    }
+
+    function Restart-NocService([string]$service) {
+        $ErrorActionPreference = 'Continue'
+        $null = & sc.exe stop $service 2>&1
+        Start-Sleep -Seconds 4
+        $null = & sc.exe start $service 2>&1
+        # 1056 = ERROR_SERVICE_ALREADY_RUNNING. NSSM's AppRestartDelay can have
+        # relaunched the child already; the health poll is the real verdict, so
+        # this is not treated as a failure (same reasoning as Update-NetVault.ps1).
+        return $true
+    }
+
+    function Wait-HttpOk([string]$url, [int]$timeoutSec) {
+        for ($i = 0; $i -lt $timeoutSec; $i++) {
+            try {
+                $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+                if ($r.StatusCode -eq 200) { return $true }
+            } catch {}
+            Start-Sleep -Seconds 1
+        }
+        return $false
+    }
+
+    # ⛔ TLS 1.2 IS STATED EXPLICITLY AND THE CERTIFICATE IS DELIBERATELY NOT
+    # VALIDATED - both halves are load-bearing.
+    #
+    # Windows PowerShell 5.1 is .NET Framework, where ServicePointManager
+    # defaults to SSL3|TLS1.0. The terminator sets minVersion: 'TLSv1.2', so the
+    # handshake fails against a listener that is working perfectly, gate 3 reads
+    # that as "no HTTPS" and the whole cutover reverts for no reason. This is the
+    # same trap already documented on Update-NetVault.ps1's agent-ingest probe,
+    # where the default protocols produced "A call to SSPI failed" and the script
+    # concluded the listener was plaintext.
+    #
+    # Validation is skipped because the question is "is the terminator
+    # terminating TLS and is the console behind it answering", not "does this
+    # chain to a root this box trusts". The probe dials 127.0.0.1, which no
+    # customer certificate will ever name, so a validating probe could only
+    # fail. The global callback is saved and restored in finally - it is
+    # process-wide state and leaving it permissive would silently weaken every
+    # later Invoke-WebRequest in this script.
+    function Wait-HttpsOk([string]$url, [int]$timeoutSec) {
+        $prevCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+        $prevProtocol = [System.Net.ServicePointManager]::SecurityProtocol
+        $ok = $false
+        try {
+            $proto = [System.Net.SecurityProtocolType]::Tls12
+            if ([System.Net.SecurityProtocolType].GetEnumNames() -contains 'Tls13') {
+                $proto = $proto -bor [System.Net.SecurityProtocolType]::Tls13
+            }
+            [System.Net.ServicePointManager]::SecurityProtocol = $proto
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+            for ($i = 0; $i -lt $timeoutSec; $i++) {
+                try {
+                    # ⛔ HttpWebRequest, NOT Invoke-WebRequest. MEASURED on Windows 11
+                    # / PowerShell 5.1 against this installer's own self-signed
+                    # certificate: four clients, same server, same cert, same
+                    # moment --
+                    #     Invoke-WebRequest      FAILED "The underlying connection
+                    #                            was closed: An unexpected error
+                    #                            occurred on a send."
+                    #     HttpWebRequest         HTTP 200
+                    #     curl.exe               200
+                    #     TcpClient + SslStream  HTTP/1.1 200 OK
+                    # The TLS handshake itself SUCCEEDS in every case (the server
+                    # logged "HANDSHAKE OK: TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256"
+                    # for the failing client too), so this is not the certificate,
+                    # not the cipher suite and not the terminator -- it is
+                    # Invoke-WebRequest alone.
+                    #
+                    # ⛔ AND IT MADE THE WHOLE FEATURE UNREACHABLE. Gate 3 is the
+                    # proof that the terminator works; with this probe it could
+                    # never return 200, so every install moved the consoles to
+                    # loopback, failed the gate, and reverted. The cutover could
+                    # not have engaged on ANY Windows box. Found only by running
+                    # the install for real -- a parse check cannot see it.
+                    $req = [System.Net.HttpWebRequest]::Create($url)
+                    $req.Timeout          = 5000
+                    $req.ReadWriteTimeout = 5000
+                    $req.Method           = 'GET'
+                    # Per-request as well as the global above: the global callback
+                    # is what Invoke-WebRequest was also relying on, so do not
+                    # depend on it alone.
+                    $req.ServerCertificateValidationCallback = { $true }
+                    $resp = $req.GetResponse()
+                    $code = [int]$resp.StatusCode
+                    $resp.Close()
+                    if ($code -eq 200) { $ok = $true; break }
+                } catch {}
+                Start-Sleep -Seconds 1
+            }
+        } finally {
+            [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prevCallback
+            [System.Net.ServicePointManager]::SecurityProtocol = $prevProtocol
+        }
+        return $ok
+    }
+
+    # ---- the consoles, and only the consoles ----------------------------
+    # The Express APIs (3005/3007/3009), the agent-ingest WebSockets (3010/3011)
+    # and all three collectors are NOT touched by any of this. They are not
+    # fronted by the terminator and nothing below names them.
+    $TlsHost = if ($TlsPublicHostValue) { $TlsPublicHostValue } else { $ServerIP }
+    $NVStandaloneDir = "$NVAppDir\.next\standalone"
+
+    $Consoles = @()
+    $Consoles += [pscustomobject]@{
+        App = 'netvault'; Service = 'NetVault'; Public = 3000; Loopback = 13000
+        # ⛔ Next's GENERATED standalone server.js reads
+        # `process.env.HOSTNAME || '0.0.0.0'`. PORT alone moves the port and
+        # leaves it bound on every interface, so 13000 would be a SECOND
+        # publicly reachable plain-HTTP copy of the hub sitting behind the
+        # terminator - strictly worse than before this step ran.
+        Mode = 'standalone'
+        EnvFiles = @("$NVAppDir\.env", "$NVStandaloneDir\.env.local")
+    }
+    if ($InstallLogVault) {
+        $Consoles += [pscustomobject]@{
+            App = 'logvault'; Service = 'LogVault-App'; Public = 3004; Loopback = 13004
+            Mode = 'next-start'
+            EnvFiles = @("$LVAppDir\.env.local", "$LVAppDir\frontend\.env.local")
+        }
+    }
+    if ($InstallDDIVault) {
+        $Consoles += [pscustomobject]@{
+            App = 'ddivault'; Service = 'DDIVault-App'; Public = 3006; Loopback = 13006
+            Mode = 'next-start'
+            EnvFiles = @("$DDIAppDir\.env.local", "$DDIAppDir\frontend\.env.local")
+        }
+    }
+    if ($InstallSpanVault) {
+        $Consoles += [pscustomobject]@{
+            App = 'spanvault'; Service = 'SpanVault-App'; Public = 3008; Loopback = 13008
+            Mode = 'next-start'
+            EnvFiles = @("$SVAppDir\.env.local", "$SVAppDir\frontend\.env.local")
+        }
+    }
+
+    # ---- SNAPSHOT (before anything is touched) --------------------------
+    # The whole FILE is snapshotted, not just the NEXTAUTH_URL line: this step
+    # also rewrites the suite probe URLs into NetVault's two env files, and a
+    # verbatim restore puts every one of them back in a single operation with
+    # nothing to enumerate and therefore nothing to forget. Same shape as
+    # Update-NetVault.ps1's $envBackup / $standaloneEnvBackup.
+    Write-Info "Snapshotting console service + env state for an automatic revert"
+    $snapshotOk = $true
+    foreach ($c in $Consoles) {
+        $c | Add-Member -NotePropertyName PrevParams   -NotePropertyValue (Get-NssmSetting $NssmExe $c.Service 'AppParameters')
+        $c | Add-Member -NotePropertyName PrevEnvExtra -NotePropertyValue (Get-NssmSetting $NssmExe $c.Service 'AppEnvironmentExtra')
+        $files = @{}
+        foreach ($f in $c.EnvFiles) {
+            if (Test-Path -LiteralPath $f) {
+                $txt = $null
+                try { $txt = (Get-Content -LiteralPath $f -Raw -ErrorAction Stop) } catch { $txt = $null }
+                if ($null -eq $txt) {
+                    Write-Warn "Could not read $f - refusing the cutover (a state that cannot be snapshotted cannot be reverted)"
+                    $snapshotOk = $false
+                } else {
+                    $files[$f] = $txt
+                }
+            }
+        }
+        $c | Add-Member -NotePropertyName PrevEnvFiles -NotePropertyValue $files
+        if ($c.Mode -eq 'standalone') {
+            if (-not ($c.PrevEnvExtra -match '(?m)^\s*PORT\s*=')) {
+                Write-Warn "NetVault service environment has no PORT entry to move - refusing the cutover"
+                $snapshotOk = $false
+            }
+        } else {
+            if (-not ($c.PrevParams -match ('-p\s+' + $c.Public + '(\s|$)'))) {
+                Write-Warn "$($c.Service) AppParameters does not contain '-p $($c.Public)' - refusing the cutover rather than guessing its command line"
+                $snapshotOk = $false
+            }
+        }
+    }
+
+    # ---- APPLY / REVERT -------------------------------------------------
+    function Set-ConsoleTransport($console, [string]$nssmExe, [string]$publicHost) {
+        # BOTH halves of one console in one function, on purpose. The bind and
+        # the NEXTAUTH_URL scheme are a single fact; splitting them is how a
+        # suite ends up serving https while NextAuth believes it is http, which
+        # bounces every sign-in back to the login page with nothing logged
+        # anywhere to say why.
+        if ($console.Mode -eq 'standalone') {
+            $lines = @($console.PrevEnvExtra -split "`r?`n" |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' })
+            if ($lines.Count -lt 2) { return $false }
+            $out = @()
+            $sawPort = $false
+            $sawHost = $false
+            foreach ($l in $lines) {
+                $name = ($l -split '=', 2)[0]
+                if ($name -eq 'PORT')     { $out += ("PORT=" + $console.Loopback); $sawPort = $true; continue }
+                if ($name -eq 'HOSTNAME') { $out += 'HOSTNAME=127.0.0.1';          $sawHost = $true; continue }
+                $out += $l
+            }
+            if (-not $sawPort) { return $false }
+            # HOSTNAME is appended rather than assumed - see the note on the
+            # netvault console entry above for why its absence is not benign.
+            if (-not $sawHost) { $out += 'HOSTNAME=127.0.0.1' }
+            $ErrorActionPreference = 'Continue'
+            $null = & $nssmExe set $console.Service AppEnvironmentExtra ($out -join "`n") 2>&1
+            if ($LASTEXITCODE -ne 0) { return $false }
+        } else {
+            $newParams = $console.PrevParams -replace ('-p\s+' + $console.Public + '(?=\s|$)'), ("-p " + $console.Loopback + " -H 127.0.0.1")
+            if ($newParams -eq $console.PrevParams) { return $false }
+            $ErrorActionPreference = 'Continue'
+            $null = & $nssmExe set $console.Service AppParameters $newParams 2>&1
+            if ($LASTEXITCODE -ne 0) { return $false }
+        }
+        foreach ($f in $console.EnvFiles) {
+            if (Test-Path -LiteralPath $f) {
+                $null = Set-EnvFileKey $f 'NEXTAUTH_URL' ("https://" + $publicHost + ":" + $console.Public)
+            }
+        }
+        return $true
+    }
+
+    function Restore-ConsoleTransport($console, [string]$nssmExe) {
+        $ErrorActionPreference = 'Continue'
+        if ($console.Mode -eq 'standalone') {
+            $lines = @($console.PrevEnvExtra -split "`r?`n" |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' })
+            if ($lines.Count -ge 2) { $null = & $nssmExe set $console.Service AppEnvironmentExtra ($lines -join "`n") 2>&1 }
+        } elseif ($console.PrevParams) {
+            $null = & $nssmExe set $console.Service AppParameters $console.PrevParams 2>&1
+        }
+        foreach ($f in $console.PrevEnvFiles.Keys) {
+            try { $console.PrevEnvFiles[$f] | Out-File -FilePath $f -Encoding UTF8 -NoNewline } catch {}
+        }
+    }
+
+    # Undo EVERYTHING this step did, including the service itself, and put the
+    # consoles back on the air. Called from every failure path below.
+    function Undo-TlsCutover([string]$reason, $consoles, [string]$nssmExe) {
+        Write-Warn "REVERTING the TLS cutover - $reason"
+        $null = & sc.exe stop NocVault-Tls 2>&1
+        Start-Sleep -Seconds 2
+        $null = & $nssmExe stop NocVault-Tls confirm 2>&1
+        $null = & $nssmExe remove NocVault-Tls confirm 2>&1
+        # EVERY console, not only the ones this run got as far as changing.
+        # Restoring one that was never touched rewrites it with the byte-identical
+        # snapshot taken before anything happened, so it is a no-op - and
+        # tracking "which ones did I reach" would be one more thing to get
+        # wrong on the path that exists to be reliable.
+        foreach ($c in $consoles) {
+            Restore-ConsoleTransport $c $nssmExe
+            $null = Restart-NocService $c.Service
+        }
+        Start-Sleep -Seconds 5
+        $backUp = $true
+        foreach ($c in $consoles) {
+            if (Wait-HttpOk ("http://127.0.0.1:" + $c.Public + "/api/health") 60) {
+                Write-OK "$($c.App) is back on plain HTTP :$($c.Public)"
+            } else {
+                Write-Warn "$($c.App) did NOT answer http://127.0.0.1:$($c.Public)/api/health after the revert - check $($c.Service) and its log"
+                $backUp = $false
+            }
+        }
+        if ($backUp) {
+            Write-OK "Revert complete - the suite is in its normal plain-HTTP configuration"
+        } else {
+            Write-Warn "Revert finished with at least one console not answering. The suite is NOT serving HTTPS; fix the service above before retrying TLS."
+        }
+    }
+
+    if (-not $snapshotOk) {
+        Write-Warn "Pre-cutover snapshot incomplete - the TLS terminator will NOT be installed and nothing has been changed."
+    } else {
+        # ---- register the service (registered stopped; started below) ----
+        $TlsLog    = "$NVDir\logs\nocvault-tls.log"
+        $TlsErrLog = "$NVDir\logs\nocvault-tls-error.log"
+        # Truncate the previous run's logs so the NOT STARTED banner check below
+        # cannot be answered by an old banner from a prior install attempt.
+        foreach ($lf in @($TlsLog, $TlsErrLog)) {
+            if (Test-Path -LiteralPath $lf) { Remove-Item -LiteralPath $lf -Force -ErrorAction SilentlyContinue }
+        }
+        $TlsDeps = @()
+        foreach ($c in $Consoles) { $TlsDeps += $c.Service }
+
+        & $NssmExe stop NocVault-Tls confirm 2>$null
+        & $NssmExe remove NocVault-Tls confirm 2>$null
+        & $NssmExe install NocVault-Tls "C:\Program Files\nodejs\node.exe" "$NVAppDir\installer\terminator\start.mjs"
+        # AppDirectory is the NetVault repo root, not installer\terminator: the
+        # terminator resolves <root>\.env and <root>\.next\standalone\.env.local
+        # from its own module path, but every log path, relative import and
+        # git-root probe is clearer from the root the rest of the app uses.
+        & $NssmExe set NocVault-Tls AppDirectory        $NVAppDir
+        # ⛔ NODE_ENV ONLY. The TLS pair, TLS_PUBLIC_HOST and the ports are all
+        # ABSENT here and that is deliberate - see the long note at $NVEnvTail
+        # above. TLS_CERT_PATH/TLS_KEY_PATH are lib/envTargets.ts MANAGED_KEYS
+        # that Settings rewrites at runtime; a value pinned in a service
+        # environment is read at runtime and beats any file, so pinning them
+        # would make every future certificate change from Settings a silent
+        # no-op for the one process that actually terminates TLS. The terminator
+        # already reads those two files itself (loadEnvironment()).
+        & $NssmExe set NocVault-Tls AppEnvironmentExtra "NODE_ENV=production"
+        & $NssmExe set NocVault-Tls DisplayName         "NocVault - TLS Terminator"
+        & $NssmExe set NocVault-Tls Description         "NocVault Suite - shared HTTPS front door for all four consoles"
+        & $NssmExe set NocVault-Tls Start               SERVICE_AUTO_START
+        # The four consoles, so a reboot brings the upstreams up first. This is
+        # ordering only - Windows does not wait for an upstream to be READY, and
+        # the terminator does not need it to be: a console that is still starting
+        # produces a 502 from that one listener, not a failure to bind.
+        & $NssmExe set NocVault-Tls DependOnService     ($TlsDeps -join "`n")
+        & $NssmExe set NocVault-Tls AppStdout           $TlsLog
+        & $NssmExe set NocVault-Tls AppStderr           $TlsErrLog
+        & $NssmExe set NocVault-Tls AppRotateFiles      1
+        & $NssmExe set NocVault-Tls AppRotateBytes      10485760
+        & $NssmExe set NocVault-Tls AppRotateOnline     1
+        & $NssmExe set NocVault-Tls AppRestartDelay     3000
+        # See the NetVault block for why 15000 and not NSSM's 1500ms default:
+        # the terminator tracks and tears down every live socket on stop,
+        # including upgraded WebSockets, and must not be killed mid-drain.
+        & $NssmExe set NocVault-Tls AppStopMethodConsole 15000
+        Write-OK "NocVault-Tls service registered (not started yet)"
+
+        # ---- move the consoles to loopback ------------------------------
+        Write-Info "Moving the consoles to 127.0.0.1 and NEXTAUTH_URL to https:// (reversible from here)"
+        $moveOk = $true
+        foreach ($c in $Consoles) {
+            if (Set-ConsoleTransport $c $NssmExe $TlsHost) {
+                Write-OK "$($c.App): 127.0.0.1:$($c.Loopback), NEXTAUTH_URL https://${TlsHost}:$($c.Public)"
+            } else {
+                Write-Warn "$($c.App): could not rewrite $($c.Service) - aborting the cutover"
+                $moveOk = $false
+                break
+            }
+        }
+
+        # ---- point the hub's suite probes at the loopback ports ----------
+        # app/api/suite/{health,stats} default to http://127.0.0.1:300X, which
+        # after the move is the TERMINATOR. A plain-HTTP probe there gets the
+        # demux 301 to https, and the follow-up fails certificate validation
+        # against 127.0.0.1 - so the launcher's Suite Health and stat tiles
+        # would all read "Unavailable". No code change: these env overrides are
+        # already honoured.
+        if ($moveOk) {
+            $probePairs = @{}
+            foreach ($c in $Consoles) {
+                $probePairs[($c.App.ToUpper() + "_HEALTH_URL")] = ("http://127.0.0.1:" + $c.Loopback + "/api/health")
+                # There is no NETVAULT_STATS_URL - the hub reads its own stats
+                # in-process and app/api/suite/stats lists only the three
+                # satellites.
+                if ($c.App -ne 'netvault') {
+                    $probePairs[($c.App.ToUpper() + "_STATS_URL")] = ("http://127.0.0.1:" + $c.Loopback + "/api/stats")
+                }
+            }
+            foreach ($f in @("$NVAppDir\.env", "$NVStandaloneDir\.env.local")) {
+                if (Test-Path -LiteralPath $f) {
+                    foreach ($k in $probePairs.Keys) { $null = Set-EnvFileKey $f $k $probePairs[$k] }
+                }
+            }
+            Write-OK "Suite health/stats probes repointed at the loopback ports"
+        }
+
+        if (-not $moveOk) {
+            Undo-TlsCutover "a console service could not be reconfigured" $Consoles $NssmExe
+        } else {
+            # ---- restart the consoles and prove them on loopback ---------
+            foreach ($c in $Consoles) { $null = Restart-NocService $c.Service }
+            Start-Sleep -Seconds 5
+            $loopbackOk = $true
+            foreach ($c in $Consoles) {
+                if (Wait-HttpOk ("http://127.0.0.1:" + $c.Loopback + "/api/health") 90) {
+                    Write-OK "$($c.App) answering on 127.0.0.1:$($c.Loopback)"
+                } else {
+                    Write-Warn "$($c.App) did NOT answer on 127.0.0.1:$($c.Loopback)"
+                    $loopbackOk = $false
+                }
+            }
+
+            if (-not $loopbackOk) {
+                Undo-TlsCutover "a console did not come back up on its loopback port" $Consoles $NssmExe
+            } else {
+                # ---- start the terminator and prove GATE 3 ---------------
+                Write-Info "Starting NocVault-Tls"
+                $ErrorActionPreference = 'Continue'
+                $null = & sc.exe start NocVault-Tls 2>&1
+                Start-Sleep -Seconds 6
+
+                $gate3 = $true
+                foreach ($c in $Consoles) {
+                    if (Wait-HttpsOk ("https://127.0.0.1:" + $c.Public + "/api/health") 60) {
+                        Write-OK "HTTPS 200 for $($c.App) through the terminator on :$($c.Public)"
+                    } else {
+                        Write-Warn "No HTTPS 200 for $($c.App) on :$($c.Public)"
+                        $gate3 = $false
+                    }
+                }
+
+                # The terminator REFUSES to start (rather than serving
+                # plaintext) on a runtime that cannot load lib/tlsConfig.ts, and
+                # says so with a named banner. Gate 2 should have caught that
+                # case already; this is the belt to its braces, and it also
+                # catches the banner appearing for any reason gate 2 could not
+                # foresee. Any occurrence fails the cutover.
+                $tlsLogText = ""
+                foreach ($lf in @($TlsErrLog, $TlsLog)) {
+                    if (Test-Path -LiteralPath $lf) {
+                        try { $tlsLogText += (Get-Content -LiteralPath $lf -Raw -ErrorAction Stop) } catch {}
+                    }
+                }
+                if ($tlsLogText -match 'NOT STARTED') {
+                    Write-Warn "The terminator logged its 'NOT STARTED' banner - it is not serving anything"
+                    $gate3 = $false
+                }
+
+                $svcTls = Get-Service -Name NocVault-Tls -ErrorAction SilentlyContinue
+                if (-not ($svcTls -and $svcTls.Status -eq 'Running')) {
+                    Write-Warn "NocVault-Tls is not Running"
+                    $gate3 = $false
+                }
+
+                if (-not $gate3) {
+                    Undo-TlsCutover "the terminator did not prove itself on all four public ports" $Consoles $NssmExe
+                } else {
+                    $script:TlsCutoverApplied = $true
+                    Write-OK "GATE 3 PASS - NocVault-Tls is terminating TLS for every installed console"
+                    Write-OK "Consoles are now bound to 127.0.0.1 only; 3000/3004/3006/3008 are the terminator"
+
+                    # ---- re-point the NetVault cron tasks ------------------
+                    # ⛔ THE THREE SCHEDULED TASKS POST TO http://127.0.0.1:3000,
+                    # which is now the TERMINATOR. curl.exe without -L would
+                    # take the demux 301 and do nothing; with -L it would fail
+                    # certificate validation against 127.0.0.1. Left alone,
+                    # health snapshots, EOL enrichment and the weekly feed sync
+                    # all stop silently - no error anywhere, just a trend chart
+                    # that never gains a point. Re-registered against the hub's
+                    # own loopback port, which is not fronted by anything.
+                    $nvCronPort = $Consoles[0].Loopback
+                    $snapA = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$nvCronPort/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
+                    Register-MaintenanceTask "NetVault-HealthSnapshot" $snapA (New-ScheduledTaskTrigger -Daily -At "00:00") "daily 00:00"
+                    $eolA  = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$nvCronPort/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
+                    Register-MaintenanceTask "NetVault-EnrichEol" $eolA (New-ScheduledTaskTrigger -Daily -At "01:00") "daily 01:00"
+                    $syncA = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$nvCronPort/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
+                    Register-MaintenanceTask "NetVault-SyncEol" $syncA (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "00:15") "weekly Sun 00:15"
+                    Write-OK "NetVault cron tasks re-pointed at 127.0.0.1:$nvCronPort"
+
+                    # ---- firewall ------------------------------------------
+                    # 3000/3004/3006/3008 are already open from the per-app
+                    # steps above and stay open - same ports, now TLS. Nothing
+                    # to add and nothing to remove.
+                    #
+                    # ⛔ 13000/13004/13006/13008 ARE NEVER OPENED. They are the
+                    # consoles themselves, speaking plain HTTP with no
+                    # authentication boundary in front of them; a rule here
+                    # would hand the world an unencrypted bypass around the
+                    # thing this whole step exists to install. They are bound to
+                    # 127.0.0.1 as well, so this is the second of two locks.
+                    if ($OpenHttpRedirectPorts) {
+                        foreach ($c in $Consoles) {
+                            $rp = $c.Public + 80
+                            Add-NocFirewallRule -DisplayName "NocVault TLS redirect $rp" -Protocol TCP -LocalPort $rp
+                        }
+                        Write-OK "Firewall rules added for the dedicated HTTP redirect ports (3080/3084/3086/3088)"
+                    } else {
+                        Write-Info "Dedicated HTTP redirect ports left closed (old http:// bookmarks are already answered with a 301 on the TLS port itself). Pass -OpenHttpRedirectPorts to open them."
+                    }
+                }
+            }
+        }
+    }
+}

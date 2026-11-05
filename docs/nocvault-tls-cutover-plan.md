@@ -94,7 +94,14 @@ The route validates the pair with `checkPrivateKey()` *before* writing anything,
 refuses to overwrite an existing pair without `replace: true`, and writes the
 key 0600. No terminator is running yet, so this is inert until step 3.
 
-### Step 3 — build `installer/Enable-NocVaultTls.ps1`  ← the actual work
+### Step 3 — build `installer/Enable-NocVaultTls.ps1`  ← **BUILT in 1.58.0**
+
+> Done. The preflight and the cutover were MOVED out of the installer into
+> `NocVault-TlsPreflight.ps1` and `NocVault-TlsCutover.ps1`, byte-for-byte, and
+> are dot-sourced by both callers — so the installer still runs the code that
+> was proven on staging, and so does the new script. `Enable-NocVaultTls.ps1`
+> is only the ~220 lines that discover an existing installation and the dry-run
+> mode. What follows is the specification it was built to.
 
 A standalone, re-runnable cutover for an install that already exists. It is
 STEP 12.5 lifted out of the installer, with the clone/build/env-template half
