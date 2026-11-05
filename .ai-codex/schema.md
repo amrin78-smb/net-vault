@@ -95,3 +95,41 @@ Indexes/constraints:
 All DDL is additive (`ADD COLUMN IF NOT EXISTS`, `CREATE TABLE IF NOT EXISTS`, `CREATE UNIQUE INDEX IF NOT EXISTS`, and the drop-then-add shape the `users_role_check` fix already uses) because schema.sql re-applies in full on every deploy. Verified against a from-scratch database AND a re-run, with every constraint above exercised for both the accepted and the refused case — not just inspected.
 
 **Privilege note.** `users_public` is an ALLOWLIST view, so both new columns were hidden from `claude_readonly`/`nocvault_readonly` by default. `auth_provider` has been ADDED to the view: it carries no secret and without it no diagnostic query can tell a local account from a directory one, which is the first question asked about any sign-in problem. ⛔ `entra_oid` is deliberately NOT in the view — not a credential, but it is the identifier joining a row to a person in the customer's directory, and `auth_provider` already answers the diagnostic question. Fail closed; adding it later is a deliberate decision. `directory_role_mappings` holds no secret (a group OBJECT ID is not one) and is covered by the blanket grant.
+
+## Deleting a user was impossible — three FKs with NO ACTION (1.55.0)
+
+⛔ **MEASURED ON THE LIVE DATABASE 2026-11-05, NOT INFERRED FROM THIS FILE.** Three foreign
+keys into `users` were `ON DELETE NO ACTION` in production, so any account that had ever
+touched anything could not be deleted:
+
+| FK | was | rows on the oldest account (id 1) |
+|---|---|---|
+| `devices.created_by` | NO ACTION | 2,482 |
+| `devices.updated_by` | NO ACTION | 2,448 |
+| `audit_log.changed_by` | NO ACTION | 9 |
+
+Now all three are `ON DELETE SET NULL`, applied by drop-then-add (ADD CONSTRAINT is not
+idempotent and this file re-applies on every deploy). Verified on a scratch database BOTH
+ways: a fresh apply produces SET NULL, and forcing NO ACTION to mimic production then
+re-applying converts it.
+
+⛔ **SET NULL, NEVER CASCADE.** These columns record WHO DID SOMETHING. Cascading would delete
+2,482 devices because an administrator left the company. A null author is the truthful
+outcome — the device is still there and nobody knows who added it.
+
+⛔ **AND THIS FILE ALREADY CLAIMED ONE OF THEM WAS SET NULL.** `audit_log` is declared with
+`changed_by ... REFERENCES users(id) ON DELETE SET NULL`, and production had NO ACTION — because
+**`CREATE TABLE IF NOT EXISTS` GUARDS CREATION ONLY AND NEVER ALTERS AN EXISTING TABLE'S
+CONSTRAINTS.** The table predates that declaration, so it had never once been applied to a
+deployed database. This is the column-level trap CLAUDE.md already records, one level up at
+constraint level: reading a `CREATE TABLE` body tells you nothing about what is live. When a
+constraint must change on an existing install, it needs its own explicit `ALTER`.
+
+⛔ `devices.created_by` / `updated_by` are declared here as bare `INTEGER` with NO `REFERENCES`
+clause, so the live FK was added OUT OF BAND and a fresh install never had one at all. The
+explicit ALTERs are what make a new install and an upgraded one finally agree — before this,
+the same product had two different referential shapes depending on when it was installed.
+
+The failure was invisible because three layers each hid the one below: Postgres raised 23503,
+the route had no catch so that became a 500, and the Users page discarded the body and rendered
+"Failed to delete user". All three are fixed together — see `.ai-codex/routes.md`.

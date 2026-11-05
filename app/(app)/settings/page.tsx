@@ -385,7 +385,16 @@ function UpdatingOverlay({ preVersion }: { preVersion: string }) {
   )
 }
 
-type User = { id: number; name: string; email: string; role: string; created_at: string; sites?: { id: number; name: string; code: string }[]; apps?: string[] }
+type User = { id: number; name: string; email: string; role: string; created_at: string; sites?: { id: number; name: string; code: string }[]; apps?: string[]; auth_provider?: string }
+
+// A row whose identity comes from the directory, not from this product.
+// ⛔ Absent means 'local' (every account that existed before Entra), and an
+// UNRECOGNISED value counts as a directory account — the same fail-closed call
+// lib/directoryUser.ts's isDirectoryAccount makes. Do not infer this from the
+// shape of any other field.
+function isDirectoryUser(u: { auth_provider?: string } | null | undefined): boolean {
+  return (u?.auth_provider || 'local') !== 'local'
+}
 // Per-user app access (netvault 1.23.0). NetVault is always accessible; an empty/absent
 // `apps` list means "all apps" (default). The form always sends 'netvault' + checked apps.
 const APP_OPTIONS: { slug: string; label: string }[] = [
@@ -595,6 +604,17 @@ function SettingsInner() {
   function fetchUsers() { fetch('/api/users').then(r => r.json()).then(setUsers) }
   function fetchSites() { fetch('/api/sites').then(r => r.json()).then(setSites) }
 
+  // ⛔ THE FORM MIRRORS THE SERVER GUARD, IT DOES NOT REPLACE IT.
+  // PUT /api/users/[id] refuses a password, a role change or an email change on
+  // a directory row with a 409 (lib/localAccountPolicy.ts). Disabling the inputs
+  // here stops an administrator filling in a field whose save is going to be
+  // rejected — but a UI gate must never be the boundary, and must never be
+  // STRICTER than the API it fronts, or the product reads as broken rather than
+  // as restricted. `name`, sites and app access stay editable, because
+  // user_apps/user_sites are hub-owned data the directory cannot supply and this
+  // form is the only way to set them.
+  const editingDirectory = isDirectoryUser(editUser)
+
   function openAddUser() { setUserForm({ name: '', email: '', password: '', role: 'viewer', site_ids: [], app_slugs: [...ALL_SLUGS] }); setEditUser(null); setShowUserForm(true); setUserError('') }
   function openEditUser(u: User) {
     // Empty/absent apps = all apps (default); otherwise the stored set (netvault always in).
@@ -628,7 +648,17 @@ function SettingsInner() {
     if (!ok) return
     const res = await fetch(`/api/users/${id}`, { method: 'DELETE' })
     if (res.ok) showToast(`User "${name}" deleted`)
-    else showToast('Failed to delete user', 'error')
+    else {
+      // ⛔ SHOW THE SERVER'S REASON. This used to be a flat
+      // showToast('Failed to delete user'), which discarded a body that says
+      // exactly what is wrong — the account is the last super admin, or other
+      // records still refer to it. The operator was left with a button that
+      // did nothing and no way to find out why, while `addSite` twenty lines
+      // below already read `d.error`. A generic failure is worse than no
+      // button: it reads as a product fault rather than a stated rule.
+      const reason = await res.json().then((d) => d?.error).catch(() => null)
+      showToast(reason || 'Failed to delete user', 'error')
+    }
     fetchUsers()
   }
 
@@ -857,20 +887,37 @@ function SettingsInner() {
                   { label: 'Full name', field: 'name', type: 'text', placeholder: 'e.g. John Smith' },
                   { label: 'Email address', field: 'email', type: 'email', placeholder: 'john@company.com' },
                   { label: editUser ? 'New password (leave blank to keep)' : 'Password', field: 'password', type: 'password', placeholder: '••••••••' },
-                ].map(f => (
+                ].map(f => {
+                  const locked = editingDirectory && (f.field === 'email' || f.field === 'password')
+                  return (
                   <div key={f.field}>
                     <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>{f.label}</label>
-                    <input className="input" type={f.type} placeholder={f.placeholder} value={String(userForm[f.field as keyof typeof userForm] ?? '')} onChange={e => setUserForm(p => ({ ...p, [f.field]: e.target.value }))} />
+                    <input className="input" type={f.type} placeholder={locked ? '\u2014' : f.placeholder} value={locked && f.field === 'password' ? '' : String(userForm[f.field as keyof typeof userForm] ?? '')} disabled={locked} onChange={e => setUserForm(p => ({ ...p, [f.field]: e.target.value }))} />
+                    {locked && (
+                      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '4px' }}>
+                        {f.field === 'email'
+                          ? 'Comes from your directory \u2014 change it there.'
+                          : 'This account signs in through your directory, so it has no password here.'}
+                      </div>
+                    )}
                   </div>
-                ))}
+                  )
+                })}
                 <div>
                   <label style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: '500', color: 'var(--text-secondary)', marginBottom: '5px' }}>Role</label>
-                  <select className="input select" value={userForm.role} onChange={e => setUserForm(p => ({ ...p, role: e.target.value, site_ids: [] }))}>
+                  <select className="input select" value={userForm.role} disabled={editingDirectory} onChange={e => setUserForm(p => ({ ...p, role: e.target.value, site_ids: [] }))}>
                     <option value="viewer">Viewer — read only, all sites</option>
                     <option value="site_admin">Site Admin — full edit, assigned sites only</option>
                     {isSuperAdmin && <option value="super_admin">Super Admin — full access including user management and deletes</option>}
                     <option value="admin">Admin — full access, all sites</option>
                   </select>
+                  {editingDirectory && (
+                    <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      Set by this account&apos;s directory group. A role chosen here would be
+                      overwritten the next time they sign in &mdash; change the group mapping in
+                      Single sign-on instead.
+                    </div>
+                  )}
                 </div>
                 {userForm.role === 'site_admin' && (
                   <div style={{ gridColumn: '1 / -1' }}>
@@ -1016,7 +1063,20 @@ function SettingsInner() {
                 {users.map(u => (
                   <tr key={u.id}>
                     <td style={{ fontWeight: '500', color: 'var(--text-primary)' }}>{u.name}</td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{u.email}</td>
+                    <td style={{ color: 'var(--text-secondary)' }}>
+                      {u.email}
+                      {/* Says where this identity lives. Without it the list shows
+                          two kinds of account that behave differently \u2014 one with a
+                          password and a locally-set role, one with neither \u2014 and
+                          looks identical. Tinted as information, not a warning:
+                          a directory account is the normal, preferred kind. */}
+                      {isDirectoryUser(u) && (
+                        <span
+                          title="Signs in through your directory. Its role comes from a directory group and it has no password here."
+                          style={{ marginLeft: '8px', fontSize: 'var(--text-xs)', fontWeight: 600, padding: '1px 6px', borderRadius: 'var(--radius-pill)', background: 'var(--tint-info)', color: 'var(--tint-info-fg)', whiteSpace: 'nowrap' }}
+                        >Directory</span>
+                      )}
+                    </td>
                     <td>
                       <RoleBadge role={u.role} />
                     </td>

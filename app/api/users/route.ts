@@ -5,6 +5,8 @@ import { query } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { checkWriteAllowed } from '@/app/api/license/route'
 import { ALL_APPS } from '@/lib/appAccess'
+import { findUserByEmail } from '@/lib/directoryStore'
+import { decideLocalAccountEmail } from '@/lib/localAccountPolicy'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -12,7 +14,7 @@ export async function GET() {
   const user = session.user as { role: string }
   if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const res = await query(`
-    SELECT u.id, u.name, u.email, u.role, u.created_at,
+    SELECT u.id, u.name, u.email, u.role, u.auth_provider, u.created_at,
       COALESCE(
         json_agg(json_build_object('id', s.id, 'name', s.name, 'code', s.code))
         FILTER (WHERE s.id IS NOT NULL), '[]'
@@ -37,9 +39,21 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   if (!body.name || !body.email || !body.password)
     return NextResponse.json({ error: 'Name, email and password required' }, { status: 400 })
-  const existing = await query('SELECT id FROM users WHERE email = $1', [body.email])
-  if (existing.rows.length > 0)
-    return NextResponse.json({ error: 'Email already exists' }, { status: 409 })
+  // ⛔ ONE POLICY, ONE FUNCTION, EVERY WRITE PATH — lib/localAccountPolicy.ts.
+  // This replaces a bare `SELECT id FROM users WHERE email = $1` + "Email
+  // already exists", which was wrong in two ways: it was CASE-SENSITIVE (so
+  // `A@x` and `a@x` were both insertable, and the directory half's
+  // case-insensitive lookup would then find a collision nobody could see
+  // coming), and it could not say that the address belongs to the DIRECTORY —
+  // the one duplicate whose fix is "this person signs in with Entra", not
+  // "pick another address". The sibling edit path uses the same call.
+  const emailHolder = await findUserByEmail(body.email)
+  const emailDecision = decideLocalAccountEmail(body.email, emailHolder)
+  if (!emailDecision.allowed)
+    return NextResponse.json(
+      { error: emailDecision.reason, field: emailDecision.field },
+      { status: emailDecision.status },
+    )
   const hash = await bcrypt.hash(body.password, 10)
   const res = await query(
     'INSERT INTO users (name, email, password_hash, role) VALUES ($1,$2,$3,$4) RETURNING id',

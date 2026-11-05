@@ -4,6 +4,20 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 
+// Change your own password.
+//
+// ⛔ AUDITED FOR THE LOCAL-ACCOUNT EMAIL POLICY AND DELIBERATELY NOT GUARDED:
+// this is the third write path to `users` under app/api/users/**, and the only
+// column it writes is `password_hash`. It takes no email from the request, so
+// `decideLocalAccountEmail` has nothing to decide here. If an email (or any
+// other identity field) is ever added to this body, the guard in
+// `app/api/users/route.ts` and `app/api/users/[id]/route.ts` must be added here
+// in the SAME change — a fixed access-control bug is a fixed instance, not a
+// fixed class.
+//
+// (It also cannot work for a directory account: `password_hash` is NULL there,
+// so `bcrypt.compare` below would reject the current-password check — the same
+// `canUsePassword` premise lib/directoryUser.ts documents. Out of scope here.)
 export async function PUT(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })

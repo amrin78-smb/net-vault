@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.55.0': [
+    'Fixed: a user account could not be deleted once it had been used for anything. On this installation the oldest account was recorded against 2,482 devices, and the database refused to remove it — the page just said "Failed to delete user" with no reason. Deleting an account now works and leaves the devices in place, with their "added by" simply showing nobody.',
+    'Fixed: the Users page threw away the server’s explanation when a delete failed, so every refusal looked the same. It now tells you what actually happened.',
+    'Added: the last super admin can no longer be deleted. Only that role can manage users and the licence, so removing the last one would leave the system with nobody able to administer it.',
+    'Settings pages for the console address, the HTTPS certificate and Microsoft Entra ID sign-in. Each site sets its own hostname, uploads its own certificate and enters its own directory details — nothing is fixed at install time. Signing in with Entra is not switched on by any of this; the directory details and a group-to-role mapping are still needed.',
+    'An account that signs in through your directory can no longer be given a password, a role or a different email address on the Users page — its role comes from the directory group and would be overwritten at the next sign-in. Its name, sites and app access are still editable here.',
+  ],
   '1.54.0': [
     'Groundwork for signing in with a Microsoft work account (Entra ID) and for serving the console over HTTPS. Nothing is switched on by this release and nothing changes for anyone signing in today - the hostname, the certificate and the directory details will all be set from Settings rather than baked in at install, so each site can use its own.',
     'The hub can now hold accounts that belong to your directory alongside its own local accounts, and a directory group decides which role such an account gets.',

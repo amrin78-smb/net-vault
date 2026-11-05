@@ -348,6 +348,20 @@ function LoginForm() {
       ? rawCallback
       : '/launcher'
   const reason = searchParams.get('reason')
+  // ⛔ A REFUSED DIRECTORY SIGN-IN MUST SAY SOMETHING, AND MUST NOT SAY WHICH
+  // CAUSE. NextAuth forwards a `false` from the signIn callback here as
+  // `?error=AccessDenied`. Without this the person authenticated successfully
+  // with Microsoft, was refused by the hub, and landed on a blank login form —
+  // so the obvious conclusion is that their password is wrong, and the next
+  // thing they do is reset a password that works perfectly.
+  //
+  // ⛔ THE NAMED CAUSE DELIBERATELY NEVER REACHES THIS PAGE. Whether it was an
+  // unmapped group, a missing groups claim, a group-claim overage or our own
+  // database being down describes how the customer's directory is wired, and
+  // this page is reachable without authenticating. The cause goes to the server
+  // log and (later) to Settings, where an administrator can see it. So the
+  // message routes the person to the right human rather than explaining.
+  const ssoRefused = searchParams.get('error') === 'AccessDenied'
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
@@ -674,6 +688,17 @@ function LoginForm() {
               {reason === 'timeout' && (
                 <div role="status" style={{ background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.3)', color: '#fbbf24', padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
                   Your session expired due to inactivity.
+                </div>
+              )}
+
+              {/* Tinted as INFORMATION, not danger: in red this reads as a
+                  rejected password, and the person doubts their credentials
+                  instead of asking the administrator the message points them
+                  at. The same call the timeout notice above makes. */}
+              {ssoRefused && (
+                <div role="status" style={{ background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#93c5fd', padding: '10px 14px', borderRadius: 'var(--radius)', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+                  Microsoft signed you in, but your account is not mapped to a role in this
+                  application. Ask an administrator to map one of your directory groups.
                 </div>
               )}
 

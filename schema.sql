@@ -515,6 +515,53 @@ BEGIN
 END
 $$;
 
+-- ── Deleting a user must not be blocked by provenance ───────────────────────
+--
+-- ⛔ MEASURED ON THE LIVE DATABASE (2026-11-05), NOT INFERRED. Three foreign
+-- keys into `users` were ON DELETE NO ACTION there, so deleting an account was
+-- impossible once it had touched anything:
+--
+--   devices.created_by    NO ACTION   2,482 rows on the oldest account
+--   devices.updated_by    NO ACTION   2,448
+--   audit_log.changed_by  NO ACTION       9
+--
+-- The DELETE raised a foreign-key violation, the route had no catch so that
+-- became a 500, and the Users page discarded the body — so the operator saw
+-- "Failed to delete user" and nothing else. Three layers each hiding the one
+-- below. All three are fixed together.
+--
+-- ⛔ AND THE FILE ALREADY *SAID* ONE OF THEM WAS SET NULL. `audit_log` is
+-- declared above with `changed_by ... ON DELETE SET NULL`, and production had
+-- NO ACTION, because `CREATE TABLE IF NOT EXISTS` GUARDS CREATION ONLY AND
+-- NEVER ALTERS AN EXISTING TABLE'S CONSTRAINTS. The table predates that
+-- declaration, so the declaration has never once been applied to a deployed
+-- database. This is the same trap CLAUDE.md records for columns, one level up:
+-- re-reading the CREATE TABLE tells you nothing about what is live.
+--
+-- ⛔ `devices.created_by`/`updated_by` are declared in this file as bare
+-- INTEGERs with NO `REFERENCES` clause at all, so the live FK was added out of
+-- band and a fresh install has never had one. Adding it here with SET NULL is
+-- what makes a new install and an upgraded one finally agree.
+--
+-- SET NULL, never CASCADE: these columns record WHO DID SOMETHING. Cascading
+-- would delete 2,482 devices because an administrator left the company. A null
+-- author is the truthful outcome — the device is still there and nobody knows
+-- who added it.
+--
+-- Drop-then-add, matching the role-constraint idiom below: ADD CONSTRAINT is
+-- not idempotent and this file re-applies in full on every deploy.
+ALTER TABLE audit_log DROP CONSTRAINT IF EXISTS audit_log_changed_by_fkey;
+ALTER TABLE audit_log ADD CONSTRAINT audit_log_changed_by_fkey
+    FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_created_by_fkey;
+ALTER TABLE devices ADD CONSTRAINT devices_created_by_fkey
+    FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+
+ALTER TABLE devices DROP CONSTRAINT IF EXISTS devices_updated_by_fkey;
+ALTER TABLE devices ADD CONSTRAINT devices_updated_by_fkey
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL;
+
 -- Fix role constraint
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
