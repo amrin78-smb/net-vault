@@ -925,6 +925,39 @@ if ($fw) {
     foreach ($r in $fw) { Inf (" - " + $r.DisplayName + " [" + $r.Enabled + "/" + $r.Direction + "/" + $r.Action + "]") }
 } else { Wn "No firewall rules matching 'NocVault*'" }
 
+# Duplicates mean the same DisplayName was created more than once. The installer
+# now refuses to add a rule that already exists (Add-NocFirewallRule), so a
+# duplicate here says the box was installed by a build older than 1.57.2 - the
+# rules still work, but the extras are noise an operator should clear.
+$dupFw = @($fw | Group-Object DisplayName | Where-Object { $_.Count -gt 1 })
+if ($dupFw.Count -gt 0) {
+    foreach ($d in $dupFw) { Wn ("Duplicate firewall rule x" + $d.Count + ": " + $d.Name + " - safe to remove the extras (Remove-NetFirewallRule removes all copies at once)") }
+}
+
+# ---------------------------------------------------------------
+Section "8b. Leftover Replaced Installations"
+# STEP 7.5 of the installer moves an existing app directory aside as
+# '<name>.replaced-<timestamp>' rather than deleting it in place, and STEP 12
+# removes the aside copy once the new services are up. One still sitting here
+# means that cleanup did not happen - which is harmless to the running suite
+# (it is serving out of its own directory) but can be a lot of disk.
+$aside = @()
+foreach ($d in @("$InstallDir\NetVault", "$InstallDir\LogVault", "$InstallDir\DDIVault", "$InstallDir\SpanVault")) {
+    if (-not (Test-Path -LiteralPath $d)) { continue }
+    $aside += @(Get-ChildItem -LiteralPath $d -Directory -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -like '*.replaced-*' })
+}
+if ($aside.Count -eq 0) {
+    Ok "No leftover '.replaced-*' directories"
+} else {
+    foreach ($a in $aside) {
+        $mb = 0
+        try { $mb = [math]::Round((Get-ChildItem -LiteralPath $a.FullName -Recurse -File -ErrorAction SilentlyContinue |
+                Measure-Object -Property Length -Sum).Sum / 1MB) } catch {}
+        Wn ("Leftover previous installation: " + $a.FullName + " (~" + $mb + " MB) - the running suite does not use it; delete it to reclaim the space")
+    }
+}
+
 # ---------------------------------------------------------------
 Section "9. Database Deep Checks"
 if (-not $script:DbReady) { Wn "DB not available - section skipped" }

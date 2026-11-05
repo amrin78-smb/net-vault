@@ -318,3 +318,37 @@ LOCATION of `secrets.env` only.
 PostgreSQL probe threw only when the password had just been generated AND `-PgAdminPassword` was
 absent. Every psql call below it ends in `2>$null`, so a bad password produced no database, no role
 and no schema, and four services restart-looping. It now throws on any authentication failure.
+
+## Re-install over a running suite (1.57.3)
+
+⛔ **`Remove-Item -Recurse -Force` ON A HELD DIRECTORY EMPTIES IT AND THEN FAILS.** Measured with
+a node process holding a tree the way NSSM holds these (relative entrypoint, working directory
+inside): **all 22 files deleted**, then the call failed on the directory itself — `tree still
+present: True, files remaining: 0 of 22`. And `git clone` into what was left **succeeded**, because
+an empty directory is a valid clone target. So STEPs 8-11's old `if (Test-Path) { Remove-Item }`
+did not fail safely OR loudly: it emptied a live installation, cloned over the top, and carried on
+with the running process serving from deleted handles. Each app step's own `nssm stop` sits ~100
+lines AFTER its delete.
+
+⛔ **THE REPLACEMENT IS A RENAME, NOT A DELETE, AND THAT IS THE WHOLE POINT.** `Move-NocAppDirAside`
+renames `<app>` to `<app>.replaced-<timestamp>`. A rename either succeeds whole or changes nothing,
+and it fails for exactly the same reasons a delete would — so it is simultaneously the pre-flight
+(it cannot half-work) and the rollback (the old tree survives intact under its new name if a later
+step fails). STEP 12 removes the aside copies only after the new services are up; `Test-NocVault-Suite.ps1`
+section 8b flags any that survive.
+
+⛔ **STEP 7.5 IS THE REFUSAL BOUNDARY.** Everything before it is idempotent and non-destructive, so
+refusing there costs nothing and leaves the existing install startable. It stops all 11 services
+(`NocVault-Tls` FIRST — 1051), polls for `Stopped` rather than sleeping (the terminator's
+`AppStopMethodConsole` is 15s because it drains live sockets), then kills orphaned node processes
+matched against the FOUR APP DIRECTORIES, never `$InstallDir`.
+
+⛔ **A SERVICE STOPPED ONLY TO SATISFY THE DEPENDENCY ORDER MUST BE STARTED AGAIN.** `NocVault-Tls`'s
+`DependOnService` forces all four console services to stop even when `-InstallLogVault $false` means
+this run will not re-register one of them. STEP 12 restarts anything in `$script:StoppedNotReinstalled`.
+
+⛔ **AN EMPTY `Get-NocDirHolders` RESULT DOES NOT MEAN NOTHING HOLDS THE DIRECTORY.** It matches
+command lines, and a process started with a relative entrypoint — which is how several of these NSSM
+services are registered — has nothing matchable even though its working directory is inside.
+Confirmed in the isolated test: the holder was correctly NOT identified, and the message says so
+instead of claiming the folder is free.

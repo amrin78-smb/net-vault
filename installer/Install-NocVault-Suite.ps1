@@ -1147,11 +1147,209 @@ if ($InstallSpanVault) {
 }
 
 # ================================================================
+# STEP 7.5 — Stop any running NocVault suite (RE-INSTALL SAFETY)
+# ================================================================
+# ⛔ NOTHING BELOW THIS POINT IS SAFE WHILE THE SUITE IS RUNNING, AND THIS IS THE
+# LAST POINT AT WHICH REFUSING COSTS NOTHING.
+#
+# STEPs 8-11 each begin by deleting their app directory and re-cloning it. NSSM
+# sets each service's WORKING DIRECTORY to the very directory its step is about
+# to remove, and each app step does run `nssm stop` - but ~100 lines AFTER its
+# own delete, which is no use to anybody.
+#
+# MEASURED, with a node process holding a directory exactly the way NSSM holds
+# these (relative entrypoint, working directory inside the tree):
+#   Remove-Item -Recurse -Force  ->  ALL 22 files deleted, then it failed on the
+#                                    directory itself. "tree still present: True,
+#                                    files remaining: 0 of 22."
+#   git clone into what was left  -> SUCCEEDED. An empty directory is a valid
+#                                    clone target.
+# So the old code did not fail safely and it did not fail loudly. It emptied a
+# live installation, cloned a fresh tree over the top, and carried on - with the
+# running process still serving from deleted file handles, and `npm ci` about to
+# try to replace native modules that process has mapped. There was no refusal and
+# no way back.
+#
+# Everything before this point is idempotent and non-destructive: directories
+# created, dependencies installed, a certificate minted only when absent,
+# databases and roles ensured. So this is the boundary. Stop the suite here,
+# prove the app directories are genuinely free here, and refuse here if they are
+# not - with the existing install untouched and still startable.
+#
+# ⛔ A RE-INSTALL IS NOT A HOT OPERATION. It takes all four consoles down for the
+# length of the run, and it needs room on disk for the old tree and the new one
+# at the same time (see Move-NocAppDirAside). Updating one app in place is
+# Update-<App>.ps1's job, not this script's.
+#
+# On a FIRST install there is nothing to stop and no directory to move, so every
+# function below is a no-op and the common path is unchanged.
+
+# ⛔ NocVault-Tls IS FIRST AND THE ORDER IS LOAD-BEARING. Its DependOnService
+# names all four console services, and Windows REFUSES `sc stop` on a service
+# that still has a running dependent (1051, ERROR_DEPENDENT_SERVICES_RUNNING).
+# With the terminator anywhere later in this list, stopping NetVault /
+# LogVault-App / DDIVault-App / SpanVault-App would fail and their directories
+# would still be held. Same ordering, same reason, as the uninstaller's list.
+$SuiteServices = @(
+    'NocVault-Tls',
+    'NetVault',
+    'LogVault-App', 'LogVault-API', 'LogVault-Collector',
+    'DDIVault-App', 'DDIVault-API', 'DDIVault-Collector',
+    'SpanVault-App', 'SpanVault-API', 'SpanVault-Collector'
+)
+
+# Which of the above this run will re-register and start again on its own. Any
+# service stopped here that is NOT in this set has to be started back up in
+# STEP 12 - stopping it was forced on us by the 1051 rule above, and silently
+# leaving an app down that the operator did not ask this run to touch would be
+# its own bug.
+$ReinstallServices = @('NetVault')
+if ($InstallLogVault)  { $ReinstallServices += @('LogVault-App', 'LogVault-API', 'LogVault-Collector') }
+if ($InstallDDIVault)  { $ReinstallServices += @('DDIVault-App', 'DDIVault-API', 'DDIVault-Collector') }
+if ($InstallSpanVault) { $ReinstallServices += @('SpanVault-App', 'SpanVault-API', 'SpanVault-Collector') }
+# NocVault-Tls is re-registered by STEP 12.5 when the TLS gates pass, and
+# deliberately NOT restarted otherwise: a terminator running while the consoles
+# are back on 0.0.0.0 would fight them for 3000/3004/3006/3008.
+$script:StoppedNotReinstalled = @()
+
+# ⛔ sc.exe, never Stop-Service. The PowerShell service cmdlets are known in this
+# suite to disconnect remote sessions and hang terminals.
+# ⛔ POLL FOR Stopped, never a fixed Start-Sleep. The terminator's
+# AppStopMethodConsole is 15000ms because it drains live sockets (including
+# upgraded WebSockets) on the way down; a 2-second sleep would report it stopped
+# while it still held its ports and its working directory.
+function Stop-NocService([string]$name, [int]$timeoutSec = 60) {
+    $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+    if (-not $svc) { return 'absent' }
+    if ($svc.Status -eq 'Stopped') { return 'already-stopped' }
+    $null = & sc.exe stop $name 2>&1
+    for ($i = 0; $i -lt $timeoutSec; $i++) {
+        Start-Sleep -Seconds 1
+        $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+        if (-not $svc -or $svc.Status -eq 'Stopped') { return 'stopped' }
+    }
+    return 'timeout'
+}
+
+# Processes whose COMMAND LINE points inside $dir. Matched with IndexOf rather
+# than -like so a [ or ] in an install path is not read as a character class.
+#
+# ⛔ AN EMPTY RESULT DOES NOT MEAN NOTHING HOLDS THE DIRECTORY. A process started
+# with a relative path - which is how several NSSM services here are registered -
+# has nothing matchable on its command line even though its working directory is
+# inside. Callers must word their message accordingly.
+function Get-NocDirHolders([string]$dir) {
+    $root = $dir.TrimEnd('\') + '\'
+    $out = @()
+    try {
+        Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.CommandLine -and $_.CommandLine.IndexOf($root, [StringComparison]::OrdinalIgnoreCase) -ge 0
+            } | ForEach-Object { $out += ('{0} (pid {1})' -f $_.Name, $_.ProcessId) }
+    } catch {}
+    return $out
+}
+
+# Move an existing app directory aside instead of deleting it.
+#
+# ⛔ RENAME, NEVER Remove-Item -Recurse, AND BOTH HALVES MATTER. A rename either
+# succeeds whole or changes nothing on disk; Remove-Item -Recurse walks the tree
+# deleting as it goes, so by the time it reports a failure the contents are
+# already gone (measured: 0 of 22 files left, and only the empty directory
+# refused). The rename also FAILS for exactly the same reasons a delete would - a
+# process with a handle into the tree, or with its working directory inside it,
+# which is every NSSM-hosted service in this suite - so it is simultaneously the
+# pre-flight (it cannot half-work) and the rollback (the old tree is still there,
+# intact, under its new name, if a later step fails).
+#
+# The aside copies are removed at the end of STEP 12, once the new install's
+# services are up. Until then both trees are on disk, which is the one real cost
+# of doing it this way.
+function Move-NocAppDirAside([string]$dir, [string]$label) {
+    if (-not (Test-Path -LiteralPath $dir)) { return $null }
+    $leaf  = (Split-Path $dir -Leaf) + '.replaced-' + (Get-Date -Format 'yyyyMMdd-HHmmss')
+    $aside = Join-Path (Split-Path $dir -Parent) $leaf
+    try {
+        Rename-Item -LiteralPath $dir -NewName $leaf -ErrorAction Stop
+        Write-Info "$label`: existing install moved aside to $leaf"
+        $script:AsidePaths += $aside
+        return $aside
+    } catch {
+        $holders = Get-NocDirHolders $dir
+        Write-Warn "$label`: '$dir' is still in use - it has NOT been touched, and neither has anything else."
+        if ($holders.Count -gt 0) {
+            Write-Info "Held by: $($holders -join ', ')"
+        } else {
+            Write-Info "No holder could be identified from process command lines. A process whose WORKING DIRECTORY is inside the folder does not show up there - check for a node.exe, an open shell, or a file browser sitting in it."
+        }
+        throw "Cannot replace $dir while something is using it. Stop whatever is listed above (or reboot) and re-run. The existing installation is intact and still startable - nothing has been deleted."
+    }
+}
+$script:AsidePaths = @()
+
+Write-Step "Stopping any running NocVault services (re-install safety)"
+$anyRunning = $false
+foreach ($svc in $SuiteServices) {
+    $state = Stop-NocService $svc
+    switch ($state) {
+        'absent'          { }
+        'already-stopped' { Write-Info "$svc already stopped" }
+        'stopped'         {
+            $anyRunning = $true
+            Write-OK "Stopped $svc"
+            if ($ReinstallServices -notcontains $svc -and $svc -ne 'NocVault-Tls') {
+                $script:StoppedNotReinstalled += $svc
+            }
+        }
+        'timeout'         {
+            # Do not carry on and hope. A service that will not stop is holding
+            # the directory the next step wants to replace, and the whole point
+            # of this step is to find that out before anything is destroyed.
+            $holders = Get-NocDirHolders $InstallDir
+            if ($holders.Count -gt 0) { Write-Info "Processes under ${InstallDir}: $($holders -join ', ')" }
+            throw "$svc did not stop within 60s. Nothing has been changed. Stop it by hand (sc.exe stop $svc), or reboot, and re-run."
+        }
+    }
+}
+if (-not $anyRunning) {
+    Write-OK "No NocVault services were running"
+} else {
+    # Windows releases file handles asynchronously after a process exits, so a
+    # rename attempted the instant sc.exe reports Stopped can still lose.
+    Start-Sleep -Seconds 3
+    # Anything orphaned from an earlier run whose service is already gone. Same
+    # narrowing as the uninstaller: OUR four app directories, never $InstallDir
+    # itself - that is the shared parent (C:\Apps by default) and matching it
+    # killed an unrelated product's node processes on a shared staging box.
+    $ourRoots = @("$NVDir", "$LVDir", "$DDIDir", "$SVDir" | ForEach-Object { $_.TrimEnd('\') + '\' })
+    $orphans = @()
+    try {
+        Get-CimInstance Win32_Process -Filter "Name='node.exe'" -ErrorAction SilentlyContinue |
+            Where-Object {
+                $cl = $_.CommandLine
+                if (-not $cl) { return $false }
+                foreach ($r in $ourRoots) {
+                    if ($cl.IndexOf($r, [StringComparison]::OrdinalIgnoreCase) -ge 0) { return $true }
+                }
+                return $false
+            } | ForEach-Object { $orphans += [int]$_.ProcessId }
+    } catch {}
+    if ($orphans.Count -gt 0) {
+        foreach ($procId in $orphans) { Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue }
+        Start-Sleep -Seconds 2
+        Write-OK "Stopped $($orphans.Count) orphaned NocVault node process(es)"
+    }
+    if ($script:StoppedNotReinstalled.Count -gt 0) {
+        Write-Info "$($script:StoppedNotReinstalled -join ', ') had to be stopped for the dependency order above and are not part of this run - they will be started again in STEP 12."
+    }
+}
+
+# ================================================================
 # STEP 8 — NetVault
 # ================================================================
 Write-Step "Installing NetVault"
 
-if (Test-Path $NVAppDir) { Remove-Item $NVAppDir -Recurse -Force }
+$null = Move-NocAppDirAside $NVAppDir 'NetVault'
 Write-Info "Cloning NetVault from GitHub..."
 & git clone $NVGitUrl $NVAppDir
 if ($LASTEXITCODE -ne 0) { throw "Failed to clone NetVault" }
@@ -1333,7 +1531,7 @@ Register-MaintenanceTask "NetVault-SyncEol" $nvSyncAction $nvSyncTrigger "weekly
 if ($InstallLogVault) {
     Write-Step "Installing LogVault"
 
-    if (Test-Path $LVAppDir) { Remove-Item $LVAppDir -Recurse -Force }
+    $null = Move-NocAppDirAside $LVAppDir 'LogVault'
     Write-Info "Cloning LogVault from GitHub..."
     & git clone $LVGitUrl $LVAppDir
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone LogVault" }
@@ -1469,7 +1667,7 @@ if ($InstallLogVault) {
 if ($InstallDDIVault) {
     Write-Step "Installing DDIVault"
 
-    if (Test-Path $DDIAppDir) { Remove-Item $DDIAppDir -Recurse -Force }
+    $null = Move-NocAppDirAside $DDIAppDir 'DDIVault'
     Write-Info "Cloning DDIVault from GitHub..."
     & git clone $DDIGitUrl $DDIAppDir
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone DDIVault" }
@@ -1660,7 +1858,7 @@ $$;
 if ($InstallSpanVault) {
     Write-Step "Installing SpanVault"
 
-    if (Test-Path $SVAppDir) { Remove-Item $SVAppDir -Recurse -Force }
+    $null = Move-NocAppDirAside $SVAppDir 'SpanVault'
     Write-Info "Cloning SpanVault from GitHub..."
     & git clone $SVGitUrl $SVAppDir
     if ($LASTEXITCODE -ne 0) { throw "Failed to clone SpanVault" }
@@ -1857,6 +2055,38 @@ if ($InstallSpanVault) {
     & sc.exe start SpanVault-Collector | Out-Null
     Start-Sleep -Seconds 3
     Write-OK "SpanVault services started"
+}
+
+# Services STEP 7.5 had to stop for the NocVault-Tls dependency order but which
+# this run does not re-install. Leaving an app down that the operator did not ask
+# this run to touch would be a bug of our own making.
+if ($script:StoppedNotReinstalled.Count -gt 0) {
+    foreach ($svc in $script:StoppedNotReinstalled) {
+        $null = & sc.exe start $svc 2>&1
+        Start-Sleep -Seconds 3
+        $st = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status
+        if ($st -eq 'Running') { Write-OK "Restarted $svc (not part of this run)" }
+        else { Write-Warn "$svc was stopped for the dependency order and did NOT come back up (state: $st). Start it by hand: sc.exe start $svc" }
+    }
+}
+
+# The trees STEP 7.5 moved aside. They are only removed once the new install's
+# services are up, so that a failure anywhere in STEPs 8-12 leaves the previous
+# installation recoverable by renaming '<app>.replaced-<timestamp>' back.
+if ($script:AsidePaths.Count -gt 0) {
+    Write-Step "Removing the previous installation"
+    foreach ($aside in $script:AsidePaths) {
+        if (-not (Test-Path -LiteralPath $aside)) { continue }
+        try {
+            Remove-Item -LiteralPath $aside -Recurse -Force -ErrorAction Stop
+            Write-OK "Removed $(Split-Path $aside -Leaf)"
+        } catch {
+            # Nothing is broken by this - the new install is already running out
+            # of its own directory. Say where the disk space went and move on.
+            Write-Warn "Could not remove $aside - $_"
+            Write-Info "Harmless: the new installation is already running. Delete it by hand to reclaim the space."
+        }
+    }
 }
 
 # ================================================================

@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.3': [
+    'Fixed: re-running the installer on a machine where the suite was already installed and running used to destroy that installation. Each app folder was deleted before its services were stopped, which emptied the folder of a running app and then cloned a fresh copy over the top \u2014 with no error and no way back. Measured on a test machine: all files deleted, the clone succeeded anyway.',
+    'The installer now stops the whole suite before it touches anything, and moves the old folder aside instead of deleting it \u2014 so if anything goes wrong later in the run, the previous installation is still on disk and can be put back. The old copy is removed only once the new services are up.',
+    'If something is still holding an app folder, the installer now refuses before changing anything and names what to stop, instead of half-removing the installation. A re-install does take all four consoles down for the length of the run; use the per-app updater to update one app in place.',
+    'Services that only had to be stopped because the HTTPS front door depends on them are started again at the end, even when this run was not asked to re-install them.',
+    'The post-install test now reports duplicate firewall rules and any previous installation left behind on disk.',
+  ],
   '1.57.2': [
     'Fixed, found by running the uninstaller for real on a Windows test machine: on a server where PostgreSQL was already installed before NocVault, the uninstaller could not remove the databases at all. It was using a password the installer had generated and stored but never actually given to the database. It now tries each password it can find and uses the one that works, and the installer stores the password that is really in use.',
     'The uninstaller reported every database and role as removed whether or not it had been. Nine failures in a row were reported as nine successes, followed by a green \u201ccomplete\u201d. It now reports what actually happened and says plainly when an uninstall finished incomplete, including which database logins are still on the server.',
