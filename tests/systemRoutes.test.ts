@@ -124,6 +124,7 @@ const consoleUrlRoute = await import('../app/api/system/console-url/route.ts')
 const entraRoute = await import('../app/api/system/entra/route.ts')
 const tlsRoute = await import('../app/api/system/tls/route.ts')
 const mappingsRoute = await import('../app/api/system/directory-mappings/route.ts')
+const refusalsRoute = await import('../app/api/system/directory-refusals/route.ts')
 
 // ── harness ─────────────────────────────────────────────────────────────────
 
@@ -952,4 +953,34 @@ test('mappings: DELETE requires a real id and says when the last mapping is gone
   ;(globalThis as Record<string, unknown>).__nvDeleteMissing = true
   const res3 = (await mappingsRoute.DELETE(urlReq('http://x/?id=5'))) as unknown as Answer
   assert.equal(res3.status, 404, 'a mapping that is already gone is a 404, not a 500')
+})
+
+
+// ── /api/system/directory-refusals ──────────────────────────────────────────
+
+test('refusals: super_admin only, like the mappings it diagnoses', async () => {
+  // ⛔ NOT MERELY CONSISTENT — NECESSARY. This answers "who tried to sign in,
+  // when, and which directory groups were they in": an account inventory of the
+  // customer's directory assembled from tokens, and the inputs to a decision
+  // (the mapping table) that only a super_admin may make. A weaker gate here
+  // would be a way to read those inputs without the right to act on them.
+  session(null)
+  assert.equal(((await refusalsRoute.GET()) as unknown as Answer).status, 401)
+  for (const role of ['admin', 'site_admin', 'viewer']) {
+    session(role)
+    const res = (await refusalsRoute.GET()) as unknown as Answer
+    assert.equal(res.status, 403, `${role} must be 403, got ${res.status}`)
+  }
+})
+
+test('refusals: the raw cause never reaches the response body', async () => {
+  // The stored cause is "<code>: <free text written for a log>". Only the code
+  // is interpreted; the free text stays server-side, so nothing written for an
+  // operator's log can end up rendered in a page by accident.
+  session('super_admin')
+  const res = (await refusalsRoute.GET()) as unknown as Answer
+  assert.equal(res.status, 200)
+  const body = JSON.stringify(res.body)
+  assert.ok(!body.includes('"cause"'), 'the raw cause string must not be serialised')
+  assert.ok(Object.prototype.hasOwnProperty.call(res.body, 'keep'), 'the cap must travel as data')
 })

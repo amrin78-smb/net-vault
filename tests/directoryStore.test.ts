@@ -416,3 +416,90 @@ test('the role CHECK constraint really rejects site_admin', async (t) => {
   )
   assert.equal((await store!.listDirectoryMappings()).length, 0, 'nothing may have been inserted')
 })
+
+// ── Refused sign-ins: the cap, which is a property of the SQL ───────────────
+//
+// ⛔ THE CAP IS THE WHOLE REASON THIS IS AN INTEGRATION TEST. This is the one
+// table in the schema whose row count is driven by a FAILURE LOOP: a
+// misconfigured directory refuses every attempt and the person retries. Nothing
+// in a customer install runs a cleanup job, so the trim has to happen in the
+// writer, and whether it does is a fact about the DELETE's OFFSET arithmetic —
+// off by one and the table either grows forever or deletes the row just written.
+
+let refusals: typeof import('../lib/directoryRefusals.ts') | null = null
+
+test('recordDirectoryRefusal caps the table at DIRECTORY_REFUSAL_KEEP', async (t) => {
+  if (!need(t)) return
+  refusals = refusals || (await import('../lib/directoryRefusals.ts'))
+  const db = await import('../lib/db.ts')
+  await db.query('DELETE FROM directory_signin_refusals')
+
+  const KEEP = refusals.DIRECTORY_REFUSAL_KEEP
+  // Comfortably past the cap, so an off-by-one cannot hide.
+  for (let i = 0; i < KEEP + 12; i++) {
+    await refusals.recordDirectoryRefusal({
+      email: `person${i}@example.invalid`,
+      entraOid: `oid-${i}`,
+      cause: 'no_matching_group: test',
+      groupKeys: [`group-${i}`],
+    })
+  }
+
+  const count = Number(
+    (await db.query('SELECT count(*)::int AS n FROM directory_signin_refusals')).rows[0].n,
+  )
+  assert.equal(count, KEEP, `expected the table capped at ${KEEP}, found ${count}`)
+
+  // ⛔ AND IT MUST KEEP THE NEWEST, NOT THE OLDEST. A trim that deleted from the
+  // wrong end would also produce exactly KEEP rows and pass a count assertion.
+  const rows = await refusals.listDirectoryRefusals()
+  assert.equal(rows.length, KEEP)
+  assert.equal(rows[0].email, `person${KEEP + 11}@example.invalid`, 'newest must be first')
+  assert.equal(rows[rows.length - 1].email, `person${12}@example.invalid`, 'the oldest kept row is wrong')
+})
+
+test('a refusal round-trips its group ids, and null stays null', async (t) => {
+  if (!need(t)) return
+  refusals = refusals || (await import('../lib/directoryRefusals.ts'))
+  const db = await import('../lib/db.ts')
+  await db.query('DELETE FROM directory_signin_refusals')
+
+  await refusals.recordDirectoryRefusal({
+    email: 'someone@example.invalid',
+    entraOid: 'oid-1',
+    cause: 'no_matching_group: none of 2 groups is mapped',
+    groupKeys: ['aaaa-1111', 'bbbb-2222'],
+  })
+  // The overage case: Microsoft sent no usable list, so there is nothing to
+  // record. `null` must NOT come back as an empty array that reads as "this
+  // person is in no groups".
+  await refusals.recordDirectoryRefusal({
+    email: 'overage@example.invalid',
+    cause: 'groups_overage: too many groups',
+    groupKeys: null,
+  })
+
+  const rows = await refusals.listDirectoryRefusals()
+  assert.equal(rows.length, 2)
+  assert.equal(rows[0].email, 'overage@example.invalid')
+  assert.equal(rows[0].group_keys, null, 'an overage must not be recorded as "no groups"')
+  assert.equal(rows[0].entra_oid, null, 'an absent oid is null, not an empty string')
+  assert.deepEqual(rows[1].group_keys, ['aaaa-1111', 'bbbb-2222'])
+})
+
+test('recordDirectoryRefusal NEVER throws — it runs inside the refusal path', async (t) => {
+  if (!need(t)) return
+  refusals = refusals || (await import('../lib/directoryRefusals.ts'))
+  // ⛔ A THROW HERE BECOMES /api/auth/error?error=<message>, i.e. the exception
+  // text published on an unauthenticated page — the one place the cause must
+  // never appear. A deliberately impossible insert proves the catch is real
+  // rather than merely written.
+  const bad = 'x'.repeat(100)
+  await assert.doesNotReject(async () => {
+    await refusals!.recordDirectoryRefusal({
+      // `cause` is NOT NULL in the schema; passing null makes the INSERT fail.
+      cause: null as unknown as string,
+      email: bad,
+    })
+  })
+})

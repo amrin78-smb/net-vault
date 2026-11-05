@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.7': [
+    'Settings \u2192 Single sign-on now shows the directory sign-ins that were turned away, and why. People who are refused are told only to ask an administrator \u2014 the reason describes how your directory is wired and the login page can be reached by anyone \u2014 which until now left the administrator with nothing to go on either.',
+    'Each entry lists the groups that person was actually in, as buttons that fill in the mapping form, so a group no longer has to be copied out of a server log by hand.',
+    'The reasons are kept apart rather than lumped together as \u201csign-in failed\u201d. Three of them look identical from the login page but need completely different fixes: no group mapped, the app registration not sending groups, or NocVault\u2019s own database being unreachable \u2014 and the last of those now says plainly that it is our fault and nothing needs changing in your directory.',
+    'The list keeps the 50 most recent and trims itself, so a misconfigured directory cannot fill the database by refusing the same person repeatedly. The entries hold group IDs only, never group names, and are not readable by the suite\u2019s read-only database role.',
+  ],
   '1.57.6': [
     'The group mappings page now says that the Entra app registration has to be set to send group memberships. Microsoft does not include them unless asked, and without them every sign-in is refused \u2014 looking from the login page exactly like having no groups mapped, so an administrator who had just filled the table in correctly had no reason to suspect the app registration.',
   ],

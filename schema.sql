@@ -594,6 +594,38 @@ ALTER TABLE directory_role_mappings DROP CONSTRAINT IF EXISTS directory_role_map
 ALTER TABLE directory_role_mappings ADD CONSTRAINT directory_role_mappings_role_check
     CHECK (role IN ('super_admin', 'admin', 'viewer'));
 
+-- ── Refused directory sign-ins ───────────────────────────────────
+-- Why a directory sign-in was turned away, so that an administrator can act on
+-- it. The login page deliberately tells the person nothing beyond "ask an
+-- administrator" (it is reachable unauthenticated and the cause describes how
+-- the customer's directory is wired), which left the administrator with nothing
+-- either: the cause went only to the Windows service log, and the group ids the
+-- person actually presented went nowhere at all. This table is the other half
+-- of that split.
+--
+-- ⛔ GROUP OBJECT IDS ONLY, NEVER NAMES, AND NEVER THE TOKEN. The ids are what
+-- the mapping table matches on, so they are what an administrator needs to
+-- copy; names would be a record of the customer's internal group structure
+-- inside a product that has no use for it. We never receive names in any case.
+--
+-- ⛔ CAPPED, BY THE WRITER. A misconfigured directory refuses every sign-in
+-- attempt, so this is the one table in the schema whose row count is driven by
+-- a failure loop. lib/directoryRefusals.ts trims to the newest
+-- DIRECTORY_REFUSAL_KEEP rows on every insert; nothing here depends on an
+-- external job that a customer install would never run.
+CREATE TABLE IF NOT EXISTS directory_signin_refusals (
+    id          BIGSERIAL PRIMARY KEY,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    provider    TEXT NOT NULL DEFAULT 'entra',
+    -- Nullable: a token can be refused before either is readable.
+    email       TEXT,
+    entra_oid   TEXT,
+    cause       TEXT NOT NULL,
+    group_keys  TEXT[]
+);
+CREATE INDEX IF NOT EXISTS idx_dir_refusals_time
+    ON directory_signin_refusals(occurred_at DESC, id DESC);
+
 -- ── v_devices_flat View ──────────────────────────────────────────
 -- Created AFTER the safe-migration ALTERs above so every column it selects
 -- (mgmt_*, location_detail, risk_score, technical_debt, remark, cost,
@@ -805,6 +837,27 @@ BEGIN
   END IF;
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'SECURITY: user_mfa_backup_codes REVOKE for nocvault_readonly/claude_readonly FAILED (%). MFA backup-code hashes may still be exposed to those roles — investigate and re-run this schema file immediately.', SQLERRM;
+END
+$$;
+
+-- directory_signin_refusals: holds the email address of everyone a directory
+-- sign-in was refused for, plus the group object ids their token carried. No
+-- credential, but it is a record of named people and of the customer's group
+-- structure, and the rule this file follows is that a new table holding either
+-- is never covered by the blanket grant's precedent.
+--
+-- No _public view counterpart: the one thing that reads this table is the
+-- Settings panel, through the application's own `netvault` role.
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nocvault_readonly') THEN
+    REVOKE SELECT ON directory_signin_refusals FROM nocvault_readonly;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'claude_readonly') THEN
+    REVOKE SELECT ON directory_signin_refusals FROM claude_readonly;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'SECURITY: directory_signin_refusals REVOKE for nocvault_readonly/claude_readonly FAILED (%). Refused sign-in email addresses may still be exposed to those roles — investigate and re-run this schema file immediately.', SQLERRM;
 END
 $$;
 

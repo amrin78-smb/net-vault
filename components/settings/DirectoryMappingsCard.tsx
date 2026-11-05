@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Callout, FieldLabel, Mono, PanelCard, PanelLoading, StatePill } from './panelChrome.tsx'
 
+// ⛔ THE CAP COMES FROM THE API, NOT FROM AN IMPORT. `DIRECTORY_REFUSAL_KEEP`
+// lives in lib/directoryRefusals.ts, which imports ./db.ts — importing it from
+// a 'use client' component drags the entire `pg` driver into the BROWSER bundle
+// and the Turbopack build fails on node-only built-ins. Measured: 6 errors from
+// pg/lib/connection-parameters.js and pg-connection-string. Any constant a
+// client component needs from a server module has to travel as data.
+
 // Settings → Single sign-on → the group -> role table.
 //
 // This is the half of directory sign-in that decides WHAT someone becomes. The
@@ -30,6 +37,15 @@ type Mapping = {
   createdAt: string
 }
 
+type Refusal = {
+  id: string
+  occurredAt: string
+  email: string | null
+  entraOid: string | null
+  explanation: { code: string; title: string; fix: string; action: string }
+  groupKeys: string[]
+}
+
 const ROLE_HELP: Record<string, string> = {
   super_admin: 'Everything, including these settings and the tenant itself.',
   admin: 'Day-to-day administration. Cannot change single sign-on.',
@@ -54,6 +70,15 @@ export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolea
   const [formDetail, setFormDetail] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [confirmingId, setConfirmingId] = useState<number | null>(null)
+
+  // ⛔ FETCHED SEPARATELY FROM THE MAPPINGS, ON PURPOSE. These are the
+  // diagnostic FOR the mapping table, so they belong in the same card — but one
+  // read failing must not hide the other, and the whole reason this section
+  // exists is that a fault in one place was leaving an administrator with
+  // nothing to go on.
+  const [refusals, setRefusals] = useState<Refusal[] | null>(null)
+  const [refusalError, setRefusalError] = useState<string | null>(null)
+  const [refusalKeep, setRefusalKeep] = useState(50)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -80,7 +105,26 @@ export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolea
     }
   }, [])
 
+  const loadRefusals = useCallback(async () => {
+    try {
+      const res = await fetch('/api/system/directory-refusals', { cache: 'no-store' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setRefusals(null)
+        setRefusalError(data?.error || 'Could not read the refused sign-ins.')
+        return
+      }
+      setRefusals(Array.isArray(data.refusals) ? data.refusals : [])
+      if (Number.isFinite(data.keep)) setRefusalKeep(data.keep)
+      setRefusalError(null)
+    } catch {
+      setRefusals(null)
+      setRefusalError('Could not reach the server to read the refused sign-ins.')
+    }
+  }, [])
+
   useEffect(() => { void load() }, [load])
+  useEffect(() => { void loadRefusals() }, [loadRefusals])
 
   async function add() {
     setSaving(true)
@@ -104,6 +148,7 @@ export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolea
       setRole('')
       setNotice('Mapping added. It applies to the next sign-in — nobody already signed in is affected until their session is renewed.')
       await load()
+      await loadRefusals()
     } catch {
       setFormError('Could not reach the server.')
     } finally {
@@ -363,6 +408,101 @@ export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolea
       >
         {saving ? 'Saving…' : 'Add mapping'}
       </button>
+
+      {/* ── Recent refused sign-ins ───────────────────────────────────────
+          ⛔ THIS IS THE OTHER HALF OF A DELIBERATE SPLIT. The login page tells
+          a refused person only to ask an administrator, because it is reachable
+          without authenticating and the cause describes how the customer's
+          directory is wired. That left the administrator with nothing too: the
+          cause went to a Windows service log, and the group ids the person
+          presented went nowhere. Three of the causes look identical from the
+          login page and need three different fixes, so without this an
+          administrator is guessing between "map a group", "change the app
+          registration" and "our database was down". */}
+      <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 4 }}>
+          Recent refused sign-ins
+        </div>
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', marginBottom: 14 }}>
+          The last {refusalKeep} directory sign-ins NocVault turned away, and why. People
+          are told only to ask an administrator, so this is the only place the reason appears.
+        </div>
+
+        {refusalError && (
+          <Callout tone="danger" title="The refused sign-ins could not be read">
+            {refusalError}
+            <button
+              className="btn-secondary"
+              style={{ padding: '4px 12px', marginLeft: 10 }}
+              onClick={() => void loadRefusals()}
+            >
+              Try again
+            </button>
+          </Callout>
+        )}
+
+        {refusals && refusals.length === 0 && !refusalError && (
+          <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-muted)' }}>
+            None recorded. Either nobody has been turned away, or single sign-on has not been used yet.
+          </div>
+        )}
+
+        {refusals && refusals.length > 0 && refusals.map(r => (
+          <div
+            key={r.id}
+            style={{
+              border: '1px solid var(--border-light)', borderRadius: 'var(--radius)',
+              padding: '12px 14px', marginBottom: 10,
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <strong style={{ fontSize: 'var(--text-md)' }}>
+                {r.email || <span style={{ color: 'var(--text-muted)' }}>unknown account</span>}
+              </strong>
+              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                {new Date(r.occurredAt).toLocaleString()}
+              </span>
+            </div>
+            <div style={{ marginTop: 6, fontSize: 'var(--text-base)' }}>{r.explanation.title}</div>
+            <div style={{ marginTop: 2, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)' }}>
+              {r.explanation.fix}
+            </div>
+
+            {/* The ids are the whole point: they are exactly what has to go in
+                the field above, and retyping a GUID from a log is how a
+                mapping ends up subtly wrong. */}
+            {r.groupKeys.length > 0 && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: 6 }}>
+                  Groups this person presented
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {r.groupKeys.map(g => {
+                    const already = (mappings || []).some(m => m.groupKey.toLowerCase() === g.toLowerCase())
+                    return (
+                      <button
+                        key={g}
+                        type="button"
+                        className="btn-secondary"
+                        disabled={already}
+                        title={already ? 'Already mapped' : 'Put this group id in the field above'}
+                        style={{ padding: '3px 10px', fontFamily: 'var(--font-mono)', fontSize: 'var(--text-xs)', opacity: already ? 0.5 : 1 }}
+                        onClick={() => {
+                          setGroupKey(g)
+                          setFormError(null)
+                          setNotice(null)
+                        }}
+                      >
+                        {g}{already ? ' ✓' : ''}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
     </PanelCard>
   )
 }

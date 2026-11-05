@@ -133,3 +133,23 @@ the same product had two different referential shapes depending on when it was i
 The failure was invisible because three layers each hid the one below: Postgres raised 23503,
 the route had no catch so that became a 500, and the Users page discarded the body and rendered
 "Failed to delete user". All three are fixed together — see `.ai-codex/routes.md`.
+
+## `directory_signin_refusals` (1.57.7)
+
+Why a directory sign-in was turned away: `occurred_at`, `provider`, `email`, `entra_oid`, `cause`,
+`group_keys TEXT[]`. Written by `lib/directoryRefusals.ts` from the NextAuth `signIn` callback, read
+by `GET /api/system/directory-refusals` (super_admin).
+
+⛔ **CAPPED BY THE WRITER, NOT BY A JOB.** The only table here whose row count is driven by a failure
+loop — a misconfigured directory refuses every attempt and people retry. `recordDirectoryRefusal`
+trims to `DIRECTORY_REFUSAL_KEEP` on every insert; nothing in a customer install would run a cleanup
+job.
+
+⛔ **GROUP OBJECT IDS ONLY, NEVER NAMES, NEVER THE TOKEN.** The ids are what `directory_role_mappings`
+matches on, so they are what an administrator must copy. Names would be a record of the customer's
+internal group structure inside a product with no use for it (and we never receive them anyway).
+
+⛔ **REVOKED FROM `nocvault_readonly` / `claude_readonly`**, following `user_mfa_backup_codes`. No
+credential, but it holds the email address of every refused person plus their group memberships, and
+this file's rule is that a new table holding named people is never covered by the blanket grant's
+precedent. No `_public` view: the only reader is the Settings panel, through `netvault`.

@@ -9,9 +9,11 @@ import { isEntraConfigured } from '@/lib/entraSettings.ts'
 import {
   resolveDirectoryRole,
   isDirectoryRolePermitted,
+  groupsFromClaims,
   type DirectoryClaims as GroupClaims,
   type RoleDecision,
 } from '@/lib/directoryRoles.ts'
+import { recordDirectoryRefusal } from '@/lib/directoryRefusals.ts'
 import {
   decideDirectoryUser,
   isDirectoryPermitted,
@@ -432,6 +434,30 @@ const authOptions = {
         // rule the login form already follows for MFA: one message to the user,
         // the specific reason to the log.
         console.warn(directoryRefusalLog(who, admission.cause))
+
+        // ⛔ THE SAME FACTS, BEHIND super_admin — NOT A SECOND CHANNEL TO THE
+        // USER. The split above keeps the cause off the login page; it also
+        // left the ADMINISTRATOR with nothing, because the log line goes to a
+        // Windows service file nobody reads and the group ids this person
+        // presented went nowhere at all. Those ids are precisely what has to be
+        // typed into the mapping table, so recording them turns "ask an
+        // administrator" into something the administrator can act on.
+        //
+        // ⛔ AWAITED, BUT IT CANNOT THROW AND CANNOT REFUSE. recordDirectoryRefusal
+        // swallows and logs every failure of its own: a throw escaping here
+        // becomes /api/auth/error?error=<message>, publishing the exception text
+        // on an unauthenticated page. The refusal below is unaffected either way.
+        const claims = user?.entraClaims as GroupClaims | undefined
+        const presented = groupsFromClaims(claims)
+        await recordDirectoryRefusal({
+          email: typeof (claims as any)?.email === 'string' ? (claims as any).email : null,
+          entraOid: typeof (claims as any)?.oid === 'string' ? (claims as any).oid : null,
+          cause: admission.cause,
+          // `null` on an overage is not "no groups": Microsoft replaced the
+          // list with a link, so there is genuinely nothing to record, and the
+          // cause already says so.
+          groupKeys: presented.groups,
+        })
 
         // ⛔ `false` IS THE REFUSAL, and it is the ONLY thing that travels.
         // NextAuth answers a falsy return with `/api/auth/error?error=
