@@ -97,13 +97,40 @@ foreach ($n in 'NocVault-TlsPreflight.ps1', 'NocVault-TlsCutover.ps1') {
 # this script has to read what is already there. Which apps are installed is
 # decided by which SERVICES EXIST, not by which directories do: a directory can
 # survive a failed install, and the cutover's whole job is to move services.
-$NVDir     = Join-Path $InstallDir 'NetVault'
-$NVAppDir  = Join-Path $NVDir 'app'
-$LVAppDir  = Join-Path (Join-Path $InstallDir 'LogVault')  'app'
-$DDIAppDir = Join-Path (Join-Path $InstallDir 'DDIVault')  'app'
-$SVAppDir  = Join-Path (Join-Path $InstallDir 'SpanVault') 'app'
+$NVDir = Join-Path $InstallDir 'NetVault'
 
 function Test-NocService([string]$n) { [bool](Get-Service -Name $n -ErrorAction SilentlyContinue) }
+
+# ⛔ THE INSTALL PATHS ARE NOT UNIFORM, AND GUESSING ONE IS HOW THIS BREAKS.
+# NetVault and SpanVault live at <InstallDir>\<App>\app; LogVault and DDIVault
+# are deployed with the REPO ROOT AS THE INSTALL ROOT on at least one real
+# server — <InstallDir>\LogVault, no 'app' subfolder. Measured on production
+# 2026-11-05: C:\Apps\LogVault\app does not exist there.
+#
+# A wrong directory here is not a crash, which is what makes it dangerous: the
+# cutover would move that console to loopback and then fail to rewrite a
+# NEXTAUTH_URL in a file that is not there, aborting mid-way.
+#
+# So it is asked of the service itself. NSSM's AppDirectory is the working
+# directory the console is ACTUALLY running from — authoritative by
+# construction, the same reasoning as reading nssm.exe from the ImagePath.
+function Resolve-NocAppDir([string]$service, [string]$appName, [string]$nssm) {
+    $fromService = ''
+    if ($nssm -and (Test-NocService $service)) {
+        try {
+            $raw = (& $nssm get $service AppDirectory 2>&1 | Out-String) -replace "`0", ''
+            $fromService = $raw.Trim()
+        } catch { $fromService = '' }
+    }
+    if ($fromService -and (Test-Path -LiteralPath $fromService)) { return $fromService }
+
+    # Fall back to probing both known layouts, newest-convention first.
+    foreach ($cand in @((Join-Path (Join-Path $InstallDir $appName) 'app'),
+                        (Join-Path $InstallDir $appName))) {
+        if (Test-Path -LiteralPath $cand) { return $cand }
+    }
+    return ''
+}
 
 Write-Step "Reading the installation"
 if (-not (Test-NocService 'NetVault')) {
@@ -132,6 +159,37 @@ if (-not $NssmExe -or -not (Test-Path -LiteralPath $NssmExe)) {
 }
 if (-not $NssmExe) { throw "Could not find nssm.exe (looked at the NetVault service's own ImagePath and $NVDir\nssm)." }
 Write-OK "nssm: $NssmExe"
+
+# Now that nssm is known, ask each service where it actually runs from.
+$NVAppDir  = Resolve-NocAppDir 'NetVault'      'NetVault'  $NssmExe
+$LVAppDir  = Resolve-NocAppDir 'LogVault-App'  'LogVault'  $NssmExe
+$DDIAppDir = Resolve-NocAppDir 'DDIVault-App'  'DDIVault'  $NssmExe
+$SVAppDir  = Resolve-NocAppDir 'SpanVault-App' 'SpanVault' $NssmExe
+if (-not $NVAppDir) { throw "Could not locate NetVault's application directory under $InstallDir." }
+Write-OK "netvault  : $NVAppDir"
+if ($InstallLogVault)  { if ($LVAppDir)  { Write-OK "logvault  : $LVAppDir" }  else { throw "LogVault-App exists but its directory could not be located." } }
+if ($InstallDDIVault)  { if ($DDIAppDir) { Write-OK "ddivault  : $DDIAppDir" } else { throw "DDIVault-App exists but its directory could not be located." } }
+if ($InstallSpanVault) { if ($SVAppDir)  { Write-OK "spanvault : $SVAppDir" }  else { throw "SpanVault-App exists but its directory could not be located." } }
+
+# ⛔ AND THE ENV FILES MUST REALLY BE THERE. The cutover rewrites NEXTAUTH_URL in
+# each console's env file; Set-EnvFileKey returns false for a file that does not
+# exist, which aborts the cutover PART WAY THROUGH. Far better to find out here,
+# before a single service has been touched.
+$envTargets = @{}
+$envTargets['netvault'] = @((Join-Path $NVAppDir '.env'), (Join-Path $NVAppDir '.next\standalone\.env.local'))
+if ($InstallLogVault)  { $envTargets['logvault']  = @((Join-Path $LVAppDir '.env.local'),  (Join-Path $LVAppDir 'frontend\.env.local')) }
+if ($InstallDDIVault)  { $envTargets['ddivault']  = @((Join-Path $DDIAppDir '.env.local'), (Join-Path $DDIAppDir 'frontend\.env.local')) }
+if ($InstallSpanVault) { $envTargets['spanvault'] = @((Join-Path $SVAppDir '.env.local'),  (Join-Path $SVAppDir 'frontend\.env.local')) }
+$missingEnv = @()
+foreach ($app in $envTargets.Keys) {
+    $present = @($envTargets[$app] | Where-Object { Test-Path -LiteralPath $_ })
+    if ($present.Count -eq 0) { $missingEnv += ("{0} (looked for: {1})" -f $app, ($envTargets[$app] -join ', ')) }
+}
+if ($missingEnv.Count -gt 0) {
+    Write-Warn "No environment file found for: $($missingEnv -join '; ')"
+    throw "The cutover rewrites NEXTAUTH_URL in each console's environment file, and at least one console has none where expected. Nothing has been changed."
+}
+Write-OK "Environment files located for every installed console"
 
 # ServerIP: the address this install was built on. Read from NetVault's .env so
 # the terminator's certificate and NEXTAUTH_URL agree with what is already

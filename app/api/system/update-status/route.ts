@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.58.1': [
+    'Fixed before it was ever run: the new HTTPS script assumed every app lives in an \u201capp\u201d sub-folder. Two of them do not \u2014 on the production server LogVault and DDIVault are installed with the repository itself as the install root. It now asks each Windows service where it is actually running from, and refuses up front if any console\u2019s configuration file is not where it expects, rather than discovering that half way through switching the consoles over.',
+  ],
   '1.58.0': [
     'HTTPS can now be turned on for an installation that is already running, with the new Enable-NocVaultTls.ps1. Until now only a fresh install could do it, so the only way to add HTTPS later was to re-run the whole installer \u2014 which rebuilds all four apps and rewrites their configuration from a template, silently discarding the Microsoft Entra ID settings and the console address along the way.',
     'The new script shares the installer\u2019s own cutover code rather than repeating it, so there is one tested path and not two that can drift apart. It changes service settings and the handful of configuration keys it owns, and nothing else.',
