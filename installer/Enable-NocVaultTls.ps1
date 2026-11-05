@@ -111,9 +111,24 @@ function Test-NocService([string]$n) { [bool](Get-Service -Name $n -ErrorAction 
 # cutover would move that console to loopback and then fail to rewrite a
 # NEXTAUTH_URL in a file that is not there, aborting mid-way.
 #
-# So it is asked of the service itself. NSSM's AppDirectory is the working
-# directory the console is ACTUALLY running from — authoritative by
-# construction, the same reasoning as reading nssm.exe from the ImagePath.
+# ⛔ AND NSSM'S AppDirectory IS *NOT* THE REPO ROOT. The first version of this
+# asked the service for its AppDirectory and used it directly, reasoning that
+# the directory a console actually runs from must be authoritative. It is
+# authoritative — about something else. A dry run on production returned:
+#
+#   netvault  -> C:\Apps\NetVault\app\.next\standalone   (the build output)
+#   logvault  -> C:\Apps\logvault\frontend                (the Next frontend)
+#   spanvault -> C:\Apps\SpanVault\app\frontend
+#
+# Those are the WORKING DIRECTORIES of the processes, and the cutover would have
+# gone looking for <that>\installer\terminator\start.mjs and found nothing.
+# Worse, the env-file check PASSED, because a .env.local really does exist in
+# both of those directories — just not the one the app reads at the repo root.
+#
+# So: start from the service's own working directory, which is at least
+# guaranteed to be INSIDE the installation, and walk UP to the git checkout.
+# Every app directory this installer creates is a clone, so `.git` is the one
+# marker that identifies a repo root independently of how deep the service runs.
 function Resolve-NocAppDir([string]$service, [string]$appName, [string]$nssm) {
     $fromService = ''
     if ($nssm -and (Test-NocService $service)) {
@@ -122,12 +137,27 @@ function Resolve-NocAppDir([string]$service, [string]$appName, [string]$nssm) {
             $fromService = $raw.Trim()
         } catch { $fromService = '' }
     }
-    if ($fromService -and (Test-Path -LiteralPath $fromService)) { return $fromService }
 
-    # Fall back to probing both known layouts, newest-convention first.
+    if ($fromService -and (Test-Path -LiteralPath $fromService)) {
+        # Walk up at most four levels: .next\standalone is two, frontend is one.
+        $d = $fromService
+        for ($i = 0; $i -lt 5 -and $d; $i++) {
+            if (Test-Path -LiteralPath (Join-Path $d '.git')) { return $d }
+            $parent = Split-Path -Parent $d
+            if (-not $parent -or $parent -eq $d) { break }
+            $d = $parent
+        }
+    }
+
+    # Fall back to probing both known layouts, newest-convention first, and
+    # still require the marker rather than accepting any directory that exists.
     foreach ($cand in @((Join-Path (Join-Path $InstallDir $appName) 'app'),
                         (Join-Path $InstallDir $appName))) {
-        if (Test-Path -LiteralPath $cand) { return $cand }
+        if (Test-Path -LiteralPath (Join-Path $cand '.git')) { return $cand }
+    }
+    foreach ($cand in @((Join-Path (Join-Path $InstallDir $appName) 'app'),
+                        (Join-Path $InstallDir $appName))) {
+        if (Test-Path -LiteralPath (Join-Path $cand 'package.json')) { return $cand }
     }
     return ''
 }
@@ -166,6 +196,16 @@ $LVAppDir  = Resolve-NocAppDir 'LogVault-App'  'LogVault'  $NssmExe
 $DDIAppDir = Resolve-NocAppDir 'DDIVault-App'  'DDIVault'  $NssmExe
 $SVAppDir  = Resolve-NocAppDir 'SpanVault-App' 'SpanVault' $NssmExe
 if (-not $NVAppDir) { throw "Could not locate NetVault's application directory under $InstallDir." }
+# ⛔ THE TERMINATOR'S ENTRY POINT IS THE PROOF. Everything else about a resolved
+# path can look plausible — the dry run that caught this reported four
+# directories that all existed and all had an .env.local in them. The one thing
+# only the real repo root has is the script NocVault-Tls is registered to run,
+# and if it is not there the terminator cannot start, so check for it HERE
+# rather than discovering it at gate 3 with four consoles already on loopback.
+$terminatorEntry = Join-Path $NVAppDir 'installer\terminator\start.mjs'
+if (-not (Test-Path -LiteralPath $terminatorEntry)) {
+    throw "Resolved NetVault to '$NVAppDir', but $terminatorEntry is not there - so that is not the repository root and the terminator could not start. Nothing has been changed."
+}
 Write-OK "netvault  : $NVAppDir"
 if ($InstallLogVault)  { if ($LVAppDir)  { Write-OK "logvault  : $LVAppDir" }  else { throw "LogVault-App exists but its directory could not be located." } }
 if ($InstallDDIVault)  { if ($DDIAppDir) { Write-OK "ddivault  : $DDIAppDir" } else { throw "DDIVault-App exists but its directory could not be located." } }
