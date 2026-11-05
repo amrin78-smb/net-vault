@@ -352,3 +352,30 @@ command lines, and a process started with a relative entrypoint — which is how
 services are registered — has nothing matchable even though its working directory is inside.
 Confirmed in the isolated test: the holder was correctly NOT identified, and the message says so
 instead of claiming the folder is free.
+
+## Directory sign-in: the two things that made it unusable (1.57.4)
+
+⛔ **EVERY PIECE OF THE FEATURE WORKED AND NOBODY COULD SIGN IN.** Two gaps, both outside the
+libraries that had the tests:
+1. the login page only ever called `signIn('credentials')` — there was no way to START an Entra
+   sign-in, so the provider, the callbacks and the JIT provisioning were unreachable from the UI;
+2. `directory_role_mappings` had no API and no UI, and zero rows refuses everyone
+   (`OUTCOME.NO_MAPPINGS`), so raw SQL was the only way to let anybody in.
+Neither is visible from a unit test of the sign-in path, because both are about what the product
+does not offer. When a feature's parts are all green, check that a person can reach them.
+
+⛔ **THE LOGIN BUTTON IS DRIVEN BY `getProviders()`, NOT BY "IS A TENANT SAVED".** `entraProviders()`
+registers the provider only when all three `ENTRA_*` values are present, so the provider list is the
+answer to "can anyone actually sign in this way" — including the half-configured case, where a
+button driven by a saved tenant id would appear and fail at Microsoft with an error the login page
+cannot explain. It also must not come from a route of ours: that page is reachable without
+authenticating, and `/api/auth/providers` is NextAuth's own public endpoint returning provider ids
+only, whereas `isEntraConfigured` sits behind a super_admin gate for exactly that reason.
+
+⛔ **THAT BUTTON IS OUTSIDE THE `<form>` AND IS `type="button"`.** Inside it, a click runs
+`handleSubmit` and posts empty credentials before the redirect. It is also hidden during `mfaStage`:
+someone part-way through a local two-factor challenge who clicks it abandons that challenge for a
+different identity, and the code they were sent becomes a mystery.
+
+⛔ **`entraAvailable` STARTS `null`, NOT `false`.** `false` renders the credentials form alone and
+then pushes it down as the button appears, under the hands of someone already typing.

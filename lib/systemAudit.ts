@@ -103,10 +103,19 @@ export type SystemAuditEntry = {
  *
  * @param actorId `session.user.id` — ⛔ FROM THE SESSION, NEVER FROM A REQUEST
  *   BODY. An actor a caller can choose is not an audit trail.
+ * @param prefix the `field_name` namespace. Defaults to `system_setting`, which
+ *   is every existing caller. Settings → Single sign-on's group mappings pass
+ *   `directory_mapping` so that an auditor can tell "somebody changed the Entra
+ *   client secret" from "somebody mapped a group to super_admin" — two very
+ *   different events that would otherwise share one namespace. The redaction in
+ *   `auditValue` is keyed on the KEY, not the prefix, so a mapping's group id
+ *   and role are recorded in full: neither is a secret, and a mapping whose
+ *   target role was redacted would be useless as evidence.
  */
 export async function recordSystemChanges(
   actorId: number | string | null | undefined,
   entries: SystemAuditEntry[],
+  prefix = 'system_setting',
 ): Promise<void> {
   const actor = typeof actorId === 'string' ? parseInt(actorId, 10) : actorId
   const rows = entries.filter((e) => auditWorthRecording(e.key, e.from, e.to))
@@ -119,7 +128,7 @@ export async function recordSystemChanges(
          VALUES (NULL, $1, $2, $3, $4)`,
         [
           Number.isFinite(actor as number) ? actor : null,
-          `system_setting:${e.key}`,
+          `${prefix}:${e.key}`,
           auditValue(e.key, e.from),
           auditValue(e.key, e.to),
         ],

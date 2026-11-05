@@ -262,3 +262,157 @@ test('loadDirectoryContext always runs BOTH lookups, so the ambiguous case is vi
   assert.ok(ctx.byEmail, 'the email row must be found too')
   assert.notEqual(ctx.byOid!.id, ctx.byEmail!.id, 'they are different rows — the ambiguous case')
 })
+
+// ── Mapping administration (Settings → Single sign-on) ──────────────────────
+//
+// ⛔ THESE MUST RUN AGAINST A REAL DATABASE AND THEY ARE THE REASON THIS FILE IS
+// AN INTEGRATION TEST. Every property below is a property of the SQL:
+//
+//   * `ON CONFLICT (provider, lower(group_key))` must match
+//     `uq_directory_mapping` EXACTLY. Name the bare columns instead and
+//     PostgreSQL raises 42P10 — but only when a duplicate is actually attempted,
+//     so every test that inserts distinct rows still passes. That precise
+//     mistake shipped once on this feature (createDirectoryUser) and a real
+//     database is what caught it.
+//   * the index is on `lower(group_key)`, so a GUID pasted in a different case
+//     is the SAME mapping. Nothing in the TypeScript lower-cases anything.
+//   * `directory_role_mappings_role_check` must really reject site_admin. The
+//     API validates the role before inserting, and the comment there calls the
+//     constraint a second line of defence — an untested second line of defence
+//     is a comment, not a defence.
+
+const GROUP_A = 'cccccccc-1111-2222-3333-555555555555'
+const GROUP_B = 'dddddddd-1111-2222-3333-555555555555'
+
+async function clearMappings() {
+  const db = await import('../lib/db.ts')
+  await db.query('DELETE FROM directory_role_mappings')
+}
+
+test('createDirectoryMapping inserts a row the panel can render and delete', async (t) => {
+  if (!need(t)) return
+  await clearMappings()
+  const row = await store!.createDirectoryMapping({
+    groupKey: GROUP_A,
+    displayName: 'Firewall Admins',
+    role: 'admin',
+  })
+  assert.ok(row, 'expected the new row back')
+  assert.equal(row!.group_key, GROUP_A)
+  assert.equal(row!.display_name, 'Firewall Admins')
+  assert.equal(row!.role, 'admin')
+  assert.equal(row!.provider, 'entra')
+  assert.equal(typeof row!.id, 'number')
+  assert.ok(row!.id > 0, 'the id is what DELETE addresses; 0 or NaN is unusable')
+})
+
+test('a second mapping for the same group returns null and does NOT throw 42P10', async (t) => {
+  if (!need(t)) return
+  await clearMappings()
+  await store!.createDirectoryMapping({ groupKey: GROUP_A, role: 'admin' })
+
+  // ⛔ The assertion is on the RETURN VALUE, not on "it did not throw". A throw
+  // here is the 42P10 mismatch between the ON CONFLICT target and
+  // uq_directory_mapping; `null` is the duplicate the API turns into a 409.
+  let threw: unknown = null
+  let second: unknown = undefined
+  try {
+    second = await store!.createDirectoryMapping({ groupKey: GROUP_A, role: 'viewer' })
+  } catch (err) {
+    threw = err
+  }
+  assert.equal(
+    threw,
+    null,
+    `ON CONFLICT did not match the unique index: ${(threw as any)?.code || ''} ${(threw as any)?.message || ''}`,
+  )
+  assert.equal(second, null, 'a duplicate must come back as null, not as a row')
+
+  // And the first row is untouched — a DO NOTHING that silently became an
+  // UPDATE would change the role out from under the administrator.
+  const rows = await store!.listDirectoryMappings()
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].role, 'admin', 'the existing mapping must not be overwritten')
+})
+
+test('the same GUID in a different case is the same mapping (index is on lower(group_key))', async (t) => {
+  if (!need(t)) return
+  await clearMappings()
+  await store!.createDirectoryMapping({ groupKey: GROUP_A.toUpperCase(), role: 'admin' })
+  const again = await store!.createDirectoryMapping({ groupKey: GROUP_A.toLowerCase(), role: 'viewer' })
+  assert.equal(again, null, 'case must not create a second mapping for one group')
+  const rows = await store!.listDirectoryMappings()
+  assert.equal(rows.length, 1, `expected 1 mapping, found ${rows.length}`)
+})
+
+test('listDirectoryMappings returns newest first', async (t) => {
+  if (!need(t)) return
+  await clearMappings()
+  await store!.createDirectoryMapping({ groupKey: GROUP_A, role: 'viewer' })
+  await store!.createDirectoryMapping({ groupKey: GROUP_B, role: 'admin' })
+  const rows = await store!.listDirectoryMappings()
+  assert.equal(rows.length, 2)
+  // created_at can tie at this speed, which is exactly why the ORDER BY carries
+  // `id DESC` as well — without it the order is arbitrary and this assertion
+  // would fail intermittently rather than never.
+  assert.equal(rows[0].group_key, GROUP_B, 'the most recently added mapping must come first')
+})
+
+test('deleteDirectoryMapping returns the removed row, then null', async (t) => {
+  if (!need(t)) return
+  await clearMappings()
+  const made = await store!.createDirectoryMapping({
+    groupKey: GROUP_A,
+    displayName: 'Firewall Admins',
+    role: 'super_admin',
+  })
+
+  // RETURNING is what the audit trail is written from: after the DELETE there is
+  // nowhere left to read the group key and role out of.
+  const removed = await store!.deleteDirectoryMapping(made!.id)
+  assert.ok(removed, 'expected the removed row back for the audit entry')
+  assert.equal(removed!.group_key, GROUP_A)
+  assert.equal(removed!.role, 'super_admin')
+
+  const again = await store!.deleteDirectoryMapping(made!.id)
+  assert.equal(again, null, 'deleting a row that is gone must be null, not a throw')
+  assert.equal((await store!.listDirectoryMappings()).length, 0)
+})
+
+test('deleteDirectoryMapping will not delete another provider’s row', async (t) => {
+  if (!need(t)) return
+  await clearMappings()
+  const made = await store!.createDirectoryMapping({ groupKey: GROUP_A, role: 'admin' })
+  const wrong = await store!.deleteDirectoryMapping(made!.id, 'some-other-provider')
+  assert.equal(wrong, null, 'the provider is part of the identity of a mapping')
+  assert.equal((await store!.listDirectoryMappings()).length, 1, 'the row must still be there')
+})
+
+test('the role CHECK constraint really rejects site_admin', async (t) => {
+  if (!need(t)) return
+  await clearMappings()
+
+  // Bypasses the API's own validation on purpose: the point is whether the
+  // DATABASE refuses, independently of the route.
+  let err: any = null
+  try {
+    await store!.createDirectoryMapping({
+      groupKey: GROUP_B,
+      role: 'site_admin' as any,
+    })
+  } catch (e) {
+    err = e
+  }
+  assert.ok(err, 'the database accepted site_admin — the CHECK constraint is missing')
+  // ⛔ ASSERT THE CODE AND THE CONSTRAINT NAME, NOT A MESSAGE SUBSTRING. A match
+  // on /violates check constraint/ alone would also be satisfied by a DIFFERENT
+  // constraint failing for a different reason, which is how a test passes while
+  // proving nothing.
+  assert.equal(err.code, '23514', `expected check_violation 23514, got ${err.code}`)
+  assert.equal(
+    err.constraint,
+    'directory_role_mappings_role_check',
+    `a different constraint rejected this row: ${err.constraint}`,
+  )
+  assert.equal((await store!.listDirectoryMappings()).length, 0, 'nothing may have been inserted')
+})

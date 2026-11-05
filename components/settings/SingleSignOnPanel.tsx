@@ -43,6 +43,7 @@ import {
   PanelLoading,
   StatePill,
 } from './panelChrome.tsx'
+import { DirectoryMappingsCard } from './DirectoryMappingsCard.tsx'
 import {
   pendingFieldSummary,
   redirectUriPresentation,
@@ -468,6 +469,16 @@ export default function SingleSignOnPanel() {
           </Callout>
         )}
       </PanelCard>
+
+      {/* The second half of directory sign-in: the tenant above decides which
+          directory is trusted, this decides what an identity from it becomes.
+          Rendered here rather than wired into the Settings page separately so
+          the two always appear together — a tenant with no mappings is a
+          configuration that looks finished and refuses everyone, and the
+          warning that says so is in that card. */}
+      <div style={{ marginTop: 20 }}>
+        <DirectoryMappingsCard ssoConfigured={Boolean(state.configured)} />
+      </div>
     </div>
   )
 }

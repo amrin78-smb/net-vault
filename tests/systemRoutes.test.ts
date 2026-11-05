@@ -46,6 +46,40 @@ const NEXT_AUTH_STUB = `
   export async function getServerSession() { return globalThis.__nvSession ?? null }
 `
 
+// ⛔ THE STORE IS A SPY, NOT A DATABASE, AND THAT IS THE POINT FOR TWO OF THE
+// TESTS BELOW. /api/system/directory-mappings validates the role BEFORE it
+// inserts, and its comment calls the table's CHECK constraint a mere second line
+// of defence. The only way to prove the first line exists is to assert the store
+// WAS NOT CALLED on a refused request — which a real database cannot tell you.
+// (The SQL itself is covered against a real PostgreSQL in directoryStore.test.ts,
+// including the ON CONFLICT target and the CHECK constraint.)
+const DIRECTORY_STORE_STUB = `
+  globalThis.__nvStoreCalls = []
+  export async function listDirectoryMappings() {
+    globalThis.__nvStoreCalls.push(['list'])
+    return globalThis.__nvMappings ?? []
+  }
+  export async function createDirectoryMapping(input) {
+    globalThis.__nvStoreCalls.push(['create', input])
+    if (globalThis.__nvCreateDuplicate) return null
+    return { id: 7, provider: 'entra', group_key: input.groupKey,
+             display_name: input.displayName ?? null, role: input.role,
+             created_at: '2026-11-05T00:00:00Z' }
+  }
+  export async function deleteDirectoryMapping(id) {
+    globalThis.__nvStoreCalls.push(['delete', id])
+    if (globalThis.__nvDeleteMissing) return null
+    return { id, provider: 'entra', group_key: 'gk-' + id, display_name: null,
+             role: 'admin', created_at: '2026-11-05T00:00:00Z' }
+  }
+`
+// systemAudit imports db.ts, which builds a pg Pool from DATABASE_URL at module
+// load. Stubbing the pool keeps these route tests from needing a database at all.
+const DB_STUB = `
+  export async function query() { return { rows: [], rowCount: 0 } }
+  export default { end: async () => {}, query: async () => ({ rows: [], rowCount: 0 }) }
+`
+
 // ⛔ `registerHooks` is real (Node >= 22.15) but absent from the @types/node this
 // repo pins, and package.json is not ours to touch — so it is reached through a
 // narrow local type rather than by widening anything.
@@ -64,6 +98,10 @@ registerHooks({
     if (spec === 'next/server') return { url: 'nvstub:next/server', shortCircuit: true }
     if (spec === 'next-auth') return { url: 'nvstub:next-auth', shortCircuit: true }
     if (spec.includes('[...nextauth]')) return { url: 'nvstub:authOptions', shortCircuit: true }
+    if (spec.endsWith('lib/directoryStore.ts')) return { url: 'nvstub:directoryStore', shortCircuit: true }
+    // ⛔ MATCHES './db.ts' TOO. systemAudit imports it relatively, so a matcher
+    // anchored on 'lib/db.ts' silently misses it and the real pg Pool loads.
+    if (spec === './db.ts' || spec.endsWith('/db.ts')) return { url: 'nvstub:db', shortCircuit: true }
     if (spec.startsWith('@/')) return next(pathToFileURL(path.join(ROOT, spec.slice(2))).href, ctx)
     return next(spec, ctx)
   },
@@ -72,6 +110,8 @@ registerHooks({
       'nvstub:next/server': NEXT_SERVER_STUB,
       'nvstub:next-auth': NEXT_AUTH_STUB,
       'nvstub:authOptions': 'export const authOptions = {}',
+      'nvstub:directoryStore': DIRECTORY_STORE_STUB,
+      'nvstub:db': DB_STUB,
     }
     if (stubs[url]) return { format: 'module', source: stubs[url], shortCircuit: true }
     return next(url, ctx)
@@ -83,6 +123,7 @@ type Answer = { body: Record<string, unknown>; status: number }
 const consoleUrlRoute = await import('../app/api/system/console-url/route.ts')
 const entraRoute = await import('../app/api/system/entra/route.ts')
 const tlsRoute = await import('../app/api/system/tls/route.ts')
+const mappingsRoute = await import('../app/api/system/directory-mappings/route.ts')
 
 // ── harness ─────────────────────────────────────────────────────────────────
 
@@ -760,4 +801,155 @@ test('tls POST with no certificate at all is a 400, not a crash', async () => {
   } finally {
     resetEnv()
   }
+})
+
+
+// ── /api/system/directory-mappings ──────────────────────────────────────────
+//
+// The group -> role table. Everything here is a property of the route: the
+// store's SQL has its own integration suite against a real PostgreSQL.
+
+type StoreCall = [string, ...unknown[]]
+
+function storeCalls(): StoreCall[] {
+  return ((globalThis as Record<string, unknown>).__nvStoreCalls as StoreCall[]) || []
+}
+function resetStore(): void {
+  ;(globalThis as Record<string, unknown>).__nvStoreCalls = []
+  ;(globalThis as Record<string, unknown>).__nvMappings = []
+  ;(globalThis as Record<string, unknown>).__nvCreateDuplicate = false
+  ;(globalThis as Record<string, unknown>).__nvDeleteMissing = false
+}
+const jsonReq = (body: unknown) => ({ json: async () => body }) as never
+const urlReq = (url: string) => ({ url }) as never
+
+test('mappings: no session is 401 and never reaches the store', async () => {
+  resetStore()
+  session(null)
+  const get = (await mappingsRoute.GET()) as unknown as Answer
+  assert.equal(get.status, 401)
+  const post = (await mappingsRoute.POST(jsonReq({ groupKey: 'g', role: 'admin' }))) as unknown as Answer
+  assert.equal(post.status, 401)
+  const del = (await mappingsRoute.DELETE(urlReq('http://x/?id=1'))) as unknown as Answer
+  assert.equal(del.status, 401)
+  assert.deepEqual(storeCalls(), [], 'an unauthenticated request must not touch the database')
+})
+
+test('mappings: an admin is 403 on every verb — this is THE escalation guard', async () => {
+  // ⛔ NOT A COPY OF THE ENTRA ROUTE'S TEST, A SECOND HALF OF IT. The entra
+  // route's own header names the attack as: an admin who could point the tenant
+  // at a directory they control, "map a group they own to super_admin and sign
+  // in". Gating the tenant on super_admin while leaving mappings at admin keeps
+  // that escalation alive on any box whose tenant is already set.
+  resetStore()
+  session('admin')
+  for (const [label, res] of [
+    ['GET', (await mappingsRoute.GET()) as unknown as Answer],
+    ['POST', (await mappingsRoute.POST(jsonReq({ groupKey: 'g', role: 'super_admin' }))) as unknown as Answer],
+    ['DELETE', (await mappingsRoute.DELETE(urlReq('http://x/?id=1'))) as unknown as Answer],
+  ] as [string, Answer][]) {
+    assert.equal(res.status, 403, `${label} must be 403 for an admin, got ${res.status}`)
+  }
+  assert.deepEqual(storeCalls(), [], 'a forbidden request must not touch the database')
+
+  // site_admin and viewer must fare no better.
+  for (const role of ['site_admin', 'viewer']) {
+    session(role)
+    const res = (await mappingsRoute.POST(jsonReq({ groupKey: 'g', role: 'admin' }))) as unknown as Answer
+    assert.equal(res.status, 403, `${role} must be 403, got ${res.status}`)
+  }
+})
+
+test('mappings: a blank group key is 400 before any insert', async () => {
+  resetStore()
+  session('super_admin')
+  const res = (await mappingsRoute.POST(jsonReq({ groupKey: '   ', role: 'admin' }))) as unknown as Answer
+  assert.equal(res.status, 400)
+  assert.match(String(res.body.error), /object ID/i)
+  assert.deepEqual(storeCalls(), [], 'nothing may be written for an empty group key')
+})
+
+test('mappings: site_admin is refused with the reason, and NOT left to the CHECK constraint', async () => {
+  resetStore()
+  session('super_admin')
+  const res = (await mappingsRoute.POST(
+    jsonReq({ groupKey: '11111111-2222-3333-4444-555555555555', role: 'site_admin' }),
+  )) as unknown as Answer
+  assert.equal(res.status, 400, 'a 500 here means the database rejected it, not the route')
+  // ⛔ THE ASSERTION THAT MATTERS. If the route let this through, the table's
+  // CHECK would still refuse it — as a 500 carrying a Postgres error string, to
+  // an administrator who would have no idea why. Proving the store was never
+  // called is the only way to show the first line of defence exists.
+  assert.deepEqual(storeCalls(), [], 'the role must be validated before the insert')
+  assert.match(String(res.body.detail), /no `?user_sites`?|assigned sites|see nothing/i)
+})
+
+test('mappings: an unknown role is refused and lists the ones that work', async () => {
+  resetStore()
+  session('super_admin')
+  const res = (await mappingsRoute.POST(
+    jsonReq({ groupKey: 'g1', role: 'wizard' }),
+  )) as unknown as Answer
+  assert.equal(res.status, 400)
+  for (const r of ['super_admin', 'admin', 'viewer']) {
+    assert.ok(String(res.body.error).includes(r), `the message should name ${r}`)
+  }
+  assert.deepEqual(storeCalls(), [])
+})
+
+test('mappings: a duplicate is 409, distinct from a database fault', async () => {
+  resetStore()
+  ;(globalThis as Record<string, unknown>).__nvCreateDuplicate = true
+  session('super_admin')
+  const res = (await mappingsRoute.POST(
+    jsonReq({ groupKey: 'g1', role: 'admin' }),
+  )) as unknown as Answer
+  assert.equal(res.status, 409, 'a duplicate must not be reported as a 500')
+  assert.equal(res.body.duplicate, true)
+})
+
+test('mappings: a valid mapping is created and the group key is passed through untrimmed of meaning', async () => {
+  resetStore()
+  session('super_admin')
+  const res = (await mappingsRoute.POST(
+    jsonReq({ groupKey: '  ABCD-1234  ', displayName: '  Net Admins  ', role: 'admin' }),
+  )) as unknown as Answer
+  assert.equal(res.status, 201)
+  const create = storeCalls().find((c) => c[0] === 'create')
+  assert.ok(create, 'the store must be called')
+  const input = create![1] as { groupKey: string; displayName: string | null; role: string }
+  assert.equal(input.groupKey, 'ABCD-1234', 'surrounding whitespace must not become part of the key')
+  assert.equal(input.displayName, 'Net Admins')
+  assert.equal(input.role, 'admin')
+})
+
+test('mappings: DELETE requires a real id and says when the last mapping is gone', async () => {
+  resetStore()
+  session('super_admin')
+
+  for (const bad of ['', 'abc', '0', '-3', '1.5']) {
+    resetStore()
+    const res = (await mappingsRoute.DELETE(urlReq(`http://x/?id=${bad}`))) as unknown as Answer
+    assert.equal(res.status, 400, `id=${bad} must be refused, got ${res.status}`)
+    assert.deepEqual(storeCalls(), [], `id=${bad} must not reach the database`)
+  }
+
+  // ⛔ lockedOut IS NOT COSMETIC. An empty table refuses EVERY directory
+  // sign-in, and an administrator tidying a list has no reason to know that
+  // removing the final row locks the whole directory out of the product.
+  resetStore()
+  const res = (await mappingsRoute.DELETE(urlReq('http://x/?id=5'))) as unknown as Answer
+  assert.equal(res.status, 200)
+  assert.equal(res.body.lockedOut, true, 'removing the last mapping must be reported as such')
+  assert.equal(res.body.remaining, 0)
+
+  resetStore()
+  ;(globalThis as Record<string, unknown>).__nvMappings = [{ id: 9 }]
+  const res2 = (await mappingsRoute.DELETE(urlReq('http://x/?id=5'))) as unknown as Answer
+  assert.equal(res2.body.lockedOut, false, 'with mappings left, nobody is locked out')
+
+  resetStore()
+  ;(globalThis as Record<string, unknown>).__nvDeleteMissing = true
+  const res3 = (await mappingsRoute.DELETE(urlReq('http://x/?id=5'))) as unknown as Answer
+  assert.equal(res3.status, 404, 'a mapping that is already gone is a 404, not a 500')
 })

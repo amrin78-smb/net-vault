@@ -78,3 +78,26 @@ Icon  — local inline SVG set (Icon.device, Icon.site, …), 24x24 viewBox, cur
 (c) HeaderSearch  (none) — mounts GlobalSearch + binds Ctrl/Cmd+K [components/shell/HeaderSearch.tsx]
 (c) HelpMenu  version — real help menu (shortcuts dialog, security, about). Replaced a Help link that pointed at /compliance [components/shell/HelpMenu.tsx]
 nav.ts — NAV_GROUPS, canSee(), visibleGroups(), isCurrent(). Role gates live HERE now; they are carried over verbatim from the old flat list and each is commented with why.
+
+### `components/settings/DirectoryMappingsCard.tsx`
+
+`<DirectoryMappingsCard ssoConfigured={boolean} />` — the group → role table, rendered by
+`SingleSignOnPanel` as a sibling card rather than wired into the Settings page, so the two always
+appear together. The tenant card decides WHICH directory is trusted; this one decides what an
+identity from it becomes.
+
+⛔ **ITS MAIN JOB IS THE EMPTY-TABLE WARNING.** Zero mappings refuses every directory sign-in
+(`lib/directoryRoles.ts`, `OUTCOME.NO_MAPPINGS`) and that is the state a fresh install is in. Shown
+as a `warn` Callout when single sign-on is configured and as `neutral` when it is not — only in the
+first case is somebody about to authenticate successfully at Microsoft and be refused here.
+
+⛔ **IT MUST NEVER OFFER A DEFAULT MAPPING.** "Map all directory users to viewer" would grant a role
+to every member of a directory this product does not administer. The refusal is the safe state.
+
+⛔ **A FAILED READ RENDERS AN ERROR, NOT AN EMPTY LIST** — otherwise a database fault shows the
+empty-table warning and tells an administrator their mappings are gone when they are not.
+
+The group's display name is shown but labelled a label: it is never matched on and does not follow a
+rename in Entra. `site_admin` is absent from the role select by construction (it comes from
+`DIRECTORY_PROVISIONABLE_ROLES` via the API), and choosing `super_admin` raises a warning that
+anyone who can add members to that group in Entra can grant themselves full control.

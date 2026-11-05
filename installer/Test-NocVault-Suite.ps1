@@ -984,6 +984,37 @@ else {
     $uapps = Pg "netvault" "SELECT has_table_privilege('netvault','user_apps','SELECT');"
     if ($script:PgExit -eq 0 -and $uapps -eq "t") { Ok "user_apps table present (per-user app access)" } else { Bad ("user_apps table missing/unreadable (got '" + $uapps + "')") }
 
+    # Directory sign-in (Microsoft Entra ID, netvault 1.56.0+). Three objects
+    # back it: the two users columns a provisioned account needs, and the
+    # group -> role table that decides what it becomes.
+    $dcols = Pg "netvault" "SELECT count(*) FROM information_schema.columns WHERE table_name='users' AND column_name IN ('auth_provider','entra_oid');"
+    if ($script:PgExit -eq 0 -and [int]$dcols -eq 2) { Ok "users.auth_provider + users.entra_oid present (directory sign-in)" }
+    else { Bad ("directory sign-in columns missing on users (found " + $dcols + " of 2)") }
+    $dmap = Pg "netvault" "SELECT has_table_privilege('netvault','directory_role_mappings','SELECT');"
+    if ($script:PgExit -eq 0 -and $dmap -eq "t") { Ok "directory_role_mappings table present" }
+    else { Bad ("directory_role_mappings missing/unreadable (got '" + $dmap + "')") }
+
+    # ⛔ AN EMPTY MAPPING TABLE REFUSES EVERY DIRECTORY SIGN-IN, AND THAT IS THE
+    # STATE A FRESH INSTALL IS IN. It is correct (a default mapping would grant a
+    # role to a group nobody here administers) but it is also invisible: the
+    # tenant is configured, Microsoft authenticates the person, and the hub
+    # refuses them. Reported as INFO when single sign-on is off and as a WARNING
+    # when it is on, because only in the second case is somebody about to hit it.
+    $dmapN = Pg "netvault" "SELECT count(*) FROM directory_role_mappings;"
+    if ($script:PgExit -eq 0) {
+        $entraOn = $false
+        foreach ($f in @("$InstallDir\NetVault\app\.env", "$InstallDir\NetVault\app\.next\standalone\.env.local")) {
+            if (Get-EnvVal $f 'ENTRA_TENANT_ID') { $entraOn = $true }
+        }
+        if ([int]$dmapN -gt 0) {
+            Ok ("directory group mappings configured (" + $dmapN + ")")
+        } elseif ($entraOn) {
+            Wn "Single sign-on is configured but NO directory group is mapped - every Entra sign-in will be refused. Settings > Single sign-on > Directory group to role mappings."
+        } else {
+            Inf "No directory group mappings (expected: single sign-on is not configured)"
+        }
+    }
+
     # MFA (TOTP second factor, netvault 1.33.0). The hub is the suite's only
     # password-verification point, so these back the second factor for all four
     # apps. Check the columns AND the backup-code table: without the latter a

@@ -195,3 +195,99 @@ export async function loadDirectoryContext(
   ])
   return { byOid, byEmail }
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// Mapping administration (Settings → Single sign-on).
+//
+// Separate from loadDirectoryMappings above ON PURPOSE. That function is on the
+// SIGN-IN path: its SELECT list, its throw-don't-return-[] contract and its
+// tests are load-bearing, and the panel needs a column it does not select (the
+// row id, to delete by). Widening it to serve the panel would put the panel's
+// requirements on the authentication path. These three functions are additive
+// and nothing in the sign-in flow calls them.
+//
+// They keep the same rule as the rest of this file: real data or a throw.
+// ────────────────────────────────────────────────────────────────────────────
+
+export type DirectoryMappingRow = {
+  id: number
+  provider: string
+  group_key: string
+  display_name: string | null
+  role: string
+  created_at: string
+}
+
+/** Every mapping, newest first, with the id the panel needs to delete one. */
+export async function listDirectoryMappings(provider = 'entra'): Promise<DirectoryMappingRow[]> {
+  const res = await query(
+    `SELECT id, provider, group_key, display_name, role, created_at
+       FROM directory_role_mappings
+      WHERE provider = $1
+      ORDER BY created_at DESC, id DESC`,
+    [provider],
+  )
+  return (res.rows || []) as DirectoryMappingRow[]
+}
+
+/**
+ * Add a mapping. Returns the new row, or `null` when one already exists for
+ * that group.
+ *
+ * ⛔ THE CONFLICT TARGET IS THE INDEX EXPRESSION, WRITTEN IDENTICALLY.
+ * `uq_directory_mapping` is `(provider, lower(group_key))`. Naming the bare
+ * columns here — `ON CONFLICT (provider, group_key)` — raises 42P10 at runtime,
+ * "there is no unique or exclusion constraint matching the ON CONFLICT
+ * specification", and it does so only when a real duplicate is attempted, so it
+ * passes every test that inserts distinct rows. That exact mistake shipped once
+ * on the directory sign-in path (createDirectoryUser) and was caught only by an
+ * integration test against a real database. Lower-casing is how the panel stays
+ * safe for GUIDs an administrator pasted in a different case from the token's.
+ *
+ * ⛔ `null` AND A THROW MEAN DIFFERENT THINGS. `null` is "that group is already
+ * mapped" — a 409 the panel explains. A throw is a database fault — a 500. The
+ * caller must not collapse them, or a connection blip reads as a duplicate and
+ * the administrator is told their configuration is wrong when it is not.
+ */
+export async function createDirectoryMapping(input: {
+  provider?: string
+  groupKey: string
+  displayName?: string | null
+  role: Role
+}): Promise<DirectoryMappingRow | null> {
+  const provider = (input.provider || 'entra').trim()
+  const groupKey = input.groupKey.trim()
+  const displayName = (input.displayName || '').trim() || null
+
+  const res = await query(
+    `INSERT INTO directory_role_mappings (provider, group_key, display_name, role)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (provider, lower(group_key)) DO NOTHING
+     RETURNING id, provider, group_key, display_name, role, created_at`,
+    [provider, groupKey, displayName, input.role],
+  )
+  const row = (res.rows || [])[0]
+  return row ? (row as DirectoryMappingRow) : null
+}
+
+/**
+ * Remove a mapping by id. Returns the row that was removed, or `null` when
+ * there was no such row.
+ *
+ * RETURNING is not decoration: the caller writes the removed group key and role
+ * into the audit trail, and after the DELETE there is nowhere else to read them
+ * from. A separate SELECT-then-DELETE would be a race.
+ */
+export async function deleteDirectoryMapping(
+  id: number,
+  provider = 'entra',
+): Promise<DirectoryMappingRow | null> {
+  const res = await query(
+    `DELETE FROM directory_role_mappings
+      WHERE id = $1 AND provider = $2
+     RETURNING id, provider, group_key, display_name, role, created_at`,
+    [id, provider],
+  )
+  const row = (res.rows || [])[0]
+  return row ? (row as DirectoryMappingRow) : null
+}

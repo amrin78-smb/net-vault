@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect, useRef, Suspense } from 'react'
-import { signIn } from 'next-auth/react'
+import { signIn, getProviders } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 const RED = '#C8102E'
@@ -368,6 +368,47 @@ function LoginForm() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [mfaStage, setMfaStage] = useState(false)
+
+  // ── Directory sign-in entry point ─────────────────────────────────────────
+  //
+  // ⛔ THE BUTTON IS DRIVEN BY getProviders(), NOT BY A SETTING THIS PAGE READS.
+  // `entraProviders()` in the NextAuth route registers the provider only when
+  // ALL THREE of ENTRA_TENANT_ID / ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET are
+  // present, so the provider list IS the answer to "can anyone actually sign in
+  // this way" — including the half-configured case, where a button driven by
+  // "is a tenant id saved?" would be shown and would fail at Microsoft with an
+  // error this page could not explain.
+  //
+  // ⛔ AND IT MUST NOT COME FROM AN ENDPOINT OF OURS. This page is reachable
+  // without authenticating. /api/auth/providers is NextAuth's own public
+  // endpoint and returns provider ids only; a new route of ours that answered
+  // "is Entra configured, and for which tenant" would be a new unauthenticated
+  // disclosure, and `isEntraConfigured` lives behind a super_admin gate for
+  // exactly that reason.
+  //
+  // `null` means "not asked yet" and renders nothing: starting from `false`
+  // would show the credentials form alone for a moment and then push it down as
+  // the button appeared, under the hands of someone already typing.
+  const [entraAvailable, setEntraAvailable] = useState<boolean | null>(null)
+  const [entraStarting, setEntraStarting] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const providers = await getProviders()
+        if (!cancelled) setEntraAvailable(Boolean(providers && providers['entra']))
+      } catch {
+        // A failed probe hides the button rather than showing one that cannot
+        // work. The credentials form is unaffected, so nobody is locked out by
+        // this going wrong — which is the right way round.
+        if (!cancelled) setEntraAvailable(false)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const [showPw, setShowPw] = useState(false)
   const [health, setHealth] = useState<'unknown' | 'ok' | 'down'>('unknown')
   const [version, setVersion] = useState<string | null>(null)
@@ -584,6 +625,67 @@ function LoginForm() {
                 </div>
               )}
             </div>
+
+            {/* ⛔ OUTSIDE THE <form>, AND NOT type="submit". Inside it, a click
+                would run handleSubmit and post empty credentials before the
+                redirect; and a browser that autofills would submit the wrong
+                flow entirely. It is also hidden during mfaStage: a person
+                part-way through a local two-factor challenge who clicks this
+                abandons that challenge for a different identity, and the code
+                they were sent becomes a mystery.
+
+                It sits ABOVE the credentials form because once a directory is
+                configured it is the path nearly everyone takes — the local
+                accounts below it are for break-glass and service use. */}
+            {entraAvailable && !mfaStage && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEntraStarting(true)
+                    // No await and no catch: signIn() navigates away. A .catch
+                    // that re-enabled the button would fight the redirect.
+                    void signIn('entra', { callbackUrl })
+                  }}
+                  disabled={entraStarting || loading}
+                  aria-busy={entraStarting}
+                  style={{
+                    width: '100%',
+                    height: 48,
+                    background: 'rgba(255,255,255,0.06)',
+                    color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    borderRadius: 'var(--radius)',
+                    fontSize: 15,
+                    fontWeight: 600,
+                    cursor: entraStarting || loading ? 'default' : 'pointer',
+                    opacity: entraStarting || loading ? 0.6 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 10,
+                    marginBottom: 18,
+                    transition: 'background 0.15s, opacity 0.15s',
+                  }}
+                  onMouseEnter={e => { if (!entraStarting && !loading) e.currentTarget.style.background = 'rgba(255,255,255,0.12)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                >
+                  {entraStarting ? 'Redirecting to Microsoft\u2026' : 'Sign in with Microsoft'}
+                </button>
+
+                <div
+                  aria-hidden="true"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    margin: '0 0 18px', color: 'rgba(255,255,255,0.35)', fontSize: 12,
+                  }}
+                >
+                  <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.14)' }} />
+                  or sign in with an account held here
+                  <span style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.14)' }} />
+                </div>
+              </>
+            )}
 
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: 18 }}>

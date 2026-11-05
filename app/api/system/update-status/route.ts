@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.4': [
+    'Microsoft Entra ID sign-in can now actually be used. The login page has a \u201cSign in with Microsoft\u201d button, which appears only once all three Entra values are saved \u2014 so a half-finished configuration does not offer a button that fails at Microsoft.',
+    'Settings \u2192 Single sign-on has a new section for mapping directory groups to roles. Until a group is mapped, every Entra sign-in is refused \u2014 which is deliberate, because a default mapping would grant a role to everyone in a directory we do not administer \u2014 and the page now says so plainly instead of leaving people to authenticate successfully and be turned away.',
+    'Only a super admin can change those mappings. Anyone who can map a group they control to the super admin role can grant themselves full control, so it is held to the same level as choosing the directory itself.',
+    'Choosing the super admin role warns that anyone who can add members to that group in Entra gains full control. Removing the last mapping warns that no directory account can sign in until another is added; local accounts are never affected.',
+    'The post-install test now reports whether any directory group is mapped, so \u201csingle sign-on is configured but nobody can sign in\u201d cannot pass unnoticed.',
+  ],
   '1.57.3': [
     'Fixed: re-running the installer on a machine where the suite was already installed and running used to destroy that installation. Each app folder was deleted before its services were stopped, which emptied the folder of a running app and then cloned a fresh copy over the top \u2014 with no error and no way back. Measured on a test machine: all files deleted, the clone succeeded anyway.',
     'The installer now stops the whole suite before it touches anything, and moves the old folder aside instead of deleting it \u2014 so if anything goes wrong later in the run, the previous installation is still on disk and can be put back. The old copy is removed only once the new services are up.',
