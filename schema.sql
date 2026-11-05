@@ -741,8 +741,20 @@ $$;
 -- adding it here is a deliberate decision with this comment in front of it.
 -- Same reasoning as user_mfa_backup_codes — a new column is never covered by
 -- precedent, however unalarming it looks.
+-- ⛔ auth_provider IS APPENDED AT THE END, NOT INSERTED BEFORE created_at,
+-- AND THAT IS A HARD POSTGRES CONSTRAINT RATHER THAN A STYLE CHOICE.
+-- CREATE OR REPLACE VIEW may only ADD columns to the END of the list; putting
+-- one in the middle is read as RENAMING the column that was in that position:
+--   ERROR: cannot change name of view column "created_at" to "auth_provider"
+-- Measured in production on 2026-11-05 — the apply aborted there under
+-- ON_ERROR_STOP and every statement after it (app_settings_public and the three
+-- privilege DO blocks) was skipped for that run. Nothing regressed, because
+-- those are idempotent and had already been applied, but the migration failed
+-- on every deploy until this ordering was corrected.
+-- The column ORDER here is therefore append-only for ever. A future column goes
+-- after this one.
 CREATE OR REPLACE VIEW users_public AS
-SELECT id, name, email, role, auth_provider, created_at FROM users;
+SELECT id, name, email, role, created_at, auth_provider FROM users;
 
 CREATE OR REPLACE VIEW app_settings_public AS
 SELECT key, value FROM app_settings
