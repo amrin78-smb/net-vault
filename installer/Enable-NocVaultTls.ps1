@@ -138,26 +138,52 @@ function Resolve-NocAppDir([string]$service, [string]$appName, [string]$nssm) {
         } catch { $fromService = '' }
     }
 
+    # ⛔ THE OUTERMOST CHECKOUT, NOT THE FIRST ONE FOUND. Next's `output:
+    # 'standalone'` build produces a near-complete COPY of the repository, and
+    # on production that copy contains .git, package.json AND
+    # installer\terminator\start.mjs. Measured:
+    #
+    #   C:\Apps\NetVault\app\.next\standalone   .git=True  pkg=True  start.mjs=True
+    #   C:\Apps\NetVault\app                     .git=True  pkg=True  start.mjs=True
+    #
+    # So a walk that stops at the first marker stops inside the build output —
+    # and every check then passes against a copy. The terminator would even have
+    # STARTED from there; what would not have worked is the env files, because
+    # the console's real .env is at the repo root and NEXTAUTH_URL would have
+    # been written into a directory the app does not read. Walking to the
+    # OUTERMOST match lands on the root in both shapes.
+    #
+    # ⛔ AND A BUILD-OUTPUT PATH IS REJECTED OUTRIGHT. `\.next\` can never be an
+    # install root whatever markers it happens to contain; saying so structurally
+    # is worth more than relying on the walk order alone.
+    function Test-NocBuildOutput([string]$d) {
+        return ($d -and ($d.ToLower() -replace '/', '\') -match '\\\.next\\')
+    }
     if ($fromService -and (Test-Path -LiteralPath $fromService)) {
-        # Walk up at most four levels: .next\standalone is two, frontend is one.
+        $best = ''
         $d = $fromService
-        for ($i = 0; $i -lt 5 -and $d; $i++) {
-            if (Test-Path -LiteralPath (Join-Path $d '.git')) { return $d }
+        $stopAt = $InstallDir.TrimEnd('\').ToLower()
+        for ($i = 0; $i -lt 6 -and $d; $i++) {
+            if ((Test-Path -LiteralPath (Join-Path $d '.git')) -and -not (Test-NocBuildOutput $d)) { $best = $d }
             $parent = Split-Path -Parent $d
             if (-not $parent -or $parent -eq $d) { break }
+            # Never walk out of the installation root: a .git above it belongs
+            # to somebody else.
+            if ($parent.TrimEnd('\').ToLower() -eq $stopAt) { break }
             $d = $parent
         }
+        if ($best) { return $best }
     }
 
     # Fall back to probing both known layouts, newest-convention first, and
     # still require the marker rather than accepting any directory that exists.
     foreach ($cand in @((Join-Path (Join-Path $InstallDir $appName) 'app'),
                         (Join-Path $InstallDir $appName))) {
-        if (Test-Path -LiteralPath (Join-Path $cand '.git')) { return $cand }
+        if ((Test-Path -LiteralPath (Join-Path $cand '.git')) -and -not (Test-NocBuildOutput $cand)) { return $cand }
     }
     foreach ($cand in @((Join-Path (Join-Path $InstallDir $appName) 'app'),
                         (Join-Path $InstallDir $appName))) {
-        if (Test-Path -LiteralPath (Join-Path $cand 'package.json')) { return $cand }
+        if ((Test-Path -LiteralPath (Join-Path $cand 'package.json')) -and -not (Test-NocBuildOutput $cand)) { return $cand }
     }
     return ''
 }
@@ -205,6 +231,12 @@ if (-not $NVAppDir) { throw "Could not locate NetVault's application directory u
 $terminatorEntry = Join-Path $NVAppDir 'installer\terminator\start.mjs'
 if (-not (Test-Path -LiteralPath $terminatorEntry)) {
     throw "Resolved NetVault to '$NVAppDir', but $terminatorEntry is not there - so that is not the repository root and the terminator could not start. Nothing has been changed."
+}
+# ⛔ AND IT MUST NOT BE THE BUILD OUTPUT. start.mjs exists in BOTH the repo root
+# and .next\standalone (Next copies it), so its presence alone proves nothing —
+# which is exactly how the first attempt at this guard passed against a copy.
+if (($NVAppDir.ToLower() -replace '/','\\') -match '\\\.next\\') {
+    throw "Resolved NetVault to '$NVAppDir', which is inside a .next build output rather than the installation root. Nothing has been changed."
 }
 Write-OK "netvault  : $NVAppDir"
 if ($InstallLogVault)  { if ($LVAppDir)  { Write-OK "logvault  : $LVAppDir" }  else { throw "LogVault-App exists but its directory could not be located." } }

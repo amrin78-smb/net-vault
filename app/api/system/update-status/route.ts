@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.58.3': [
+    'Second fix from the same dry run: the build output of the hub is a near-complete copy of the application folder \u2014 it contains the same marker files, including the HTTPS front door\u2019s own program. So the previous fix still stopped inside it, and every check passed against the copy. The script now walks out to the outermost checkout and refuses any path inside a build output outright. Verified on the production server: all four applications now resolve to the right folder.',
+  ],
   '1.58.2': [
     'Fixed by a dry run on the production server before any change was made: the new HTTPS script asked each Windows service which folder it runs from, which turns out to be the build output folder rather than the application folder. It would have pointed the HTTPS front door at a file that does not exist. It now walks up to the actual checkout, and refuses outright if the front door\u2019s own program is not found there \u2014 instead of discovering that once all four consoles had already been switched over.',
   ],
