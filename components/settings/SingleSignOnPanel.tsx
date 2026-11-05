@@ -206,13 +206,40 @@ export default function SingleSignOnPanel() {
     void send({ tenantId: '', clientId: '', clientSecret: '' })
   }
 
-  if (loading) return <PanelCard title="Single sign-on"><PanelLoading /></PanelCard>
+  // ⛔ THE MAPPINGS CARD RENDERS ON EVERY BRANCH, INCLUDING THE FAILURE ONE.
+  // It was originally only in the success return, and a live check caught what
+  // that means: /api/system/entra reads ENV FILES and 500s when it cannot (a
+  // missing .env, a permissions problem, a half-finished deploy), and the
+  // mappings are in the DATABASE and entirely unaffected. Hiding them behind an
+  // unrelated failure takes the group -> role table away from an administrator
+  // at the moment they are most likely to be trying to fix a sign-in problem.
+  //
+  // `null` is passed where this component does not KNOW whether single sign-on
+  // is configured — the card then states the consequence of an empty list
+  // without asserting anything about the tenant it could not read.
+  const mappings = (ssoConfigured: boolean | null) => (
+    <div style={{ marginTop: 20 }}>
+      <DirectoryMappingsCard ssoConfigured={ssoConfigured} />
+    </div>
+  )
+
+  if (loading) {
+    return (
+      <div>
+        <PanelCard title="Single sign-on"><PanelLoading /></PanelCard>
+        {mappings(null)}
+      </div>
+    )
+  }
 
   if (loadError || !state) {
     return (
-      <PanelCard title="Single sign-on">
-        <Callout tone="danger" title="Single sign-on settings could not be read">{loadError}</Callout>
-      </PanelCard>
+      <div>
+        <PanelCard title="Single sign-on">
+          <Callout tone="danger" title="Single sign-on settings could not be read">{loadError}</Callout>
+        </PanelCard>
+        {mappings(null)}
+      </div>
     )
   }
 
@@ -476,9 +503,7 @@ export default function SingleSignOnPanel() {
           the two always appear together — a tenant with no mappings is a
           configuration that looks finished and refuses everyone, and the
           warning that says so is in that card. */}
-      <div style={{ marginTop: 20 }}>
-        <DirectoryMappingsCard ssoConfigured={Boolean(state.configured)} />
-      </div>
+      {mappings(Boolean(state.configured))}
     </div>
   )
 }

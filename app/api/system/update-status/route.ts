@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.5': [
+    'Fixed before release, found by opening the page rather than by a test: the new directory group mappings disappeared whenever the single sign-on settings above them could not be read. Those settings come from files on the server and the mappings come from the database, so an unrelated fault was hiding the group list at exactly the moment an administrator would be trying to fix a sign-in problem. The mappings now always show, and say plainly that the other fault does not affect them.',
+  ],
   '1.57.4': [
     'Microsoft Entra ID sign-in can now actually be used. The login page has a \u201cSign in with Microsoft\u201d button, which appears only once all three Entra values are saved \u2014 so a half-finished configuration does not offer a button that fails at Microsoft.',
     'Settings \u2192 Single sign-on has a new section for mapping directory groups to roles. Until a group is mapped, every Entra sign-in is refused \u2014 which is deliberate, because a default mapping would grant a role to everyone in a directory we do not administer \u2014 and the page now says so plainly instead of leaving people to authenticate successfully and be turned away.',

@@ -36,7 +36,11 @@ const ROLE_HELP: Record<string, string> = {
   viewer: 'Read-only.',
 }
 
-export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolean }) {
+// `ssoConfigured` is TRI-STATE. `null` means the caller could not read the Entra
+// settings (that route reads env files and can 500 while the database is
+// perfectly healthy), so this card states the consequence of an empty list
+// without asserting whether single sign-on is on.
+export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolean | null }) {
   const [loading, setLoading] = useState(true)
   const [mappings, setMappings] = useState<Mapping[] | null>(null)
   const [roles, setRoles] = useState<string[]>([])
@@ -169,17 +173,24 @@ export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolea
       )}
 
       {/* ⛔ THE ONE WARNING THIS CARD EXISTS FOR. */}
-      {mappings && mappings.length === 0 && ssoConfigured && (
+      {mappings && mappings.length === 0 && ssoConfigured === true && (
         <Callout tone="warn" title="Single sign-on is on, but no group is mapped">
           Every directory sign-in will be refused until a group is mapped below. People will reach
           Microsoft, authenticate successfully, and come back to the login page being told to ask an
           administrator — this is that configuration. Local accounts are unaffected.
         </Callout>
       )}
-      {mappings && mappings.length === 0 && !ssoConfigured && (
+      {mappings && mappings.length === 0 && ssoConfigured === false && (
         <Callout tone="neutral" title="No groups mapped">
           Nothing to do until single sign-on is configured above. Mappings set here take effect as
           soon as it is.
+        </Callout>
+      )}
+      {mappings && mappings.length === 0 && ssoConfigured === null && (
+        <Callout tone="warn" title="No groups mapped">
+          While this list is empty every directory sign-in is refused. Whether single sign-on is
+          currently configured could not be read — that is a separate setting and a separate fault,
+          and it does not affect the mappings below. Local accounts are unaffected either way.
         </Callout>
       )}
 

@@ -379,3 +379,13 @@ different identity, and the code they were sent becomes a mystery.
 
 ⛔ **`entraAvailable` STARTS `null`, NOT `false`.** `false` renders the credentials form alone and
 then pushes it down as the button appears, under the hands of someone already typing.
+
+⛔ **A PANEL'S EARLY RETURN CAN HIDE AN UNRELATED, HEALTHY FEATURE (1.57.5).** `DirectoryMappingsCard`
+was rendered only from `SingleSignOnPanel`'s success branch. `/api/system/entra` reads ENV FILES and
+500s when it cannot (a missing `.env`, a permissions problem, a half-finished deploy) — and the
+mappings are in the DATABASE, entirely unaffected. So an env fault took the group → role table away
+from the administrator at the exact moment they were most likely trying to fix a sign-in problem.
+Found by opening the page, not by any test: every unit test passed, and the panel's own error branch
+looked correct in isolation. The card now renders on all three branches (loading, error, success),
+and `ssoConfigured` is TRI-STATE so that `null` ("could not read the other setting") states the
+consequence of an empty list without asserting anything about the tenant.
