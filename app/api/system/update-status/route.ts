@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.1': [
+    'Fixed, found by installing the suite for real on a Windows test machine: the installer\u2019s own check of whether HTTPS was working could never succeed, so every install would have switched to HTTPS, decided it had failed, and switched back. The check used a PowerShell command that cannot talk to the new HTTPS front door; three other ways of asking the same question all worked. HTTPS could not have been turned on without this.',
+    'The same faulty check was used in two more places: the NetVault updater would have undone every update on a site using HTTPS, and the post-install test would have reported a perfectly healthy site as down.',
+    'The installer no longer insists on having the PostgreSQL, Node and NSSM installers on hand when those are already installed on the machine \u2014 it checks for the software rather than for the setup files.',
+  ],
   '1.57.0': [
     'A fresh install now creates its own HTTPS certificate instead of leaving the consoles on plain HTTP until someone supplies one. Browsers will warn that it is self-issued until you upload your own certificate in Settings, which the installer will never overwrite once it is there.',
     'Remote agents can now reach the hub over HTTPS, including with a self-issued certificate, and can be given the certificate\u2019s fingerprint so they refuse to talk to anything else. Without a fingerprint the connection is encrypted but unverified, and the agent says so in its log rather than failing \u2014 so turning HTTPS on never strands an agent that is already out in the field.',

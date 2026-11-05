@@ -96,9 +96,32 @@ function VerGE($got, $min) { try { return ([version]$got -ge [version]$min) } ca
 function Http($url, [int]$timeoutSec = 15, [switch]$NoRedirect) {
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
     try {
-        $p = @{ Uri = $url; UseBasicParsing = $true; TimeoutSec = $timeoutSec; ErrorAction = "Stop" }
-        if ($NoRedirect) { $p["MaximumRedirection"] = 0 }
-        $r = Invoke-WebRequest @p
+        # ⛔ HttpWebRequest, NOT Invoke-WebRequest. Measured on Windows 11 /
+        # PowerShell 5.1: Invoke-WebRequest cannot complete a request to a node
+        # https server presenting a self-signed certificate, while
+        # HttpWebRequest, curl.exe and a raw SslStream all return 200 from the
+        # same server. The handshake itself succeeds, so it is the client.
+        # Left unfixed, every HTTPS check in this script would report a healthy
+        # TLS suite as DOWN - a test that fails on working software is worse
+        # than no test, because the next person deletes it.
+        $req = [System.Net.HttpWebRequest]::Create($url)
+        $req.Timeout          = $timeoutSec * 1000
+        $req.ReadWriteTimeout = $timeoutSec * 1000
+        $req.Method           = 'GET'
+        $req.ServerCertificateValidationCallback = { $true }
+        if ($NoRedirect) { $req.AllowAutoRedirect = $false }
+        $raw = $req.GetResponse()
+        $body = ''
+        try {
+            $sr = New-Object System.IO.StreamReader($raw.GetResponseStream())
+            $body = $sr.ReadToEnd(); $sr.Close()
+        } catch {}
+        $r = [pscustomobject]@{
+            StatusCode = [int]$raw.StatusCode
+            Content    = $body
+            Headers    = @{ Location = $raw.Headers['Location'] }
+        }
+        $raw.Close()
         $sw.Stop()
         return [pscustomobject]@{ Code = [int]$r.StatusCode; Content = $r.Content; Ms = $sw.ElapsedMilliseconds; Loc = $r.Headers.Location; Err = $null }
     } catch {

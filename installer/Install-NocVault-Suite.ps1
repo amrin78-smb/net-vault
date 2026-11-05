@@ -489,11 +489,57 @@ $PgSvcName = (Get-Service | Where-Object {
 if (-not $PgSvcName) { $PgSvcName = "postgresql-x64-16" }
 
 # ── Validate prerequisites ────────────────────────────────────────
+#
+# ⛔ A DEPENDENCY'S INSTALLER IS ONLY REQUIRED WHEN THE DEPENDENCY ITSELF IS
+# ABSENT, AND THIS BLOCK USED TO DEMAND ALL THREE UNCONDITIONALLY. That
+# contradicted the body of this very script, which already handles each one
+# being present:
+#
+#     "Node.js $nodeVer already installed (>= v$NodeRequired required)"
+#     "PostgreSQL already installed"
+#     "Git already installed: $gitVer"
+#
+# So the script was willing to SKIP installing a dependency but refused to START
+# without that dependency's installer. On a machine that already satisfies every
+# requirement — an existing PostgreSQL 16 the customer wants reused is the
+# common case, not a corner — the install exited 1 having done nothing, naming
+# files it was never going to run.
+#
+# ⛔ THE CHECKS BELOW TEST THE CAPABILITY FIRST AND THE FILE ONLY AS A
+# FALLBACK, so a genuinely bare machine still gets the same refusal it always
+# did. Each probe is wrapped where it invokes a tool (`& node`), because on a
+# machine where the tool is truly absent that call raises a TERMINATING
+# command-resolution error a bare 2>$null cannot catch — the trap CLAUDE.md
+# records as having crashed a fresh install on a clean box.
 Write-Step "Validating installer package"
 $missing = @()
-if (-not $NodeMsi)               { $missing += "dependencies\node-v22.<x>.<y>-x64.msi  (ANY Node 22 LTS at or above v$NodeRequired - needed by the TLS terminator, and Node 20 is end-of-life)" }
-if (-not (Test-Path $NssmZip))   { $missing += "dependencies\nssm-2.24.zip" }
-if (-not $PgInstaller)           { $missing += "dependencies\postgresql-16*windows-x64.exe" }
+
+$nodeOk = $false
+try {
+    $nv = (& node --version 2>$null)
+    if ($nv -and $nv -match 'v([\d\.]+)') { $nodeOk = ([version]$Matches[1] -ge $NodeRequired) }
+} catch { $nodeOk = $false }
+if (-not $nodeOk -and -not $NodeMsi) {
+    $missing += "dependencies\node-v22.<x>.<y>-x64.msi  (ANY Node 22 LTS at or above v$NodeRequired - needed by the TLS terminator, and Node 20 is end-of-life). Node is not installed, or is older than v$NodeRequired."
+} elseif ($nodeOk) {
+    Write-OK "Node already satisfies v$NodeRequired - its installer is not required"
+}
+
+$nssmOk = $false
+try { $nssmOk = [bool](Get-Command nssm.exe -ErrorAction SilentlyContinue) } catch { $nssmOk = $false }
+if (-not $nssmOk -and (Test-Path 'C:\Windows\System32\nssm.exe')) { $nssmOk = $true }
+if (-not $nssmOk -and -not (Test-Path $NssmZip)) {
+    $missing += "dependencies\nssm-2.24.zip  (nssm.exe was not found on this machine)"
+} elseif ($nssmOk) {
+    Write-OK "nssm already present - its archive is not required"
+}
+
+$pgOk = [bool]$PgSvcName -and [bool](Get-Service -Name $PgSvcName -ErrorAction SilentlyContinue)
+if (-not $pgOk -and -not $PgInstaller) {
+    $missing += "dependencies\postgresql-16*windows-x64.exe  (no PostgreSQL service was found on this machine)"
+} elseif ($pgOk) {
+    Write-OK "PostgreSQL service '$PgSvcName' already present - its installer is not required"
+}
 if ($missing.Count -gt 0) {
     Write-Host "`n  Missing required files:" -ForegroundColor Red
     $missing | ForEach-Object { Write-Host "    - $_" -ForegroundColor Red }
@@ -872,8 +918,32 @@ if ($PgPreInstalled) {
 # STEP 6 — NSSM
 # ================================================================
 Write-Step "Installing NSSM"
-Expand-Archive -Path $NssmZip -DestinationPath $NssmDir -Force
-Write-OK "NSSM ready"
+# ⛔ USE AN EXISTING nssm.exe RATHER THAN DEMANDING THE ARCHIVE. This step
+# used to call Expand-Archive unconditionally, so a machine that already had
+# nssm still needed dependencies\nssm-2.24.zip on disk — the same
+# capability-vs-installer confusion the preflight had, and the preflight's old
+# strictness is what hid it: it refused to start without the zip, so the
+# unconditional expand could never be reached without one.
+#
+# Node, PostgreSQL and Git all have an "already installed" branch here. nssm did
+# not. It does now, and $NssmExe is repointed at whatever we actually found, so
+# every later `& $NssmExe` call works regardless of which path provided it.
+if (Test-Path $NssmExe) {
+    Write-OK "NSSM already extracted at $NssmExe"
+} elseif (Test-Path $NssmZip) {
+    Expand-Archive -Path $NssmZip -DestinationPath $NssmDir -Force
+    Write-OK "NSSM extracted from the bundled archive"
+} else {
+    $existing = $null
+    try { $existing = (Get-Command nssm.exe -ErrorAction SilentlyContinue).Source } catch { $existing = $null }
+    if (-not $existing -and (Test-Path 'C:\Windows\System32\nssm.exe')) { $existing = 'C:\Windows\System32\nssm.exe' }
+    if ($existing) {
+        $NssmExe = $existing
+        Write-OK "Using the nssm already on this machine: $NssmExe"
+    } else {
+        throw "nssm.exe was not found and dependencies\nssm-2.24.zip is missing - cannot register services."
+    }
+}
 
 # ================================================================
 # STEP 6.5 — Agent WebSocket TLS certificates (wss://)
@@ -1889,8 +1959,40 @@ if (-not $TlsGateOk) {
             [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
             for ($i = 0; $i -lt $timeoutSec; $i++) {
                 try {
-                    $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                    if ($r.StatusCode -eq 200) { $ok = $true; break }
+                    # ⛔ HttpWebRequest, NOT Invoke-WebRequest. MEASURED on Windows 11
+                    # / PowerShell 5.1 against this installer's own self-signed
+                    # certificate: four clients, same server, same cert, same
+                    # moment --
+                    #     Invoke-WebRequest      FAILED "The underlying connection
+                    #                            was closed: An unexpected error
+                    #                            occurred on a send."
+                    #     HttpWebRequest         HTTP 200
+                    #     curl.exe               200
+                    #     TcpClient + SslStream  HTTP/1.1 200 OK
+                    # The TLS handshake itself SUCCEEDS in every case (the server
+                    # logged "HANDSHAKE OK: TLSv1.2 ECDHE-RSA-AES128-GCM-SHA256"
+                    # for the failing client too), so this is not the certificate,
+                    # not the cipher suite and not the terminator -- it is
+                    # Invoke-WebRequest alone.
+                    #
+                    # ⛔ AND IT MADE THE WHOLE FEATURE UNREACHABLE. Gate 3 is the
+                    # proof that the terminator works; with this probe it could
+                    # never return 200, so every install moved the consoles to
+                    # loopback, failed the gate, and reverted. The cutover could
+                    # not have engaged on ANY Windows box. Found only by running
+                    # the install for real -- a parse check cannot see it.
+                    $req = [System.Net.HttpWebRequest]::Create($url)
+                    $req.Timeout          = 5000
+                    $req.ReadWriteTimeout = 5000
+                    $req.Method           = 'GET'
+                    # Per-request as well as the global above: the global callback
+                    # is what Invoke-WebRequest was also relying on, so do not
+                    # depend on it alone.
+                    $req.ServerCertificateValidationCallback = { $true }
+                    $resp = $req.GetResponse()
+                    $code = [int]$resp.StatusCode
+                    $resp.Close()
+                    if ($code -eq 200) { $ok = $true; break }
                 } catch {}
                 Start-Sleep -Seconds 1
             }

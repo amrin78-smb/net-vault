@@ -510,7 +510,31 @@ function Wait-Healthy([int]$TimeoutSec = 60, [string]$ExpectedVersion = $null) {
     for ($i = 0; $i -lt $TimeoutSec; $i++) {
         try {
             # 127.0.0.1, not localhost - see the comment on the original health poll below.
-            $resp = Invoke-WebRequest -Uri $probeUrl -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+            #
+            # ⛔ HttpWebRequest, NOT Invoke-WebRequest, AND THIS ONE DECIDES
+            # WHETHER TO ROLL BACK. Measured on Windows 11 / PowerShell 5.1:
+            # Invoke-WebRequest cannot complete a request to a node https server
+            # presenting a self-signed certificate ("The underlying connection
+            # was closed: An unexpected error occurred on a send") while
+            # HttpWebRequest, curl.exe and a raw SslStream all return 200 from
+            # the same server in the same second. The TLS handshake SUCCEEDS in
+            # every case, so it is the client, not the certificate.
+            #
+            # Left as it was, a TLS-fronted suite would have failed this probe on
+            # EVERY deploy and auto-rolled-back a perfectly good update. Same
+            # defect as the installer's gate-3 probe; fixed in the same change
+            # rather than one site at a time.
+            $req = [System.Net.HttpWebRequest]::Create($probeUrl)
+            $req.Timeout          = 3000
+            $req.ReadWriteTimeout = 3000
+            $req.Method           = 'GET'
+            $req.ServerCertificateValidationCallback = { $true }
+            $raw  = $req.GetResponse()
+            $code = [int]$raw.StatusCode
+            $sr   = New-Object System.IO.StreamReader($raw.GetResponseStream())
+            $respBody = $sr.ReadToEnd()
+            $sr.Close(); $raw.Close()
+            $resp = [pscustomobject]@{ StatusCode = $code; Content = $respBody }
             if ($resp.StatusCode -eq 200) {
                 if ($ExpectedVersion) {
                     # A 200/status:ok alone is not proof the CORRECT build is
