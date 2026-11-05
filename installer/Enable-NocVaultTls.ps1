@@ -400,6 +400,43 @@ if ($Disable) {
     }
     Write-OK "Suite probes pointed back at the public ports"
 
+    # ⛔ AND THE SCHEDULED TASKS, WHICH ARE THE MIRROR OF THE CUTOVER'S OWN
+    # RE-POINT. The cutover moves NetVault's three maintenance tasks onto the
+    # hub's loopback port; turning HTTPS off moves the hub back to 3000 and
+    # leaves those tasks posting to a port nothing listens on any more. They
+    # fail SILENTLY - curl exits non-zero into a scheduled task nobody reads -
+    # so the health trend simply stops gaining points and the EOL data quietly
+    # goes stale. Found on the staging lab by checking the tasks after a
+    # -Disable, not by anything failing.
+    if ($CronSecret) {
+        $pubPort = 3000
+        $taskDefs = @(
+            @{ Name='NetVault-HealthSnapshot'; Path='/api/system/health-snapshot'; Trigger=(New-ScheduledTaskTrigger -Daily -At '00:00');                              When='daily 00:00' },
+            @{ Name='NetVault-EnrichEol';      Path='/api/system/enrich-eol';      Trigger=(New-ScheduledTaskTrigger -Daily -At '01:00');                              When='daily 01:00' },
+            @{ Name='NetVault-SyncEol';        Path='/api/system/sync-eol';        Trigger=(New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At '00:15');          When='weekly Sun 00:15' }
+        )
+        $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+        $taskBad = @()
+        foreach ($td in $taskDefs) {
+            if (-not (Get-ScheduledTask -TaskName $td.Name -ErrorAction SilentlyContinue)) { continue }
+            try {
+                $act = New-ScheduledTaskAction -Execute 'curl.exe' -Argument ("-s -X POST http://127.0.0.1:$pubPort$($td.Path) -H `"Authorization: Bearer $CronSecret`"")
+                Register-ScheduledTask -TaskName $td.Name -Action $act -Trigger $td.Trigger -Principal $principal -Force | Out-Null
+            } catch { $taskBad += $td.Name }
+        }
+        # Read back rather than assume - the same lesson as the cutover's side.
+        foreach ($td in $taskDefs) {
+            $t = Get-ScheduledTask -TaskName $td.Name -ErrorAction SilentlyContinue
+            if (-not $t) { continue }
+            $arg = ($t.Actions | ForEach-Object { $_.Arguments }) -join ' '
+            if ($arg -notmatch "127\.0\.0\.1:$pubPort/") { if ($taskBad -notcontains $td.Name) { $taskBad += $td.Name } }
+        }
+        if ($taskBad.Count -eq 0) { Write-OK "NetVault cron tasks pointed back at 127.0.0.1:$pubPort" }
+        else { Write-Warn "These scheduled tasks were NOT pointed back and will fail silently: $($taskBad -join ', ')" }
+    } else {
+        Write-Warn "CRON_SECRET not found in NetVault's .env, so the three maintenance tasks were left pointing at the loopback port. They will fail silently until re-pointed at 127.0.0.1:3000."
+    }
+
     Write-Step "Restarting the consoles"
     foreach ($c in $back) { $null = & sc.exe stop $c.Service 2>&1 }
     Start-Sleep -Seconds 6

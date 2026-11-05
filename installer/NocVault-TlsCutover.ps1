@@ -86,6 +86,37 @@ if (-not $TlsGateOk) {
 } else {
     Write-Step "Shared TLS terminator (NocVault-Tls)"
 
+    # ⛔ THIS BLOCK EXISTS BECAUSE THE EXTRACTION MISSED A DEPENDENCY.
+    # The cutover re-registers NetVault's three scheduled tasks against the
+    # hub's loopback port, and it did so by calling Register-MaintenanceTask -
+    # a function defined in Install-NocVault-Suite.ps1 and therefore present
+    # only when the INSTALLER dot-sources this file. Run from
+    # Enable-NocVaultTls.ps1 it is not defined, and PowerShell's answer to an
+    # unknown command is a non-terminating error: three of them, followed by
+    # this file's own unconditional "[OK] NetVault cron tasks re-pointed".
+    #
+    # The consequence was silent and delayed, which is the worst combination:
+    # the three tasks keep posting to http://127.0.0.1:3000, which after a
+    # cutover is the TERMINATOR speaking TLS. The nightly health snapshot, the
+    # daily EOL enrichment and the weekly feed sync all stop - no error
+    # anywhere, just a trend chart that never gains a point, which is the exact
+    # failure the comment beside that code warns about.
+    #
+    # Caught on the staging lab, by reading the output of a cutover that had
+    # otherwise succeeded. Defined only when absent, so the installer's own
+    # copy still wins inside the installer.
+    if (-not (Get-Command Register-MaintenanceTask -ErrorAction SilentlyContinue)) {
+        function Register-MaintenanceTask([string]$Name, $Action, $Trigger, [string]$When) {
+            try {
+                $principal = New-ScheduledTaskPrincipal -UserId 'S-1-5-18' -LogonType ServiceAccount -RunLevel Highest
+                Register-ScheduledTask -TaskName $Name -Action $Action -Trigger $Trigger -Principal $principal -Force | Out-Null
+                Write-OK "Scheduled task '$Name' registered ($When)"
+            } catch {
+                Write-Warn "Could not register scheduled task '$Name' ($When) - non-fatal: $($_.Exception.Message)"
+            }
+        }
+    }
+
     # ---- helpers (local to this step) -----------------------------------
     # nssm emits UTF-16 and the NULs survive the capture; '' means "could not
     # read", which every caller treats as a reason not to proceed.
@@ -727,7 +758,22 @@ if (-not $TlsGateOk) {
                     Register-MaintenanceTask "NetVault-EnrichEol" $eolA (New-ScheduledTaskTrigger -Daily -At "01:00") "daily 01:00"
                     $syncA = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$nvCronPort/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
                     Register-MaintenanceTask "NetVault-SyncEol" $syncA (New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "00:15") "weekly Sun 00:15"
-                    Write-OK "NetVault cron tasks re-pointed at 127.0.0.1:$nvCronPort"
+                    # ⛔ VERIFY, DO NOT ANNOUNCE. This line used to print
+                    # unconditionally, directly beneath three calls that had
+                    # just failed. Read the registered tasks back and say what
+                    # is actually true.
+                    $cronOk = 0; $cronBad = @()
+                    foreach ($tn in 'NetVault-HealthSnapshot','NetVault-EnrichEol','NetVault-SyncEol') {
+                        $t = Get-ScheduledTask -TaskName $tn -ErrorAction SilentlyContinue
+                        $arg = ''
+                        if ($t) { $arg = ($t.Actions | ForEach-Object { $_.Arguments }) -join ' ' }
+                        if ($arg -match ("127\.0\.0\.1:" + $nvCronPort + "/")) { $cronOk++ } else { $cronBad += $tn }
+                    }
+                    if ($cronBad.Count -eq 0) {
+                        Write-OK "NetVault cron tasks re-pointed at 127.0.0.1:$nvCronPort ($cronOk of 3 verified)"
+                    } else {
+                        Write-Warn "NetVault cron tasks NOT re-pointed: $($cronBad -join ', '). They will keep posting to the terminator's port and will stop working silently - no error, just a health trend that never gains a point. Re-point them by hand, or re-run this script."
+                    }
 
                     # ---- firewall ------------------------------------------
                     # 3000/3004/3006/3008 are already open from the per-app

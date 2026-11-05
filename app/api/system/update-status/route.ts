@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.59.1': [
+    'Two faults found on a staging rig built to reproduce the production cutover, both of which would have stopped NetVault\u2019s nightly jobs without any error being raised. Turning HTTPS on outside the installer failed to move the three maintenance tasks onto the new internal port \u2014 and then reported that it had. Turning HTTPS back off did not move them back at all.',
+    'Either way the nightly health snapshot and both end-of-life jobs would have gone on posting to a port nothing was listening on: no error anywhere, just a health trend that stops gaining points and end-of-life data that quietly goes stale. Both directions now move the tasks and then read them back to confirm it, rather than announcing success.',
+  ],
   '1.59.0': [
     'HTTPS can now be turned back OFF with a supported command, instead of editing four Windows services by hand. Until now the undo only existed inside a cutover that failed \u2014 once one had succeeded there was no way back.',
     'When a console fails to come back during a cutover, the installer now reports why: the service state, its actual command line, what is listening on each port, the console\u2019s own startup output, and one final request that distinguishes \u201cnever started\u201d from \u201cstarted but returning an error\u201d. Those need opposite fixes and the previous message could not tell them apart \u2014 it said only that the console did not answer, which cost an evening of guesswork.',
