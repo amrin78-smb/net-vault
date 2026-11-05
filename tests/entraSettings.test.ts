@@ -18,6 +18,7 @@ import {
   type EntraWriteResult,
   type EntraWriter,
 } from '../lib/entraSettings.ts'
+import { classifyRedirectUri } from '../lib/redirectUri.ts'
 
 // ⛔ EVERY IDENTIFIER HERE IS FAKE. No real tenant, application, secret,
 // hostname or address appears in this file — the GUIDs are obviously-patterned
@@ -801,4 +802,84 @@ test('every key has a label, because labels are the only thing allowed to travel
     changed: [],
   })
   assert.equal(answer.failedField, 'ENTRA_SOMETHING_NEW')
+})
+
+// ── classifyRedirectUri ─────────────────────────────────────────────────────
+//
+// ⛔ THE CASE THAT MATTERS IS THE DEFAULT ONE. Every NocVault install starts on
+// an IP (NEXTAUTH_URL is baked to the server address at install time), so the
+// derived Redirect URI is an IP URI — and Entra will not accept one. Before
+// this, the panel showed that string as the thing to register. The failure it
+// leads to happens on MICROSOFT'S side: the portal refuses the paste and
+// nothing reaches this server, so there is no log line and no audit row for
+// anybody here to work from.
+
+test('an IP Redirect URI is refused, because Entra refuses it', () => {
+  for (const uri of [
+    'https://192.168.6.111:3000/api/auth/callback/entra',
+    'https://10.0.0.5/api/auth/callback/entra',
+    'https://[2001:db8::1]:3000/api/auth/callback/entra',
+  ]) {
+    const v = classifyRedirectUri(uri)
+    assert.equal(v.kind, 'ip', `${uri} should classify as ip, got ${v.kind}`)
+    assert.equal(v.registrable, false, `${uri} must not be presented as registrable`)
+    assert.match(v.problems.join(' '), /will not accept an IP address/i)
+  }
+})
+
+test('a proper https hostname is registrable and raises nothing', () => {
+  const v = classifyRedirectUri('https://nocvault.example.com:3000/api/auth/callback/entra')
+  assert.equal(v.kind, 'dns')
+  assert.equal(v.registrable, true)
+  assert.deepEqual(v.problems, [], `expected no problems, got ${JSON.stringify(v.problems)}`)
+})
+
+test('http is refused for a real hostname — which is the pre-TLS install', () => {
+  // ⛔ THIS IS NOT A PEDANTIC EXTRA. An install that has set its hostname but
+  // not yet run the TLS cutover has a perfectly good host and still cannot use
+  // single sign-on, and nothing else in the product would say so.
+  const v = classifyRedirectUri('http://nocvault.example.com:3000/api/auth/callback/entra')
+  assert.equal(v.kind, 'dns')
+  assert.equal(v.registrable, false)
+  assert.match(v.problems.join(' '), /requires a Redirect URI to use https/i)
+})
+
+test('a single-label hostname is refused and named', () => {
+  const v = classifyRedirectUri('https://nocvault:3000/api/auth/callback/entra')
+  assert.equal(v.kind, 'single-label')
+  assert.equal(v.registrable, false)
+  assert.match(v.problems.join(' '), /fully qualified/i)
+  assert.ok(v.problems.join(' ').includes('nocvault'), 'the message should name the host')
+})
+
+test('loopback is called out as useless rather than quietly accepted', () => {
+  for (const uri of [
+    'http://localhost:3000/api/auth/callback/entra',
+    'https://127.0.0.1:3000/api/auth/callback/entra',
+  ]) {
+    const v = classifyRedirectUri(uri)
+    assert.equal(v.kind, 'loopback', `${uri} -> ${v.kind}`)
+    assert.equal(v.registrable, false)
+    assert.match(v.problems.join(' '), /only work for a browser running on that machine/i)
+  }
+  // ⛔ AND http IS NOT ALSO COMPLAINED ABOUT FOR LOOPBACK. Entra's one https
+  // exception is loopback, so adding that message here would be wrong advice.
+  const local = classifyRedirectUri('http://localhost:3000/api/auth/callback/entra')
+  assert.doesNotMatch(local.problems.join(' '), /requires a Redirect URI to use https/i)
+})
+
+test('nothing configured yet is not an error', () => {
+  const v = classifyRedirectUri('')
+  assert.equal(v.kind, 'none')
+  assert.equal(v.registrable, false)
+  assert.deepEqual(v.problems, [], 'an unset console address must not be reported as a problem')
+  assert.equal(classifyRedirectUri(null).kind, 'none')
+  assert.equal(classifyRedirectUri(undefined).kind, 'none')
+})
+
+test('something that is not a URL says so instead of throwing', () => {
+  const v = classifyRedirectUri('not a url at all')
+  assert.equal(v.registrable, false)
+  assert.equal(v.problems.length, 1)
+  assert.match(v.problems[0], /does not parse as a URL/i)
 })

@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.8': [
+    'Settings now warns when the Redirect URI it tells you to register is one Microsoft will refuse. Entra does not accept an IP address, and every installation starts on one \u2014 so until a hostname is set, the page was confidently showing a value that cannot be registered.',
+    'It also warns when the address is not yet served over HTTPS, which Entra requires, and when it is a bare machine name with no domain. In each case it says what to change and where.',
+    'This matters because the refusal happens at Microsoft: the portal rejects the paste and nothing about it reaches NocVault, so there would be nothing in any log here to explain it.',
+  ],
   '1.57.7': [
     'Settings \u2192 Single sign-on now shows the directory sign-ins that were turned away, and why. People who are refused are told only to ask an administrator \u2014 the reason describes how your directory is wired and the login page can be reached by anyone \u2014 which until now left the administrator with nothing to go on either.',
     'Each entry lists the groups that person was actually in, as buttons that fill in the mapping form, so a group no longer has to be copied out of a server log by hand.',

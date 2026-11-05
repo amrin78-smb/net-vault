@@ -44,6 +44,9 @@ import {
   StatePill,
 } from './panelChrome.tsx'
 import { DirectoryMappingsCard } from './DirectoryMappingsCard.tsx'
+// Pure, zero-import module: see the header in lib/redirectUri.ts for why it is
+// not in lib/entraSettings.ts.
+import { classifyRedirectUri } from '../../lib/redirectUri.ts'
 import {
   pendingFieldSummary,
   redirectUriPresentation,
@@ -245,6 +248,11 @@ export default function SingleSignOnPanel() {
 
   const service = state.restartRequiresService || 'NetVault'
   const redirect = redirectUriPresentation(state.redirectUri, state.redirectUriAfterRestart)
+  // Classified against what Entra will actually take. `afterRestart` is checked
+  // in preference when there is one: that is the value the install is heading
+  // for, and warning about a URI that is about to be replaced would send an
+  // administrator to fix something they have already fixed.
+  const redirectVerdict = classifyRedirectUri(redirect.afterRestart || redirect.current)
   const pending = pendingFieldSummary(state.restartPendingFields, service)
   const worst = worstShadow(ENTRA_KEYS.map((k) => state.shadow?.[k]))
   const shadowSummary = shadowPresentation(
@@ -348,6 +356,39 @@ export default function SingleSignOnPanel() {
               </div>
             )}
             {redirect.note && <Callout tone="warn" title="Register both of these">{redirect.note}</Callout>}
+
+            {/* ⛔ ENTRA WILL NOT ACCEPT AN IP ADDRESS, AND EVERY INSTALL STARTS
+                ON ONE. NEXTAUTH_URL is baked to the server's address at install
+                time, so the derived URI above is an IP URI until somebody sets
+                a hostname — and this card presented it as the string to
+                register, confidently, when the portal will refuse the paste.
+                That refusal happens on MICROSOFT'S side: nothing about it
+                reaches this server, so there is no log line and no audit row,
+                and the administrator is left believing they copied it wrong.
+                Same for the scheme: https is required for anything but
+                loopback, so an install whose TLS cutover has not run cannot use
+                single sign-on either. Verified in the field on SecVault. */}
+            {redirectVerdict.problems.length > 0 && (
+              <Callout
+                tone="warn"
+                title={
+                  redirectVerdict.kind === 'ip'
+                    ? 'Entra will not accept this Redirect URI'
+                    : 'This Redirect URI cannot be registered as it stands'
+                }
+              >
+                {redirectVerdict.problems.map((p, i) => (
+                  <div key={i} style={{ marginBottom: i === redirectVerdict.problems.length - 1 ? 0 : 6 }}>{p}</div>
+                ))}
+                <div style={{ marginTop: 8, fontSize: 'var(--text-sm)' }}>
+                  Registering it will be refused by the Entra portal, and that refusal happens at
+                  Microsoft — nothing about it reaches this server, so there will be nothing here
+                  to explain it. Change the console address under
+                  {' '}<strong>Settings → Console address</strong>, then come back: this value
+                  follows it automatically.
+                </div>
+              </Callout>
+            )}
           </div>
         )}
       </PanelCard>

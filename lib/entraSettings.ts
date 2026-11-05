@@ -577,3 +577,10 @@ export function entraRestartPending(
   }
   return { pending: fields.length > 0, fields }
 }
+
+// The Redirect URI classifier used to live here and now lives in
+// lib/redirectUri.ts. It has to be importable by a 'use client' component, and
+// this module reaches node:fs through envFile.ts — which would drag the whole
+// Node fs shim into the browser bundle, exactly as importing lib/directoryRefusals.ts
+// dragged in the pg driver. A pure function with no imports is the only kind a
+// client component can share with a route.

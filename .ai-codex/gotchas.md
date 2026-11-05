@@ -389,3 +389,18 @@ Found by opening the page, not by any test: every unit test passed, and the pane
 looked correct in isolation. The card now renders on all three branches (loading, error, success),
 and `ssoConfigured` is TRI-STATE so that `null` ("could not read the other setting") states the
 consequence of an empty list without asserting anything about the tenant.
+
+⛔ **ENTRA WILL NOT ACCEPT AN IP ADDRESS AS A REDIRECT URI (1.57.8).** Every NocVault install starts
+on one — `NEXTAUTH_URL` is baked to the server's address at install time — so the Redirect URI the
+SSO panel derives and presents as "register this" could not be registered at all. The failure is the
+worst possible shape: it happens on **Microsoft's side**, the portal refuses the paste, and nothing
+about it reaches this server, so there is no log line and no audit row and the administrator
+concludes they copied it wrong. `classifyRedirectUri` now flags it, along with non-loopback `http`
+(Entra requires https, loopback excepted — so a correct hostname still fails before the TLS cutover)
+and a single-label host. Reported from SecVault's field experience, not from the docs.
+
+⛔ **A 'use client' COMPONENT CANNOT IMPORT A MODULE THAT REACHES NODE BUILT-INS.** Twice in one
+session: `lib/directoryRefusals.ts` pulled the whole `pg` driver into the browser bundle (6 Turbopack
+errors from `pg/lib/connection-parameters.js`), and `lib/entraSettings.ts` reaches `node:fs` through
+`envFile.ts`. A *constant* a client needs travels as data from the API; a pure *function* it shares
+with a route goes in its own zero-import module. `tsc` is happy either way — only the build catches it.
