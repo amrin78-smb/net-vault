@@ -15,5 +15,12 @@
       "span": "AB:CD:EF:...:12",
       "ddi": "AB:CD:EF:...:12"
     }
+  },
+
+  "_hubTls": "OPTIONAL, JWT-mode only. The same deal as wsFingerprints, for the HUB control channel. Give hubUrl an https:// scheme and the agent enrolls, heartbeats, polls policy, refreshes its identity and self-updates over TLS — nothing is needed here for that traffic to be ENCRYPTED, and it works whether the hub's certificate is CA-issued or the self-signed one the installer mints by default. hubFingerprint additionally VERIFIES the hub: a self-signed cert has no chain to validate, so the agent instead pins the certificate's SHA-256 fingerprint. Without a pin the channel is encrypted but unauthenticated (the agent logs UNPINNED once and connects anyway, so turning HTTPS on at the server never strands an already-deployed agent); with one, a substituted certificate is rejected before the enrol token or the hub JWT is written to the socket. ONE key, not a per-app map like wsFingerprints — there is exactly one hub. Colons and case are ignored, so paste openssl's output as-is. Set it at install time from the hub's own fingerprint, never from something the hub told you: a pin is only worth having if it arrived by a different route than the thing it authenticates. Redirects are NOT followed on this channel, so hubUrl must name the scheme and port the hub actually serves — an http:// hubUrl answered with a 301 is logged as a misconfiguration, not chased.",
+  "_hubTlsExample": {
+    "hubUrl": "https://SERVER_IP:3000",
+    "enrollToken": "REPLACE_WITH_ENROLL_TOKEN",
+    "hubFingerprint": "AB:CD:EF:...:12"
   }
 }

@@ -14,6 +14,8 @@ import {
 import { decideConsoleUrl, DEFAULT_CONSOLE_PORT } from '@/lib/consoleUrl.ts'
 import { nextAuthUrlMismatch, resolveTlsConfig } from '@/lib/tlsConfig.ts'
 
+import { recordSystemChanges } from '@/lib/systemAudit.ts'
+
 export const dynamic = 'force-dynamic'
 
 // Settings → Console address. Reads and writes NEXTAUTH_URL.
@@ -320,6 +322,16 @@ export async function PUT(req: NextRequest) {
       { status: 500 },
     )
   }
+
+  // ⛔ RECORDED AFTER THE WRITE SUCCEEDED. The console address is the field
+  // that decides where sign-in callbacks land, and a wrong one makes the
+  // console unreachable — so "who changed it, from what, to what" is exactly
+  // what someone will need at the moment nobody can log in. Not a secret, so
+  // the real values are recorded (lib/systemAudit.ts redacts only the Entra
+  // fields).
+  await recordSystemChanges((session.user as { id?: number | string } | undefined)?.id, [
+    { key: 'NEXTAUTH_URL', from: write.previous, to: decision.url },
+  ])
 
   const shadow = shadowAnswer(write.shadow)
   return NextResponse.json({

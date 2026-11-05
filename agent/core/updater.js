@@ -118,7 +118,12 @@ function verifyManifest(manifest, publicKeyPem) {
 // Download url -> Buffer with a timeout. Picks http/https by scheme, rejects
 // non-200, concats the body. A stalled response is destroyed and rejected so the
 // updater can abort cleanly rather than hang the policy tick forever.
-function httpGetBuffer(url, timeoutMs) {
+//
+// `tlsOpts` is the hub's TLS posture (rejectUnauthorized / a pin-verifying
+// createConnection — see the TLS block in core/hub.js), threaded through because
+// the bundle files are served by the SAME origin as the signed manifest. Omitted
+// or {} for a plain-http hub, so this is a no-op on the Phase-1 path.
+function httpGetBuffer(url, timeoutMs, tlsOpts) {
   return new Promise((resolve, reject) => {
     const lib = /^https/i.test(url) ? https : http;
     let settled = false;
@@ -127,7 +132,7 @@ function httpGetBuffer(url, timeoutMs) {
       settled = true;
       fn(arg);
     };
-    const req = lib.get(url, (res) => {
+    const req = lib.get(url, { ...(tlsOpts || {}) }, (res) => {
       if (res.statusCode !== 200) {
         res.resume();
         return finish(reject, new Error('HTTP ' + res.statusCode));
@@ -184,15 +189,19 @@ function createUpdater({ currentDir, logger, publicKeyPem, currentVersion } = {}
 
   /**
    * consider(manifest, opts) — verify → stage all files → write APPLY.json → onReady.
-   * opts = { bundleBaseUrl, onReady }
+   * opts = { bundleBaseUrl, onReady, tlsOptions }
    *   bundleBaseUrl : `<hubUrl>/api/agents/bundle` — each file is GET
    *                   `${bundleBaseUrl}/${file.path}`.
    *   onReady       : called once ALL files are staged + APPLY.json written
    *                   (default () => process.exit(0)); injectable for tests.
+   *   tlsOptions    : the hub's TLS posture for an https:// hub (self-signed cert +
+   *                   optional fingerprint pin); hub.js builds it and passes the
+   *                   SAME options it used for the manifest. Absent on http.
    */
   async function consider(manifest, opts) {
     const options = opts || {};
     const bundleBaseUrl = options.bundleBaseUrl;
+    const tlsOptions = options.tlsOptions;
     const onReady = typeof options.onReady === 'function' ? options.onReady : () => process.exit(0);
 
     if (!manifest) return; // no manifest advertised — safe no-op
@@ -228,7 +237,7 @@ function createUpdater({ currentDir, logger, publicKeyPem, currentVersion } = {}
         const url = `${base}/${f.path}`;
         let buf;
         try {
-          buf = await httpGetBuffer(url);
+          buf = await httpGetBuffer(url, undefined, tlsOptions);
         } catch (e) {
           log.error('Update aborted: download failed for', f.path, '-', e && e.message ? e.message : String(e));
           clearPending();

@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.0': [
+    'A fresh install now creates its own HTTPS certificate instead of leaving the consoles on plain HTTP until someone supplies one. Browsers will warn that it is self-issued until you upload your own certificate in Settings, which the installer will never overwrite once it is there.',
+    'Remote agents can now reach the hub over HTTPS, including with a self-issued certificate, and can be given the certificate\u2019s fingerprint so they refuse to talk to anything else. Without a fingerprint the connection is encrypted but unverified, and the agent says so in its log rather than failing \u2014 so turning HTTPS on never strands an agent that is already out in the field.',
+    'Changes to the console address, the HTTPS certificate and the Microsoft Entra ID settings are now written to the audit log. The Entra values are recorded as set or not set, never the values themselves \u2014 but a replaced secret is still recorded as a change.',
+  ],
   '1.56.1': [
     'Fixed: the database update shipped in 1.56.0 stopped part-way through on an existing installation, so a few of its final steps were skipped on each upgrade. Nothing was lost and nothing was left insecure \u2014 those steps had already been applied by earlier updates and simply re-run each time \u2014 but the update reported a failure on every deploy until now.',
   ],

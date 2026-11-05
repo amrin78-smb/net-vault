@@ -21,6 +21,8 @@ import {
   validateCertificatePair,
 } from '@/lib/certImport.ts'
 
+import { recordSystemChanges } from '@/lib/systemAudit.ts'
+
 export const dynamic = 'force-dynamic'
 
 // Settings → HTTPS. Reports the transport and installs a certificate pair.
@@ -387,6 +389,18 @@ export async function POST(req: NextRequest) {
     { ...config, status: 'active' },
     consoleUrl,
   )
+
+  // ⛔ RECORDED AFTER THE CERTIFICATE IS ON DISK AND THE PATHS ARE WRITTEN.
+  // Replacing the certificate that terminates TLS for every console is worth a
+  // row; the PATHS are recorded (they are not secrets and are what an operator
+  // needs to find the backup), never any key material — lib/systemAudit.ts
+  // redacts the Entra fields, and nothing here passes it key bytes at all.
+  // `config` was resolved at the top of this handler, BEFORE the write, so its
+  // paths are genuinely the previous ones.
+  await recordSystemChanges((session.user as { id?: number | string } | undefined)?.id, [
+    { key: 'TLS_CERT_PATH', from: config.certPath, to: certPath },
+    { key: 'TLS_KEY_PATH', from: config.keyPath, to: keyPath },
+  ])
 
   return NextResponse.json({
     ok: true,

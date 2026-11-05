@@ -19,9 +19,18 @@
 .PARAMETER TlsCertPath
     PEM certificate (leaf + chain) for the shared TLS terminator. Supply this
     AND -TlsKeyPath to front all four consoles with HTTPS. Omit both and the
-    suite installs exactly as it always has, on plain HTTP.
+    installer MINTS a self-signed pair under C:\ProgramData\NocVault\certs, so
+    HTTPS is on by default; a real certificate replaces it later from Settings.
 .PARAMETER TlsKeyPath
     PEM private key matching -TlsCertPath. Both or neither.
+.PARAMETER NoSelfSignedTls
+    Do NOT mint a self-signed certificate when none is configured, and install
+    on plain HTTP exactly as the suite did before STEP 4b gained the mint.
+    The one case this is for: a RE-RUN on a server that already has enrolled
+    agents running an agent build that predates self-signed hub support. Those
+    agents dial the hub on 3000 - the port the terminator takes over - so the
+    cutover would break their control channel until they are updated. A fresh
+    install has no agents and does not need this.
 .PARAMETER TlsPublicHost
     The hostname users actually type. Optional. When set it pins the terminator's
     X-Forwarded-Host and is used for NEXTAUTH_URL instead of -ServerIP.
@@ -46,6 +55,7 @@ param(
     [string]$TlsKeyPath      = "",
     [string]$TlsPublicHost   = "",
     [switch]$OpenHttpRedirectPorts,
+    [switch]$NoSelfSignedTls,
     [switch]$Unattended
 )
 
@@ -136,6 +146,45 @@ function GrantNocRoRead($db) {
             Write-Warn "nocvault_readonly grant on '$db' FAILED (exit $LASTEXITCODE): $g - Hub cross-DB reads may be degraded."
         }
     }
+}
+
+# ── Shared TLS terminator certificate helper ──────────────────────
+# installer\NocVault-Tls.ps1 holds Find-NocVaultOpenSsl / Get-NocVaultCertInfo /
+# New-NocVaultCertificate: the self-signed mint for the TERMINATOR's own
+# certificate (nocvault.crt / nocvault.key), ported from SecVault. It lives in
+# its own file so the logic has one home if a second script ever needs to mint.
+#
+# ⛔ THE DOT-SOURCE IS GUARDED, NOT MANDATORY. A missing helper must cost the
+# install its HTTPS, not the install itself: without it STEP 4b simply finds no
+# certificate pair, gate 1 fails, and the suite installs on plain HTTP exactly
+# as it always did. The whole installer\ folder ships together (see
+# Build-Setup-Exe.ps1's closing note), so absence means somebody shipped a
+# partial folder - worth a loud line, not a dead install.
+$NocTlsHelperDir = $PSScriptRoot
+if (-not $NocTlsHelperDir) {
+    if ($PSCommandPath) { $NocTlsHelperDir = Split-Path -Parent $PSCommandPath }
+}
+#
+# ⛔ THE FAILURE IS RECORDED HERE AND REPORTED IN STEP 4b, NOT PRINTED NOW. The
+# banner below calls Clear-Host, so anything written at this point is wiped off
+# an interactive console before a human reads it - and "the certificate helper
+# is missing" is precisely the line that must not be lost.
+$script:TlsHelperLoaded = $false
+$script:TlsHelperError  = ''
+if ($NocTlsHelperDir) {
+    $NocTlsHelper = Join-Path $NocTlsHelperDir 'NocVault-Tls.ps1'
+    if (Test-Path -LiteralPath $NocTlsHelper) {
+        try {
+            . $NocTlsHelper
+            $script:TlsHelperLoaded = $true
+        } catch {
+            $script:TlsHelperError = "could not be loaded: $($_.Exception.Message)"
+        }
+    } else {
+        $script:TlsHelperError = "not found at $NocTlsHelper"
+    }
+} else {
+    $script:TlsHelperError = 'this script could not resolve its own folder, so the helper could not be located'
 }
 
 # ── Agent WebSocket TLS (wss://) ──────────────────────────────────
@@ -539,7 +588,7 @@ if ($nodeCurrent -and $nodeCurrent -ge $NodeRequired) {
     # An OLDER Node already on the box is upgraded in place by the MSI. That is a
     # deliberate change of behaviour from the Node 20 era: a Node 20 left here
     # would build and run all four apps perfectly and then silently make the TLS
-    # terminator unstartable, which STEP 3b turns into "no HTTPS" rather than an
+    # terminator unstartable, which STEP 4b turns into "no HTTPS" rather than an
     # outage - but it is still not what the operator asked for.
     if ($nodeCurrent) { Write-Warn "Node.js $nodeVer is older than v$NodeRequired - upgrading in place" }
     Start-Process -Wait -FilePath "msiexec.exe" -ArgumentList "/I `"$NodeMsi`" /quiet"
@@ -548,7 +597,32 @@ if ($nodeCurrent -and $nodeCurrent -ge $NodeRequired) {
 }
 
 # ================================================================
-# STEP 3b — TLS terminator preflight (DECIDES ONLY - changes nothing)
+# STEP 4 — Git
+# ================================================================
+# ⛔ GIT IS INSTALLED BEFORE THE TLS PREFLIGHT, AND THAT ORDER IS NOW
+# LOAD-BEARING. Git for Windows carries the openssl.exe that STEP 4b uses to
+# mint the terminator's certificate (see Find-NocVaultOpenSsl's path list, and
+# Get-WsTlsOpenSsl's, which is the same list). This step used to sit AFTER the
+# preflight, which was fine while the preflight only looked for a certificate
+# the customer had supplied - but a mint that runs before Git is installed finds
+# no openssl on a clean machine and silently produces the plain-HTTP install
+# this change exists to end. Nothing in the preflight needs anything else from
+# this step, and nothing in this step needs anything from the preflight.
+Write-Step "Installing Git"
+# Same command-not-found gotcha as the Node.js check above - see that comment.
+$gitVer = try { & git --version 2>$null } catch { $null }
+if ($gitVer) {
+    Write-OK "Git already installed: $gitVer"
+} elseif (Test-Path $GitInstaller) {
+    Start-Process -Wait -FilePath $GitInstaller -ArgumentList '/VERYSILENT','/NORESTART'
+    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + $env:PATH
+    Write-OK "Git installed"
+} else {
+    throw "Git installer not found and Git is not installed. Cannot continue."
+}
+
+# ================================================================
+# STEP 4b — TLS terminator preflight (mints a certificate; DECIDES the rest)
 # ================================================================
 # ⛔ READ THIS BEFORE TOUCHING STEP 12.5.
 #
@@ -571,17 +645,38 @@ if ($nodeCurrent -and $nodeCurrent -ge $NodeRequired) {
 # consoles on 0.0.0.0:3000/3004/3006/3008 over plain HTTP, NEXTAUTH_URL http://,
 # no NocVault-Tls service. There is no partial state to land in.
 #
-# ⛔ GATE 1 IS BOTH-OR-NEITHER, mirroring lib/tlsConfig.ts exactly. One path set
-# alone is a half-finished configuration, not a disabled one, and calling it
-# "TLS off" would silently ignore an operator who has clearly started turning it
-# on.
+# ⛔ ONE THING HAPPENS HERE BEFORE ANY GATE IS JUDGED: IF NO CERTIFICATE IS
+# CONFIGURED, ONE IS MINTED. That is the ONLY change to this step's behaviour,
+# and it is why "the suite installs on plain HTTP" is now the EXCEPTION rather
+# than the rule. The reasoning is SecVault's, which has shipped it since its
+# v2.112.0: a terminator that engages only when the customer has already
+# supplied a certificate engages almost never, so every console in the field
+# stayed on plain HTTP - and plain HTTP on an administrator console is a worse
+# outcome than a self-signed certificate an operator replaces from Settings.
+# The earlier note here argued the opposite (that a self-signed certificate
+# "trains every administrator to click through a browser warning, which is
+# worse than plain HTTP because it looks safe"). That trade was reconsidered
+# deliberately: a browser warning is VISIBLE and fixable, while unencrypted
+# session cookies on a flat management LAN are neither.
+#
+# ⛔ GATE 1 IS STILL BOTH-OR-NEITHER, mirroring lib/tlsConfig.ts exactly, and the
+# mint does NOT soften it. One path set alone is a half-finished configuration,
+# not a disabled one, and calling it "TLS off" would silently ignore an operator
+# who has clearly started turning it on - so a HALF-configured pair is still
+# refused and is deliberately NOT completed by minting the missing half, which
+# would pair a certificate with a key that does not match it.
+#
+# ⛔ AND THE MINT NEVER OVERWRITES. New-NocVaultCertificate's first act is to
+# succeed without recreating anything when both files are present; that, not a
+# condition in this step, is what makes an operator's real corporate
+# certificate survive every re-run of this installer.
 #
 # ⛔ GATE 2 IS DETECTED BY ATTEMPTING IT, NEVER FROM A VERSION TABLE. That is the
 # same rule installer\terminator\start.mjs follows, for the same reason: "which
 # Node can strip types" (22.6 flagged, 22.18 unflagged, 23.6 unflagged, 20
 # never) is a second source of truth that goes stale, and a stale copy of it
 # here decides whether a customer's four consoles are reachable.
-Write-Step "TLS terminator preflight"
+Write-Step "TLS terminator preflight (certificate + gates 1 and 2)"
 
 # Run a throwaway .ts file and see whether Node accepts it.
 #
@@ -625,15 +720,47 @@ $TlsPublicHostValue = $TlsPublicHost.Trim()
 $TlsCert            = $TlsCertPath.Trim()
 $TlsKey             = $TlsKeyPath.Trim()
 
-# Nothing is GENERATED here, unlike the agent-ingest WS certificates. A terminator
-# in front of four administrator consoles needs the customer's OWN certificate;
-# a self-signed one would train every administrator to click through a browser
-# warning, which is worse than plain HTTP because it looks safe.
-#
 # The convention path is probed so the graphical installer (which cannot pass new
 # arguments without an .exe rebuild) can still enable TLS: drop the pair in
-# $CertDir as nocvault.crt / nocvault.key before running setup.
+# $CertDir as nocvault.crt / nocvault.key before running setup. It is ALSO where
+# the self-signed pair is minted, so the GUI install gets HTTPS with no
+# arguments at all.
+#
+# ⛔ THE MINT RUNS ONLY WHEN NEITHER PATH PARAMETER WAS SUPPLIED. An operator who
+# passed -TlsCertPath/-TlsKeyPath has made a choice, and a generated certificate
+# must never appear beside it; an operator who passed exactly one has made a
+# MISTAKE, and the warning below is the right answer to that, not a silent
+# repair with a key that matches nothing.
+$script:TlsMint = $null
 if ((-not $TlsCert) -and (-not $TlsKey)) {
+    if ($NoSelfSignedTls) {
+        Write-Info "-NoSelfSignedTls was passed - no certificate will be generated."
+    } elseif (-not $script:TlsHelperLoaded) {
+        Write-Warn "installer\NocVault-Tls.ps1 $($script:TlsHelperError) - no certificate can be minted, so the suite will install on plain HTTP. Ship the whole installer folder together."
+    } else {
+        # ⛔ Minting is a FILE WRITE under C:\ProgramData\NocVault\certs and
+        # nothing else. It binds no port, registers no service and edits no env
+        # file, so this step keeps its "decides only" character: a minted
+        # certificate that the gates then reject leaves two unused files behind
+        # and changes the installed suite not at all.
+        $script:TlsMint = New-NocVaultCertificate -CertDir $CertDir -ServerIp $ServerIP -PublicHost $TlsPublicHostValue
+        if ($script:TlsMint.Success) {
+            if ($script:TlsMint.Created) {
+                Write-OK "Self-signed certificate minted: $($script:TlsMint.CertPath)"
+                Write-Info "SANs: $($script:TlsMint.SanParts -join ', ')"
+                if ($script:TlsMint.NotAfter) { Write-Info "Expires $($script:TlsMint.NotAfter.ToString('yyyy-MM-dd'))" }
+            } else {
+                Write-OK "Certificate pair already present in $CertDir - reused, NOT regenerated ($($script:TlsMint.Message))"
+            }
+        } else {
+            # Not fatal, by design: no certificate means gate 1 fails below and
+            # the suite installs on plain HTTP, which is exactly what it did
+            # before this mint existed.
+            Write-Warn "No certificate was generated: $($script:TlsMint.Error)"
+            Write-Warn "The suite will install on plain HTTP. Fix the cause (usually a missing openssl.exe) or supply -TlsCertPath/-TlsKeyPath, then re-run."
+        }
+    }
+
     $defaultCert = Join-Path $CertDir 'nocvault.crt'
     $defaultKey  = Join-Path $CertDir 'nocvault.key'
     if ((Test-Path -LiteralPath $defaultCert) -and (Test-Path -LiteralPath $defaultKey)) {
@@ -667,28 +794,54 @@ if ((-not $TlsCert) -and (-not $TlsKey)) {
     $TlsGateOk = $true
 }
 
+# What is actually on disk, read back from the certificate itself rather than
+# from what this run did. $script:TlsCertFingerprint / $script:TlsCertSelfSigned
+# are read by the closing summary.
+#
+# ⛔ "SELF-SIGNED" IS DECIDED BY subject == issuer, NOT BY "did we mint it". A
+# re-install reuses the certificate minted by the previous run, so a
+# did-I-create-it flag would stop reporting a self-signed certificate as
+# self-signed on every run after the first - and the fingerprint line is the
+# only thing telling an operator that their agents need a pin.
+$script:TlsCertFingerprint = $null
+$script:TlsCertSelfSigned  = $false
+$script:TlsCertNotAfter    = $null
+if ($TlsGateOk -and $script:TlsHelperLoaded) {
+    $tlsInfo = Get-NocVaultCertInfo $TlsCert
+    if ($tlsInfo.Ok) {
+        $script:TlsCertFingerprint = $tlsInfo.Fingerprint
+        $script:TlsCertSelfSigned  = $tlsInfo.SelfSigned
+        $script:TlsCertNotAfter    = $tlsInfo.NotAfter
+    } else {
+        # A certificate the installer cannot parse is NOT reported as fine and
+        # is NOT treated as a gate failure either: node may still load it
+        # perfectly, and gate 3 is the thing that actually settles whether the
+        # terminator serves. Say what could not be measured.
+        Write-Warn "Could not read certificate details from $TlsCert ($($tlsInfo.Error)) - no fingerprint can be reported for it."
+    }
+}
+
 if ($TlsGateOk) {
     Write-OK "Gate 1 PASS - certificate pair present ($TlsCert)"
     Write-OK "Gate 2 PASS - this Node executes TypeScript"
+    if ($script:TlsCertFingerprint) {
+        Write-Info "Certificate SHA-256: $($script:TlsCertFingerprint)"
+    }
+    if ($script:TlsCertSelfSigned) {
+        # ⛔ A CONSTRAINT SECVAULT DOES NOT HAVE. The agents dial the HUB on port
+        # 3000 - the same port the terminator takes over - for /api/agents/enroll,
+        # /heartbeat, /policy, /update-manifest and /bundle. A CA-issued
+        # certificate is transparent to them; a SELF-SIGNED one is not, so an
+        # agent that cannot be told to trust this certificate loses its control
+        # channel when the cutover lands. The fingerprint above is what it is
+        # told. This is stated here AND in the closing summary because an
+        # operator scrolling a 20-minute install sees one of the two.
+        Write-Warn "This certificate is SELF-SIGNED. Agents dial the hub on :3000, which the terminator takes over, so an agent's hubUrl must become https:// and should pin the fingerprint above (the agent's 'hubFingerprint' config key)."
+        Write-Info "Re-running on a server that already has enrolled agents? Their hubUrl is http://, which the terminator answers with a 301 that the agent does not follow. Update them, or pass -NoSelfSignedTls to stay on plain HTTP until you have."
+    }
     Write-Info "The consoles still install on 0.0.0.0. They move to 127.0.0.1 only in STEP 12.5, and only after gate 3."
 } else {
     Write-Info "TLS terminator will not be installed - continuing with the plain-HTTP install."
-}
-
-# ================================================================
-# STEP 4 — Git
-# ================================================================
-Write-Step "Installing Git"
-# Same command-not-found gotcha as the Node.js check above - see that comment.
-$gitVer = try { & git --version 2>$null } catch { $null }
-if ($gitVer) {
-    Write-OK "Git already installed: $gitVer"
-} elseif (Test-Path $GitInstaller) {
-    Start-Process -Wait -FilePath $GitInstaller -ArgumentList '/VERYSILENT','/NORESTART'
-    $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + $env:PATH
-    Write-OK "Git installed"
-} else {
-    throw "Git installer not found and Git is not installed. Cannot continue."
 }
 
 # ================================================================
@@ -2204,6 +2357,16 @@ if ($script:TlsCutoverApplied) {
     Write-Host "       consoles. The apps themselves are bound to 127.0.0.1 only. An old" -ForegroundColor Gray
     Write-Host "       http:// bookmark on those ports is answered with a 301." -ForegroundColor Gray
     Write-Host "       Certificate: $TlsCert" -ForegroundColor Gray
+    if ($script:TlsCertNotAfter) {
+        Write-Host "       Expires: $($script:TlsCertNotAfter.ToString('yyyy-MM-dd'))" -ForegroundColor Gray
+    }
+    if ($script:TlsCertSelfSigned) {
+        Write-Host "       This certificate is SELF-SIGNED, so browsers will warn on first visit." -ForegroundColor Yellow
+        Write-Host "       That is the shipping default: HTTPS with a warning beats plain HTTP" -ForegroundColor Gray
+        Write-Host "       on an administrator console. Install the organisation's own" -ForegroundColor Gray
+        Write-Host "       certificate from Settings to clear it - the installer will NEVER" -ForegroundColor Gray
+        Write-Host "       overwrite a certificate that is already in place." -ForegroundColor Gray
+    }
     Write-Host "       To change it later use Settings (it rewrites TLS_CERT_PATH /" -ForegroundColor Gray
     Write-Host "       TLS_KEY_PATH in NetVault's env files) and restart NocVault-Tls." -ForegroundColor Gray
 }
@@ -2236,6 +2399,32 @@ if ($InstallSpanVault) {
     Write-Host "  [7] Configure SNMP community strings per device in SpanVault > Settings" -ForegroundColor Gray
 }
 Write-Host ""
+# ── Shared terminator certificate fingerprint ─────────────────────
+# ⛔ PRINTED BECAUSE THE AGENTS DIAL THE HUB ON THE PORT THE TERMINATOR TOOK
+# OVER. 3000 carries /api/agents/enroll, /heartbeat, /policy, /update-manifest
+# and /bundle as well as the console, so a self-signed certificate in front of
+# it is a fact about the agent fleet, not only about browsers. The agent has no
+# chain to validate, exactly as with the two agent-ingest certificates below,
+# so it is pinned by SHA-256 fingerprint and this is where the operator gets it.
+#
+# ⛔ PRINTED, NOT WRITTEN INTO AN ENV FILE. The WS fingerprints are also
+# persisted (SPANVAULT_WS_FINGERPRINT / DDIVAULT_WS_FINGERPRINT) because
+# app/api/agents/enroll-tokens/route.ts READS them to bake -WsFingerprint into
+# the install command it hands out. Nothing reads a hub-certificate fingerprint
+# yet, and this repo has a documented history of configuration that nothing
+# reads being mistaken for configuration that works. When the agent side grows
+# a hub pin and the enroll-token route grows the matching env key, persist it
+# here in the SAME change - until then, printing it is the honest surface.
+if ($script:TlsCutoverApplied -and $script:TlsCertSelfSigned -and $script:TlsCertFingerprint) {
+    Write-Host "  Hub/console TLS (HTTPS on 3000/3004/3006/3008) - self-signed, pin this:" -ForegroundColor White
+    Write-Host "  Terminator certificate SHA-256: $($script:TlsCertFingerprint)" -ForegroundColor Cyan
+    Write-Host "    cert: $TlsCert" -ForegroundColor Gray
+    Write-Host "    Agents reach the hub on :3000 THROUGH this certificate, so their hubUrl" -ForegroundColor Gray
+    Write-Host "    must be https://${AccessHost}:3000 and 'hubFingerprint' in the agent's" -ForegroundColor Gray
+    Write-Host "    config.json should carry the value above. Without the pin the channel is" -ForegroundColor Gray
+    Write-Host "    encrypted but unauthenticated; with an http:// hubUrl it stops working." -ForegroundColor Gray
+    Write-Host ""
+}
 # ── Agent WebSocket TLS fingerprints ──────────────────────────────
 # These certificates are self-signed, so there is no chain for an agent to
 # validate - the agent pins the SHA-256 fingerprint instead. Print it here (and

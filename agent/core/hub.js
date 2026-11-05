@@ -32,17 +32,118 @@ const path = require('path');
 const os = require('os');
 const http = require('http');
 const https = require('https');
+const tls = require('tls');
 const createIdentityStore = require('./identity-store');
 
 // Persist the issued identity next to the agent (agent/hub-identity.json). The
 // entrypoint lives one level up from core/, matching config.json's location.
 const DEFAULT_IDENTITY_PATH = path.join(__dirname, '..', 'hub-identity.json');
 
+// ── TLS for an https:// hub ──────────────────────────────────────────────────
+//
+// This mirrors core/transport.js's wss:// handling, for the same reason and with
+// the same trade. The suite's consoles are moving behind a shared TLS terminator
+// on the SAME port the agent dials (netvault :3000), and the installer mints a
+// SELF-SIGNED certificate by default so HTTPS is on out of the box. A self-signed
+// cert has no chain to validate, so Node's default `rejectUnauthorized: true`
+// rejects every hub request — enrol, heartbeat, policy, refresh and self-update
+// all stop at once. It is set false here and the certificate is instead pinned by
+// SHA-256 fingerprint:
+//   config.hubFingerprint = "<sha256>"   (colons/case ignored — paste openssl's output)
+//
+// A single scalar, not a per-app map like `wsFingerprints`: there is exactly ONE
+// hub, so there is nothing to key the pin by. (Per-app pins exist on the WS side
+// only because SpanVault and DDIVault present their own certificates and both
+// transports are handed the same config object.)
+//
+// Why pin rather than just encrypt: TLS alone stops someone READING this channel
+// but not someone SUBSTITUTING themselves for the hub — and this channel carries
+// the enrolment token (in the enroll body) and the hub JWT (in the Authorization
+// header of every heartbeat/policy/refresh/logs call). That is exactly the kind of
+// credential the WS pin was added to protect.
+//
+// THE TRADE, stated honestly: against a properly validated CA chain this is
+// WEAKER — an unpinned connection is encrypted but unauthenticated, and a pin is
+// only as good as the out-of-band route it arrived by. Against what this channel
+// does TODAY, which is plain HTTP, it is strictly better: today the token and the
+// JWT travel in cleartext to whoever answers. A CA-issued certificate keeps
+// working either way (`rejectUnauthorized: false` relaxes verification, it does
+// not forbid a valid chain), and an operator who has one can simply leave
+// hubFingerprint unset.
+//
+// No fingerprint configured => still connect (encrypted, unverified) and say so.
+// Refusing would strand an already-deployed agent the moment an operator turns
+// HTTPS on at the server, which is the one thing this must never do.
+//
+// The pin is set at install time, NOT taken from a hub response: anyone able to
+// substitute the hub could substitute the fingerprint alongside it. A pin is only
+// worth having if it arrives by a different route than the thing it authenticates.
+//
+// WHERE the pin is checked matters as much as that it is checked (the lesson the
+// WS transport learned the hard way). Verifying after the response arrives is TOO
+// LATE: `Authorization: Bearer <jwt>` and the enrol token travel in the REQUEST,
+// so by then the credential has already been handed to whoever answered. So when a
+// pin IS configured we take over socket creation and verify the certificate on
+// 'secureConnect' — after the TLS handshake, before http.request writes a single
+// header or body byte. On mismatch the socket is destroyed and the request never
+// starts (asserted by test: the server records no request at all).
+//
+// Note the callback discipline, copied verbatim from transport.js: http.ClientRequest
+// does `if (newSocket) oncreate(null, newSocket)` on whatever createConnection
+// RETURNS, and oncreate is once()-wrapped. Returning the socket would hand it over
+// immediately — before secureConnect — and reintroduce the very leak this closes.
+// Return undefined; only ever hand the socket over via `cb`. Leaving `agent`
+// undefined alongside a createConnection is what makes Node use it at all: set any
+// agent (including `agent: false`, which builds a fresh default Agent) and the agent
+// owns socket creation, createConnection is never called, and the credential leaks
+// exactly as before.
+function normalizeFp(v) {
+  return String(v || '').replace(/[^a-fA-F0-9]/g, '').toLowerCase();
+}
+
+// `report` carries the logging out to the client that owns a logger (see hubTls
+// below). Pure/injectable so the posture can be logged once per process rather
+// than on every 30s heartbeat.
+function hubTlsOptionsFor(url, config, report) {
+  if (!/^https:/i.test(String(url || ''))) return {}; // plain http — nothing to do
+  const say = report || {};
+  const want = normalizeFp(config && config.hubFingerprint);
+  if (!want) {
+    // Unpinned: nothing to verify, so there is nothing to gate the request on.
+    if (typeof say.unpinned === 'function') say.unpinned();
+    return { rejectUnauthorized: false };
+  }
+  return {
+    rejectUnauthorized: false,
+    createConnection: (connOpts, cb) => {
+      const sock = tls.connect({ ...connOpts, rejectUnauthorized: false }, () => {
+        let got = '';
+        try {
+          got = normalizeFp(sock.getPeerCertificate().fingerprint256);
+        } catch (_e) {
+          got = '';
+        }
+        if (got !== want) {
+          sock.destroy();
+          if (typeof say.mismatch === 'function') say.mismatch(want, got);
+          cb(new Error('TLS pin mismatch — refusing to send credentials'));
+          return;
+        }
+        if (typeof say.verified === 'function') say.verified();
+        cb(null, sock);
+      });
+      sock.once('error', (e) => cb(e));
+      return undefined;
+    },
+  };
+}
+
 // ── JSON HTTP helpers (built-ins only — no dependency) ─────────────────────────
 // Mirror updater.js:httpGetBuffer's http/https-by-scheme style, but JSON in/out.
-// Resolve { statusCode, body } (body = parsed JSON or null); reject only on a
-// transport error, so callers can branch on the status code (e.g. 401).
-function requestJson(method, url, headers, bodyObj) {
+// Resolve { statusCode, body, location } (body = parsed JSON or null); reject only
+// on a transport error, so callers can branch on the status code (e.g. 401).
+// `tlsOpts` comes from hubTlsOptionsFor() and is {} for a plain-http hub.
+function requestJson(method, url, headers, bodyObj, tlsOpts) {
   return new Promise((resolve, reject) => {
     let u;
     try {
@@ -58,6 +159,9 @@ function requestJson(method, url, headers, bodyObj) {
       port: u.port || (u.protocol === 'https:' ? 443 : 80),
       path: (u.pathname || '/') + (u.search || ''),
       headers: Object.assign({ Accept: 'application/json' }, headers || {}),
+      // rejectUnauthorized / createConnection for an https hub (no-op on http).
+      // Spread LAST so it can't be shadowed by a key above.
+      ...(tlsOpts || {}),
     };
     if (payload != null) {
       opts.headers['Content-Type'] = 'application/json';
@@ -87,7 +191,13 @@ function requestJson(method, url, headers, bodyObj) {
         } catch (_e) {
           body = null; // non-JSON body — leave null, caller only needs the code
         }
-        finish(resolve, { statusCode: res.statusCode, body });
+        finish(resolve, {
+          statusCode: res.statusCode,
+          body,
+          // Surfaced ONLY so a non-followed redirect can be reported as the
+          // configuration error it is (see statusText below). Never acted on.
+          location: (res.headers && res.headers.location) || null,
+        });
       });
     });
     // A black-hole hub (accepts TCP, never responds) must not hang forever — that
@@ -103,8 +213,33 @@ function requestJson(method, url, headers, bodyObj) {
   });
 }
 
-const httpPostJson = (url, bodyObj, headers) => requestJson('POST', url, headers, bodyObj);
-const httpGetJson = (url, headers) => requestJson('GET', url, headers, null);
+// ── Redirects are deliberately NOT followed ───────────────────────────────────
+// This channel is now reachable through a TLS terminator, so a plaintext-to-HTTPS
+// bounce (301) is a realistic answer to a misconfigured `hubUrl`. We still do not
+// follow it, on purpose: every request here carries either the enrolment token (in
+// the POST body) or the hub JWT (Authorization header), and re-sending those to a
+// location the SERVER chose is precisely the credential-forwarding hazard the pin
+// above exists to prevent — and with a pin configured there is no sane policy for
+// which certificate to expect at the redirect target. Following a 301 also would
+// not un-leak anything: an http:// enroll has already put the token on the wire in
+// cleartext by the time the 301 comes back. The fix is configuration — point
+// `hubUrl` at the scheme/port the terminator actually serves.
+//
+// What DID need fixing is the diagnostic. A 301 used to arrive as
+// `{ statusCode: 301, body: null }` and be logged as a bare "HTTP 301", which
+// reads like a hub bug rather than a hub URL that needs an `s`. Say so instead.
+// The Location is truncated at '?' so a token-bearing query string is never logged.
+function statusText(res) {
+  const code = res && res.statusCode;
+  if (code >= 300 && code < 400) {
+    const loc = res && res.location ? ` → ${String(res.location).split('?')[0]}` : '';
+    return (
+      `HTTP ${code} redirect${loc} — NOT followed (this channel carries the enrol token / hub JWT); ` +
+      'point hubUrl at the final scheme and port instead'
+    );
+  }
+  return `HTTP ${code}`;
+}
 
 // Best-effort primary IPv4 of the agent host (first non-internal IPv4).
 function primaryIpv4() {
@@ -171,6 +306,39 @@ function createHubClient(opts) {
   function logErr(...a) {
     if (logger && logger.error) logger.error('[hub]', ...a);
   }
+
+  // ── TLS posture for this hub (see the hubTlsOptionsFor block above) ──────────
+  // Unlike the WS transport, which logs its TLS posture once per CONNECT, this
+  // channel fires every 30s — an unconditional line would flood the log ring that
+  // `get_logs` returns. So the informational lines are latched to their first
+  // occurrence. A MISMATCH is deliberately NOT latched: it is a live failure and
+  // should be visible on every tick it happens, like any other request error.
+  let saidUnpinned = false;
+  let saidVerified = false;
+  const tlsReport = {
+    unpinned: () => {
+      if (saidUnpinned) return;
+      saidUnpinned = true;
+      log('TLS: hub reached encrypted but UNPINNED (set hubFingerprint in config.json to verify the hub).');
+    },
+    verified: () => {
+      if (saidVerified) return;
+      saidVerified = true;
+      log('TLS: hub certificate verified against configured pin.');
+    },
+    mismatch: (want, got) => {
+      logErr(
+        `TLS: hub certificate fingerprint MISMATCH — refusing to send credentials. expected ${want.slice(0, 16)}… got ${got ? got.slice(0, 16) + '…' : '(none)'}`
+      );
+    },
+  };
+  const hubTls = (url) => hubTlsOptionsFor(url, config, tlsReport);
+
+  // Per-client JSON helpers: identical to before, plus the hub's TLS options. They
+  // live INSIDE the client because the pin/report are per-config, not global.
+  const httpPostJson = (url, bodyObj, headers) =>
+    requestJson('POST', url, headers, bodyObj, hubTls(url));
+  const httpGetJson = (url, headers) => requestJson('GET', url, headers, null, hubTls(url));
 
   let lastPolicy = null;
   let stopped = false;
@@ -327,7 +495,7 @@ function createHubClient(opts) {
       // but make it clear the token is the problem. Never spin tight (backoff).
       return scheduleEnrollRetry('enroll rejected (401) — token bad/expired/used');
     }
-    return scheduleEnrollRetry(`enroll failed (HTTP ${res.statusCode})`);
+    return scheduleEnrollRetry(`enroll failed (${statusText(res)})`);
   }
 
   function scheduleEnrollRetry(reason) {
@@ -461,7 +629,7 @@ function createHubClient(opts) {
           if (res.statusCode === 200) {
             log(`get_logs command (id=${cmd.id}) — ${lines.length} line(s) posted to hub`);
           } else {
-            logErr(`get_logs upload failed (HTTP ${res.statusCode})`);
+            logErr(`get_logs upload failed (${statusText(res)})`);
           }
         } catch (e) {
           // Best-effort return path — a failed upload only logs, never crashes.
@@ -505,7 +673,7 @@ function createHubClient(opts) {
       return;
     }
     if (res.statusCode !== 200) {
-      logErr(`heartbeat failed (HTTP ${res.statusCode})`);
+      logErr(`heartbeat failed (${statusText(res)})`);
       return;
     }
     // Phase 4a: the hub carries any queued commands back in the 200 body (there is no
@@ -581,7 +749,7 @@ function createHubClient(opts) {
         }
       }
     } else {
-      logErr(`policy poll unexpected response (HTTP ${res.statusCode})`);
+      logErr(`policy poll unexpected response (${statusText(res)})`);
     }
   }
 
@@ -620,7 +788,7 @@ function createHubClient(opts) {
       });
       log(`identity refreshed — new expiry ${res.body.expires_at || '?'}`);
     } else {
-      logErr(`refresh failed (HTTP ${res.statusCode})`);
+      logErr(`refresh failed (${statusText(res)})`);
     }
   }
 
@@ -647,13 +815,20 @@ function createHubClient(opts) {
     }
     if (res.statusCode === 404) return; // no update advertised — normal
     if (res.statusCode !== 200 || !res.body) {
-      logErr(`update-manifest unexpected response (HTTP ${res.statusCode})`);
+      logErr(`update-manifest unexpected response (${statusText(res)})`);
       return;
     }
     // consider() is fully self-guarding: it verifies the signature before any download
     // or write, skips if already on this version, and aborts (discarding pending/) on
     // any per-file mismatch. On full success it stages + restarts the process.
-    await updater.consider(res.body, { bundleBaseUrl: `${hubUrl}/api/agents/bundle` });
+    //
+    // The bundle files come off the SAME hub origin as the manifest, so they need the
+    // same TLS options — otherwise a self-signed hub would hand over a manifest and
+    // then fail every download, which looks like a broken bundle rather than a trust
+    // problem. (Integrity of the files themselves never depended on TLS: each one is
+    // sha256-checked against the Ed25519-signed manifest before it is staged.)
+    const bundleBaseUrl = `${hubUrl}/api/agents/bundle`;
+    await updater.consider(res.body, { bundleBaseUrl, tlsOptions: hubTls(bundleBaseUrl) });
   }
 
   // ── Public API ─────────────────────────────────────────────────────────────

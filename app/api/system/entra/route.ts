@@ -24,6 +24,8 @@ import {
   type EntraWriteResult,
 } from '@/lib/entraSettings.ts'
 
+import { recordSystemChanges, AUDITED_KEYS } from '@/lib/systemAudit.ts'
+
 export const dynamic = 'force-dynamic'
 
 // Settings → Single sign-on. Reads and writes ENTRA_TENANT_ID,
@@ -68,7 +70,7 @@ export const dynamic = 'force-dynamic'
 
 const SERVICE_NAME = 'NetVault'
 
-type SessionUser = { role?: string; name?: string }
+type SessionUser = { role?: string; name?: string; id?: number | string }
 
 function roleOf(session: unknown): string | undefined {
   return ((session as { user?: SessionUser } | null)?.user || {}).role
@@ -364,6 +366,26 @@ export async function PUT(req: NextRequest) {
       { status: 500 },
     )
   }
+
+  // ⛔ AUDITED AFTER THE WRITE SUCCEEDED, NEVER BEFORE IT. A row written
+  // up-front would record a change that a later refusal rolled back, and an
+  // audit trail that reports things which did not happen is worse than none.
+  //
+  // ⛔ ONLY THE SESSION'S id IS THE ACTOR — never anything from the body.
+  //
+  // ⛔ All three Entra fields record PRESENCE ONLY (lib/systemAudit.ts). The
+  // comparison that decides whether to record happens on the RAW values, so a
+  // secret ROTATION is captured even though both sides redact identically.
+  // This is the one change in the product that can escalate past every other
+  // guard: whoever sets the tenant decides which directory issues identities.
+  await recordSystemChanges(
+    (session.user as SessionUser | undefined)?.id,
+    AUDITED_KEYS.filter((k) => (ENTRA_KEYS as readonly string[]).includes(k)).map((k) => ({
+      key: k,
+      from: current.values[k],
+      to: plan.writes.filter((w) => w.key === k).slice(-1)[0]?.value ?? current.values[k],
+    })),
+  )
 
   const shadow = shadowAnswer({ ...measureShadows(), ...shadows } as Record<EntraKey, ShadowVerdict>)
   const consoleUrl = (process.env.NEXTAUTH_URL || '').trim() || null

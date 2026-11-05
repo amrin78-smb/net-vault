@@ -85,6 +85,22 @@ the existing WebSocket to SpanVault. **Data flows to the apps, never to the hub.
 - **Policy poll (not applied).** Every ~5 min the agent GETs its policy and stores/logs
   it. In Phase 2 the policy is **not** applied to modules — the span module's real work
   config still comes from the app WS.
+- **TLS (`https://` hubUrl).** The hub channel handles TLS exactly like the data-plane
+  WS does. An `https://` `hubUrl` is dialed with `rejectUnauthorized: false` — the
+  suite's terminator usually presents a **self-signed** certificate (the installer mints
+  one by default), which has no chain to validate — and the certificate is instead pinned
+  by SHA-256 fingerprint via **`config.hubFingerprint`** (one key, not a per-app map:
+  there is only one hub; colons/case ignored, so paste openssl's output). With **no** pin
+  the channel is encrypted but **unauthenticated** — the agent logs `UNPINNED` once and
+  connects anyway, so turning HTTPS on at the server never strands a deployed agent.
+  With a pin, a substituted certificate is rejected on `secureConnect`, **before** the
+  enrol token or the `Authorization: Bearer <jwt>` is written to the socket (verifying
+  after the response would be too late — the credential rides in the *request*). A
+  CA-issued certificate keeps working either way; leave `hubFingerprint` unset for it.
+  Bundle downloads for self-update inherit the same options (same origin as the manifest).
+  **Redirects are not followed** on this channel — it carries the enrol token and the hub
+  JWT, so re-sending them to a server-chosen location is not something to do silently; a
+  3xx is logged as a `hubUrl` misconfiguration instead.
 
 To reset a hub identity (e.g. after re-enrolling), delete `agent/hub-identity.json`.
 
