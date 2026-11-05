@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.59.0': [
+    'HTTPS can now be turned back OFF with a supported command, instead of editing four Windows services by hand. Until now the undo only existed inside a cutover that failed \u2014 once one had succeeded there was no way back.',
+    'When a console fails to come back during a cutover, the installer now reports why: the service state, its actual command line, what is listening on each port, the console\u2019s own startup output, and one final request that distinguishes \u201cnever started\u201d from \u201cstarted but returning an error\u201d. Those need opposite fixes and the previous message could not tell them apart \u2014 it said only that the console did not answer, which cost an evening of guesswork.',
+  ],
   '1.58.5': [
     'Fixed a fault introduced by the previous version and caught on the production server: when the HTTPS cutover is abandoned and undone, it now puts back everything it changed. The previous version taught the cutover to update a console\u2019s web address inside the Windows service, but did not teach the undo step to restore it \u2014 so after an abandoned cutover two consoles were left believing they were on HTTPS while serving plain HTTP, which breaks sign-in on a site that otherwise looks completely healthy. The affected server has been corrected.',
   ],

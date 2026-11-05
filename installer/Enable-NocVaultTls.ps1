@@ -36,6 +36,12 @@
     certificate the gates fail and nothing is changed.
 .PARAMETER OpenHttpRedirectPorts
     Also open the dedicated HTTP redirect ports (3080/3084/3086/3088).
+.PARAMETER Disable
+    Turn HTTPS back OFF: stop and remove NocVault-Tls, put the four consoles
+    back on their public ports on 0.0.0.0, and set NEXTAUTH_URL back to http://.
+    The cutover's own revert only exists inside a failed run, so without this
+    there is no supported way back once a cutover has SUCCEEDED - only editing
+    four services by hand.
 .PARAMETER DryRun
     Evaluate the gates and report what WOULD happen. Changes nothing: no
     service is registered, no console is moved, no env file is edited. A
@@ -53,7 +59,8 @@ param(
     [string]$TlsPublicHost         = "",
     [switch]$NoSelfSignedTls,
     [switch]$OpenHttpRedirectPorts,
-    [switch]$DryRun
+    [switch]$DryRun,
+    [switch]$Disable
 )
 
 function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
@@ -298,6 +305,127 @@ if (Test-Path -LiteralPath $nvEnv) {
 # line by line (Set-EnvFileKey), and appending a tail would duplicate keys in a
 # file that already has them.
 $NVEnvTail = ""
+
+# ── -Disable: the supported way back to plain HTTP ────────────────
+if ($Disable) {
+    Write-Step "Turning HTTPS off"
+    $tls = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
+    if (-not $tls) { Write-Info "NocVault-Tls is not installed - the consoles are already serving directly." }
+
+    # ⛔ THE TERMINATOR GOES FIRST. Its DependOnService names all four consoles,
+    # and Windows refuses `sc stop` on a service with a running dependent
+    # (1051) - so stopping a console while the terminator runs fails, and the
+    # console is then left half-reconfigured.
+    if ($tls) {
+        $null = & sc.exe stop 'NocVault-Tls' 2>&1
+        for ($i = 0; $i -lt 60; $i++) {
+            Start-Sleep -Seconds 1
+            $x = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
+            if (-not $x -or $x.Status -eq 'Stopped') { break }
+        }
+        $null = & $NssmExe remove 'NocVault-Tls' confirm 2>&1
+        Write-OK "NocVault-Tls stopped and removed"
+    }
+
+    $host4 = if ($TlsPublicHost.Trim()) { $TlsPublicHost.Trim() } else { $ServerIP }
+    $back = @()
+    $back += [pscustomobject]@{ App='netvault'; Service='NetVault'; Public=3000; Loopback=13000; Mode='standalone'; EnvFiles=@((Join-Path $NVAppDir '.env'), (Join-Path $NVAppDir '.next\standalone\.env.local')) }
+    if ($InstallLogVault)  { $back += [pscustomobject]@{ App='logvault';  Service='LogVault-App';  Public=3004; Loopback=13004; Mode='next-start'; EnvFiles=@((Join-Path $LVAppDir '.env.local'),  (Join-Path $LVAppDir 'frontend\.env.local')) } }
+    if ($InstallDDIVault)  { $back += [pscustomobject]@{ App='ddivault';  Service='DDIVault-App';  Public=3006; Loopback=13006; Mode='next-start'; EnvFiles=@((Join-Path $DDIAppDir '.env.local'), (Join-Path $DDIAppDir 'frontend\.env.local')) } }
+    if ($InstallSpanVault) { $back += [pscustomobject]@{ App='spanvault'; Service='SpanVault-App'; Public=3008; Loopback=13008; Mode='next-start'; EnvFiles=@((Join-Path $SVAppDir '.env.local'),  (Join-Path $SVAppDir 'frontend\.env.local')) } }
+
+    function Set-EnvFileKeyBack([string]$path, [string]$key, [string]$value) {
+        if (-not (Test-Path -LiteralPath $path)) { return $false }
+        $raw = ''
+        try { $raw = (Get-Content -LiteralPath $path -Raw -ErrorAction Stop) } catch { return $false }
+        if ($null -eq $raw) { $raw = '' }
+        $lines = @($raw -split "`r?`n")
+        $found = $false
+        for ($i = 0; $i -lt $lines.Count; $i++) {
+            if ($lines[$i] -match ('^\s*' + [regex]::Escape($key) + '\s*=')) { $lines[$i] = "$key=$value"; $found = $true }
+        }
+        if (-not $found) { $lines = @($lines) + "$key=$value" }
+        try { ($lines -join "`n") | Out-File -FilePath $path -Encoding UTF8 -NoNewline } catch { return $false }
+        return $true
+    }
+
+    foreach ($c in $back) {
+        $ErrorActionPreference = 'Continue'
+        if ($c.Mode -eq 'standalone') {
+            $raw = (( & $NssmExe get $c.Service AppEnvironmentExtra 2>&1 | Out-String) -replace "`0", '').Trim()
+            $lines = @($raw -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' })
+            $out = @()
+            foreach ($l in $lines) {
+                $name = ($l -split '=', 2)[0]
+                if ($name -eq 'PORT')         { $out += ("PORT=" + $c.Public); continue }
+                if ($name -eq 'HOSTNAME')     { $out += 'HOSTNAME=0.0.0.0';    continue }
+                if ($name -eq 'NEXTAUTH_URL') { $out += ("NEXTAUTH_URL=http://" + $host4 + ":" + $c.Public); continue }
+                $out += $l
+            }
+            if ($out.Count -ge 1) { $null = & $NssmExe set $c.Service AppEnvironmentExtra ($out -join "`n") 2>&1 }
+        } else {
+            $prev = (( & $NssmExe get $c.Service AppParameters 2>&1 | Out-String) -replace "`0", '').Trim()
+            # Reverse of the cutover's rewrite. Note it normalises `--port` to
+            # `-p`: functionally identical to Next, and the alternative is
+            # remembering a spelling across a reboot.
+            $new = $prev -replace ('(?:-p|--port)\s+' + $c.Loopback + '\s+-H\s+127\.0\.0\.1(?=\s|$)'), ("-p " + $c.Public)
+            if ($new -eq $prev) {
+                $new = $prev -replace ('(?:-p|--port)\s+' + $c.Loopback + '(?=\s|$)'), ("-p " + $c.Public)
+            }
+            if ($new -ne $prev) { $null = & $NssmExe set $c.Service AppParameters $new 2>&1 }
+
+            $raw = (( & $NssmExe get $c.Service AppEnvironmentExtra 2>&1 | Out-String) -replace "`0", '').Trim()
+            if ($raw -match '(?m)^\s*NEXTAUTH_URL\s*=') {
+                $lines = @($raw -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' })
+                $out = @()
+                foreach ($l in $lines) {
+                    if ((($l -split '=', 2)[0]) -eq 'NEXTAUTH_URL') { $out += ("NEXTAUTH_URL=http://" + $host4 + ":" + $c.Public) }
+                    else { $out += $l }
+                }
+                if ($out.Count -ge 1) { $null = & $NssmExe set $c.Service AppEnvironmentExtra ($out -join "`n") 2>&1 }
+            }
+        }
+        foreach ($f in $c.EnvFiles) { $null = Set-EnvFileKeyBack $f 'NEXTAUTH_URL' ("http://" + $host4 + ":" + $c.Public) }
+        Write-OK "$($c.App): back on 0.0.0.0:$($c.Public), NEXTAUTH_URL http://${host4}:$($c.Public)"
+    }
+
+    # The hub's suite probes, which the cutover pointed at the loopback ports.
+    foreach ($f in @((Join-Path $NVAppDir '.env'), (Join-Path $NVAppDir '.next\standalone\.env.local'))) {
+        if (-not (Test-Path -LiteralPath $f)) { continue }
+        foreach ($c in $back) {
+            if ($c.App -eq 'netvault') { continue }
+            $null = Set-EnvFileKeyBack $f ($c.App.ToUpper() + '_HEALTH_URL') ("http://127.0.0.1:" + $c.Public + "/api/health")
+            $null = Set-EnvFileKeyBack $f ($c.App.ToUpper() + '_STATS_URL')  ("http://127.0.0.1:" + $c.Public + "/api/stats")
+        }
+    }
+    Write-OK "Suite probes pointed back at the public ports"
+
+    Write-Step "Restarting the consoles"
+    foreach ($c in $back) { $null = & sc.exe stop $c.Service 2>&1 }
+    Start-Sleep -Seconds 6
+    foreach ($c in $back) { $null = & sc.exe start $c.Service 2>&1; Start-Sleep -Seconds 2 }
+
+    $allBack = $true
+    foreach ($c in $back) {
+        $ok = $false
+        for ($i = 0; $i -lt 90; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+                $q = [Net.HttpWebRequest]::Create("http://127.0.0.1:" + $c.Public + "/api/health")
+                $q.Timeout = 3000
+                $r = $q.GetResponse(); if ([int]$r.StatusCode -eq 200) { $ok = $true }; $r.Close()
+            } catch {}
+            if ($ok) { break }
+        }
+        if ($ok) { Write-OK "$($c.App) answering on :$($c.Public) over plain HTTP" }
+        else { Write-Warn "$($c.App) is NOT answering on :$($c.Public)"; $allBack = $false }
+    }
+    Write-Host ""
+    if ($allBack) { Write-Host "  HTTPS is OFF - all consoles are serving directly again." -ForegroundColor Green }
+    else { Write-Host "  HTTPS is off but at least one console did not come back - see above." -ForegroundColor Yellow }
+    Write-Host ""
+    exit $(if ($allBack) { 0 } else { 1 })
+}
 
 # ── Gates 1 and 2, then the cutover ───────────────────────────────
 . (Join-Path $NocTlsHelperDir 'NocVault-TlsPreflight.ps1')

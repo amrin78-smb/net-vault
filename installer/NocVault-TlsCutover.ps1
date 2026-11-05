@@ -566,6 +566,70 @@ if (-not $TlsGateOk) {
                     Write-OK "$($c.App) answering on 127.0.0.1:$($c.Loopback)"
                 } else {
                     Write-Warn "$($c.App) did NOT answer on 127.0.0.1:$($c.Loopback)"
+                    # ⛔ SAY WHY, NOT JUST THAT. This line used to be the entire
+                    # record of a failed cutover: "did NOT answer", then a
+                    # revert, and nothing to work from. It cost a production
+                    # evening of guessing - four hypotheses tested and all four
+                    # wrong - because the one machine that knew what happened
+                    # had thrown the evidence away. Everything below is read
+                    # AFTER the failure, from the live system.
+                    $ErrorActionPreference = 'Continue'
+                    try {
+                        # ⛔ "DID NOT ANSWER" CONFLATES TWO VERY DIFFERENT
+                        # FAULTS. Wait-HttpOk uses Invoke-WebRequest with
+                        # -ErrorAction Stop, which THROWS on 4xx and 5xx - so a
+                        # console that never started and one that started and
+                        # returns 500 are indistinguishable in the loop above.
+                        # They need opposite fixes. One more request, reported
+                        # verbatim, separates them.
+                        $probeUrl = "http://127.0.0.1:" + $c.Loopback + "/api/health"
+                        try {
+                            $pr = [Net.HttpWebRequest]::Create($probeUrl)
+                            $pr.Timeout = 8000
+                            $presp = $pr.GetResponse()
+                            $pcode = [int]$presp.StatusCode
+                            $pbody = (New-Object IO.StreamReader($presp.GetResponseStream())).ReadToEnd()
+                            $presp.Close()
+                            Write-Info "  final probe     : HTTP $pcode - $($pbody.Substring(0, [Math]::Min(160, $pbody.Length)))"
+                        } catch [Net.WebException] {
+                            $we = $_.Exception
+                            if ($we.Response) {
+                                $wc = [int]$we.Response.StatusCode
+                                $wb = ''
+                                try { $wb = (New-Object IO.StreamReader($we.Response.GetResponseStream())).ReadToEnd() } catch {}
+                                Write-Info "  final probe     : HTTP $wc (the console IS listening and answering, just not 200) - $($wb.Substring(0, [Math]::Min(160, $wb.Length)))"
+                            } else {
+                                Write-Info "  final probe     : no response at all ($($we.Status)) - nothing is listening on that port"
+                            }
+                        } catch {
+                            Write-Info "  final probe     : $($_.Exception.Message)"
+                        }
+                        $svcNow = Get-Service -Name $c.Service -ErrorAction SilentlyContinue
+                        Write-Info "  service state   : $(if ($svcNow) { $svcNow.Status } else { 'NOT FOUND' })"
+                        Write-Info "  AppParameters   : $(Get-NssmSetting $NssmExe $c.Service 'AppParameters')"
+                        foreach ($port in @($c.Loopback, $c.Public)) {
+                            $lc = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
+                            if ($lc) { Write-Info ("  port {0,-6}     : listening on {1} (pid {2})" -f $port, (($lc.LocalAddress | Select-Object -Unique) -join ','), (($lc.OwningProcess | Select-Object -Unique) -join ',')) }
+                            else     { Write-Info ("  port {0,-6}     : nothing listening" -f $port) }
+                        }
+                        # The console's own output is the only place a startup
+                        # error appears at all; NSSM only writes it when the
+                        # service has AppStdout/AppStderr configured.
+                        foreach ($k in 'AppStderr','AppStdout') {
+                            $lf = Get-NssmSetting $NssmExe $c.Service $k
+                            if ($lf -and (Test-Path -LiteralPath $lf)) {
+                                $tail = @(Get-Content -LiteralPath $lf -Tail 6 -ErrorAction SilentlyContinue)
+                                if ($tail.Count -gt 0) {
+                                    Write-Info "  $k ($lf):"
+                                    foreach ($t in $tail) { Write-Info "      $($t.TrimEnd())" }
+                                }
+                            } else {
+                                Write-Info "  $k : not configured, so the console's startup output was not captured anywhere"
+                            }
+                        }
+                    } catch {
+                        Write-Info "  (could not collect diagnostics: $($_.Exception.Message))"
+                    }
                     $loopbackOk = $false
                 }
             }
