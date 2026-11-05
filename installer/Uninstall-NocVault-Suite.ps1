@@ -84,7 +84,17 @@ $PgBin   = "C:\Program Files\PostgreSQL\16\bin"
 $RepoDirs = @("$NVDir\app", "$LVDir\app", "$DDIDir\app", "$SVDir\app")
 
 # ── Inventory (must match the installer) ──────────────────────────
+# ⛔ NocVault-Tls IS FIRST, AND THE ORDER IS LOAD-BEARING. Its
+# DependOnService names all four console services, and Windows REFUSES
+# `sc stop` on a service that has a running dependent (1051,
+# ERROR_DEPENDENT_SERVICES_RUNNING). With the terminator anywhere later in this
+# list, stopping NetVault/LogVault-App/DDIVault-App/SpanVault-App would fail,
+# `sc delete` would mark them for deletion while still running, and STEP 6 would
+# then fail to remove the directories their live processes are holding open.
+# A suite that never had a terminator skips it harmlessly - the loop already
+# `continue`s on a service that does not exist.
 $Services = @(
+    "NocVault-Tls",
     "NetVault",
     "LogVault-Collector", "LogVault-API", "LogVault-App",
     "DDIVault-API", "DDIVault-App", "DDIVault-Collector",
@@ -100,7 +110,17 @@ $FirewallRules = @(
     "NocVault Syslog UDP 1514", "NocVault Syslog TCP 1514",
     "NocVault DDIVault 3006",
     "NocVault SpanVault 3008",
-    "NocVault SpanVault 3010"
+    "NocVault SpanVault 3010",
+    # The shared TLS terminator's optional dedicated redirect ports
+    # (-OpenHttpRedirectPorts at install time). The TLS ports themselves are
+    # 3000/3004/3006/3008 and are already listed above - the terminator took
+    # over the consoles' existing ports rather than adding new ones, which is
+    # also why there is nothing here for 13000/13004/13006/13008: those were
+    # never opened.
+    "NocVault TLS redirect 3080",
+    "NocVault TLS redirect 3084",
+    "NocVault TLS redirect 3086",
+    "NocVault TLS redirect 3088"
 )
 
 # Databases (and their owning roles). Order matters: drop DBs before roles so

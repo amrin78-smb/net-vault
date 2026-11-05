@@ -10,6 +10,13 @@
    3b. Agent WebSocket TLS: self-signed certs on disk, SV_/DDI_WS_TLS_* wired
        into the env each app reads, 3010/3011 listening, cert SAN covers the
        server IP, expiry runway, and DDI_WS_ALLOW_PLAINTEXT no longer set
+   3c. Shared TLS terminator (NocVault-Tls), when the suite is TLS-fronted:
+       the service runs, every console answers HTTPS /api/health through it,
+       a plaintext request to a TLS port is answered 301, the consoles are on
+       127.0.0.1 only, no loopback port is open in the firewall, NEXTAUTH_URL
+       is https:// in every env file, and the terminator logged no
+       "NOT STARTED" banner. On a plain-HTTP suite the section reports that and
+       checks nothing further - that is a supported configuration, not a fault
     4. HTTP health + deployed versions for all 4 apps
     5. Public endpoints + launcher performance (suite probes, cache, license)
     6. NextAuth / login smoke (best-effort)
@@ -102,6 +109,36 @@ function Http($url, [int]$timeoutSec = 15, [switch]$NoRedirect) {
             try { $loc  = $_.Exception.Response.Headers["Location"] } catch {}
         }
         return [pscustomobject]@{ Code = $code; Content = $null; Ms = $sw.ElapsedMilliseconds; Loc = $loc; Err = $_.Exception.Message }
+    }
+}
+
+# HTTPS variant of Http, for probing the TLS terminator.
+#
+# ⛔ TLS 1.2 IS STATED EXPLICITLY AND THE CERTIFICATE IS DELIBERATELY NOT
+# VALIDATED. Windows PowerShell 5.1 is .NET Framework, where
+# ServicePointManager defaults to SSL3|TLS1.0; the terminator sets
+# minVersion 'TLSv1.2' and refuses them, so a default-protocol probe fails
+# against a listener that is working perfectly - the same trap recorded on
+# Update-NetVault.ps1's agent-ingest probe ("A call to SSPI failed", measured
+# on the production server 2026-09-01). Validation is skipped because this
+# dials 127.0.0.1, which no customer certificate will ever name; a failure to
+# validate here would say nothing about whether the customer's chain is good.
+# Both globals are saved and restored - they are process-wide, and leaving the
+# callback permissive would quietly weaken every later probe in this script.
+function Https($url, [int]$timeoutSec = 15) {
+    $prevCb    = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+    $prevProto = [System.Net.ServicePointManager]::SecurityProtocol
+    try {
+        $proto = [System.Net.SecurityProtocolType]::Tls12
+        if ([System.Net.SecurityProtocolType].GetEnumNames() -contains 'Tls13') {
+            $proto = $proto -bor [System.Net.SecurityProtocolType]::Tls13
+        }
+        [System.Net.ServicePointManager]::SecurityProtocol = $proto
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+        return (Http $url $timeoutSec)
+    } finally {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prevCb
+        [System.Net.ServicePointManager]::SecurityProtocol = $prevProto
     }
 }
 
@@ -317,6 +354,275 @@ if ($plainNssm -or $plainFile) {
 }
 
 # ---------------------------------------------------------------
+Section "3c. Shared TLS Terminator (NocVault-Tls)"
+# The suite installer can front all four consoles with ONE TLS terminator: each
+# console moves to 127.0.0.1:1300X and NocVault-Tls takes over the public port
+# it used to hold (3000/3004/3006/3008 - deliberately the SAME ports, so every
+# bookmark, ticket link and firewall rule still points at the right place).
+#
+# ⛔ A SUITE WITH NO TERMINATOR IS NOT A FAILURE. Plain HTTP on 0.0.0.0 is how
+# this suite has shipped for its whole life and is still fully supported - a
+# customer with no certificate gets it by design. So this section first decides
+# WHICH configuration is installed and then checks that one is coherent. What it
+# must never do is pass a suite that is half-way between the two.
+$script:TlsFronted = $false
+$script:NvNssmPort = 3000
+$NocTlsSvc = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
+
+$Consoles = @(
+    @{ App='netvault';  Label='NetVault';      Service='NetVault';       Public=3000; Loopback=13000;
+       EnvFiles=@((Join-Path $InstallDir 'NetVault\app\.env'), (Join-Path $InstallDir 'NetVault\app\.next\standalone\.env.local')) },
+    @{ App='logvault';  Label='LogVault-App';  Service='LogVault-App';   Public=3004; Loopback=13004;
+       EnvFiles=@((Join-Path $InstallDir 'LogVault\app\.env.local'), (Join-Path $InstallDir 'LogVault\app\frontend\.env.local')) },
+    @{ App='ddivault';  Label='DDIVault-App';  Service='DDIVault-App';   Public=3006; Loopback=13006;
+       EnvFiles=@((Join-Path $InstallDir 'DDIVault\app\.env.local'), (Join-Path $InstallDir 'DDIVault\app\frontend\.env.local')) },
+    @{ App='spanvault'; Label='SpanVault-App'; Service='SpanVault-App';  Public=3008; Loopback=13008;
+       EnvFiles=@((Join-Path $InstallDir 'SpanVault\app\.env.local'), (Join-Path $InstallDir 'SpanVault\app\frontend\.env.local')) }
+)
+
+# Read the port NetVault's own service environment pins. $nssm was located in
+# section 2. A terminator service plus NetVault still on 3000 is NOT a
+# TLS-fronted suite (nothing can bind one port twice) - it is the half-way state
+# this section exists to catch.
+if ($nssm) {
+    $nvExtra = ""
+    try { $nvExtra = (& $nssm get NetVault AppEnvironmentExtra 2>$null | Out-String) } catch { $nvExtra = "" }
+    $nvExtra = $nvExtra -replace "`0", ''
+    foreach ($line in @($nvExtra -split "`r?`n")) {
+        if ($line.Trim() -match '^PORT\s*=\s*(\d+)$') { $script:NvNssmPort = [int]$Matches[1] }
+    }
+}
+if ($NocTlsSvc -and $script:NvNssmPort -ne 3000) { $script:TlsFronted = $true }
+
+# Every later section probes the CONSOLE directly, so its base URL depends on
+# where the console actually listens. Set here, before section 4 uses it.
+# Unchanged from the historic values on a plain-HTTP suite.
+$NVBase  = "http://127.0.0.1:3000"
+$LVBase  = "http://127.0.0.1:3004"
+$DDIBase = "http://127.0.0.1:3006"
+$SVBase  = "http://127.0.0.1:3008"
+if ($script:TlsFronted) {
+    $NVBase  = "http://127.0.0.1:13000"
+    $LVBase  = "http://127.0.0.1:13004"
+    $DDIBase = "http://127.0.0.1:13006"
+    $SVBase  = "http://127.0.0.1:13008"
+}
+$ConsoleBase = @{ 'netvault' = $NVBase; 'logvault' = $LVBase; 'ddivault' = $DDIBase; 'spanvault' = $SVBase }
+
+# NEXTAUTH_URL's scheme must match the transport on EVERY console. A mismatch is
+# the worst failure mode in this whole feature: NextAuth silently bounces every
+# sign-in back to the login page with no error in any log, on either side.
+function NextAuthUrls($files) {
+    $found = @()
+    foreach ($f in $files) {
+        if (-not (Test-Path -LiteralPath $f)) { continue }
+        $raw = ""
+        try { $raw = (Get-Content -LiteralPath $f -Raw -ErrorAction Stop) } catch { continue }
+        foreach ($line in @($raw -split "`r?`n")) {
+            if ($line.Trim() -match '^NEXTAUTH_URL\s*=\s*(\S+)$') { $found += [pscustomobject]@{ File = $f; Url = $Matches[1] } }
+        }
+    }
+    return $found
+}
+
+if (-not $script:TlsFronted) {
+    if ($NocTlsSvc) {
+        Bad ("NocVault-Tls exists but NetVault's service PORT is still " + $script:NvNssmPort + " - the suite is HALF cut over. The terminator cannot bind a port the console is holding; one of the two is not serving.")
+    } else {
+        Inf "No NocVault-Tls service - this is a plain-HTTP suite (supported: the installer leaves it that way when no certificate is configured)"
+    }
+    # The mirror-image scheme mismatch: https:// baked in on a suite serving
+    # plain HTTP breaks sign-in just as thoroughly.
+    $wrongScheme = @()
+    foreach ($c in $Consoles) {
+        foreach ($n in (NextAuthUrls $c.EnvFiles)) {
+            if ($n.Url -like 'https://*') { $wrongScheme += ($c.Label + " -> " + $n.File) }
+        }
+    }
+    if ($wrongScheme.Count -gt 0) {
+        Bad ("NEXTAUTH_URL is https:// on a plain-HTTP suite (" + ($wrongScheme -join '; ') + ") - every sign-in will bounce silently")
+    } else {
+        Ok "NEXTAUTH_URL is http:// everywhere, matching the plain-HTTP transport"
+    }
+} else {
+    # ---- the service itself ----
+    if ($NocTlsSvc.Status -eq 'Running') {
+        $tlsStart = (Get-Service -Name 'NocVault-Tls').StartType
+        if ($tlsStart -ne 'Automatic') { Wn ("NocVault-Tls Running but StartType=" + $tlsStart + " - a reboot would leave all four consoles unreachable (they are bound to 127.0.0.1)") }
+        else { Ok "NocVault-Tls : Running (Automatic)" }
+    } else {
+        Bad ("NocVault-Tls : " + $NocTlsSvc.Status + " - ALL FOUR consoles are unreachable, they are bound to 127.0.0.1 only")
+    }
+
+    # ⛔ "Running" IS NOT "SERVING". start.mjs's own header records a launcher
+    # that imported the terminator, bound nothing, logged nothing and exited 0
+    # while NSSM reported Running. And the terminator deliberately degrades a
+    # BROKEN certificate to plain HTTP rather than refusing to start - so a
+    # service-state check alone passes a suite that is reachable and completely
+    # unencrypted. Only bytes off the socket settle it, which is the next check.
+    foreach ($c in $Consoles) {
+        $h = Https ("https://127.0.0.1:" + $c.Public + "/api/health") 20
+        if ($h.Code -eq 200) { Ok ($c.App + " answers HTTPS /api/health through the terminator on :" + $c.Public + " (" + $h.Ms + "ms)") }
+        else { Bad ($c.App + " HTTPS /api/health on :" + $c.Public + " FAILED (code=" + $h.Code + " err=" + $h.Err + ") - the terminator may have degraded to plain HTTP; check " + (Join-Path $InstallDir 'NetVault\logs\nocvault-tls-error.log')) }
+    }
+
+    # The same-port plaintext demux. A plaintext request into a TLS listener is a
+    # PROTOCOL failure, not a redirect, so without the demux every old
+    # http://host:3000 bookmark would get an unexplained connection error with
+    # nothing in any log to explain it. The terminator peeks the first byte and
+    # answers non-TLS with a 301.
+    foreach ($c in $Consoles) {
+        $p = Http ("http://127.0.0.1:" + $c.Public + "/") 12 -NoRedirect
+        if ($p.Code -eq 301 -and $p.Loc -and ([string]$p.Loc) -like 'https://*') {
+            Ok ($c.App + " plaintext on :" + $c.Public + " -> 301 " + $p.Loc)
+        } elseif ($p.Code -eq 301) {
+            Bad ($c.App + " plaintext on :" + $c.Public + " -> 301 but Location is not https (" + $p.Loc + ")")
+        } else {
+            Bad ($c.App + " plaintext on :" + $c.Public + " did NOT get a 301 (code=" + $p.Code + " err=" + $p.Err + ") - old http:// bookmarks will fail with an unexplained connection error")
+        }
+    }
+
+    # ---- the consoles are LOOPBACK-ONLY ----
+    # This is the half of the feature that makes the terminator a security
+    # boundary rather than a convenience. A console still answering plain HTTP
+    # on its public-facing interface is an unencrypted bypass around it.
+    foreach ($c in $Consoles) {
+        $lb = Get-NetTCPConnection -LocalPort $c.Loopback -State Listen -ErrorAction SilentlyContinue
+        if (-not $lb) {
+            Bad ("TCP " + $c.Loopback + " NOT listening - " + $c.Label + " is not where the terminator expects it")
+        } else {
+            $addrs = @($lb | ForEach-Object { $_.LocalAddress } | Sort-Object -Unique)
+            $wide  = @($addrs | Where-Object { $_ -ne '127.0.0.1' })
+            if ($wide.Count -gt 0) {
+                Bad ($c.Label + " is listening on " + ($addrs -join ',') + ":" + $c.Loopback + " - not loopback-only. HOSTNAME/-H did not take effect and the console is reachable unencrypted, bypassing the terminator.")
+            } else {
+                Ok ($c.Label + " bound to 127.0.0.1:" + $c.Loopback + " only")
+            }
+        }
+    }
+
+    # ⛔ AND NO FIREWALL RULE MAY OPEN ONE. The loopback bind is one lock; the
+    # absent firewall rule is the second. A rule here would hand the world a
+    # plain-HTTP route straight past the thing this whole feature installs.
+    $badFw = @()
+    foreach ($c in $Consoles) {
+        $hit = Get-NetFirewallRule -ErrorAction SilentlyContinue |
+            Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' } |
+            Where-Object {
+                $pf = $null
+                try { $pf = ($_ | Get-NetFirewallPortFilter -ErrorAction SilentlyContinue) } catch { $pf = $null }
+                $pf -and (@($pf.LocalPort) -contains ([string]$c.Loopback))
+            }
+        if ($hit) { $badFw += ([string]$c.Loopback + " (" + (@($hit | ForEach-Object { $_.DisplayName }) -join ', ') + ")") }
+    }
+    if ($badFw.Count -gt 0) { Bad ("Inbound firewall rule(s) OPEN a console loopback port: " + ($badFw -join '; ') + " - remove them, they bypass TLS entirely") }
+    else { Ok "No inbound firewall rule opens 13000/13004/13006/13008" }
+
+    # ---- NEXTAUTH_URL scheme ----
+    $schemeBad = @()
+    $schemeSeen = 0
+    foreach ($c in $Consoles) {
+        foreach ($n in (NextAuthUrls $c.EnvFiles)) {
+            $schemeSeen++
+            if (-not ($n.Url -like 'https://*')) { $schemeBad += ($c.Label + " -> " + $n.File + " = " + $n.Url) }
+        }
+    }
+    if ($schemeSeen -eq 0) { Wn "No NEXTAUTH_URL found in any console env file - cannot verify the scheme" }
+    elseif ($schemeBad.Count -gt 0) { Bad ("NEXTAUTH_URL is still http:// behind TLS (" + ($schemeBad -join '; ') + ") - every sign-in bounces back to the login page with no error anywhere") }
+    else { Ok ("NEXTAUTH_URL is https:// in all " + $schemeSeen + " console env file(s)") }
+
+    # ---- the certificate the terminator is actually configured with ----
+    # Read from NetVault's env files, because that is where the terminator reads
+    # them from (nocvault-tls-terminator.ts loadEnvironment()) and where
+    # Settings writes them (lib/envTargets.ts MANAGED_KEYS).
+    $nvEnvFiles = $Consoles[0].EnvFiles
+    $certPath = $null; $keyPath = $null
+    foreach ($f in $nvEnvFiles) {
+        if (-not $certPath) { $certPath = Get-EnvVal $f 'TLS_CERT_PATH' }
+        if (-not $keyPath)  { $keyPath  = Get-EnvVal $f 'TLS_KEY_PATH' }
+    }
+    if ($certPath -and $keyPath) {
+        if ((Test-Path -LiteralPath $certPath) -and (Test-Path -LiteralPath $keyPath)) {
+            Ok ("TLS_CERT_PATH + TLS_KEY_PATH set and both files present (" + $certPath + ")")
+            # Expiry runway on the LEAF. Parsed from the first PEM block only -
+            # a real certificate file here carries leaf + intermediates, so
+            # base64-decoding the whole file (the way the agent WS check above
+            # can, since those are single self-signed certs) would fail.
+            $leaf = $null
+            try {
+                $pem = Get-Content -LiteralPath $certPath -Raw
+                $m = [regex]::Match($pem, '-----BEGIN CERTIFICATE-----([\s\S]*?)-----END CERTIFICATE-----')
+                if ($m.Success) {
+                    $der = [Convert]::FromBase64String(($m.Groups[1].Value -replace '\s',''))
+                    $leaf = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2(,$der)
+                }
+            } catch { $leaf = $null }
+            if ($leaf) {
+                $days = [int]([math]::Floor(($leaf.NotAfter - (Get-Date)).TotalDays))
+                if ($days -lt 0)     { Bad ("Terminator certificate EXPIRED on " + $leaf.NotAfter.ToString('yyyy-MM-dd') + " - every console shows a browser error") }
+                elseif ($days -lt 30){ Wn  ("Terminator certificate expires in " + $days + " days (" + $leaf.NotAfter.ToString('yyyy-MM-dd') + ")") }
+                else                 { Ok  ("Terminator certificate valid until " + $leaf.NotAfter.ToString('yyyy-MM-dd') + " (" + $days + " days)") }
+            } else {
+                Wn ("Could not parse a certificate out of " + $certPath + " - expiry not checked")
+            }
+        } else {
+            Bad ("TLS_CERT_PATH/TLS_KEY_PATH point at a file that is missing (cert=" + $certPath + " key=" + $keyPath + ") - the terminator degrades to PLAIN HTTP on all four ports")
+        }
+    } else {
+        Bad "TLS_CERT_PATH / TLS_KEY_PATH not found in NetVault's env files - the terminator cannot be serving TLS from a configured certificate"
+    }
+
+    # ⛔ AND THEY MUST NOT BE PINNED IN ANY SERVICE ENVIRONMENT. They are
+    # lib/envTargets.ts MANAGED_KEYS: a value in AppEnvironmentExtra is read at
+    # runtime and beats any file, because dotenv never overrides an existing
+    # process.env entry. Pinned, a certificate changed from Settings saves
+    # cleanly, restarts cleanly and changes nothing - the exact bug wave one
+    # removed NEXTAUTH_URL from three services to fix.
+    if ($nssm) {
+        $pinned = @()
+        foreach ($svcName in @('NocVault-Tls','NetVault','LogVault-App','DDIVault-App','SpanVault-App')) {
+            if (-not (Get-Service -Name $svcName -ErrorAction SilentlyContinue)) { continue }
+            $envRaw = ""
+            try { $envRaw = (& $nssm get $svcName AppEnvironmentExtra 2>$null | Out-String) } catch { $envRaw = "" }
+            $envRaw = $envRaw -replace "`0", ''
+            foreach ($k in @('TLS_CERT_PATH','TLS_KEY_PATH','TLS_PUBLIC_HOST','NEXTAUTH_URL')) {
+                if ($envRaw -match ("(?m)^\s*" + $k + "\s*=")) { $pinned += ($svcName + "/" + $k) }
+            }
+        }
+        if ($pinned.Count -gt 0) { Bad ("Runtime-settable key(s) PINNED in a service environment: " + ($pinned -join ', ') + " - they shadow the env file forever and make the Settings page a silent no-op") }
+        else { Ok "No runtime-settable TLS/auth key is pinned in any service environment - the env files are authoritative" }
+    } else {
+        Wn "nssm.exe not found - could not verify that TLS_*/NEXTAUTH_URL are unpinned in the service environments"
+    }
+
+    # ---- the refusal banner ----
+    # start.mjs prints "NocVault TLS terminator: NOT STARTED" and exits rather
+    # than serving plaintext when it cannot load lib/tlsConfig.ts (a Node that
+    # cannot execute TypeScript). Nothing is being served when that happens, so
+    # its presence in the log is decisive even if some other check passed.
+    $tlsLogDir = Join-Path $InstallDir 'NetVault\logs'
+    $tlsLogText = ""
+    foreach ($lf in @((Join-Path $tlsLogDir 'nocvault-tls-error.log'), (Join-Path $tlsLogDir 'nocvault-tls.log'))) {
+        if (Test-Path -LiteralPath $lf) {
+            try { $tlsLogText += (Get-Content -LiteralPath $lf -Raw -ErrorAction Stop) } catch {}
+        }
+    }
+    if (-not $tlsLogText) {
+        Wn ("No terminator log found under " + $tlsLogDir + " - cannot check for the 'NOT STARTED' banner")
+    } elseif ($tlsLogText -match 'NOT STARTED') {
+        Bad "The terminator logged its 'NOT STARTED' banner - it refused to start (a Node that cannot execute TypeScript) and is serving nothing"
+    } else {
+        Ok "No 'NOT STARTED' banner in the terminator log"
+        # The other banner: a BROKEN certificate degrades to plain HTTP loudly
+        # rather than refusing to start, which is only safe because it is never
+        # silent. If it is there, the consoles are up and UNENCRYPTED.
+        if ($tlsLogText -match 'traffic is NOT encrypted') {
+            Bad "The terminator logged its degrade-to-plain-HTTP banner - the consoles are reachable but NOT encrypted. Fix TLS_CERT_PATH/TLS_KEY_PATH and restart NocVault-Tls."
+        }
+    }
+}
+
+# ---------------------------------------------------------------
 Section "4. HTTP Health + Versions"
 $apps = @(
     @{ Name="netvault";  Port=3000; Min="1.19.7" },
@@ -324,8 +630,15 @@ $apps = @(
     @{ Name="ddivault";  Port=3006; Min="1.17.0" },
     @{ Name="spanvault"; Port=3008; Min="1.48.4" }
 )
+# ⛔ $ConsoleBase, not the public port. Behind the TLS terminator the public port
+# is the TERMINATOR: an http:// probe there is answered with the demux 301, and
+# Invoke-WebRequest then follows it to https://127.0.0.1 and fails certificate
+# validation - so all four apps would be reported DOWN on a perfectly healthy
+# TLS suite. Section 3c sets this to the console's real listening address, and
+# leaves it at the historic public port on a plain-HTTP suite. The HTTPS path
+# through the terminator is checked in 3c, where a failure can be attributed.
 foreach ($a in $apps) {
-    $r = Http ("http://127.0.0.1:" + $a.Port + "/api/health") 20
+    $r = Http (($ConsoleBase[$a.Name]) + "/api/health") 20
     if ($r.Code -eq 200 -and $r.Content) {
         $ver = $null
         try { $ver = ($r.Content | ConvertFrom-Json).version } catch {}
@@ -338,30 +651,30 @@ foreach ($a in $apps) {
 
 # ---------------------------------------------------------------
 Section "5. Public Endpoints + Launcher Performance"
-$sh1 = Http "http://127.0.0.1:3000/api/suite/health" 12
+$sh1 = Http "$NVBase/api/suite/health" 12
 if ($sh1.Code -eq 200) {
-    $sh2 = Http "http://127.0.0.1:3000/api/suite/health" 12
+    $sh2 = Http "$NVBase/api/suite/health" 12
     Ok ("/api/suite/health 200 (cold " + $sh1.Ms + "ms, warm " + $sh2.Ms + "ms)")
     if ($sh1.Ms -gt 3000) { Wn ("suite/health cold > 3s (" + $sh1.Ms + "ms) - a sibling app may be slow") }
 } else { Bad ("/api/suite/health FAILED (code=" + $sh1.Code + ")") }
 
-$ss1 = Http "http://127.0.0.1:3000/api/suite/stats" 12
+$ss1 = Http "$NVBase/api/suite/stats" 12
 if ($ss1.Code -eq 200) {
-    $ss2 = Http "http://127.0.0.1:3000/api/suite/stats" 12
+    $ss2 = Http "$NVBase/api/suite/stats" 12
     Ok ("/api/suite/stats 200 (cold " + $ss1.Ms + "ms, warm " + $ss2.Ms + "ms)")
     if ($ss2.Ms -lt $ss1.Ms) { Inf "warm call faster -> in-memory cache appears active" }
 } else { Bad ("/api/suite/stats FAILED (code=" + $ss1.Code + ")") }
 
-$lic = Http "http://127.0.0.1:3000/api/license" 12
+$lic = Http "$NVBase/api/license" 12
 if ($lic.Code -eq 200 -and $lic.Content) {
     $sid = $null; try { $sid = ($lic.Content | ConvertFrom-Json).serverId } catch {}
     Ok ("/api/license 200 (" + $lic.Ms + "ms)" + $(if ($sid) { " serverId=" + $sid } else { "" }))
 } else { Wn ("/api/license code=" + $lic.Code) }
 
-$set = Http "http://127.0.0.1:3000/api/settings" 12
+$set = Http "$NVBase/api/settings" 12
 if ($set.Code -eq 200) { Ok ("/api/settings 200 (" + $set.Ms + "ms)") } else { Wn ("/api/settings code=" + $set.Code) }
 
-$lvs = Http "http://127.0.0.1:3004/api/stats" 12
+$lvs = Http "$LVBase/api/stats" 12
 if ($lvs.Code -eq 200) { Ok ("LogVault /api/stats 200 (" + $lvs.Ms + "ms)") } else { Wn ("LogVault /api/stats code=" + $lvs.Code) }
 
 # NocVault Agent bootstrap (Phase 2 hub-served bundle). The minted install
@@ -369,13 +682,13 @@ if ($lvs.Code -eq 200) { Ok ("LogVault /api/stats 200 (" + $lvs.Ms + "ms)") } el
 # agent files from /api/agents/bundle. Both are PUBLIC (no session). These 503
 # (never 200) if the on-disk agent\ dir isn't present at the standalone runtime
 # root - the exact failure mode that would make a minted install command 404.
-$aps = Http "http://127.0.0.1:3000/api/agents/install.ps1" 12
+$aps = Http "$NVBase/api/agents/install.ps1" 12
 if ($aps.Code -eq 200 -and $aps.Content -match 'param\(' -and $aps.Content -match 'NocVault-Agent') {
     Ok ("/api/agents/install.ps1 serves the installer (200, " + $aps.Ms + "ms)")
 } else {
     Bad ("/api/agents/install.ps1 FAILED (code=" + $aps.Code + ") - agent installer not served (minted install one-liner would 404)")
 }
-$abn = Http "http://127.0.0.1:3000/api/agents/bundle" 12
+$abn = Http "$NVBase/api/agents/bundle" 12
 if ($abn.Code -eq 200 -and $abn.Content) {
     $files = $null; try { $files = ($abn.Content | ConvertFrom-Json).files } catch {}
     if ($files -and @($files).Count -ge 1) {
@@ -394,7 +707,7 @@ if ($abn.Code -eq 200 -and $abn.Content) {
 # install with no committed/signed manifest legitimately 503s (advertises no
 # update) - but the repo ships a signed one, so a real deploy must serve 200 with
 # a body carrying version + files + sig.
-$aum = Http "http://127.0.0.1:3000/api/agents/update-manifest" 12
+$aum = Http "$NVBase/api/agents/update-manifest" 12
 if ($aum.Code -eq 200 -and $aum.Content) {
     $man = $null; try { $man = ($aum.Content | ConvertFrom-Json) } catch {}
     if ($man -and $man.version -and $man.files -and $man.sig) {
@@ -413,7 +726,7 @@ if ($aum.Code -eq 200 -and $aum.Content) {
 # is present AND locked down, not a 404 (route missing) or 405 (wrong method).
 $refCode = $null
 try {
-    $rf = Invoke-WebRequest "http://127.0.0.1:3000/api/agents/smoke-test/refresh" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
+    $rf = Invoke-WebRequest "$NVBase/api/agents/smoke-test/refresh" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
     $refCode = [int]$rf.StatusCode
 } catch {
     if ($_.Exception.Response) { try { $refCode = [int]$_.Exception.Response.StatusCode } catch {} }
@@ -430,7 +743,7 @@ if ($refCode -eq 401) {
 # locked to agent JWTs, not a 404 (route missing).
 $logCode = $null
 try {
-    $lf = Invoke-WebRequest "http://127.0.0.1:3000/api/agents/smoke-test/logs" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
+    $lf = Invoke-WebRequest "$NVBase/api/agents/smoke-test/logs" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
     $logCode = [int]$lf.StatusCode
 } catch {
     if ($_.Exception.Response) { try { $logCode = [int]$_.Exception.Response.StatusCode } catch {} }
@@ -447,7 +760,7 @@ if ($logCode -eq 401) {
 # bad type / unknown agent; unauthed can never reach that logic.
 $cmdCode = $null
 try {
-    $cf = Invoke-WebRequest "http://127.0.0.1:3000/api/agents/smoke-test/commands" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
+    $cf = Invoke-WebRequest "$NVBase/api/agents/smoke-test/commands" -Method Post -UseBasicParsing -TimeoutSec 12 -ErrorAction Stop
     $cmdCode = [int]$cf.StatusCode
 } catch {
     if ($_.Exception.Response) { try { $cmdCode = [int]$_.Exception.Response.StatusCode } catch {} }
@@ -458,17 +771,17 @@ if ($cmdCode -eq 401) {
     Bad ("/api/agents/<id>/commands unauthed POST returned code=" + $cmdCode + " (expected 401 - route missing or not gated)")
 }
 
-$root = Http "http://127.0.0.1:3000/" 12 -NoRedirect
+$root = Http "$NVBase/" 12 -NoRedirect
 if ($root.Code -ge 300 -and $root.Code -lt 400) { Ok ("NetVault / redirects (" + $root.Code + " -> " + $root.Loc + ")") }
 elseif ($root.Code -eq 200) { Inf "NetVault / returned 200 (no redirect)" }
 else { Wn ("NetVault / code=" + $root.Code) }
 
-$login = Http "http://127.0.0.1:3000/login" 12
+$login = Http "$NVBase/login" 12
 if ($login.Code -eq 200) { Ok "NetVault /login renders (200)" } else { Wn ("NetVault /login code=" + $login.Code) }
 
 # ---------------------------------------------------------------
 Section "6. Auth / NextAuth"
-$csrf = Http "http://127.0.0.1:3000/api/auth/csrf" 12
+$csrf = Http "$NVBase/api/auth/csrf" 12
 if ($csrf.Code -eq 200 -and $csrf.Content) {
     $tok = $null; try { $tok = ($csrf.Content | ConvertFrom-Json).csrfToken } catch {}
     if ($tok) { Ok "NextAuth csrf endpoint OK (auth stack is up)" } else { Wn "csrf 200 but no token parsed" }
@@ -478,12 +791,12 @@ if ($TestLogin) {
     Inf "Attempting credentials login with default admin (admin@yourcompany.com / Admin1234!) ..."
     try {
         $sess = $null
-        $c = Invoke-WebRequest "http://127.0.0.1:3000/api/auth/csrf" -UseBasicParsing -SessionVariable sess -TimeoutSec 12
+        $c = Invoke-WebRequest "$NVBase/api/auth/csrf" -UseBasicParsing -SessionVariable sess -TimeoutSec 12
         $tk = ($c.Content | ConvertFrom-Json).csrfToken
         $body = @{ csrfToken = $tk; email = "admin@yourcompany.com"; password = "Admin1234!"; redirect = "false"; json = "true" }
-        $null = Invoke-WebRequest "http://127.0.0.1:3000/api/auth/callback/credentials" -Method Post -Body $body -WebSession $sess -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 12 -ErrorAction SilentlyContinue
+        $null = Invoke-WebRequest "$NVBase/api/auth/callback/credentials" -Method Post -Body $body -WebSession $sess -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 12 -ErrorAction SilentlyContinue
         $hasSession = $false
-        foreach ($ck in $sess.Cookies.GetCookies("http://127.0.0.1:3000")) { if ($ck.Name -like "*session-token*") { $hasSession = $true } }
+        foreach ($ck in $sess.Cookies.GetCookies("$NVBase")) { if ($ck.Name -like "*session-token*") { $hasSession = $true } }
         if ($hasSession) { Ok "Login smoke: session cookie issued (default admin login works)" }
         else { Wn "Login smoke: no session cookie - default password may have changed, or flow differs. Verify in browser." }
     } catch { Wn ("Login smoke error: " + $_.Exception.Message) }

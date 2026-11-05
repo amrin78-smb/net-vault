@@ -8,6 +8,17 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { STAGE_LABELS } from '@/app/components/UpdateFailureBanner'
 import { useEscape } from '@/components/ui'
 import MfaCard from './MfaCard'
+// The Entra-SSO-and-HTTPS panels (1.55.0) live in components/settings/ rather
+// than in this file. This file is already ~1,600 lines and the three panels
+// carry their own fetches, their own two confirmation flows and a shared set of
+// module-top-level sub-components; inlining them would have doubled it and put
+// the one rule those panels must not break — never declare a component inside
+// another — right next to a file with several of them nested at the top.
+// They render here, so they appear in the Settings navigation like every other
+// section, and nothing else in this file had to move.
+import ConsoleAddressPanel from '@/components/settings/ConsoleAddressPanel'
+import CertificatePanel from '@/components/settings/CertificatePanel'
+import SingleSignOnPanel from '@/components/settings/SingleSignOnPanel'
 
 /**
  * Shell for the Add/Edit site dialogs.
@@ -410,6 +421,21 @@ type Country = { id: number; name: string; iso_code: string; region: string }
 
 const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS']
 
+/**
+ * Every section this page can show.
+ *
+ * ⛔ ONE DECLARATION, because the list is repeated three times below (the state
+ * type, the ?tab= allow-list and the cast that follows it) and a section added
+ * to two of the three is reachable by URL but has no button, or has a button
+ * that the deep-link guard then refuses. `console` and `certificate` are
+ * admin+; `sso` is super_admin ONLY — see the filters on the nav below, which
+ * are the same shape as the existing license/updates ones.
+ */
+type SettingsTab =
+  'general' | 'console' | 'certificate' | 'sso' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about'
+const ADMIN_TABS: SettingsTab[] =
+  ['general', 'console', 'certificate', 'sso', 'users', 'sites', 'security', 'license', 'updates', 'about']
+
 function SettingsInner() {
   const { showToast } = useToast()
   const { confirm } = useConfirm()
@@ -432,7 +458,7 @@ function SettingsInner() {
   const searchParams = useSearchParams()
   const urlTab = searchParams.get('tab')
 
-  const [activeTab, setActiveTab] = useState<'general'|'users'|'sites'|'security'|'license'|'updates'|'about'>('general')
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
 
   // A non-admin has exactly one tab, so land them on it rather than on the
   // 'general' default they are not allowed to see.
@@ -454,18 +480,34 @@ function SettingsInner() {
     if (!user) return
     const t = urlTab
     if (!t) return
-    const allowed = canSeeAdminTabs
-      ? ['general', 'users', 'sites', 'security', 'license', 'updates', 'about']
+    // ⛔ 'sso' IS FILTERED OUT FOR A NON-super_admin HERE TOO, not only in the
+    // nav. Hiding the button is cosmetic — each section is rendered by its own
+    // `activeTab === '<name>'` block, so /settings?tab=sso would otherwise draw
+    // the directory-trust panel for an `admin`, which is the exact role split
+    // /api/system/entra refuses at the API.
+    const allowed: string[] = canSeeAdminTabs
+      // ⛔ `license` IS GATED HERE TOO, AND IT WAS NOT BEFORE. Its nav BUTTON is
+      // filtered by isSuperAdmin further down, but this allow-list admitted it
+      // for any admin — so /settings?tab=license rendered the licence panel for
+      // someone who could never see the button. Exactly the split this effect's
+      // own comment warns about, left behind on one tab.
+      //
+      // Found while adding `sso`, which is the point: CLAUDE.md's rule is that a
+      // fixed access-control bug is a fixed INSTANCE, not a fixed CLASS — when
+      // you gate one surface, check its siblings in the same pass. Both tabs
+      // are now gated in BOTH places; if a third super_admin-only tab is added,
+      // it belongs in both too.
+      ? ADMIN_TABS.filter(x => (x !== 'sso' && x !== 'license') || isSuperAdmin)
       : ['security']
     if (allowed.includes(t)) {
-      setActiveTab(t as 'general' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about')
+      setActiveTab(t as SettingsTab)
     }
     // Depends on urlTab, NOT just [user]: the three Administration rows in
     // the sidebar are query-string variants of THIS SAME route, so moving
     // between them changes the URL without remounting the page. Reading the
     // tab only on mount made every Administration link look dead - the
     // address bar updated and the panel stayed exactly where it was.
-  }, [user, canSeeAdminTabs, urlTab])
+  }, [user, canSeeAdminTabs, isSuperAdmin, urlTab])
   /**
    * Switch section AND reflect it in the URL.
    *
@@ -808,8 +850,12 @@ function SettingsInner() {
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
           {([
-            ['System',   ['general', 'sites', 'updates', 'about']],
-            ['Access',   ['users']],
+            // Console address and Certificate are System: they are facts about
+            // this installation's address and transport. Single sign-on sits
+            // under Access beside Users, because it decides WHO may sign in —
+            // and it is the one entry here gated on super_admin alone.
+            ['System',   ['general', 'console', 'certificate', 'sites', 'updates', 'about']],
+            ['Access',   ['users', 'sso']],
             ['Billing',  ['license']],
             ['Personal', ['security']],
           ] as const).map(([group, tabs]) => {
@@ -818,6 +864,11 @@ function SettingsInner() {
               .filter(tab => tab !== 'general' || isAdmin)
               .filter(tab => tab !== 'license' || isSuperAdmin)
               .filter(tab => tab !== 'updates' || isAdmin)
+              .filter(tab => tab !== 'console' || isAdmin)
+              .filter(tab => tab !== 'certificate' || isAdmin)
+              // ⛔ super_admin, not admin. Whoever sets the tenant decides which
+              // directory is trusted to issue identities for the whole suite.
+              .filter(tab => tab !== 'sso' || isSuperAdmin)
             if (visible.length === 0) return null
             return (
               <div key={group} className="settings-nav-group">
@@ -832,6 +883,9 @@ function SettingsInner() {
                   >
                     <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
                       {tab === 'general' ? 'General'
+                        : tab === 'console' ? 'Console address'
+                        : tab === 'certificate' ? 'Certificate'
+                        : tab === 'sso' ? 'Single sign-on'
                         : tab === 'users' ? 'Users & access'
                         : tab === 'sites' ? 'Organisation & sites'
                         : tab === 'security' ? 'Security / 2FA'
@@ -1151,6 +1205,19 @@ function SettingsInner() {
         </div>
       )}
 
+      {/* CONSOLE ADDRESS TAB (admin+) — NEXTAUTH_URL, saved vs running, the
+          per-file state, and the lockout confirmation. */}
+      {activeTab === 'console' && isAdmin && <ConsoleAddressPanel />}
+
+      {/* CERTIFICATE TAB (admin+) — the three transport states and the
+          certificate install, including the replace confirmation. */}
+      {activeTab === 'certificate' && isAdmin && <CertificatePanel />}
+
+      {/* SINGLE SIGN-ON TAB — ⛔ super_admin ONLY, and the role check is on the
+          CONTENT, not only on the nav button: the nav filter hides the button
+          and this is what makes /settings?tab=sso mean nothing for an `admin`. */}
+      {activeTab === 'sso' && isSuperAdmin && <SingleSignOnPanel />}
+
       {/* SITES TAB */}
       {activeTab === 'sites' && (
         <div>
@@ -1306,7 +1373,11 @@ function SettingsInner() {
       )}
 
       {/* LICENSE TAB */}
-      {activeTab === 'license' && (
+      {/* ⛔ `&& isSuperAdmin` matches the sso block above and the allow-list.
+          The content block is the real gate — the allow-list only decides which
+          tab opens, and `setActiveTab` is reachable from other code paths. Both
+          layers, or neither is a boundary. */}
+      {activeTab === 'license' && isSuperAdmin && (
         <div>
           {/* Status card */}
           <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>

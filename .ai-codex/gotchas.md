@@ -231,3 +231,39 @@ clean type-check and a screenshot all pass it. Type into a dialog before calling
   production, and the dashboard clock read "ICT · Asia/Bangkok". Put the character itself in
   JSX text, or wrap it in an expression (`{'·'}`). Checked across all four suite apps —
   netvault was the only one affected.
+
+## The TLS cutover, and the sibling updater that would have undone it (1.56.0)
+
+⛔ **MOVING THE FOUR CONSOLES TO LOOPBACK IS THE CHANGE THAT CAN BRICK A SUITE.** It is what
+makes the terminator a boundary, and if the terminator then does not start, all four web UIs are
+unreachable with nothing but console access to the box to recover. So the installer gates it
+behind three proofs — a certificate PAIR exists, the Node that will run the service actually
+executes TypeScript (proved by RUNNING a throwaway `.ts`, never read off a version table), and
+the terminator answers HTTPS `/api/health` on every console's public port with no
+"NOT STARTED" banner — and `Undo-TlsCutover` runs from EVERY failure path, restoring each
+console's whole env file from a pre-change snapshot and REMOVING the service so no auto-start
+entry is left to fight for port 3000 at the next reboot. Fail any gate and the suite installs
+exactly as it ships today.
+
+⛔ **`Update-SpanVault.ps1` WOULD HAVE SILENTLY UNDONE THE CUTOVER ON EVERY RUN.** Its `$Services`
+table hardcodes `next start -p 3008` and the script RE-APPLIES `AppParameters` on each update —
+so a routine SpanVault update would have put that console back on `0.0.0.0:3008`, the port the
+terminator holds, with no error. It now preserves the live parameters when they already name
+`-H 127.0.0.1`. ⛔ The general rule: an updater that rewrites a service's `AppParameters` from a
+table will overwrite any deployment-time change to those parameters. LogVault's and DDIVault's
+updaters do not rewrite them, which is the only reason they did not have the same bug — check
+before assuming a sibling is safe.
+
+⛔ **`Update-NetVault.ps1` HAD TWO `Get-NetTCPConnection -LocalPort 3000` KILLS.** Behind the
+terminator, 3000 is the TERMINATOR's port — those would have killed all four consoles mid-update.
+Both now use the real app port read from the live service environment.
+
+⛔ **`NocVault-Tls` MUST BE STOPPED AND REMOVED FIRST ON UNINSTALL.** Its `DependOnService` makes
+Windows refuse `sc stop` on a console while it is running (1051), which cascades into `sc delete`
+against live processes and a failed directory removal.
+
+⛔ **ITS `AppEnvironmentExtra` CARRIES ONLY `NODE_ENV`, DELIBERATELY.** `TLS_CERT_PATH` and
+`TLS_KEY_PATH` are `MANAGED_KEYS`: the service environment beats any file, so pinning them would
+make every certificate change from Settings a silent no-op for the one process that actually
+terminates TLS — wave one's `NEXTAUTH_URL` bug, one process over. The terminator's own
+`loadEnvironment()` already reads the two files `resolveEnvTargets()` writes.

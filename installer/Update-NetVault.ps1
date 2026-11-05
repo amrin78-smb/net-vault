@@ -314,6 +314,76 @@ function Get-NssmForService([string]$service) {
     return $null
 }
 
+# ======================================================================
+# Where does NetVault actually listen, and is a TLS terminator in front?
+# ======================================================================
+# The suite installer can put all four consoles behind the shared terminator
+# (NocVault-Tls): each app moves to 127.0.0.1:1300X and the terminator takes
+# over the public port. Nothing in THIS script creates or removes that
+# arrangement - it only has to stop assuming port 3000 is NetVault.
+#
+# ⛔ THREE THINGS IN HERE WOULD OTHERWISE BE ACTIVELY DESTRUCTIVE AFTER A
+# CUTOVER, not merely wrong:
+#   1. the "clear port 3000" steps kill whatever process holds 3000 - which,
+#      after a cutover, is the TERMINATOR, i.e. every console on the box;
+#   2. the health check (and the rollback's re-verification) polls
+#      http://127.0.0.1:3000, which a TLS listener answers with a 301 and never
+#      a 200 - so a perfectly good update would be declared failed and rolled
+#      back, and then the rollback would be declared failed too;
+#   3. the three scheduled tasks POST to http://127.0.0.1:3000 with curl.exe
+#      and no -L, so health snapshots and EOL enrichment stop silently.
+#
+# Resolved from the LIVE service environment, never from a flag or a file this
+# script writes: the installer is the only thing that performs a cutover, and
+# the service registry is where it recorded the result.
+function Get-NssmSettingValue([string]$nssmExe, [string]$service, [string]$setting) {
+    if (-not $nssmExe) { return '' }
+    if (-not (Test-Path -LiteralPath $nssmExe)) { return '' }
+    $ErrorActionPreference = 'Continue'
+    $raw = ''
+    try { $raw = (& $nssmExe get $service $setting 2>&1 | Out-String) } catch { $raw = '' }
+    $raw = $raw -replace "`0", ''
+    return $raw.Trim()
+}
+
+$script:NvAppPort   = 3000
+$script:TlsFronted  = $false
+function Resolve-NetVaultTransport {
+    $nssmProbe = Get-NssmForService 'NetVault'
+    $extra = Get-NssmSettingValue $nssmProbe 'NetVault' 'AppEnvironmentExtra'
+    foreach ($line in @($extra -split "`r?`n")) {
+        if ($line.Trim() -match '^PORT\s*=\s*(\d+)$') { $script:NvAppPort = [int]$Matches[1] }
+    }
+    $svcTls = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
+    # BOTH conditions. A terminator service that exists while NetVault is still
+    # on 3000 is not fronting it (nothing can bind the same port twice), and
+    # treating that as "TLS active" would send every probe at a listener that
+    # is not there.
+    if ($svcTls -and $script:NvAppPort -ne 3000) { $script:TlsFronted = $true }
+}
+Resolve-NetVaultTransport
+if ($script:TlsFronted) {
+    Write-Host "    Transport: NetVault on 127.0.0.1:$($script:NvAppPort) behind NocVault-Tls (HTTPS on 3000)" -ForegroundColor Gray
+}
+
+# Stop / start the shared terminator alongside NetVault. No-ops - silently and
+# deliberately - on a suite that has no terminator, which is every install that
+# never configured a certificate.
+function Stop-TlsTerminator {
+    if (-not (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue)) { return }
+    $ErrorActionPreference = 'Continue'
+    $null = & sc.exe stop NocVault-Tls 2>&1
+    Start-Sleep -Seconds 2
+    Write-OK "NocVault-Tls stopped"
+}
+function Start-TlsTerminator {
+    if (-not (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue)) { return }
+    $ErrorActionPreference = 'Continue'
+    $null = & sc.exe start NocVault-Tls 2>&1
+    Start-Sleep -Seconds 3
+    Write-OK "NocVault-Tls started"
+}
+
 # Read a single value from a KEY=VALUE file (e.g. C:\ProgramData\NocVault\secrets.env).
 function Get-EnvVal([string]$file, [string]$key) {
     if (-not (Test-Path $file)) { return $null }
@@ -404,12 +474,43 @@ function Write-StatusJson {
 # Poll /api/health until it answers 200 or $TimeoutSec elapses. Shared by the
 # main flow's mandatory final health check and the rollback recovery path.
 function Wait-Healthy([int]$TimeoutSec = 60, [string]$ExpectedVersion = $null) {
-    Write-Host "    Waiting for NetVault to respond on :3000 " -ForegroundColor Gray -NoNewline
+    # ⛔ THE PROBE FOLLOWS THE TRANSPORT. Behind the terminator the console is
+    # only reachable over HTTPS on 3000; probing http://127.0.0.1:3000 there
+    # gets the demux's 301, never a 200, and this function is the gate that
+    # decides whether to roll the update back.
+    if ($script:TlsFronted) {
+        $probeUrl = "https://127.0.0.1:3000/api/health"
+    } else {
+        $probeUrl = "http://127.0.0.1:$($script:NvAppPort)/api/health"
+    }
+    Write-Host "    Waiting for NetVault to respond at $probeUrl " -ForegroundColor Gray -NoNewline
     $healthy = $false
+    # ⛔ TLS 1.2 STATED EXPLICITLY, CERTIFICATE DELIBERATELY NOT VALIDATED.
+    # Windows PowerShell 5.1 is .NET Framework, where ServicePointManager
+    # defaults to SSL3|TLS1.0; the terminator sets minVersion 'TLSv1.2' and
+    # refuses them, so the probe would fail against a listener that is working
+    # perfectly and trigger a rollback of a good update. That is the identical
+    # trap already recorded on the agent-ingest probe further down this file
+    # ("A call to SSPI failed", measured on the production server 2026-09-01).
+    # Validation is skipped because this dials 127.0.0.1, which no customer
+    # certificate will ever name - the question is "is the console answering",
+    # not "does this chain to a trusted root". Saved and restored around the
+    # loop: it is process-wide state.
+    $prevCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+    $prevProtocol = [System.Net.ServicePointManager]::SecurityProtocol
+    try {
+    if ($script:TlsFronted) {
+        $proto = [System.Net.SecurityProtocolType]::Tls12
+        if ([System.Net.SecurityProtocolType].GetEnumNames() -contains 'Tls13') {
+            $proto = $proto -bor [System.Net.SecurityProtocolType]::Tls13
+        }
+        [System.Net.ServicePointManager]::SecurityProtocol = $proto
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    }
     for ($i = 0; $i -lt $TimeoutSec; $i++) {
         try {
             # 127.0.0.1, not localhost - see the comment on the original health poll below.
-            $resp = Invoke-WebRequest -Uri "http://127.0.0.1:3000/api/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+            $resp = Invoke-WebRequest -Uri $probeUrl -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
             if ($resp.StatusCode -eq 200) {
                 if ($ExpectedVersion) {
                     # A 200/status:ok alone is not proof the CORRECT build is
@@ -428,6 +529,10 @@ function Wait-Healthy([int]$TimeoutSec = 60, [string]$ExpectedVersion = $null) {
         } catch {}
         Write-Host "." -ForegroundColor DarkGray -NoNewline
         Start-Sleep -Seconds 1
+    }
+    } finally {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prevCallback
+        [System.Net.ServicePointManager]::SecurityProtocol = $prevProtocol
     }
     Write-Host ""
     return $healthy
@@ -458,9 +563,17 @@ function Invoke-Rollback([string]$Reason) {
         # is stopped before the build/standalone snapshot is ever touched).
         Write-Step "Stopping NetVault before restoring last known-good version"
         $ErrorActionPreference = 'Continue'
+        # Terminator first: it proxies into NetVault, so stopping it before the
+        # upstream avoids a burst of 502s and, more importantly, keeps it from
+        # holding a keep-alive socket open against a process we are about to
+        # replace on disk.
+        Stop-TlsTerminator
         $null = & sc.exe stop NetVault 2>&1
         $ErrorActionPreference = 'Stop'
-        $portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+        # ⛔ $script:NvAppPort, NEVER a literal 3000. Behind the terminator,
+        # port 3000 is the TERMINATOR - killing its owning process here would
+        # take all four consoles down as a side effect of rolling back one app.
+        $portProc = Get-NetTCPConnection -LocalPort $script:NvAppPort -ErrorAction SilentlyContinue
         if ($portProc) {
             $procPid = $portProc.OwningProcess
             if ($procPid -and $procPid -gt 0) {
@@ -530,6 +643,11 @@ function Invoke-Rollback([string]$Reason) {
             Write-Warn "sc.exe start NetVault failed during rollback (exit $startExit)"
             $ok = $false
         }
+        # Bring the front door back BEFORE Wait-Healthy, which probes through it
+        # when the suite is TLS-fronted. A rollback that restored a working app
+        # but left the terminator stopped would report itself as failed - and
+        # the console really would be unreachable, since the app is on loopback.
+        Start-TlsTerminator
 
         # Gate on the PREVIOUS version too (item 5), not just a bare 200 - the
         # same NSSM-relaunch race that motivates the version check in the main
@@ -558,6 +676,10 @@ try {
 try {
 
     Write-Step "Stopping NetVault service"
+    # The shared TLS terminator goes down with it (no-op when there isn't one).
+    # It is only a proxy - it holds no state and rebuilds nothing - so the whole
+    # of its involvement in an update is "stop before, start after".
+    Stop-TlsTerminator
     Write-Host "    Running: sc.exe stop NetVault" -ForegroundColor Gray
     $svc = Get-Service -Name NetVault -ErrorAction SilentlyContinue
     if ($svc) {
@@ -1040,7 +1162,23 @@ try {
                            # Written by the reconcile step just above. deriveIngest reads
                            # these from the RUNNING process env, so they must reach the
                            # standalone runtime file, not just $AppDir\.env.
-                           'SPANVAULT_WS_TLS', 'SPANVAULT_WS_FINGERPRINT', 'DDIVAULT_WS_TLS', 'DDIVAULT_WS_FINGERPRINT')) {
+                           'SPANVAULT_WS_TLS', 'SPANVAULT_WS_FINGERPRINT', 'DDIVAULT_WS_TLS', 'DDIVAULT_WS_FINGERPRINT',
+                           # The shared terminator reads BOTH files (its
+                           # loadEnvironment() merges <root>\.env then
+                           # .next\standalone\.env.local then process.env), so
+                           # these are copied for the same reason as the keys
+                           # above: the running process must not be left behind
+                           # by an edit that only reached the deploy source.
+                           # They are lib/envTargets.ts MANAGED_KEYS, which is
+                           # exactly why they live in files and are never pinned
+                           # in any service environment.
+                           'TLS_CERT_PATH', 'TLS_KEY_PATH', 'TLS_PUBLIC_HOST',
+                           # Set by the installer's TLS cutover: without these
+                           # the hub's suite probes aim at the terminator's
+                           # public ports and every launcher tile reads
+                           # "Unavailable".
+                           'NETVAULT_HEALTH_URL', 'LOGVAULT_HEALTH_URL', 'DDIVAULT_HEALTH_URL', 'SPANVAULT_HEALTH_URL',
+                           'LOGVAULT_STATS_URL', 'DDIVAULT_STATS_URL', 'SPANVAULT_STATS_URL')) {
             $line = Get-Content $rootEnvPath | Where-Object { $_ -match "^$key=" } | Select-Object -First 1
             if ($line) {
                 $val = $line.Substring($key.Length + 1)
@@ -1098,13 +1236,16 @@ try {
     Write-Step "Starting NetVault service"
     $currentStage = 'service-start'
     Write-Host "    Running: sc.exe start NetVault" -ForegroundColor Gray
-    $portProc = Get-NetTCPConnection -LocalPort 3000 -ErrorAction SilentlyContinue
+    # ⛔ $script:NvAppPort, NEVER a literal 3000 - see the matching note in
+    # Invoke-Rollback. After a TLS cutover, 3000 belongs to the terminator and
+    # killing its owner here would drop every console on the box.
+    $portProc = Get-NetTCPConnection -LocalPort $script:NvAppPort -ErrorAction SilentlyContinue
     if ($portProc) {
         $procPid = $portProc.OwningProcess
         if ($procPid -and $procPid -gt 0) {
             Get-Process -Id $procPid -ErrorAction SilentlyContinue | Stop-Process -Force
             Start-Sleep -Seconds 2
-            Write-OK "Cleared port 3000"
+            Write-OK "Cleared port $($script:NvAppPort)"
         }
     }
     # Relax Stop around sc.exe too — same stderr-as-terminating-error risk as the
@@ -1124,6 +1265,9 @@ try {
     # updates that had actually succeeded).
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne 1056) { throw "sc.exe start NetVault failed (exit $LASTEXITCODE)" }
 
+    # The front door, back up before the health check below goes through it.
+    Start-TlsTerminator
+
     # Mandatory final health check (item 4 of the resilience plan): exit code 0
     # from sc.exe/npm is NOT sufficient proof the update succeeded - a service
     # that "started" per SCM but is stuck crash-looping or never opens its port
@@ -1133,7 +1277,8 @@ try {
     $healthy = Wait-Healthy -TimeoutSec 60 -ExpectedVersion $attemptedVersion
     if (-not $healthy) {
         $verMsg = if ($attemptedVersion) { " (or never reported version $attemptedVersion - may still be serving a stale relaunched build)" } else { "" }
-        throw "NetVault did not answer /api/health within 60s of starting$verMsg - service may be crash-looping or stuck"
+        $tlsMsg = if ($script:TlsFronted) { " (probed over HTTPS through NocVault-Tls; check that service too - the console is bound to 127.0.0.1:$($script:NvAppPort) and is only reachable through it)" } else { "" }
+        throw "NetVault did not answer /api/health within 60s of starting$verMsg$tlsMsg - service may be crash-looping or stuck"
     }
     Write-OK "NetVault service is running (health check passed)"
 
@@ -1163,7 +1308,7 @@ try {
     $cronLine = Get-Content "$AppDir\.env" | Where-Object { $_ -match '^CRON_SECRET=' } | Select-Object -First 1
     $CronSecret = if ($cronLine) { $cronLine.Substring('CRON_SECRET='.Length) } else { '' }
     if ($CronSecret) {
-        $action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
+        $action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$($script:NvAppPort)/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
         $trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
         Register-MaintenanceTask "NetVault-HealthSnapshot" $action $trigger "daily 00:00"
         # No immediate baseline snapshot here - the daily scheduled task above takes
@@ -1174,7 +1319,7 @@ try {
 
     Write-Step "Registering daily EOL enrichment task"
     if ($CronSecret) {
-        $eolAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
+        $eolAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$($script:NvAppPort)/api/system/enrich-eol -H `"Authorization: Bearer $CronSecret`""
         $eolTrigger = New-ScheduledTaskTrigger -Daily -At "01:00"
         Register-MaintenanceTask "NetVault-EnrichEol" $eolAction $eolTrigger "daily 01:00"
         # No immediate enrichment run here - the daily scheduled task above runs it
@@ -1187,7 +1332,7 @@ try {
 
     Write-Step "Registering weekly EOL feed-sync task"
     if ($CronSecret) {
-        $syncAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:3000/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
+        $syncAction = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$($script:NvAppPort)/api/system/sync-eol -H `"Authorization: Bearer $CronSecret`""
         # Weekly, Sunday 00:15 - just ahead of the daily 01:00 enrichment, so Sunday's
         # enrichment applies the freshly-pulled seed. The endpoint writes ONLY eol_seed
         # (verifies the feed signature first); offline/air-gapped installs no-op safely
@@ -1245,7 +1390,8 @@ try {
 }
 
 Write-Host ""
-Write-Host "  Update complete. Access NetVault at: http://localhost:3000" -ForegroundColor Green
+$doneScheme = if ($script:TlsFronted) { "https" } else { "http" }
+Write-Host "  Update complete. Access NetVault at: ${doneScheme}://<this-server>:3000" -ForegroundColor Green
 Write-Host ""
 
 # Best-effort - if Start-Transcript never succeeded (see top of script), this

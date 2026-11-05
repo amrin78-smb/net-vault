@@ -153,3 +153,67 @@ guard here, re-run its mutation, don't trust a green suite.
 (installer) installer/terminator/{start.mjs,nocvault-tls-terminator.ts,tlsTerminator.ts} — the suite's shared TLS terminator: ONE process fronting all four consoles (3000/3004/3006/3008 → 127.0.0.1:1300X), rather than a custom server per app. ⛔ **NETVAULT IS `output: 'standalone'` AND NSSM RUNS NEXT'S OWN GENERATED server.js, so SecVault's per-app wrapper cannot be used here**; at four apps it would also mean four certificate installs and four renewals. Reuses `lib/tlsConfig.ts` unchanged for the three transport states. ⛔ THE SAME-PORT DEMUX: a plaintext request into a TLS listener is a protocol failure, not a redirect, so an old `http://host:3000` bookmark would give an unexplained connection error — it peeks byte 1, routes `0x16` to TLS and anything else to a 301. `socket.unshift` is load-bearing (deleting it breaks 9 of 19 tests; the byte is already consumed and every request loses its first character). ⛔ **IT OVERWRITES EVERY CLIENT `x-forwarded-*`, NEVER APPENDS** — `resolveOrigin` takes `.split(',')[0]` for the proto, so a client's `http` would win and silently downgrade every URL the app builds over a genuinely-TLS connection; and a two-value host fails `HOSTNAME_RE` and falls back to the install-time `NEXTAUTH_URL`, reintroducing the exact bug `resolveOrigin` was written to fix. Those redirects carry a short-lived signed SSO token. ⛔ **BLOCKED ON NODE: it cannot run on the Node 20.19.0 the installer bundles**, which cannot execute TypeScript (22.6 flagged / 22.18 unflagged) — and Node 20 LTS has been end-of-life since April 2026. `start.mjs` detects this by ATTEMPTING the import, never from a version table, and REFUSES with a named error rather than serving plaintext: with the decision layer unloadable it cannot tell a configured certificate from an unconfigured one, and plaintext there is indistinguishable from a deliberate `disabled` install — SecVault's 2026-09-24 outage shape exactly.
 
 (lib) lib/localAccountPolicy.ts — decideLocalAccountEmail/decideDirectoryAccountEdit/sameRow + LOCAL_EMAIL_OUTCOME/DIRECTORY_EDIT_OUTCOME. Who may write what to `users`. ⛔ **A LOCAL ACCOUNT MUST NOT USE A DIRECTORY EMAIL ADDRESS** (policy, 2026-11-05) — this is the symmetric half of `directoryUser.ts`'s EMAIL_COLLISION, so the refusal lands in front of whoever typed it instead of surfacing later as a failed sign-in for someone else. There is deliberately NO "link these two accounts" action and none is planned; the fix is to remove or re-address the local account. ⛔ `decideDirectoryAccountEdit` refuses a password, a role CHANGE or an email CHANGE on a directory row. The password case closes a real hole: `PUT /api/users/[id]` wrote `password_hash` from the body regardless of whose row it was, and a hash on an `entra` row makes `canUsePassword()` true. ⛔ CHANGES are compared, not mere presence — the Users form posts every field on every save, so refusing any request CONTAINING `role` would make a directory account's name and app access unsavable, which is the blanket refusal this avoids. The password is the exception: there is no "unchanged password" to compare against. Provenance comes from the shared `isDirectoryAccount`, so an unrecognised provider gets the stricter treatment.
+
+### lib/publicUrl.ts — `TRUST_PROXY_HEADERS` (1.56.0)
+
+`resolveOrigin` gained an optional allow-list and an injectable `env` (typed `EnvLike`, NOT
+`NodeJS.ProcessEnv` — this repo declares `NODE_ENV` as required there, so every test passing a
+small literal fails to compile and the workaround is a cast at each call site, which is how a
+test ends up asserting against a shape the function never sees).
+
+`TRUST_PROXY_HEADERS` is a comma-separated host allow-list. When SET, an `x-forwarded-host`
+that is not on it is **discarded** (falling back to the request's own `Host`) rather than
+refused — a misconfigured allow-list must not become an outage on every page that builds a
+cross-app link. ⛔ **UNSET MEANS EXACTLY TODAY'S BEHAVIOUR, AND THAT IS DELIBERATE.** The
+tempting default — ignore proxy headers unless a proxy is declared — is wrong here: behind the
+TLS terminator the app is reached over plain HTTP on loopback, so with `x-forwarded-proto`
+ignored it would conclude `http`, build `http://` cross-app URLs over a genuinely TLS
+deployment, and bounce every sign-in with no error anywhere. A hardening default that breaks
+sign-in the moment TLS is switched on is one that gets turned off again.
+
+⛔ **A SECOND HARDENING WAS BUILT, THEN REMOVED BEFORE COMMIT — the reasoning is in the file
+and is worth reading before anyone proposes it again.** Pinning the token-bearing `/api/sso/*`
+handoffs to `NEXTAUTH_URL` instead of the request origin looks obviously right (those redirects
+carry a signed JWT, so a header should not choose who receives it) and is a REGRESSION: on every
+install that has not yet used Settings → Console address, `NEXTAUTH_URL` is still the
+install-time baked IP, which is the precise bug `resolveOrigin` was written in 2026-07 to escape.
+Correct on a configured install, broken on all the others, with nothing in the code able to tell
+them apart. The risk it closed is also thinner than it looks: those routes require a valid
+session and a browser never sends `x-forwarded-host`, so steering the redirect means making the
+request yourself — which means already holding the session whose token you would receive.
+Revisiting it needs an explicit "the operator declared this address" key, not an inference about
+`NEXTAUTH_URL`'s contents.
+
+### components/settings/* — the three Settings panels (1.56.0)
+
+`systemPanelHelpers.ts` (pure, no JSX — every three-state judgement lives here so it is
+testable), `panelChrome.tsx` (PanelCard/Callout/StatePill/FactTable/CopyValue/SavedRunningRows),
+and `ConsoleAddressPanel` / `CertificatePanel` / `SingleSignOnPanel`.
+`app/(app)/settings/page.tsx` only imports and renders them.
+
+⛔ **SEPARATE FILES BECAUSE OF THE NO-NESTED-COMPONENTS RULE.** The page already nests several
+components at the top and is 1,600+ lines; three fetch-driven forms added there would lose input
+focus on every keystroke. Every component in these files is at module top level.
+
+⛔ **BOTH CONFIRMATION FLOWS BRANCH ON `needsConfirmation === true`, NEVER ON THE STATUS CODE.**
+The console-address lockout prompt and the certificate-replace prompt are both 409 — and so is
+the duplicate-key refusal, which is a plain error. Branching on `res.status === 409` would turn
+a refusal into a "proceed anyway?" button. Editing the input WITHDRAWS a pending confirmation,
+so a confirm can never be carried onto a value the operator was never shown.
+
+⛔ **THE CLIENT SECRET IS OMITTED FROM THE BODY ENTIRELY WHEN THE BOX IS BLANK, not sent as
+`''`.** `normaliseEntraInput` distinguishes keep (absent) from clear (empty string) by the body's
+SHAPE, so sending `''` would silently wipe the stored secret on every unrelated save.
+
+⛔ `shadowPresentation()` keeps three states and `clear` is the only one the panel is silent
+about; anything missing or unrecognised fails closed to `unknown`, which is rendered as
+unchecked and never as ok. `savedVsRunning()` compares VALUES, not configured-ness, so a secret
+ROTATION is detected. Entra's pending-field sentence uses the API's own labels verbatim — the
+field that matters is the secret, and that comparison happens server-side precisely so only its
+label travels.
+
+⛔ **`license` WAS GATED IN ONE PLACE AND NOT THE OTHER, and is now gated in both.** Its nav
+button was filtered by `isSuperAdmin` while the `?tab=` allow-list admitted any admin, so
+`/settings?tab=license` rendered the licence panel for someone who could never see the button —
+the exact split that effect's own comment warns about, left behind on one tab. Found while
+adding `sso`. A new super_admin-only tab belongs in BOTH the allow-list and its content block.

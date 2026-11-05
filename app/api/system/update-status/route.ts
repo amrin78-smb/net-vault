@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.56.0': [
+    'Settings now has pages for the console address, the HTTPS certificate and Microsoft Entra ID sign-in. Each site enters its own hostname, uploads its own certificate and supplies its own directory details — nothing is fixed when the suite is installed.',
+    'Changing the console address warns you, and asks again, if the name you typed points somewhere other than this server. That is the one mistake that leaves nobody able to reach the console afterwards.',
+    'The suite can now serve all four consoles over HTTPS through a single front door, so there is one certificate to install and one to renew rather than four. A fresh install only switches to it once it has proved the new front door answers on every console — if anything is missing or does not answer, the install finishes exactly as before, on plain HTTP.',
+    'Fixed: the licence page could be reached by typing its address even by an administrator who is not a super admin, who was never shown the button for it.',
+    'Note for whoever installs this: HTTPS requires a newer Node.js (22) than the installer currently carries. Until that is supplied the suite installs and runs exactly as it does today.',
+  ],
   '1.55.0': [
     'Fixed: a user account could not be deleted once it had been used for anything. On this installation the oldest account was recorded against 2,482 devices, and the database refused to remove it — the page just said "Failed to delete user" with no reason. Deleting an account now works and leaves the devices in place, with their "added by" simply showing nobody.',
     'Fixed: the Users page threw away the server’s explanation when a delete failed, so every refusal looked the same. It now tells you what actually happened.',
