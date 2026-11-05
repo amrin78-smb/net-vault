@@ -94,6 +94,7 @@ function Start-EngineWorker([string]$innerCmd) {
         <TextBox x:Name="TxtInstallDir" Text="C:\Apps" Height="28" Padding="6,4" Margin="0,0,0,14"/>
 
         <CheckBox x:Name="ChkKeepDb" Content="Keep databases (preserve all data - skip the DROP step)" Margin="0,0,0,8"/>
+        <CheckBox x:Name="ChkKeepCerts" Content="Keep the TLS certificate, its private key and the agent pins (only if re-installing here)" Margin="0,0,0,8"/>
         <CheckBox x:Name="ChkRemoveDeps" Content="Also uninstall shared prerequisites (Node.js, Git, PostgreSQL, VC++)" Margin="0,0,0,14"/>
 
         <CheckBox x:Name="ChkConfirm" FontWeight="SemiBold" Foreground="#B91C1C" Margin="0,18,0,0"
@@ -128,7 +129,7 @@ $reader = New-Object System.Xml.XmlNodeReader $xaml
 $win    = [Windows.Markup.XamlReader]::Load($reader)
 $win.TaskbarItemInfo = New-Object System.Windows.Shell.TaskbarItemInfo
 $el = @{}
-'ConfigPanel','TxtInstallDir','ChkKeepDb','ChkRemoveDeps','ChkConfirm',
+'ConfigPanel','TxtInstallDir','ChkKeepDb','ChkKeepCerts','ChkRemoveDeps','ChkConfirm',
 'ProgressPanel','LblStep','Bar','LblPct','TxtLog','LblStatus','BtnCancel','BtnRemove' | ForEach-Object {
     $el[$_] = $win.FindName($_)
 }
@@ -170,6 +171,7 @@ $el.BtnRemove.Add_Click({
     }
     $installDir = $el.TxtInstallDir.Text.Trim()
     $keepDb     = [bool]$el.ChkKeepDb.IsChecked
+    $keepCerts  = [bool]$el.ChkKeepCerts.IsChecked
     $removeDeps = [bool]$el.ChkRemoveDeps.IsChecked
 
     $script:total = 7
@@ -179,6 +181,7 @@ $el.BtnRemove.Add_Click({
     # The engine auto-reads the postgres password (secrets.env / app .env) - no password arg.
     $cmd = "& $(Q $UninstallPs1) -Force -InstallDir $(Q $installDir)"
     if ($keepDb)     { $cmd += ' -KeepDatabases' }
+    if ($keepCerts)  { $cmd += ' -KeepCertificates' }
     if ($removeDeps) { $cmd += ' -RemoveDependencies' }
 
     $el.ConfigPanel.Visibility='Collapsed'; $el.ProgressPanel.Visibility='Visible'

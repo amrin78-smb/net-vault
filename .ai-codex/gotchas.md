@@ -267,3 +267,54 @@ against live processes and a failed directory removal.
 make every certificate change from Settings a silent no-op for the one process that actually
 terminates TLS — wave one's `NEXTAUTH_URL` bug, one process over. The terminator's own
 `loadEnvironment()` already reads the two files `resolveEnvTargets()` writes.
+
+## Uninstall / install parity — found by running the real uninstaller on a real box (1.57.2)
+
+⛔ **`secrets.env`'s `POSTGRES_PASSWORD` WAS NOT NECESSARILY THE CLUSTER'S PASSWORD.** The
+installer generated one unconditionally and wrote it there, but an install onto a PostgreSQL that
+already exists takes the real password from `-PgAdminPassword`, and only that value reached the
+cluster and the app `.env` files. `Uninstall-NocVault-Suite.ps1` and `Test-NocVault-Suite.ps1`
+both read `secrets.env` FIRST, so on such a box the uninstaller authenticated with a password that
+works against nothing. Fixed on both sides: the installer records the password actually in use, and
+both consumers now TEST each candidate (`Test-PgSuperuserPassword`) and take the first that
+authenticates, not the first file that contains the key.
+
+⛔ **THE UNINSTALLER PRINTED `[OK] Dropped database:` WITHOUT LOOKING AT THE EXIT CODE.** psql's
+stderr went to `$null` and nothing read `$LASTEXITCODE`. Measured: nine consecutive `[OK]`s over
+nine failures, then a green "Uninstall Complete". Any uninstaller/installer step that shells out
+must read the exit code before it claims the step worked — and the closing banner must be able to
+say INCOMPLETE.
+
+⛔ **THE "LEFTOVER NODE PROCESS" KILL MATCHED `$InstallDir`, THE SHARED PARENT.** `C:\Apps` is not
+a NocVault-specific path. Measured: a NocVault uninstall killed CertVault's `server.js` and
+`engine-worker.js` (both launched from `C:\Apps\CertVault\runtime\node\node.exe`) and reported them
+as "2 leftover NocVault node process(es)". It now matches the four app directories, with `IndexOf`
+rather than `-like` so a `[` in a path is not read as a character class. Note what saved the other
+product on the same box: SecVaultTest is launched with a RELATIVE path, so the substring never
+matched it — escaping this was luck, not narrowing.
+
+⛔ **A FULL UNINSTALL LEFT THREE PRIVATE KEYS ON DISK.** `C:\ProgramData\NocVault\certs` is outside
+`$InstallDir`, so the directory-removal step never reached it: `nocvault.key` (on a customer
+install, their uploaded wildcard key) plus the `spanvault-ws` / `ddivault-ws` agent-ingest keys.
+Removed by default now, `-KeepCertificates` to retain. `secrets.env` is still deliberately kept.
+
+⛔ **`New-NetFirewallRule` ADDS A SECOND RULE WITH THE SAME `DisplayName`** — it does not replace.
+Two installs left two identical `NocVault DDIVault WS 3011` rules. All 11 call sites now go through
+`Add-NocFirewallRule`, which returns early if the rule exists. That rule was also missing from the
+uninstaller's removal list, so it survived a full uninstall; `Remove-NetFirewallRule -DisplayName`
+does remove every duplicate at once, so the removal side needed only the missing name.
+
+⛔ **`DROP ROLE` REFUSING IS THE SAFE OUTCOME, NOT A FAILURE TO WORK AROUND.** `nocvault_readonly`
+could not be dropped because 23 objects in an unrelated `certvault` database depend on it. Forcing
+it would revoke grants another product is using. The uninstaller reports the dependency, prints the
+`REASSIGN OWNED` / `DROP OWNED` remedy, and leaves the role alone.
+
+⛔ **THE INSTALLER PRINTED GENERATED SECRETS TO THE CONSOLE.** The unattended path echoed
+`POSTGRES_PASSWORD` and the `nocvault_readonly` password in full — into the GUI's
+`Desktop\NocVault-Suite-*.log` and into whatever session drove a remote install. It now prints the
+LOCATION of `secrets.env` only.
+
+⛔ **A WRONG `-PgAdminPassword` USED TO RUN ALL THE WAY TO A GREEN BANNER.** The pre-existing-
+PostgreSQL probe threw only when the password had just been generated AND `-PgAdminPassword` was
+absent. Every psql call below it ends in `2>$null`, so a bad password produced no database, no role
+and no schema, and four services restart-looping. It now throws on any authentication failure.

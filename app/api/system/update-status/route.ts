@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.57.2': [
+    'Fixed, found by running the uninstaller for real on a Windows test machine: on a server where PostgreSQL was already installed before NocVault, the uninstaller could not remove the databases at all. It was using a password the installer had generated and stored but never actually given to the database. It now tries each password it can find and uses the one that works, and the installer stores the password that is really in use.',
+    'The uninstaller reported every database and role as removed whether or not it had been. Nine failures in a row were reported as nine successes, followed by a green \u201ccomplete\u201d. It now reports what actually happened and says plainly when an uninstall finished incomplete, including which database logins are still on the server.',
+    'A full uninstall used to leave the HTTPS private key, and the two certificates remote agents check, behind on the disk. On a site that uploaded its own certificate that is the organisation\u2019s own private key, left on a decommissioned server. These are now removed; pass -KeepCertificates if you are re-installing on the same machine.',
+    'The uninstaller could stop an unrelated application that happened to be installed under the same folder. On the test machine it stopped another product\u2019s two services, which restarted themselves seconds later. It now only ever touches NocVault\u2019s own four folders.',
+    'Installing twice no longer leaves duplicate firewall rules, one rule the uninstaller missed is now removed, and the installer no longer prints the database passwords it generates \u2014 it points to the protected file that holds them. An incorrect PostgreSQL password supplied on the command line now stops the install immediately instead of producing an installation with no database.',
+  ],
   '1.57.1': [
     'Fixed, found by installing the suite for real on a Windows test machine: the installer\u2019s own check of whether HTTPS was working could never succeed, so every install would have switched to HTTPS, decided it had failed, and switched back. The check used a PowerShell command that cannot talk to the new HTTPS front door; three other ways of asking the same question all worked. HTTPS could not have been turned on without this.',
     'The same faulty check was used in two more places: the NetVault updater would have undone every update on a site using HTTPS, and the post-install test would have reported a perfectly healthy site as down.',

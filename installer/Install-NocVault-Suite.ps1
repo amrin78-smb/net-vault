@@ -148,6 +148,25 @@ function GrantNocRoRead($db) {
     }
 }
 
+# ── Firewall rule helper ──────────────────────────────────────────
+# New-NetFirewallRule does NOT replace a rule with the same DisplayName - it adds
+# ANOTHER one. Every call site here used to invoke it unguarded, so each re-install
+# left a second (then third) copy of the same rule. Measured on staging: two
+# identical "NocVault DDIVault WS 3011" rules after two installs. Harmless to
+# traffic, but it contradicts the "re-installs are idempotent" promise, and a
+# duplicate list is how a rule that should have been removed hides in plain sight.
+function Add-NocFirewallRule {
+    param(
+        [Parameter(Mandatory)][string]$DisplayName,
+        [Parameter(Mandatory)][string]$Protocol,
+        [Parameter(Mandatory)][int]$LocalPort
+    )
+    $existing = Get-NetFirewallRule -DisplayName $DisplayName -ErrorAction SilentlyContinue
+    if ($existing) { return }
+    New-NetFirewallRule -DisplayName $DisplayName -Direction Inbound -Protocol $Protocol `
+        -LocalPort $LocalPort -Action Allow -ErrorAction SilentlyContinue | Out-Null
+}
+
 # ── Shared TLS terminator certificate helper ──────────────────────
 # installer\NocVault-Tls.ps1 holds Find-NocVaultOpenSsl / Get-NocVaultCertInfo /
 # New-NocVaultCertificate: the self-signed mint for the TERMINATOR's own
@@ -418,7 +437,19 @@ New-Item -ItemType Directory -Force 'C:\ProgramData\NocVault' | Out-Null
 $SecretsFile = 'C:\ProgramData\NocVault\secrets.env'
 $script:SecretsExisted = Test-Path $SecretsFile
 
-$PostgresPassword = Get-EnvVal $SecretsFile 'POSTGRES_PASSWORD'; if (-not $PostgresPassword) { $PostgresPassword = New-Pass 28 }
+# ⛔ -PgAdminPassword WINS, AND IT MUST ALSO BE WHAT secrets.env RECORDS.
+# This line used to generate a password unconditionally when secrets.env had
+# none, and the generated value was written to secrets.env below even on an
+# install where the caller supplied the cluster's REAL password with
+# -PgAdminPassword (the documented way to install onto a PostgreSQL that already
+# exists). Only the supplied value ever reached the cluster and the app .env
+# files, so secrets.env ended up holding a password that authenticates against
+# nothing - and the uninstaller and the suite tester both read secrets.env FIRST.
+# Measured on a staging box installed that way: every DROP DATABASE and DROP ROLE
+# in the uninstaller failed with 'password authentication failed for user
+# "postgres"'. Keeping these two in step is what makes secrets.env trustworthy.
+$PostgresPassword = if ($PgAdminPassword) { $PgAdminPassword } else { Get-EnvVal $SecretsFile 'POSTGRES_PASSWORD' }
+if (-not $PostgresPassword) { $PostgresPassword = New-Pass 28 }
 $NextAuthSecret   = Get-EnvVal $SecretsFile 'NEXTAUTH_SECRET';   if (-not $NextAuthSecret)   { $NextAuthSecret   = New-Pass 32 }
 $NocRoPass        = Get-EnvVal $SecretsFile 'NOCVAULT_RO_PASS';  if (-not $NocRoPass)        { $NocRoPass        = New-Pass 28 }
 $NvPass           = Get-EnvVal $SecretsFile 'NV_DB_PASS';        if (-not $NvPass)           { $NvPass           = New-Pass 28 }
@@ -1064,8 +1095,21 @@ $env:PGPASSWORD = $PgAdminPassword
 # would fail cryptically here - convert it into a clear, actionable message instead.
 if ($PgPreInstalled) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "SELECT 1" 2>$null | Out-Null
-    if ($LASTEXITCODE -ne 0 -and -not $script:SecretsExisted -and -not $PgAdminPasswordProvided) {
-        throw "PostgreSQL is already installed but its superuser password is not known to NocVault. Uninstall PostgreSQL (or run the uninstaller with -RemoveDependencies) and re-install, or re-run with -PgAdminPassword <existing password>."
+    if ($LASTEXITCODE -ne 0) {
+        # ⛔ THROW ON ANY FAILURE HERE. This used to throw only when the password
+        # had just been generated AND -PgAdminPassword was absent, which left the
+        # two cases that actually happen in the field running on: a WRONG
+        # -PgAdminPassword, and a stale secrets.env from an earlier install whose
+        # PostgreSQL has since been reinstalled. In both, every psql call below
+        # this point fails - and they all end in `2>$null`, so the install walks
+        # all the way to a green "Complete" banner having created no database,
+        # no role and no schema, with four services restart-looping on a database
+        # that is not there.
+        if ($PgAdminPasswordProvided) {
+            throw "The -PgAdminPassword supplied does not authenticate as PostgreSQL's 'postgres' superuser. Check it and re-run - nothing has been changed."
+        }
+        $src = if ($script:SecretsExisted) { "the password stored in $SecretsFile (left by an earlier install) no longer matches this PostgreSQL" } else { "its superuser password is not known to NocVault" }
+        throw "PostgreSQL is already installed but $src. Uninstall PostgreSQL (or run the uninstaller with -RemoveDependencies) and re-install, or re-run with -PgAdminPassword <existing password>."
     }
 }
 
@@ -1243,7 +1287,7 @@ Write-OK "NetVault standalone .env.local written (incl. SERVER_IP, CRON_SECRET)"
 & $NssmExe set NetVault AppStopMethodConsole 15000
 Write-OK "NetVault service registered"
 
-New-NetFirewallRule -DisplayName "NocVault NetVault 3000" -Direction Inbound -Protocol TCP -LocalPort 3000 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+Add-NocFirewallRule -DisplayName "NocVault NetVault 3000" -Protocol TCP -LocalPort 3000
 Write-OK "Firewall rule added: port 3000"
 
 # Register a recurring maintenance task as Local SYSTEM via the well-known SID
@@ -1407,11 +1451,11 @@ if ($InstallLogVault) {
     & $NssmExe set LogVault-App AppThrottle         60000
     Write-OK "LogVault services registered"
 
-    New-NetFirewallRule -DisplayName "NocVault LogVault 3004"   -Direction Inbound -Protocol TCP -LocalPort 3004 -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    New-NetFirewallRule -DisplayName "NocVault Syslog UDP 514"  -Direction Inbound -Protocol UDP -LocalPort 514  -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    New-NetFirewallRule -DisplayName "NocVault Syslog TCP 514"  -Direction Inbound -Protocol TCP -LocalPort 514  -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    New-NetFirewallRule -DisplayName "NocVault Syslog UDP 1514" -Direction Inbound -Protocol UDP -LocalPort 1514 -Action Allow -ErrorAction SilentlyContinue | Out-Null
-    New-NetFirewallRule -DisplayName "NocVault Syslog TCP 1514" -Direction Inbound -Protocol TCP -LocalPort 1514 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Add-NocFirewallRule -DisplayName "NocVault LogVault 3004" -Protocol TCP -LocalPort 3004
+    Add-NocFirewallRule -DisplayName "NocVault Syslog UDP 514" -Protocol UDP -LocalPort 514
+    Add-NocFirewallRule -DisplayName "NocVault Syslog TCP 514" -Protocol TCP -LocalPort 514
+    Add-NocFirewallRule -DisplayName "NocVault Syslog UDP 1514" -Protocol UDP -LocalPort 1514
+    Add-NocFirewallRule -DisplayName "NocVault Syslog TCP 1514" -Protocol TCP -LocalPort 1514
     Write-OK "Firewall rules added for LogVault"
 
     # NOTE: No external cleanup scheduled task. Retention/partition cleanup now runs
@@ -1601,12 +1645,12 @@ $$;
     & $NssmExe set DDIVault-Collector AppStopMethodConsole 15000
     Write-OK "DDIVault services registered"
 
-    New-NetFirewallRule -DisplayName "NocVault DDIVault 3006" -Direction Inbound -Protocol TCP -LocalPort 3006 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Add-NocFirewallRule -DisplayName "NocVault DDIVault 3006" -Protocol TCP -LocalPort 3006
     Write-OK "Firewall rule added: port 3006"
     # Port 3011 (DDI_WS_PORT) — the agent-WS ingest, bound to all interfaces inside the
     # existing DDIVault-API process (no separate NSSM service). The REST API (3007) stays
     # loopback; this is the only DDIVault port besides the App (3006) that must be inbound.
-    New-NetFirewallRule -DisplayName "NocVault DDIVault WS 3011" -Direction Inbound -Protocol TCP -LocalPort 3011 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Add-NocFirewallRule -DisplayName "NocVault DDIVault WS 3011" -Protocol TCP -LocalPort 3011
     Write-OK "Firewall rule added: port 3011 (agent WS ingest)"
 }
 
@@ -1761,10 +1805,10 @@ $$;
     & $NssmExe set SpanVault-Collector AppStopMethodConsole 15000
     Write-OK "SpanVault services registered"
 
-    New-NetFirewallRule -DisplayName "NocVault SpanVault 3008" -Direction Inbound -Protocol TCP -LocalPort 3008 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Add-NocFirewallRule -DisplayName "NocVault SpanVault 3008" -Protocol TCP -LocalPort 3008
     # Port 3010 = remote distributed-polling agent WebSocket server (SV_WS_PORT, default 3010).
     # Needed only for off-box polling agents; core monitoring/UI works without it.
-    New-NetFirewallRule -DisplayName "NocVault SpanVault 3010" -Direction Inbound -Protocol TCP -LocalPort 3010 -Action Allow -ErrorAction SilentlyContinue | Out-Null
+    Add-NocFirewallRule -DisplayName "NocVault SpanVault 3010" -Protocol TCP -LocalPort 3010
     Write-OK "Firewall rules added: ports 3008, 3010"
 }
 
@@ -2360,7 +2404,7 @@ if (-not $TlsGateOk) {
                     if ($OpenHttpRedirectPorts) {
                         foreach ($c in $Consoles) {
                             $rp = $c.Public + 80
-                            New-NetFirewallRule -DisplayName "NocVault TLS redirect $rp" -Direction Inbound -Protocol TCP -LocalPort $rp -Action Allow -ErrorAction SilentlyContinue | Out-Null
+                            Add-NocFirewallRule -DisplayName "NocVault TLS redirect $rp" -Protocol TCP -LocalPort $rp
                         }
                         Write-OK "Firewall rules added for the dedicated HTTP redirect ports (3080/3084/3086/3088)"
                     } else {
@@ -2475,15 +2519,20 @@ if ($script:TlsCutoverApplied) {
 Write-Host ""
 Write-Host "  Default login : admin@yourcompany.com / Admin1234!" -ForegroundColor Yellow
 Write-Host "  IMPORTANT: Change the default password immediately!" -ForegroundColor Yellow
-if ($Unattended -and $PgAdminPassword -eq $DefaultPgPassword) {
+# ⛔ LOCATION, NEVER THE VALUE. These two used to print the generated
+# POSTGRES_PASSWORD and nocvault_readonly password in full. The console is the
+# least private place a secret can be put: an unattended install is normally
+# driven by the GUI, which tees everything to Desktop\NocVault-Suite-*.log, and
+# a remote install writes the whole transcript into whatever session ran it. Both
+# values are already in secrets.env, which is ACL'd to SYSTEM + Administrators -
+# so point at the file and let an administrator read it there.
+if ($Unattended -and -not $script:SecretsExisted) {
     Write-Host ""
-    Write-Host "  PostgreSQL 'postgres' password (auto-set): $DefaultPgPassword" -ForegroundColor Yellow
-    Write-Host "  IMPORTANT: Record and change this database superuser password." -ForegroundColor Yellow
-}
-if ($Unattended -and $NocReadOnlyPass -eq $DefaultNocRoPassword) {
-    Write-Host ""
-    Write-Host "  nocvault_readonly DB password (auto-set): $DefaultNocRoPassword" -ForegroundColor Yellow
-    Write-Host "  IMPORTANT: Record and change this read-only role password." -ForegroundColor Yellow
+    Write-Host "  Generated credentials (PostgreSQL superuser, nocvault_readonly," -ForegroundColor Yellow
+    Write-Host "  NEXTAUTH_SECRET and the four per-app DB passwords) are stored in:" -ForegroundColor Yellow
+    Write-Host "    $SecretsFile" -ForegroundColor White
+    Write-Host "  Readable by Administrators and SYSTEM only. Back it up somewhere" -ForegroundColor Gray
+    Write-Host "  safe - the uninstaller needs POSTGRES_PASSWORD from it." -ForegroundColor Gray
 }
 Write-Host ""
 Write-Host "  Post-install checklist:" -ForegroundColor White

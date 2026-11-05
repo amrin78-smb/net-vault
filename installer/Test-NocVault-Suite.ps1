@@ -79,15 +79,50 @@ function Get-EnvVal([string]$file, [string]$key) {
     }
     return $null
 }
+# Does this password actually authenticate as the postgres superuser?
+# Uses $script:Psql, which is resolved further down but well before the only
+# caller of Resolve-PgPassword (PowerShell binds $script: variables at call time).
+function Test-PgSuperuserPassword([string]$pw) {
+    if (-not $pw) { return $false }
+    if (-not $script:Psql) { return $false }
+    $had  = Test-Path Env:\PGPASSWORD
+    $prev = if ($had) { $env:PGPASSWORD } else { $null }
+    $env:PGPASSWORD = $pw
+    try {
+        & $script:Psql -U postgres -h localhost -p 5432 -tAc "SELECT 1" 2>&1 | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    } finally {
+        if ($had) { $env:PGPASSWORD = $prev } else { Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue }
+    }
+}
+
+# ⛔ EVERY CANDIDATE IS TESTED - see the long note on the identical function in
+# Uninstall-NocVault-Suite.ps1. In short: secrets.env is first in this list but
+# its POSTGRES_PASSWORD is not guaranteed to be the cluster's, because an install
+# onto a pre-existing PostgreSQL takes the real password from -PgAdminPassword.
+# Returning the first value FOUND rather than the first value that WORKS made
+# this script report "Cannot connect as postgres" - and skip every schema, grant
+# and collector-DB check - on a suite that was perfectly healthy.
 function Resolve-PgPassword([string]$installDir) {
     $candidates = @(
         'C:\ProgramData\NocVault\secrets.env',
         (Join-Path $installDir 'NetVault\app\.env'),
         (Join-Path $installDir 'LogVault\app\.env.local'),
         (Join-Path $installDir 'DDIVault\app\.env.local'),
-        (Join-Path $installDir 'SpanVault\app\.env.local')
+        (Join-Path $installDir 'SpanVault\app\.env.local'),
+        # Installs whose repo root IS the install root (no 'app' subfolder).
+        (Join-Path $installDir 'LogVault\.env.local'),
+        (Join-Path $installDir 'DDIVault\.env.local'),
+        (Join-Path $installDir 'SpanVault\.env.local')
     )
-    foreach ($f in $candidates) { $v = Get-EnvVal $f 'POSTGRES_PASSWORD'; if ($v) { return $v } }
+    foreach ($f in $candidates) {
+        $v = Get-EnvVal $f 'POSTGRES_PASSWORD'
+        if ($v -and (Test-PgSuperuserPassword $v)) {
+            return [pscustomobject]@{ Password = $v; Source = $f }
+        }
+    }
     return $null
 }
 
@@ -209,9 +244,10 @@ if ($pgsvc -and $pgsvc.Status -eq "Running") { Ok ("PostgreSQL service running: 
 # DB connection setup (shared by sections 9 + 10)
 if (-not $SkipDb -and $script:Psql) {
     if (-not $PgPassword) {
-        $PgPassword = Resolve-PgPassword $InstallDir
-        if ($PgPassword) {
-            Inf "Using stored PostgreSQL password."
+        $resolved = Resolve-PgPassword $InstallDir
+        if ($resolved) {
+            $PgPassword = $resolved.Password
+            Inf "Using the PostgreSQL password from $($resolved.Source)."
         } else {
             $sec = Read-Host "Enter PostgreSQL 'postgres' password" -AsSecureString
             $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec)
