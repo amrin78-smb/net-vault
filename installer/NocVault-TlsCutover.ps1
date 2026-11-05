@@ -394,13 +394,35 @@ if (-not $TlsGateOk) {
     }
 
     function Restore-ConsoleTransport($console, [string]$nssmExe) {
+        # ⛔ RESTORE EVERYTHING Set-ConsoleTransport CAN WRITE, FOR EVERY MODE.
+        # This used to restore AppEnvironmentExtra only for 'standalone' and
+        # AppParameters only for the others, because that was all each mode
+        # wrote. When NEXTAUTH_URL-in-the-service-environment handling was added
+        # it became a write for EVERY mode - and the restore was not widened to
+        # match.
+        #
+        # The result, on production: the cutover failed at the loopback check
+        # and reverted, and the revert put the AppParameters back but left
+        # LogVault and DDIVault pinned to https://… in their service
+        # environment while they served plain HTTP again. Both consoles looked
+        # perfectly healthy - /api/health was 200 - and sign-in was broken on
+        # both. Found only because the repair script read the value back.
+        #
+        # An apply and its revert are two halves of one fact. Widening one
+        # without the other is how a revert leaves a worse state than the
+        # failure it was recovering from, which is the one thing a revert may
+        # never do. Restoring unconditionally also makes this correct for
+        # whatever the apply learns to write next.
         $ErrorActionPreference = 'Continue'
-        if ($console.Mode -eq 'standalone') {
+        if ($console.PrevEnvExtra) {
             $lines = @($console.PrevEnvExtra -split "`r?`n" |
                 ForEach-Object { $_.Trim() } |
                 Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' })
-            if ($lines.Count -ge 2) { $null = & $nssmExe set $console.Service AppEnvironmentExtra ($lines -join "`n") 2>&1 }
-        } elseif ($console.PrevParams) {
+            # A floor, not a mode test: an empty parse would blank an
+            # environment that carries DATABASE_URL and NEXTAUTH_SECRET.
+            if ($lines.Count -ge 1) { $null = & $nssmExe set $console.Service AppEnvironmentExtra ($lines -join "`n") 2>&1 }
+        }
+        if ($console.PrevParams) {
             $null = & $nssmExe set $console.Service AppParameters $console.PrevParams 2>&1
         }
         foreach ($f in $console.PrevEnvFiles.Keys) {

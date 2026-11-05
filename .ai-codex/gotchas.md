@@ -404,3 +404,26 @@ session: `lib/directoryRefusals.ts` pulled the whole `pg` driver into the browse
 errors from `pg/lib/connection-parameters.js`), and `lib/entraSettings.ts` reaches `node:fs` through
 `envFile.ts`. A *constant* a client needs travels as data from the API; a pure *function* it shares
 with a route goes in its own zero-import module. `tsc` is happy either way — only the build catches it.
+
+⛔ **AN APPLY AND ITS REVERT ARE TWO HALVES OF ONE FACT (1.58.5).** `Set-ConsoleTransport` wrote
+`AppEnvironmentExtra` only for `standalone` mode, so `Restore-ConsoleTransport` restored it only for
+`standalone`. When the apply was widened to rewrite a service-pinned `NEXTAUTH_URL` for EVERY
+console, the restore was not widened to match. On production the cutover then failed at the loopback
+check and reverted — and the revert put the AppParameters back while leaving LogVault and DDIVault
+pinned to `https://…` in their service environment with the consoles serving plain HTTP again. Both
+reported `/api/health` 200. Both had broken sign-in. **A revert that leaves a worse state than the
+failure it was recovering from is the one thing a revert may never do.** The restore is now
+unconditional over everything the apply can write, so widening the apply again cannot desynchronise
+it.
+
+⛔ **NSSM'S `AppDirectory` IS THE SERVICE'S WORKING DIRECTORY, NOT THE INSTALL ROOT**, and on
+production the four consoles run from four different depths (`.next\standalone`, `frontend`, the
+repo root). Worse, Next's standalone build output is a near-complete COPY of the repo — it carries
+`.git`, `package.json` and `installer\terminator\start.mjs` — so any single marker identifies it
+just as well as the real root. Resolve by walking to the OUTERMOST checkout, bounded by
+`$InstallDir`, and reject any `\.next\` path structurally.
+
+⛔ **CONSOLE SERVICES IN THE FIELD ARE NOT ALL REGISTERED THE SAME WAY.** Measured on one server:
+`node server.js` (standalone), `cmd.exe /c next.cmd start --port 3004`, `next.cmd start -p 3006`,
+and `node .../next start -p 3008` — four shapes from four installer eras on one box. Anything that
+rewrites a command line must accept `-p` and `--port`, and must refuse rather than guess at a third.

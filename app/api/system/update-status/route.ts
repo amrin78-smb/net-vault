@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.58.5': [
+    'Fixed a fault introduced by the previous version and caught on the production server: when the HTTPS cutover is abandoned and undone, it now puts back everything it changed. The previous version taught the cutover to update a console\u2019s web address inside the Windows service, but did not teach the undo step to restore it \u2014 so after an abandoned cutover two consoles were left believing they were on HTTPS while serving plain HTTP, which breaks sign-in on a site that otherwise looks completely healthy. The affected server has been corrected.',
+  ],
   '1.58.4': [
     'The HTTPS cutover refused to run on the production server, correctly, because one console was registered with a slightly different command line by an older version of the installer. It now understands both spellings instead of refusing.',
     'More importantly: two consoles on that server keep their web address in the Windows service itself, which overrides the configuration file the cutover rewrites. Switching to HTTPS would have left those two serving HTTPS while still believing they were on http \u2014 which turns every sign-in into a silent bounce back to the login page, on a site that otherwise looks completely healthy. The cutover now updates the address wherever it actually lives, preserving every other setting in that service untouched.',
