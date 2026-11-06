@@ -65,6 +65,11 @@ type TlsState = {
   error?: string | null
   httpsPort?: number | null
   httpPort?: number | null
+  /** ⛔ Tri-state: `null` means the NocVault-Tls probe could not read it. */
+  fronted?: boolean | null
+  /** The port a browser connects to when fronted; `null` when unknown. */
+  publicPort?: number | null
+  terminator?: string | null
   certPath?: string | null
   keyPath?: string | null
   certPresent?: boolean
@@ -159,7 +164,7 @@ function CertificateFacts({ cert, title }: { cert: CertDescription | null | unde
 
 type Mode = 'paste' | 'upload'
 
-export default function CertificatePanel() {
+export default function CertificatePanel({ canInstall = true }: { canInstall?: boolean }) {
   const { showToast } = useToast()
   const [state, setState] = useState<TlsState | null>(null)
   const [loading, setLoading] = useState(true)
@@ -296,7 +301,12 @@ export default function CertificatePanel() {
     )
   }
 
+  // ⛔ Same as ConsoleAddressPanel: the route returns `fronted`/`publicPort`
+  // and this file never mentioned either, so the Certificate tab reported the
+  // loopback port as the HTTPS port on every fronted install.
   const transport = transportPresentation(state.status, {
+    fronted: state.fronted ?? null,
+    publicPort: state.publicPort ?? null,
     httpsPort: state.httpsPort,
     httpPort: state.httpPort,
     error: state.error,
@@ -566,11 +576,21 @@ export default function CertificatePanel() {
           </div>
         )}
 
+        {/* ⛔ A BUTTON THE SERVER WILL REFUSE IS WORSE THAN NO BUTTON. The
+            write is super_admin because the certificate installed here is the
+            one all four consoles present through NocVault-Tls; an `admin` can
+            still READ this tab for diagnostics. */}
+        {!canInstall && (
+          <Callout tone="info" title="Read-only for your role">
+            Installing a certificate replaces the one all four consoles present, so it is restricted
+            to a super admin. Everything above is current and accurate.
+          </Callout>
+        )}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: 18 }}>
           <button
             className="btn-primary"
             style={{ padding: '10px 24px' }}
-            disabled={busy || !hasInput}
+            disabled={busy || !hasInput || !canInstall}
             onClick={() => { void install(false) }}
           >
             {busy && !prompt ? 'Installing…' : 'Install certificate'}

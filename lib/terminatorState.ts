@@ -82,13 +82,121 @@ export async function readTerminatorState(): Promise<TerminatorReading> {
   }
 }
 
-/** Does a named service exist at all? Used before offering to restart it. */
-export async function serviceExists(name: string): Promise<boolean> {
-  if (process.platform !== 'win32') return false
+/**
+ * Does a named service exist? Tri-state, for the same reason as above.
+ *
+ * ⛔ REPLACES AN EARLIER `serviceExists(): Promise<boolean>` THAT RETURNED
+ * `false` ON NON-WINDOWS AND ON ANY EXCEPTION — the precise collapse this
+ * module's header forbids, in this module, under an inviting name. It was also
+ * dead (the restart route carried a private copy), so it was pure trap.
+ */
+export async function serviceExists(name: string): Promise<boolean | null> {
+  if (process.platform !== 'win32') return null
   try {
     await execFileAsync('sc.exe', ['query', name], { timeout: 10_000 })
     return true
-  } catch {
-    return false
+  } catch (err: unknown) {
+    const e = err as { code?: number; stdout?: string; stderr?: string }
+    const text = `${e?.stdout || ''}${e?.stderr || ''}`
+    if (e?.code === 1060 || /1060/.test(text) || /does not exist as an installed service/i.test(text)) {
+      return false
+    }
+    return null
+  }
+}
+
+export type DependencyReading = {
+  /** ⛔ `null` when we could not tell — never `false`. */
+  dependsOn: boolean | null
+  detail: string | null
+}
+
+/**
+ * Parse the dependency list out of `sc qc` output.
+ *
+ * ⛔ `sc qc` PRINTS EXTRA DEPENDENCIES ON UNLABELLED CONTINUATION LINES:
+ *
+ *     DEPENDENCIES       : NetVault
+ *                        : LogVault-App
+ *                        : DDIVault-App
+ *
+ * A parser that keys on the line containing `DEPENDENCIES` sees the FIRST
+ * entry and silently misses the rest. That is not hypothetical — a display
+ * filter with this exact bug made a failed `depend=` clear look like a partial
+ * success on production. Collect the labelled line's value, then every
+ * following unlabelled `: value` line, and stop at the next labelled field.
+ */
+export function parseScQcDependencies(stdout: string): string[] | null {
+  const lines = String(stdout || '').split(/\r?\n/)
+  const out: string[] = []
+  let inDeps = false
+  let sawLabel = false
+  for (const line of lines) {
+    const labelled = line.match(/^\s*([A-Z_]+)\s*:\s*(.*)$/)
+    if (labelled) {
+      if (/^DEPENDENCIES$/i.test(labelled[1])) {
+        inDeps = true
+        sawLabel = true
+        const v = labelled[2].trim()
+        if (v) out.push(v)
+        continue
+      }
+      // Any OTHER labelled field ends the dependency block.
+      if (inDeps) inDeps = false
+      continue
+    }
+    if (inDeps) {
+      const cont = line.match(/^\s*:\s*(.*)$/)
+      if (cont) {
+        const v = cont[1].trim()
+        if (v) out.push(v)
+        continue
+      }
+      if (!line.trim()) { inDeps = false; continue }
+    }
+  }
+  // ⛔ NO LABEL AT ALL IS NOT AN EMPTY LIST. `sc.exe` LOCALISES ITS FIELD
+  // NAMES (ABHAENGIGKEITEN, DEPENDANCES, ...), so on a non-English Windows the
+  // label is simply absent from our regex's point of view. Saying "no
+  // dependencies" there would be a guess presented as a fact.
+  if (!sawLabel) return null
+  return out
+}
+
+/**
+ * Does the terminator declare a dependency on `service`?
+ *
+ * ⛔ THE CALLER DECIDES WHICH WAY `null` FALLS, AND THE TWO CALLERS CHOOSE
+ * OPPOSITELY ON PURPOSE:
+ *
+ *   - An UPDATER must assume it DOES depend. Getting 1051 there means the app
+ *     service never stopped, and the updater then rebuilds `node_modules`
+ *     under a live process — real corruption. Stopping the terminator
+ *     unnecessarily only costs a short outage it already warned about.
+ *   - The RESTART BUTTON must assume it does NOT. A refused stop there is
+ *     nothing worse than a restart that reports `failed`, which the operator
+ *     can retry; stopping the terminator unnecessarily takes all four consoles
+ *     down, which is the outage we removed in 1.61.1.
+ */
+export async function terminatorDependsOn(service: string): Promise<DependencyReading> {
+  if (process.platform !== 'win32') {
+    return { dependsOn: null, detail: 'Not a Windows host.' }
+  }
+  try {
+    const { stdout } = await execFileAsync('sc.exe', ['qc', TERMINATOR_SERVICE], { timeout: 10_000 })
+    const deps = parseScQcDependencies(stdout)
+    if (deps === null) {
+      return { dependsOn: null, detail: 'sc.exe did not print a dependency field this build recognises.' }
+    }
+    const hit = deps.some((d) => d.toLowerCase() === service.toLowerCase())
+    return { dependsOn: hit, detail: null }
+  } catch (err: unknown) {
+    const e = err as { code?: number; stdout?: string; stderr?: string; message?: string }
+    const text = `${e?.stdout || ''}${e?.stderr || ''}`
+    if (e?.code === 1060 || /1060/.test(text) || /does not exist as an installed service/i.test(text)) {
+      // No terminator at all: it cannot depend on anything.
+      return { dependsOn: false, detail: null }
+    }
+    return { dependsOn: null, detail: (e?.message || 'sc.exe could not be run').slice(0, 200) }
   }
 }

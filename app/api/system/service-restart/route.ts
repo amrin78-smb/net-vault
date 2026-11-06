@@ -23,13 +23,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import fs from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { findGitRoot } from '@/lib/gitRoot'
 import { recordSystemChanges } from '@/lib/systemAudit.ts'
 import {
+  readTerminatorState,
+  serviceExists,
+  terminatorDependsOn,
+} from '@/lib/terminatorState.ts'
+import {
   HUB_SERVICE,
+  buildRestartHeader,
   RESTART_PURPOSES,
   RESTART_TASK_NAME,
   TERMINATOR_SERVICE,
@@ -56,25 +63,12 @@ function userOf(session: unknown): SessionUser {
  * action when it may need a restart.
  */
 async function terminatorPresent(): Promise<boolean | null> {
-  if (process.platform !== 'win32') return null
-  try {
-    const { stdout } = await execFileAsync('sc.exe', ['query', TERMINATOR_SERVICE], { timeout: 10_000 })
-    return /SERVICE_NAME/i.test(stdout) || /STATE/i.test(stdout)
-  } catch (err: unknown) {
-    const e = err as { code?: number; stdout?: string; stderr?: string }
-    const text = `${e?.stdout || ''}${e?.stderr || ''}`
-    if (e?.code === 1060 || /1060/.test(text) || /does not exist as an installed service/i.test(text)) return false
-    return null
-  }
-}
-
-async function serviceExists(name: string): Promise<boolean> {
-  try {
-    await execFileAsync('sc.exe', ['query', name], { timeout: 10_000 })
-    return true
-  } catch {
-    return false
-  }
+  // ⛔ ONE IMPLEMENTATION. This was a byte-level duplicate of
+  // lib/terminatorState.ts's probe, which exists precisely so four routes get
+  // the same answer; the copy also treated a SUCCESSFUL query whose output
+  // lacked the English tokens SERVICE_NAME/STATE as "absent".
+  const reading = await readTerminatorState()
+  return reading.present
 }
 
 function readLockPid(lockPath: string): number | null {
@@ -95,6 +89,31 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
+/** Beyond this, a restart lock is debris from a run that died. */
+const LOCK_STALE_MS = 15 * 60 * 1000
+
+/**
+ * ⛔ A STALE LOCK MUST NOT WEDGE THE BUTTON FOREVER. The wrapper removes the
+ * lock in its `finally`; a reboot mid-restart skips that, and Windows reuses
+ * PIDs, so the recorded PID can come back alive as something unrelated and
+ * every future click gets a 409 with no way to clear it from the product.
+ */
+function lockHeld(lockPath: string): number | null {
+  const pid = readLockPid(lockPath)
+  if (pid === null) return null
+  let ageMs = 0
+  try { ageMs = Date.now() - fs.statSync(lockPath).mtimeMs } catch { ageMs = 0 }
+  if (ageMs > LOCK_STALE_MS) {
+    try { fs.unlinkSync(lockPath) } catch { /* best effort */ }
+    return null
+  }
+  if (!isPidAlive(pid)) {
+    try { fs.unlinkSync(lockPath) } catch { /* best effort */ }
+    return null
+  }
+  return pid
+}
+
 /**
  * What a restart would do, per purpose, and what the last one did.
  *
@@ -111,29 +130,42 @@ export async function GET() {
   }
 
   const paths = restartPaths(findGitRoot(process.cwd()))
-  const pid = readLockPid(paths.lock)
   let text: string | null = null
   try {
     if (fs.existsSync(paths.log)) text = fs.readFileSync(paths.log, 'utf8')
   } catch { text = null }
   const report = parseRestartLog(text)
+  const logUnreadable = text === null && fs.existsSync(paths.log)
   const present = await terminatorPresent()
 
   const targets: Record<string, { service: string | null; why: string }> = {}
   for (const purpose of RESTART_PURPOSES) {
-    targets[purpose] = resolveRestartTarget(purpose, present === true)
+    // ⛔ `present !== false`, NOT `present === true`. `null` means we could not
+    // read the service, and the two outcomes are not symmetric: offering a
+    // restart that then fails with 1060 is recoverable noise, while telling an
+    // operator their newly-installed certificate needs no action is the
+    // 2026-11-06 production failure restated in calmer words.
+    targets[purpose] = resolveRestartTarget(purpose, present !== false)
   }
 
   return NextResponse.json({
     available: process.platform === 'win32',
     terminatorPresent: present,
     targets,
-    inProgress: pid !== null && isPidAlive(pid),
+    inProgress: lockHeld(paths.lock) !== null,
     // ⛔ So the panel can prove the hub answering it is a NEW process rather
     // than the old one that never went down. "The page loaded again" is not
     // evidence that anything restarted.
     uptimeSeconds: Math.floor(process.uptime()),
-    lastRun: { outcome: report.outcome, finished: report.finished, lines: report.lines.slice(-20) },
+    logUnreadable,
+    lastRun: {
+      outcome: report.outcome,
+      finished: report.finished,
+      // ⛔ The panel matches this against the id POST handed it, so a verdict
+      // from an earlier run can never be read as this one's.
+      runId: report.runId,
+      lines: report.lines.slice(-20),
+    },
   })
 }
 
@@ -174,13 +206,16 @@ export async function POST(req: NextRequest) {
   const purpose = body.purpose
 
   const present = await terminatorPresent()
-  const target = resolveRestartTarget(purpose, present === true)
+  const target = resolveRestartTarget(purpose, present !== false)
   if (!target.service) {
     // Not an error — there is genuinely nothing to restart, and saying so is
     // more useful than bouncing a service for no effect.
     return NextResponse.json({ started: false, service: null, reason: target.why })
   }
-  if (!(await serviceExists(target.service))) {
+  // ⛔ ONLY A DEFINITE `false` BLOCKS. `null` is "we could not ask" — refusing
+  // there would turn an unreadable SCM into "nothing to restart", which is the
+  // same collapse as above.
+  if ((await serviceExists(target.service)) === false) {
     return NextResponse.json(
       { error: `The ${target.service} service is not installed on this host, so there is nothing to restart.` },
       { status: 409 },
@@ -188,13 +223,27 @@ export async function POST(req: NextRequest) {
   }
 
   const paths = restartPaths(findGitRoot(process.cwd()))
-  const pid = readLockPid(paths.lock)
-  if (pid !== null && isPidAlive(pid)) {
-    return NextResponse.json({ error: `A restart is already running (process ${pid}).` }, { status: 409 })
+  const heldBy = lockHeld(paths.lock)
+  if (heldBy !== null) {
+    return NextResponse.json({ error: `A restart is already running (process ${heldBy}).` }, { status: 409 })
   }
 
+  let hubDependents: string[] = []
+  if (target.service === HUB_SERVICE) {
+    const dep = await terminatorDependsOn(HUB_SERVICE)
+    if (dep.dependsOn === true) hubDependents = [TERMINATOR_SERVICE]
+  }
+
+  // ⛔ THE ROUTE OWNS THE LOG HEADER. Without a run id written BEFORE the task
+  // is scheduled, the panel polls a log that still holds the PREVIOUS run's
+  // verdict for the seconds between `schtasks /run` and the wrapper starting —
+  // and presents it as this run's result. A green "Restarted" from the last
+  // successful run is the worst possible thing to show while a restart is
+  // actually still pending.
+  const runId = randomUUID()
   try {
     fs.mkdirSync(paths.log.replace(/[\\/][^\\/]+$/, ''), { recursive: true })
+    fs.writeFileSync(paths.log, buildRestartHeader(runId, target.service), 'utf8')
     fs.writeFileSync(
       paths.wrapper,
       buildRestartWrapper({
@@ -202,10 +251,21 @@ export async function POST(req: NextRequest) {
         log: paths.log,
         lock: paths.lock,
         taskName: RESTART_TASK_NAME,
-        // ⛔ THE TERMINATOR DEPENDS ON THE HUB, so Windows refuses to stop the
-        // hub while it runs (1051). Stopping it first and starting it after is
-        // what makes a hub restart actually restart anything.
-        dependents: target.service === HUB_SERVICE && present === true ? [TERMINATOR_SERVICE] : [],
+        // ⛔ ONLY WHEN THE TERMINATOR ACTUALLY DECLARES THE DEPENDENCY.
+        // This used to key on the terminator merely EXISTING, and the comment
+        // here asserted the dependency as a standing fact. It stopped being
+        // one the same day: cutovers from 1.61.1 clear `DependOnService`
+        // (NocVault-TlsCutover.ps1), because it turned every one-app restart
+        // into a four-console outage. Keyed on existence, this panel
+        // reintroduced exactly that outage — while its own confirm dialog
+        // promised "the other three consoles are unaffected".
+        //
+        // ⛔ AND `null` FALLS THE OTHER WAY HERE THAN IN THE UPDATERS, ON
+        // PURPOSE. An updater that guesses wrong gets 1051, carries on, and
+        // rebuilds node_modules under a live process — corruption. This button
+        // that guesses wrong just reports `failed`, which the operator retries.
+        // So: stop the front door only on a POSITIVE reading.
+        dependents: hubDependents,
       }),
       'utf8',
     )
@@ -243,6 +303,15 @@ export async function POST(req: NextRequest) {
     await execFileAsync('schtasks.exe', ['/run', '/tn', RESTART_TASK_NAME], { timeout: 20_000 })
   } catch (err: unknown) {
     const e = err as { message?: string; stderr?: string }
+    // ⛔ REMOVE THE TASK WE JUST CREATED. Returning here used to leave
+    // `NocVault-ServiceRestart` registered with a `/sc once /st 00:00`
+    // trigger and the wrapper still on disk — which Windows schedules for the
+    // FOLLOWING day when the start time has passed. A failed click could
+    // therefore restart a service unattended at midnight. The wrapper's own
+    // self-delete never runs, because the wrapper never ran.
+    try {
+      await execFileAsync('schtasks.exe', ['/delete', '/tn', RESTART_TASK_NAME, '/f'], { timeout: 15_000 })
+    } catch { /* best effort: the task may not have been created at all */ }
     return NextResponse.json(
       { error: `Could not start the restart: ${(e?.stderr || e?.message || '').toString().slice(0, 300)}` },
       { status: 500 },
@@ -253,6 +322,7 @@ export async function POST(req: NextRequest) {
     started: true,
     service: target.service,
     why: target.why,
+    runId,
     // ⛔ Whether THIS request's own process is the one going down decides the
     // entire client experience: a hub restart means the page loses contact, a
     // terminator restart means a few seconds of 502 on the public port.

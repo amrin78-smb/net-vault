@@ -75,6 +75,14 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.62.0': [
+    'Fixed: using the Restart button on Settings - Console address or Single sign-on could take all four consoles off the air, not just this one. It stopped the shared HTTPS front door whenever that service merely existed, rather than when it actually had to be stopped - while the confirmation box promised the other three were unaffected. It now checks, and only stops it when it genuinely must.',
+    'Fixed: the Restart button could report success for a restart that never happened, and could spin forever on one that worked. It compared against a reading taken when the page was opened - so a console that had restarted for any other reason in between read as proof - and for a certificate restart it was watching the wrong service entirely. Each restart is now identified, so the result you see always belongs to the restart you asked for, and a restart that cannot be confirmed says so instead of waiting indefinitely.',
+    'Fixed: the Certificate and Console address tabs reported the internal port as the address people connect to - and the Console address field offered that internal port as its example. Following it was accepted and would have left nobody able to sign in. Both tabs now report the public port, and say plainly when the front door cannot be read rather than guessing.',
+    'Fixed: turning HTTPS off could report a green success while a console had not come back, and a Preview whose checks failed claimed the engine had moved all four consoles and put them back when it had touched nothing. Those are now separate, accurately worded outcomes.',
+    'Installing a certificate now requires a super administrator, matching the HTTPS tab beside it: the certificate installed here is the one all four consoles present. Administrators keep read access to the tab. The private key\u2019s location is also no longer included in what that page returns.',
+    'Hardening: a half-finished change can no longer wedge the HTTPS panel until someone deletes a file on the server, two clicks a second apart can no longer start two changes at once, and a change that fails to schedule no longer leaves a task behind that could fire by itself at midnight.',
+  ],
   '1.61.2': [
     'The NetVault updater now leaves the HTTPS front door running while it works, so updating NetVault no longer interrupts the other three consoles. It stopped the front door because Windows used to refuse to stop NetVault on its own; that restriction was removed in the previous version, so the updater now checks whether it still applies instead of assuming it does. Sites updated from an older version are still handled correctly.',
     'The same change was made to the LogVault, DDIVault and SpanVault updaters.',

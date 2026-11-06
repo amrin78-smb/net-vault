@@ -1220,7 +1220,7 @@ function SettingsInner() {
 
       {/* CERTIFICATE TAB (admin+) — the three transport states and the
           certificate install, including the replace confirmation. */}
-      {activeTab === 'certificate' && isAdmin && <CertificatePanel />}
+      {activeTab === 'certificate' && isAdmin && <CertificatePanel canInstall={isSuperAdmin} />}
 
       {/* HTTPS TAB — ⛔ super_admin ONLY, and the check is on the CONTENT as
           well as the nav: the nav filter hides the button, and this is what

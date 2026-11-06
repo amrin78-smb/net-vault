@@ -32,10 +32,19 @@ type RestartState = {
   targets: Record<string, { service: string | null; why: string }>
   inProgress: boolean
   uptimeSeconds: number
-  lastRun: { outcome: 'none' | 'running' | 'succeeded' | 'failed'; finished: boolean; lines: string[] }
+  logUnreadable?: boolean
+  lastRun: {
+    outcome: 'none' | 'running' | 'succeeded' | 'failed'
+    finished: boolean
+    runId: string | null
+    lines: string[]
+  }
 }
 
-type Phase = 'idle' | 'starting' | 'waiting' | 'done' | 'failed'
+type Phase = 'idle' | 'starting' | 'waiting' | 'done' | 'failed' | 'unconfirmed'
+
+/** How long to keep waiting before admitting we cannot confirm. */
+const WAIT_LIMIT_MS = 4 * 60 * 1000
 
 export default function RestartControl({ purpose, pending, title }: {
   purpose: RestartPurpose
@@ -50,7 +59,11 @@ export default function RestartControl({ purpose, pending, title }: {
   const [lostContact, setLostContact] = useState(false)
   /** The uptime we saw before asking; a LOWER one proves a new process. */
   const baselineUptime = useRef<number | null>(null)
+  /** The id of the run WE started, so a stale verdict can never be read. */
+  const myRunId = useRef<string | null>(null)
+  const waitingSince = useRef<number | null>(null)
   const poll = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [failReason, setFailReason] = useState<string | null>(null)
 
   const load = useCallback(async (quiet = false) => {
     try {
@@ -64,8 +77,36 @@ export default function RestartControl({ purpose, pending, title }: {
       // answering, and it would answer this poll just as happily. A LOWER
       // uptime than the one we recorded is the only thing that cannot be
       // produced by the old process.
-      if (phase === 'waiting' && baselineUptime.current !== null && data.uptimeSeconds < baselineUptime.current) {
-        setPhase('done')
+      if (phase === 'waiting') {
+        // ⛔ TWO INDEPENDENT PROOFS, AND NEITHER ALONE IS ENOUGH FOR EVERY CASE.
+        //
+        // 1. A LOWER uptime than the baseline. Only the hub's own restart can
+        //    produce this, and nothing the old process could do fakes it — so
+        //    it stays the primary signal when WE are the service going down.
+        //    The baseline now comes from the POST response, not from whatever
+        //    this component happened to fetch at mount: a hub that restarted
+        //    for any unrelated reason in between (a deploy, an NSSM app-exit
+        //    restart) left a stale, far larger baseline, and the very first
+        //    poll then "proved" a restart that had not started yet.
+        //
+        // 2. The run's OWN verdict, matched on runId. Restarting NocVault-Tls
+        //    never changes the hub's uptime, so proof 1 can never fire for it
+        //    — the panel span on "Restarting…" forever while the log had said
+        //    `succeeded` for minutes. The id match is what makes reading the
+        //    log safe: without it, the previous run's green verdict is sitting
+        //    in that file during the seconds before the wrapper starts.
+        const mine = myRunId.current !== null && data.lastRun.runId === myRunId.current
+        const uptimeProof = baselineUptime.current !== null && data.uptimeSeconds < baselineUptime.current
+        if (mine && data.lastRun.finished && data.lastRun.outcome === 'failed') {
+          setFailReason(data.lastRun.lines.slice(-4).join(' · ') || null)
+          setPhase('failed')
+        } else if (uptimeProof || (mine && data.lastRun.finished && data.lastRun.outcome === 'succeeded')) {
+          setPhase('done')
+        } else if (waitingSince.current !== null && Date.now() - waitingSince.current > WAIT_LIMIT_MS) {
+          // ⛔ NEVER SPIN FOREVER. A wrapper killed before it wrote its
+          // sentinel leaves `outcome: 'running'` in the log permanently.
+          setPhase('unconfirmed')
+        }
       }
       return data
     } catch {
@@ -94,7 +135,8 @@ export default function RestartControl({ purpose, pending, title }: {
     setConfirming(false)
     setError(null)
     setPhase('starting')
-    baselineUptime.current = state?.uptimeSeconds ?? null
+    setFailReason(null)
+    myRunId.current = null
     try {
       const res = await fetch('/api/system/service-restart', {
         method: 'POST',
@@ -104,18 +146,30 @@ export default function RestartControl({ purpose, pending, title }: {
       const body = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(body?.error || `The server answered ${res.status}.`)
       if (body?.started === false) {
-        // Nothing to restart — a real answer, not a failure.
+        // Nothing to restart — a real answer, not a failure. ⛔ SHOW THE
+        // SERVER'S REASON AND REFETCH. This used to call `setState((s) => s)`,
+        // which returns the same reference, so React bailed out: nothing
+        // re-rendered, the reason was discarded, and the button looked dead.
+        // The operator clicked it again, and again.
         setPhase('idle')
         setError(null)
-        setState((s) => s)
+        setFailReason(body?.reason || null)
+        void load(true)
         return
       }
+      // ⛔ FROM THE RESPONSE, not from state fetched at mount. See the verdict
+      // comment in `load`.
+      baselineUptime.current = typeof body?.previousUptimeSeconds === 'number'
+        ? body.previousUptimeSeconds
+        : (state?.uptimeSeconds ?? null)
+      myRunId.current = typeof body?.runId === 'string' ? body.runId : null
+      waitingSince.current = Date.now()
       setPhase('waiting')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
       setPhase('failed')
     }
-  }, [purpose, state?.uptimeSeconds])
+  }, [purpose, state?.uptimeSeconds, load])
 
   if (!pending) return null
 
@@ -167,9 +221,52 @@ export default function RestartControl({ purpose, pending, title }: {
     )
   }
 
+  if (phase === 'unconfirmed') {
+    return (
+      <Callout tone="warn" title="Could not confirm the restart">
+        <div>
+          The restart was started, but this page has not seen proof that {service} came back with a new
+          process. It may still have worked. Check the service on the server before assuming the saved
+          value is in force.
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <button type="button" className="btn-secondary" onClick={() => { setPhase('idle'); void load() }} style={{ padding: '8px 16px' }}>
+            Check again
+          </button>
+        </div>
+      </Callout>
+    )
+  }
+
+  if (phase === 'failed' && failReason) {
+    return (
+      <Callout tone="danger" title="The restart did not take effect">
+        <div>
+          {service} was asked to restart and the process did not change, so the old value is still in
+          use.
+        </div>
+        <div style={{ marginTop: 8 }}><Mono>{failReason}</Mono></div>
+        <div style={{ marginTop: 8 }}>
+          <button type="button" className="btn-secondary" onClick={() => { setPhase('idle'); setFailReason(null); void load() }} style={{ padding: '8px 16px' }}>
+            Try again
+          </button>
+        </div>
+      </Callout>
+    )
+  }
+
   return (
     <>
       {error && <Callout tone="danger" title="The restart did not start">{error}</Callout>}
+      {failReason && phase === 'idle' && (
+        <Callout tone="info" title="Nothing was restarted">{failReason}</Callout>
+      )}
+      {state?.logUnreadable && (
+        <Callout tone="warn" title="The restart log could not be read">
+          A restart may have run. This panel cannot report its outcome, so treat the state of {service || 'the service'} as
+          unknown rather than as unchanged.
+        </Callout>
+      )}
       {state?.lastRun.outcome === 'failed' && phase === 'idle' && (
         <Callout tone="warn" title="The last restart did not take effect">
           The service was asked to restart and the process did not change, so the old value is still in

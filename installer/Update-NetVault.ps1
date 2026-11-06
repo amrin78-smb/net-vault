@@ -405,7 +405,23 @@ function Stop-TlsTerminator {
     $ErrorActionPreference = 'Continue'
     $null = & sc.exe stop NocVault-Tls 2>&1
     $script:StoppedTheTerminator = $true
-    Start-Sleep -Seconds 2
+    # WAIT FOR IT TO ACTUALLY REACH Stopped. The old code slept 2 seconds and
+    # moved on. The cutover deliberately sets AppStopMethodConsole 15000 on
+    # this service, because the terminator drains every live socket - upgraded
+    # WebSockets included - before it exits, so at t+2s it is routinely still
+    # STOP_PENDING. Not waiting defeats the entire reason the stop is ordered
+    # first: this app's own service stop is then refused with 1051 while a
+    # dependent is still running, and the npm install/build that follows
+    # rewrites node_modules underneath a live process.
+    $tlsSw = [Diagnostics.Stopwatch]::StartNew()
+    while ($tlsSw.Elapsed.TotalSeconds -lt 60) {
+        if ((Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue).Status -eq 'Stopped') { break }
+        Start-Sleep -Milliseconds 500
+    }
+    $tlsState = (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue).Status
+    if ($tlsState -ne 'Stopped') {
+        Write-Warn "NocVault-Tls is still $tlsState after $([int]$tlsSw.Elapsed.TotalSeconds)s - this app's own service stop may be refused with 1051"
+    }
     Write-OK "NocVault-Tls stopped"
 }
 function Start-TlsTerminator {
@@ -416,7 +432,40 @@ function Start-TlsTerminator {
     $ErrorActionPreference = 'Continue'
     $null = & sc.exe start NocVault-Tls 2>&1
     $script:StoppedTheTerminator = $false
-    Start-Sleep -Seconds 3
+    # WAIT FOR Running, AND SAY SO LOUDLY IF IT NEVER COMES BACK. The old code
+    # discarded sc.exe's exit code and slept 3 seconds, and NOTHING downstream
+    # could notice the failure: this script's health check probes the API on
+    # 127.0.0.1, which sits BEHIND the terminator and answers whether or not
+    # the front door is up. So a terminator that failed to start still printed
+    # "health check passed", wrote success:true and exited 0 - with all four
+    # consoles' public ports dead.
+    $tlsSw2 = [Diagnostics.Stopwatch]::StartNew()
+    $tlsUp = $false
+    while ($tlsSw2.Elapsed.TotalSeconds -lt 90) {
+        if ((Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue).Status -eq 'Running') { $tlsUp = $true; break }
+        Start-Sleep -Milliseconds 500
+    }
+    if (-not $tlsUp) {
+        Write-Warn "NocVault-Tls did NOT come back - ALL FOUR consoles are unreachable on their public ports. Start it with: sc.exe start NocVault-Tls"
+        return
+    }
+    # Running is not the same as answering. Prove the PUBLIC port responds.
+    $tlsProbe = $false
+    for ($i = 0; $i -lt 10; $i++) {
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+            $null = Invoke-WebRequest -Uri "https://127.0.0.1:3000/api/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+            $tlsProbe = $true; break
+        } catch {
+            # A certificate NAME mismatch against 127.0.0.1 still proves the
+            # front door is terminating TLS on this port, which is the only
+            # thing being asked here.
+            if ("$($_.Exception.Message)" -match 'trust|SSL|certificate|secure channel') { $tlsProbe = $true; break }
+        }
+        Start-Sleep -Seconds 2
+    }
+    if ($tlsProbe) { Write-OK "NocVault-Tls is back and answering on :3000" }
+    else { Write-Warn "NocVault-Tls is Running but :3000 is not answering - the consoles may be unreachable from outside" }
     Write-OK "NocVault-Tls started"
 }
 
@@ -1458,6 +1507,17 @@ Write-Host ""
 # throws harmlessly; never let it mask the update's own success/failure.
 try { Stop-Transcript | Out-Null } catch {}
 } finally {
+    # ⛔ THE FRONT DOOR COMES BACK ON EVERY PATH OUT, NOT JUST THE HAPPY ONE.
+    # The Stop/Start pair lives inside the try above with large unguarded
+    # stretches between them, and an exception, an `exit`, or an early `return`
+    # from the rollback skipped the Start entirely - leaving NocVault-Tls
+    # stopped, which means ALL FOUR consoles unreachable, not just this app's.
+    # (LogVault's rollback had exactly that shape: `return $false` on an
+    # un-revertable source, several lines before its own Start call.) A
+    # `finally` is the only construct that covers all of them at once, and
+    # Start-TlsTerminator is idempotent - it returns immediately unless THIS run is the one
+    # that stopped the service.
+    try { Start-TlsTerminator } catch { Write-Warn "Could not restore NocVault-Tls: $($_.Exception.Message)" }
     # Item 6: release the concurrency lock on every path out of the outer try
     # above - success, failure-then-rollback (exit 1), or anything else.
     if ($lockAcquired) {

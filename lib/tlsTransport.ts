@@ -178,7 +178,14 @@ export function buildWrapperScript(opts: {
     `$lock = ${psLiteral(opts.lock)}`,
     'New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null',
     '$PID | Out-File -FilePath $lock -Encoding ascii -Force',
-    `"[NV-TRANSPORT] action=${opts.action} started $(Get-Date -Format s)" | Out-File -FilePath $log -Encoding UTF8 -Force`,
+    // ⛔ `psLiteral`, EVEN THOUGH `isTransportAction` ALREADY GUARDS THIS.
+    // These are DOUBLE-quoted PowerShell strings, where `$(...)` is evaluated —
+    // so a raw interpolation here means the quoting depends entirely on the
+    // validator being right, which is exactly what this file's header claims it
+    // does NOT. A fourth action, or a free-text label, would turn a settings
+    // form into code execution as SYSTEM. Concatenate a single-quoted literal
+    // instead so the guarantee is structural.
+    `("[NV-TRANSPORT] action=" + ${psLiteral(opts.action)} + " started $(Get-Date -Format s)") | Out-File -FilePath $log -Encoding UTF8 -Force`,
     'try {',
     `    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass ${args.join(' ')} 2>&1 |`,
     '        ForEach-Object { $s = "$_"; $s | Out-File -FilePath $log -Append -Encoding UTF8; $s }',
@@ -189,7 +196,7 @@ export function buildWrapperScript(opts: {
     '} finally {',
     // ⛔ The sentinel goes down BEFORE the cleanup. A panel polling this file
     // must learn the run ended even if removing the lock or the task throws.
-    `    "${RUN_SENTINEL} exit=$rc action=${opts.action}" | Out-File -FilePath $log -Append -Encoding UTF8`,
+    `    ("${RUN_SENTINEL} exit=$rc action=" + ${psLiteral(opts.action)}) | Out-File -FilePath $log -Append -Encoding UTF8`,
     '    Remove-Item -LiteralPath $lock -Force -ErrorAction SilentlyContinue',
     `    & schtasks.exe /delete /tn ${psLiteral(opts.taskName)} /f 2>&1 | Out-Null`,
     '}',
@@ -211,10 +218,21 @@ export type RunOutcome =
   /** HTTPS is off. */
   | 'disabled'
   /**
-   * The engine refused or reverted. ⛔ A DISTINCT OUTCOME FROM `enabled`,
-   * because the exit code is 0 for both.
+   * The engine moved the consoles and then PUT THEM BACK. ⛔ A DISTINCT
+   * OUTCOME FROM `enabled`, because the exit code is 0 for both.
    */
   | 'reverted'
+  /**
+   * The engine REFUSED before changing anything — a gate did not pass, or a
+   * dry run reported that one would not.
+   *
+   * ⛔ NOT THE SAME AS `reverted`, AND CONFLATING THEM MAKES THE PANEL LIE.
+   * `reverted`'s copy says "the engine put every console back the way it found
+   * it". For a failing preview — the action we actively recommend doing first —
+   * nothing was ever moved, so that sentence asserts a four-console
+   * cutover-and-rollback that never happened.
+   */
+  | 'refused'
   /** Ended without any banner we recognise. */
   | 'unknown'
 
@@ -240,9 +258,21 @@ const BANNERS: Array<{ re: RegExp; outcome: RunOutcome }> = [
   { re: /HTTPS was NOT enabled/i, outcome: 'reverted' },
   { re: /REVERTING the TLS cutover/i, outcome: 'reverted' },
   { re: /HTTPS is ON\b/i, outcome: 'enabled' },
-  { re: /HTTPS is OFF\b/i, outcome: 'disabled' },
+  // ⛔ ANCHORED ON THE SUCCESS WORDING, NOT ON "HTTPS is OFF".
+  // Enable-NocVaultTls.ps1 prints TWO banners for a disable:
+  //   all back -> "HTTPS is OFF - all consoles are serving directly again."
+  //   NOT all  -> "HTTPS is off but at least one console did not come back"
+  // A loose /HTTPS is OFF\b/i matches BOTH, so a disable that left a console
+  // unreachable rendered a green "HTTPS was turned off". This module's rule —
+  // the banner is the verdict, never the exit code — was derived entirely from
+  // the ENABLE path, where the engine exits 0 either way. On the disable path
+  // the banner is ambiguous and the exit code is the disambiguator, which is
+  // why `parseRunLog` now disqualifies this one on a non-zero exit.
+  { re: /HTTPS is OFF\s*-\s*all consoles/i, outcome: 'disabled' },
   { re: /Re-run without -DryRun/i, outcome: 'previewed' },
-  { re: /Gates did NOT pass/i, outcome: 'reverted' },
+  // Refusals: nothing was moved, so nothing was put back.
+  { re: /Gates did NOT pass/i, outcome: 'refused' },
+  { re: /HTTPS is off but at least one console did not come back/i, outcome: 'unknown' },
 ]
 
 /** Lines an operator should see first: gate results, refusals, probe verdicts. */
@@ -289,12 +319,26 @@ export function parseRunLog(text: string | null | undefined): RunReport {
     return { outcome: 'running', action, exitCode: null, finished: false, lines, highlights: lines.filter(isHighlight) }
   }
 
+  // ⛔ SCAN BACKWARDS, BECAUSE THE DOCS SAY THE FINAL BANNER IS AUTHORITATIVE
+  // AND THE OLD LOOP DID NOT. It iterated the PATTERN list and asked whether
+  // any line anywhere matched, so pattern ORDER silently outranked the
+  // engine's chronology — survivable only because the log is truncated per
+  // run. Taking the last matching line makes order irrelevant and the comment
+  // true.
   let outcome: RunOutcome = 'unknown'
-  for (const banner of BANNERS) {
-    if (lines.some((l) => banner.re.test(l))) {
-      outcome = banner.outcome
-      break
+  outer: for (let i = lines.length - 1; i >= 0; i--) {
+    for (const banner of BANNERS) {
+      if (banner.re.test(lines[i])) {
+        outcome = banner.outcome
+        break outer
+      }
     }
+  }
+  // ⛔ A `disabled` VERDICT NEEDS A CLEAN EXIT. See the banner note above: the
+  // disable path's failure wording is caught explicitly, but a future reword
+  // must not be able to claim success, so require the exit code to agree too.
+  if (outcome === 'disabled' && exitCode !== null && exitCode !== 0) {
+    outcome = 'unknown'
   }
   return { outcome, action, exitCode, finished: true, lines, highlights: lines.filter(isHighlight) }
 }

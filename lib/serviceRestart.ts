@@ -152,7 +152,13 @@ export function buildRestartWrapper(opts: {
     `$svc  = ${svc}`,
     'New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null',
     '$PID | Out-File -FilePath $lock -Encoding ascii -Force',
-    '"[NV-RESTART] service=$svc started $(Get-Date -Format s)" | Out-File -FilePath $log -Encoding UTF8 -Force',
+    // ⛔ APPEND, NOT -Force. The ROUTE truncates this log and writes the
+    // `runId=` header before scheduling the task, so the panel can tell ITS
+    // run's verdict from the previous run's. If the wrapper truncated here,
+    // there would be a window — task scheduled, wrapper not yet started — in
+    // which the log still holds the PREVIOUS run's verdict, and the panel
+    // would present it as this run's result.
+    '"[NV-RESTART] service=$svc started $(Get-Date -Format s)" | Out-File -FilePath $log -Append -Encoding UTF8',
     `$deps = ${depsLiteral}`,
     '$rc = 1',
     // ⛔ THE PID, NOT "IS IT RUNNING". A service that never stopped is still
@@ -179,15 +185,29 @@ export function buildRestartWrapper(opts: {
     '    }',
     '    $state = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status',
     '    "[NV-RESTART] state after $([int]$sw.ElapsedMilliseconds) ms: $state" | Out-File -FilePath $log -Append -Encoding UTF8',
-    // ⛔ Unconditional. A stop that did not complete is a reason to try harder
-    // to start, not a reason to leave the console down.
-    '    $startOut = (& sc.exe start $svc 2>&1 | Out-String).Trim()',
-    '    "[NV-RESTART] start issued: $($startOut -replace \'\\s+\', \' \')" | Out-File -FilePath $log -Append -Encoding UTF8',
-    '    $sw2 = [Diagnostics.Stopwatch]::StartNew()',
+    // ⛔ UNCONDITIONAL **AND RETRIED**, and the retry is the load-bearing half.
+    // The stop poll above exits either because the service reached Stopped or
+    // because it timed out — and the only way it times out is the service
+    // still being STOP_PENDING, which is precisely the state in which
+    // `sc start` is rejected (1056/1061). A single start issued at that
+    // moment is guaranteed to be refused, and the old code then only
+    // OBSERVED Status for 120 s without ever asking again: the service
+    // finished stopping a few seconds later and stayed Stopped forever.
+    // That is the console left down by a settings page — the one outcome
+    // this function's header calls worse than a slow restart.
     '    $running = $false',
-    '    while ($sw2.Elapsed.TotalSeconds -lt 120) {',
-    '        if ((Get-Service -Name $svc -ErrorAction SilentlyContinue).Status -eq \'Running\') { $running = $true; break }',
-    '        Start-Sleep -Milliseconds 500',
+    '    $sw2 = [Diagnostics.Stopwatch]::StartNew()',
+    '    $attempt = 0',
+    '    while ($sw2.Elapsed.TotalSeconds -lt 150) {',
+    '        $st = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status',
+    '        if ($st -eq \'Running\') { $running = $true; break }',
+    // Never fire into a pending transition: that is the rejection above.
+    '        if ($st -ne \'StartPending\' -and $st -ne \'StopPending\') {',
+    '            $attempt = $attempt + 1',
+    '            $startOut = (& sc.exe start $svc 2>&1 | Out-String).Trim()',
+    '            "[NV-RESTART] start attempt $attempt : $($startOut -replace \'\\s+\', \' \')" | Out-File -FilePath $log -Append -Encoding UTF8',
+    '        }',
+    '        Start-Sleep -Milliseconds 1000',
     '    }',
     // The dependents go back up LAST, and whether they do is part of the
     // verdict: a terminator left stopped means four consoles unreachable.
@@ -226,6 +246,8 @@ export type RestartReport = {
   outcome: RestartOutcome
   finished: boolean
   lines: string[]
+  /** Which run this log belongs to, so a panel never reads a stale verdict. */
+  runId: string | null
 }
 
 /**
@@ -236,16 +258,33 @@ export type RestartReport = {
  * PowerShell exit code is evidence of nothing. The wrapper writes whether the
  * service actually came back, and that line is what is read.
  */
+/** The header the ROUTE writes before scheduling, stamping this run's id. */
+export const RESTART_RUN_PREFIX = '[NV-RESTART] runId='
+
+export function buildRestartHeader(runId: string, service: string): string {
+  return `${RESTART_RUN_PREFIX}${runId} service=${service}\r\n`
+}
+
 export function parseRestartLog(text: string | null | undefined): RestartReport {
-  if (text === null || text === undefined) return { outcome: 'none', finished: false, lines: [] }
+  if (text === null || text === undefined) return { outcome: 'none', finished: false, lines: [], runId: null }
   const lines = String(text).split(/\r?\n/).map((l) => l.replace(/\s+$/, '')).filter((l) => l !== '')
   const finished = lines.some((l) => l.startsWith(RESTART_SENTINEL))
-  if (!finished) return { outcome: 'running', finished: false, lines }
+  const idLine = lines.find((l) => l.startsWith(RESTART_RUN_PREFIX))
+  const runId = idLine ? (idLine.slice(RESTART_RUN_PREFIX.length).split(/\s+/)[0] || null) : null
+  if (!finished) return { outcome: 'running', finished: false, lines, runId }
   // ⛔ BOTH, AND `changed` IS THE LOAD-BEARING HALF. A refused stop (1051,
   // dependent service running) leaves the service Running the whole time, so
   // `running=True` alone is exactly what a restart that never happened looks
   // like. A different PID is the only proof the process was replaced.
   const ran = lines.some((l) => /\[NV-RESTART\] running=True/i.test(l))
   const changed = lines.some((l) => /\[NV-RESTART\] pid after: .*changed=True/i.test(l))
-  return { outcome: ran && changed ? 'succeeded' : 'failed', finished: true, lines }
+  // ⛔ AND THE DEPENDENTS HAVE TO BE BACK. The wrapper already makes `$depsBack`
+  // a third term of its exit code — and this function deliberately ignores exit
+  // codes, so that term was being written into a value nothing read. The log
+  // line is right there. Without this, "the hub restarted cleanly but
+  // NocVault-Tls never came back" reported `succeeded` while all four consoles'
+  // public ports were dead — a false all-clear from the one function whose
+  // entire job is to refuse them.
+  const depsFailed = lines.some((l) => /\[NV-RESTART\] dependent .* back: False/i.test(l))
+  return { outcome: ran && changed && !depsFailed ? 'succeeded' : 'failed', finished: true, lines, runId }
 }

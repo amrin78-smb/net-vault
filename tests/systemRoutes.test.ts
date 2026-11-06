@@ -664,7 +664,7 @@ test('tls POST refuses a mismatched pair and writes NOTHING', async () => {
   const m = mintMaterial()
   const dir = sandbox()
   try {
-    session('admin')
+    session('super_admin')
     // ⛔ THE GUARD THE WHOLE FEATURE RESTS ON. Both halves parse; this pair
     // fails only at the next restart, weeks later, during an unrelated upgrade.
     const { status, body } = (await tlsRoute.POST(
@@ -684,7 +684,7 @@ test('tls POST installs a pasted chain, sets the paths, and requires a restart',
   const dir = sandbox()
   try {
     process.env.NEXTAUTH_URL = 'http://console.invalid:3000'
-    session('admin')
+    session('super_admin')
     const { status, body } = (await tlsRoute.POST(
       req({ certificate: m.leaf + m.chain, privateKey: m.key }),
     )) as unknown as Answer
@@ -717,7 +717,7 @@ test('tls POST will not replace an existing certificate without being asked', as
   const m = mintMaterial()
   const dir = sandbox()
   try {
-    session('admin')
+    session('super_admin')
     const first = (await tlsRoute.POST(req({ certificate: m.leaf + m.chain, privateKey: m.key }))) as unknown as Answer
     assert.equal(first.status, 200)
     const certPath = first.body.certPath as string
@@ -756,7 +756,7 @@ test('tls POST accepts a .pfx with its passphrase and installs the whole chain',
   const m = mintMaterial()
   const dir = sandbox()
   try {
-    session('admin')
+    session('super_admin')
     const { status, body } = (await tlsRoute.POST(
       req({ certificateB64: m.pfx.toString('base64'), passphrase: 'fixturePass' }),
     )) as unknown as Answer
@@ -776,7 +776,7 @@ test('tls POST accepts a .cer/.der plus a key plus a chain bundle', async () => 
   const m = mintMaterial()
   sandbox()
   try {
-    session('admin')
+    session('super_admin')
     const der = new crypto.X509Certificate(m.leaf).raw
     const { status, body } = (await tlsRoute.POST(
       req({
@@ -795,7 +795,7 @@ test('tls POST accepts a .cer/.der plus a key plus a chain bundle', async () => 
 test('tls POST with no certificate at all is a 400, not a crash', async () => {
   sandbox()
   try {
-    session('admin')
+    session('super_admin')
     const { status, body } = (await tlsRoute.POST(req({}))) as unknown as Answer
     assert.equal(status, 400)
     assert.match(String(body.error), /No certificate was supplied/)
@@ -983,4 +983,32 @@ test('refusals: the raw cause never reaches the response body', async () => {
   const body = JSON.stringify(res.body)
   assert.ok(!body.includes('"cause"'), 'the raw cause string must not be serialised')
   assert.ok(Object.prototype.hasOwnProperty.call(res.body, 'keep'), 'the cap must travel as data')
+})
+
+// ─── the certificate write is super_admin ───────────────────────────────────
+
+test('tls POST refuses a plain admin, and GET still serves one', async () => {
+  // ⛔ THE BLAST RADIUS, NOT THE CONVENIENCE. This route writes
+  // TLS_CERT_PATH/TLS_KEY_PATH into the env files NocVault-Tls reads, so the
+  // certificate installed here is the one ALL FOUR consoles present. It was
+  // admin+ on the reasoning that the change is "bounded and recoverable" —
+  // true when each console held its own certificate, and false from the moment
+  // a shared front door existed. Settings → HTTPS beside it is super_admin for
+  // exactly this reason.
+  const m = mintMaterial()
+  const dir = sandbox()
+  try {
+    session('admin')
+    const { status } = (await tlsRoute.POST(
+      req({ certificate: m.leaf, privateKey: m.key }),
+    )) as unknown as Answer
+    assert.equal(status, 403)
+
+    // ...and reading stays available to an admin: this tab is diagnostic.
+    const get = (await tlsRoute.GET()) as unknown as Answer
+    assert.equal(get.status ?? 200, 200)
+  } finally {
+    resetEnv()
+    void dir
+  }
 })

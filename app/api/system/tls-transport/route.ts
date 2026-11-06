@@ -103,6 +103,32 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
+/** A run that cannot still be going. Beyond this, the lock is debris. */
+const LOCK_STALE_MS = 30 * 60 * 1000
+
+/**
+ * Remove a lock that cannot belong to a live run.
+ *
+ * ⛔ WITHOUT THIS, THE FEATURE WEDGES WITH NO WAY OUT OF THE UI. The lock is
+ * removed only by the wrapper's `finally`, so a reboot mid-cutover leaves it
+ * behind — and Windows recycles PIDs aggressively, so an unrelated process
+ * inheriting the recorded PID makes the liveness check say "a run is in
+ * progress" forever. Every POST then 409s and the panel hides the whole action
+ * section, including the harmless Preview, until someone deletes a file from
+ * the server console — precisely the thing this panel exists to avoid needing.
+ * Age is the second condition because PID liveness alone cannot distinguish
+ * "still running" from "PID reused".
+ */
+function reapStaleLock(lockPath: string): void {
+  try {
+    const st = fs.statSync(lockPath)
+    const pid = readLockPid(lockPath)
+    const dead = pid === null || !isPidAlive(pid)
+    const old = Date.now() - st.mtimeMs > LOCK_STALE_MS
+    if (dead || old) fs.unlinkSync(lockPath)
+  } catch { /* no lock, or someone else just removed it */ }
+}
+
 /**
  * The log, or `null` when there has never been a run.
  *
@@ -143,7 +169,7 @@ export async function GET() {
     terminator: terminator.state,
     // A sentinel-less log with a dead PID is a crashed run, not a live one; the
     // lock is what decides "in progress", never the log alone.
-    runInProgress: runInProgress || (run.outcome === 'running' && runInProgress),
+    runInProgress,
   })
 
   return NextResponse.json({
@@ -155,7 +181,11 @@ export async function GET() {
     httpsPort: config.httpsPort,
     httpPort: config.httpPort,
     certPath: config.certPath,
-    keyPath: config.keyPath,
+    // ⛔ `keyPath` IS DELIBERATELY NOT RETURNED. It is the PRIVATE key's
+    // absolute path, GET is admin-or-super_admin, and TransportPanel never
+    // rendered it — so it was pure disclosure to a role that cannot press a
+    // button on this tab. `keyPresent` answers the only question the panel asks.
+    keyPresent: Boolean(config.keyPath),
     publicHost: (process.env.TLS_PUBLIC_HOST || '').trim() || null,
     // ⛔ REPORTED SEPARATELY FROM `status`. The hub reads its environment at
     // startup, so `status` can be stale with respect to a terminator that was
@@ -170,6 +200,13 @@ export async function GET() {
     ports: SUITE_PUBLIC_PORTS,
     scriptPresent,
     runInProgress,
+    // ⛔ "STARTED AND DIED" IS A THIRD STATE, AND IT WAS UNREPRESENTABLE.
+    // `parseRunLog` returns 'running' for ANY log with no sentinel, forever —
+    // the log is only truncated by the NEXT run. A cutover killed mid-flight
+    // (reboot, task terminated, PowerShell crash) therefore left GET reporting
+    // the contradictory pair `runInProgress: false` + `outcome: 'running'`, and
+    // the panel polled every 3 s indefinitely showing "A change is running".
+    runDied: run.outcome === 'running' && !runInProgress,
     logPath: paths.log,
     logError,
     lastRun: {
@@ -255,8 +292,35 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  // ⛔ THE ROUTE CLAIMS THE LOCK, NOT THE WRAPPER. The 409 guard above reads a
+  // lock the WRAPPER writes — which only happens once Task Scheduler has
+  // launched it, seconds after this request returns. In that window a second
+  // click (two tabs, two admins, or a Preview launched "safely at any time"
+  // on top of a live cutover) passed the guard, truncated the running log with
+  // `-Force`, and started a second engine instance stopping and starting the
+  // same four services. `flag: 'wx'` fails if the file exists, so the claim is
+  // atomic rather than check-then-write.
   try {
     fs.mkdirSync(paths.log.replace(/[\\/][^\\/]+$/, ''), { recursive: true })
+    reapStaleLock(paths.lock)
+    fs.writeFileSync(paths.lock, String(process.pid), { encoding: 'utf8', flag: 'wx' })
+  } catch (err: unknown) {
+    const code = (err as { code?: string })?.code
+    if (code === 'EEXIST') {
+      return NextResponse.json(
+        { error: 'A transport change was just started. Wait for it to finish.' },
+        { status: 409 },
+      )
+    }
+    const message = err instanceof Error ? err.message : String(err)
+    return NextResponse.json({ error: `Could not claim the run lock: ${message}` }, { status: 500 })
+  }
+
+  const releaseLock = () => {
+    try { fs.unlinkSync(paths.lock) } catch { /* the wrapper may own it by now */ }
+  }
+
+  try {
     fs.writeFileSync(
       paths.wrapper,
       buildWrapperScript({
@@ -270,6 +334,7 @@ export async function POST(req: NextRequest) {
       'utf8',
     )
   } catch (err: unknown) {
+    releaseLock()
     const message = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: `Could not write the run script: ${message}` }, { status: 500 })
   }
@@ -294,6 +359,17 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const e = err as { message?: string; stderr?: string }
     const message = (e?.stderr || e?.message || 'unknown error').toString().slice(0, 400)
+    // ⛔ REMOVE THE TASK AND RELEASE THE LOCK. Returning here used to leave
+    // `NocVault-TlsTransport` registered with a `/sc once /st 00:00` trigger
+    // and the wrapper still on disk holding the last requested action — and a
+    // `once` trigger whose start time has already passed is scheduled for the
+    // FOLLOWING day. A failed click could therefore drop the whole suite to
+    // plain HTTP, unattended, at midnight. The wrapper's own self-delete never
+    // runs, because the wrapper never ran.
+    try {
+      await execFileAsync('schtasks.exe', ['/delete', '/tn', TRANSPORT_TASK_NAME, '/f'], { timeout: 15_000 })
+    } catch { /* best effort */ }
+    releaseLock()
     return NextResponse.json({ error: `Could not schedule the change: ${message}` }, { status: 500 })
   }
 

@@ -41,6 +41,7 @@ type TransportState = {
   ports: Array<{ app: string; port: number }>
   scriptPresent: boolean
   runInProgress: boolean
+  runDied?: boolean
   logPath: string | null
   logError: string | null
   lastRun: {
@@ -108,8 +109,21 @@ function runPresentation(run: TransportState['lastRun']): { tone: Tone; title: s
         tone: 'warn',
         title: 'The change was abandoned and undone',
         text:
-          'A gate did not pass, so the engine put every console back the way it found it — the suite '
-          + 'is serving exactly as it was before. The lines below say which gate and why.',
+          'A gate did not pass after the move had started, so the engine put every console back the '
+          + 'way it found it — the suite is serving exactly as it was before. The lines below say '
+          + 'which gate and why.',
+      }
+    // ⛔ SEPARATE FROM `reverted`, AND THE WORDING IS THE WHOLE POINT. Nothing
+    // was moved here, so claiming the engine "put every console back" would
+    // assert a cutover and rollback that never happened — which is what a
+    // failing Preview, the action we recommend doing FIRST, used to render.
+    case 'refused':
+      return {
+        tone: 'warn',
+        title: 'The engine refused before changing anything',
+        text:
+          'A gate did not pass, so nothing was moved and nothing needed putting back — the suite is '
+          + 'serving exactly as it was. The lines below say which gate and why.',
       }
     default:
       return {
@@ -190,7 +204,14 @@ export default function TransportPanel() {
 
   // Follow a run while one is in flight.
   useEffect(() => {
-    const inFlight = Boolean(state?.runInProgress) || state?.lastRun.outcome === 'running' || (started !== null && !contactLost)
+    // ⛔ `runDied` VETOES "running". A sentinel-less log stays `outcome:
+    // 'running'` until the NEXT run truncates it, so a cutover killed
+    // mid-flight used to keep this panel polling every 3 s forever under "A
+    // change is running". The server now distinguishes "the lock is held" from
+    // "the log never finished", and only the former is in flight.
+    const inFlight = Boolean(state?.runInProgress)
+      || (state?.lastRun.outcome === 'running' && !state?.runDied)
+      || (started !== null && !contactLost)
     if (!inFlight) {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
       return
@@ -200,7 +221,7 @@ export default function TransportPanel() {
     return () => {
       if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
     }
-  }, [state?.runInProgress, state?.lastRun.outcome, started, contactLost, load])
+  }, [state?.runInProgress, state?.runDied, state?.lastRun.outcome, started, contactLost, load])
 
   const run = useCallback(async (action: TransportAction) => {
     setBusy(true)
@@ -407,6 +428,29 @@ export default function TransportPanel() {
         )}
       </PanelCard>
 
+      {/* ⛔ OUTSIDE THE CARD BELOW, BECAUSE THE CARD IS SKIPPED IN EXACTLY THIS
+          CASE. An unreadable log makes `parseRunLog(null)` return
+          `outcome: 'none'`, so `runReport` is null and — on a fresh page load,
+          with `started` null — the whole "Last change" card is not rendered,
+          taking this callout with it. The server deliberately distinguishes
+          "no log yet" from "could not open the log" so the panel never shows
+          "no changes yet" for a log it simply failed to read; nesting the
+          message inside the skipped card threw that distinction away. */}
+      {state.logError && (
+        <Callout tone="warn" title="The log could not be read">
+          <div>{state.logError}</div>
+          <div style={{ marginTop: 8 }}>
+            This is not the same as &ldquo;nothing has run&rdquo; — treat the last change as unknown.
+          </div>
+        </Callout>
+      )}
+      {state.runDied && (
+        <Callout tone="warn" title="The last change stopped without finishing">
+          A change was started and never wrote its result — the host rebooted, or the task was
+          stopped. Whether it completed is unknown. Run Preview to see the current state before
+          deciding what to do.
+        </Callout>
+      )}
       {(runReport || started) && (
         <PanelCard title="Last change">
           {contactLost && started && (
@@ -447,7 +491,7 @@ export default function TransportPanel() {
             </FactTable>
           )}
 
-          {state.logError && <Callout tone="warn" title="The log could not be read">{state.logError}</Callout>}
+          {/* moved out of this card — see the hoisted copy above */}
           <LogBlock lines={state.lastRun.highlights} label="Gate results and refusals" />
           <LogBlock lines={state.lastRun.lines} label="The engine's output (tail)" />
 

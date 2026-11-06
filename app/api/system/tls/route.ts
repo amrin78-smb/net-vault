@@ -176,8 +176,15 @@ export async function GET() {
     // The terminator holds the certificate, so "which service must restart to
     // serve a new one" depends on this too.
     terminator: terminator.state,
+    // ⛔ PASS THE TRI-STATE THROUGH. `running` is `boolean | null`, and `null`
+    // is falsy — so the old ternary reported "not fronted, public port is the
+    // loopback port" for a probe that simply failed, which is the one claim
+    // lib/terminatorState.ts exists to prevent anyone making.
     fronted: terminator.running,
-    publicPort: terminator.running ? HUB_PUBLIC_PORT : config.httpsPort,
+    publicPort:
+      terminator.running === true ? HUB_PUBLIC_PORT
+      : terminator.running === false ? config.httpsPort
+      : null,
     installTargets: targetPaths(config),
     ...shadowAnswer(measureShadows()),
   })
@@ -198,8 +205,19 @@ export async function POST(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const role = roleOf(session)
-  if (role !== 'admin' && role !== 'super_admin') {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  // ⛔ super_admin, MATCHING THE BLAST RADIUS AND MATCHING SETTINGS -> HTTPS.
+  // This writes TLS_CERT_PATH/TLS_KEY_PATH into the env files the TERMINATOR
+  // reads, so the certificate installed here is the one all four consoles
+  // present. It was admin+ on the reasoning that the change is "bounded and
+  // recoverable" — true when each console held its own certificate, and no
+  // longer true once a shared front door existed. The HTTPS tab beside it is
+  // super_admin precisely because it can affect all four; installing the
+  // certificate they all serve is the same class of act. GET stays admin+.
+  if (role !== 'super_admin') {
+    return NextResponse.json(
+      { error: 'Installing a certificate affects all four consoles and requires a super admin.' },
+      { status: 403 },
+    )
   }
 
   const body = (await req.json().catch(() => ({}))) as {

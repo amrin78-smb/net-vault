@@ -486,3 +486,32 @@ were fine because neither makes that call.
 Server-to-server on one box uses the **loopback** (`http://127.0.0.1:13000`): no redirect, no DNS, no
 certificate. `NEXT_PUBLIC_*` hub URLs are the opposite — a browser reads those and they must stay
 public. The cutover now repoints the first and leaves the second alone.
+
+### Seams, not parts (the 2026-11-06 sweep)
+
+A four-agent review of the HTTPS and restart features found 20 defects. **Every
+serious one was at a SEAM**, and every pure function involved was already well
+covered by tests:
+
+- **Route computed, panel never read it.** `fronted`/`publicPort` shipped in
+  1.60.1; no panel passed them, so the helper's whole fronted branch was dead
+  code — with five PASSING tests over it, because they called the helper
+  directly. `console-url/route.ts` received only the import line. Net effect:
+  both tabs reported the loopback port as the public address for weeks.
+  **A type that does not declare the field is why nothing could consume it** —
+  the panels' prop types had no `fronted`, so wiring it was a type error.
+- **A lib's tri-state collapsed at its caller.** `terminatorState.ts` returns
+  `null` for "could not read" precisely so nobody states a guess; both callers
+  wrote `=== true`, turning it into `false`.
+- **The engine printed a banner the parser never saw.** The disable path's
+  FAILURE wording contains the success substring. Only the enable path's logs
+  had been harvested into fixtures.
+- **The panel's verdict watched the wrong thing.** Hub uptime cannot prove a
+  `NocVault-Tls` restart, and the baseline was fetched at mount rather than
+  taken from the POST response.
+
+**The rule:** when a feature spans a lib, a route and a panel, write at least
+one test that crosses each join — see `tests/systemSeams.test.ts`, which
+asserts the panels actually pass the props the routes compute, and which caught
+a second un-fixed `examplePort` in the PUT handler the moment it was written.
+Testing each layer in isolation is what let all of this ship.

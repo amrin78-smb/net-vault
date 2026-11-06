@@ -186,6 +186,7 @@ export async function GET() {
   const runningValue = (process.env.NEXTAUTH_URL || '').trim() || null
   const savedValue = deploySource.value
 
+  const terminator = await readTerminatorState()
   const tls = resolveTlsConfig(process.env)
 
   return NextResponse.json({
@@ -199,17 +200,39 @@ export async function GET() {
     ...shadowAnswer(shadowVerdict('NEXTAUTH_URL', SERVICE_NAME)),
     // The transport the server is ACTUALLY serving, which is what decides
     // whether the address must say http or https.
+    // ⛔ THE TERMINATOR FRAME IS WHAT MAKES THESE PORTS MEAN ANYTHING.
+    // 1.60.1 was supposed to add it here; what it actually added to this file
+    // was the import line and nothing else, so this route kept reporting the
+    // LOOPBACK port (13000 behind a cutover) as the HTTPS port — and the panel
+    // printed it into the field's own placeholder, where an operator could
+    // follow it and lock everyone out. See `examplePort` below.
     transport: {
       status: tls.status,
       httpsPort: tls.httpsPort,
       httpPort: tls.httpPort,
       error: tls.error,
+      fronted: terminator.running,
+      publicPort:
+        terminator.running === true ? HUB_PUBLIC_PORT
+        : terminator.running === false ? tls.httpsPort
+        : null,
     },
     // ⛔ Compared against `status === 'active'`, not against "certs are
     // configured": in `failed` we are serving plaintext, so an https:// address
     // is just as broken there as in `disabled`.
     schemeMismatch: nextAuthUrlMismatch(tls, runningValue),
-    examplePort: tls.httpsPort || DEFAULT_CONSOLE_PORT,
+    // ⛔ THE PUBLIC PORT, NEVER THE LOOPBACK ONE. This is printed as the
+    // field's hint AND its placeholder, so it is the number an operator is
+    // most likely to actually type. `lib/consoleUrl.ts` range-checks a port but
+    // cannot know a port is loopback-only, so a suggested 13000 is ACCEPTED,
+    // and after the restart NextAuth issues callbacks nobody can reach — the
+    // exact lockout this route's confirmation guard exists to prevent,
+    // reopened through its own example. When the probe cannot tell, fall back
+    // to the hub's public port rather than to this process's bound port.
+    examplePort:
+      terminator.running === true ? HUB_PUBLIC_PORT
+      : terminator.running === false ? (tls.httpsPort || DEFAULT_CONSOLE_PORT)
+      : DEFAULT_CONSOLE_PORT,
   })
 }
 
@@ -233,11 +256,21 @@ export async function PUT(req: NextRequest) {
   // plaintext however configured it is.
   const tls = resolveTlsConfig(process.env)
   const tlsActive = tls.status === 'active'
+  // ⛔ THE WRITE PATH NEEDS THE SAME FRAME AS THE READ PATH. This example is
+  // what `lib/consoleUrl.ts` prints inside its refusal and confirmation
+  // messages, so an operator correcting a rejected address is handed a port to
+  // use — and the loopback port here is the lockout, offered at the exact
+  // moment they are most likely to accept a suggestion. The GET handler was
+  // fixed first and this one was missed; a seam test caught it.
+  const putTerminator = await readTerminatorState()
 
   const decision = await decideConsoleUrl(body.url, {
     tlsActive,
     localAddresses: localAddresses(),
-    examplePort: tls.httpsPort || DEFAULT_CONSOLE_PORT,
+    examplePort:
+      putTerminator.running === true ? HUB_PUBLIC_PORT
+      : putTerminator.running === false ? (tls.httpsPort || DEFAULT_CONSOLE_PORT)
+      : DEFAULT_CONSOLE_PORT,
     confirmed: body.confirmed === true,
   })
 

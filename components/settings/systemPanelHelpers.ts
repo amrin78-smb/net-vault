@@ -109,6 +109,25 @@ export function transportPresentation(
   const httpsPort = typeof opts.httpsPort === 'number' ? opts.httpsPort : null
   const httpPort = typeof opts.httpPort === 'number' ? opts.httpPort : null
   const publicPort = typeof opts.publicPort === 'number' ? opts.publicPort : null
+  // ⛔ THREE STATES IN, THREE STATES OUT. `fronted` is `boolean | null` and
+  // `null` means the probe could not read the service. Falling through to the
+  // plain `active` sentence there states the loopback port as the public
+  // address with full confidence — the same failure as the bug above, just
+  // reached through a failed `sc.exe` instead of a missing frame. Say so
+  // instead.
+  if (status === 'active' && opts.fronted === null && 'fronted' in opts) {
+    return {
+      tone: 'warn',
+      label: 'HTTPS active',
+      headline:
+        'A certificate is loaded and this console is serving HTTPS, but the shared NocVault-Tls front '
+        + 'door could not be read, so which port the browser connects to cannot be stated here. '
+        + `This process listens on ${httpsPort ? `port ${httpsPort}` : 'its configured port'}; if the front door is `
+        + 'running, the public port is a different one.',
+      loud: false,
+      normal: false,
+    }
+  }
   if (status === 'active' && opts.fronted) {
     return {
       tone: 'ok',

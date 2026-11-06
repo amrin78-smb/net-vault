@@ -60,7 +60,16 @@ type ConsoleUrlState = {
   shadow?: ShadowVerdictLike
   shadowNote?: string | null
   takesEffectOnRestart?: boolean | null
-  transport?: { status?: string | null; httpsPort?: number | null; httpPort?: number | null; error?: string | null }
+  transport?: {
+    status?: string | null
+    httpsPort?: number | null
+    httpPort?: number | null
+    error?: string | null
+    /** ⛔ Tri-state: `null` means the NocVault-Tls probe could not read it. */
+    fronted?: boolean | null
+    /** The port a browser connects to when fronted; `null` when unknown. */
+    publicPort?: number | null
+  }
   schemeMismatch?: string | null
   examplePort?: number
   error?: string
@@ -191,10 +200,16 @@ export default function ConsoleAddressPanel() {
   }
 
   const service = state.restartRequiresService || 'NetVault'
+  // ⛔ PASS THE TERMINATOR FRAME. Without `fronted`/`publicPort` the helper's
+  // whole fronted branch is unreachable, and this panel states the loopback
+  // port as the address people connect to. The route has computed these since
+  // 1.60.1; nothing was reading them.
   const transport = transportPresentation(state.transport?.status, {
     httpsPort: state.transport?.httpsPort,
     httpPort: state.transport?.httpPort,
     error: state.transport?.error,
+    fronted: state.transport?.fronted ?? null,
+    publicPort: state.transport?.publicPort ?? null,
   })
   const shadow = shadowPresentation(state.shadow, 'NEXTAUTH_URL', service)
   const pair = savedVsRunning(state.saved, state.running)

@@ -130,3 +130,8 @@ product could save a change it could not apply.
 - ⛔ **A LOWER UPTIME IS THE PROOF.** "The page loaded again" is not evidence a restart happened — a
   refused stop leaves the original process answering this very poll.
 - Losing contact mid-restart is rendered as expected, not as a fault.
+
+### Changed 1.62.0
+- `CertificatePanel` takes `canInstall?: boolean` (default true). Settings passes `isSuperAdmin`; a plain admin sees the tab read-only rather than a button the server will 403.
+- `RestartControl` gained the `unconfirmed` phase (a restart it cannot prove, instead of an endless spinner) and reports the server's reason when there is nothing to restart.
+- `TransportPanel` renders the log-read error and a died-run notice OUTSIDE the "Last change" card — the card is skipped in exactly the case those messages describe.

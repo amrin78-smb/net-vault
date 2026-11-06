@@ -277,3 +277,18 @@ One shared answer to "is the TLS front door there, and running", used by four ro
   `unknown`, with `present`/`running` as `null`, **never `false`**.
 - `HUB_PUBLIC_PORT` (3000) — ⛔ **NOT `process.env.PORT`**: behind the terminator that is the LOOPBACK
   port, and reporting it as the address anyone connects to is the bug this module exists to stop.
+
+### `lib/terminatorState.ts` (server only)
+- `TERMINATOR_SERVICE`, `HUB_PUBLIC_PORT` — the front-door service name and the hub's PUBLIC port (never `process.env.PORT`, which is the loopback port behind a cutover).
+- `readTerminatorState(): Promise<TerminatorReading>` — tri-state (`running`/`stopped`/`absent`/`unknown`); `present`/`running` are `null` on every unknown, NEVER `false`.
+- `parseScQcDependencies(stdout): string[] | null` — reads `sc qc`'s dependency list INCLUDING its unlabelled continuation lines. `null` means no label was found at all (e.g. a localised Windows), which is not an empty list.
+- `terminatorDependsOn(service): Promise<DependencyReading>` — `dependsOn: boolean | null`. ⛔ The two callers resolve `null` OPPOSITELY on purpose: an updater assumes it DOES depend (guessing wrong there corrupts a build), the restart button assumes it does NOT (guessing wrong there is a four-console outage).
+- `serviceExists(name): Promise<boolean | null>` — tri-state. Replaced a boolean version that returned `false` for non-Windows and for ANY exception.
+
+### `lib/serviceRestart.ts` additions
+- `RESTART_RUN_PREFIX`, `buildRestartHeader(runId, service)` — the ROUTE writes this header and truncates the log before scheduling, so a panel can never read the previous run's verdict as this run's.
+- `parseRestartLog` now returns `runId`, and requires `running=True` AND `changed=True` AND no `dependent <x> back: False`.
+
+### `lib/tlsTransport.ts` changes
+- `RunOutcome` gained `refused` — the engine stopped BEFORE moving anything, distinct from `reverted` (moved, then put back). Conflating them made a failing Preview claim a cutover-and-rollback that never happened.
+- `parseRunLog` scans banners from the END of the log (the documented rule; the old loop let pattern order outrank chronology) and disqualifies a `disabled` verdict on a non-zero exit.
