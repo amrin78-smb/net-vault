@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.59.3': [
+    'Turning HTTPS on for an already-installed suite could never actually produce HTTPS — on any server. The front door started correctly, took over all four console ports, and served them in PLAIN TEXT, because nothing had told it where the certificate was. Its own log said so in as many words on every attempt; nothing read that log, so the final check could only report “no HTTPS response” — the same message it gives for a bad certificate, a dead console or a wrong cipher, which need entirely different fixes.',
+    'The fresh installer wrote the certificate location while building a new configuration file from scratch. The enable-on-an-existing-install path deliberately does not append to that file, correctly, because the file already exists and belongs to the administrator — but nothing was ever put in its place. The certificate check only ever confirmed that the files were present on disk, which they were.',
+    'The cutover now records the certificate location where the front door actually reads it, and refuses to proceed at all if it cannot. Turning HTTPS back off removes it again, so the suite can never report itself as encrypted while serving plain text.',
+    'The final check now also reads the front door’s own report of its state, so “started but not encrypting” is named as exactly that instead of being reported as an unreachable console.',
+  ],
   '1.59.2': [
     'The HTTPS cutover has failed twice on the production server with a single line — that one console “did not answer” — and both times the console was in fact answering correctly, as the very next request in the same run proved. The check that gave up was discarding the reason it gave up, so five separate explanations were investigated and disproved against a server that was never broken.',
     'The health check now reports exactly what it saw, every attempt tallied, so a console that is held to be unreachable has to say why.',

@@ -400,6 +400,46 @@ if ($Disable) {
     }
     Write-OK "Suite probes pointed back at the public ports"
 
+    # ⛔ AND THE CERTIFICATE PATHS COME OUT, OR THE SUITE LIES ABOUT ITSELF.
+    # The cutover writes TLS_CERT_PATH/TLS_KEY_PATH into NetVault's env so the
+    # terminator can find the certificate. Those same two keys are what
+    # `lib/tlsConfig.ts` resolves for the APP: with them set and loadable it
+    # reports 'active', and app/api/system/tls + app/api/system/console-url
+    # report the console as HTTPS. Leaving them behind after turning HTTPS off
+    # means the hub serves plain HTTP while telling an admin it is encrypted -
+    # a silent degrade, which is the one thing lib/tlsConfig.ts exists to
+    # prevent ("'failed' MUST NEVER LOOK LIKE 'disabled'" - and neither may
+    # 'disabled' look like 'active').
+    #
+    # Removed, not blanked: `TLS_CERT_PATH=` with an empty value is what
+    # resolveTlsConfig() treats as unset anyway, and a trailing empty assignment
+    # is one more thing for the next reader to wonder about. The certificate
+    # FILES are left alone - only the configuration pointing at them goes, so
+    # re-running without -Disable needs no new certificate.
+    function Remove-EnvFileKeyBack([string]$path, [string]$key) {
+        if (-not (Test-Path -LiteralPath $path)) { return $false }
+        $raw = ''
+        try { $raw = (Get-Content -LiteralPath $path -Raw -ErrorAction Stop) } catch { return $false }
+        if ($null -eq $raw) { return $false }
+        $lines = @($raw -split "`r?`n")
+        $kept  = @($lines | Where-Object { $_ -notmatch ('^\s*' + [regex]::Escape($key) + '\s*=') })
+        if ($kept.Count -eq $lines.Count) { return $false }
+        try { ($kept -join "`n") | Out-File -FilePath $path -Encoding UTF8 -NoNewline } catch { return $false }
+        return $true
+    }
+    $tlsKeysRemoved = 0
+    foreach ($f in @((Join-Path $NVAppDir '.env'), (Join-Path $NVAppDir '.next\standalone\.env.local'))) {
+        foreach ($k in @('TLS_CERT_PATH', 'TLS_KEY_PATH', 'TLS_PUBLIC_HOST')) {
+            if (Remove-EnvFileKeyBack $f $k) { $tlsKeysRemoved++ }
+        }
+    }
+    if ($tlsKeysRemoved -gt 0) {
+        Write-OK "Certificate configuration removed from NetVault's env ($tlsKeysRemoved entr$(if ($tlsKeysRemoved -eq 1) { 'y' } else { 'ies' })) - the suite no longer reports itself as HTTPS"
+        Write-Info "The certificate FILES are untouched, so re-enabling needs no new certificate."
+    } else {
+        Write-Info "No TLS_CERT_PATH/TLS_KEY_PATH entries were present in NetVault's env - nothing to remove."
+    }
+
     # ⛔ AND THE SCHEDULED TASKS, WHICH ARE THE MIRROR OF THE CUTOVER'S OWN
     # RE-POINT. The cutover moves NetVault's three maintenance tasks onto the
     # hub's loopback port; turning HTTPS off moves the hub back to 3000 and

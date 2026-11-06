@@ -660,6 +660,59 @@ if (-not $TlsGateOk) {
                 }
             }
             Write-OK "Suite health/stats probes repointed at the loopback ports"
+
+            # ⛔ AND THE TERMINATOR IS TOLD WHERE THE CERTIFICATE IS. Gate 1
+            # proves a certificate pair EXISTS ON DISK. It does NOT put the
+            # paths anywhere the terminator reads, and `resolveTlsConfig()`
+            # returns 'disabled' - serve plain HTTP, deliberately and quietly -
+            # when neither TLS_CERT_PATH nor TLS_KEY_PATH is set.
+            #
+            # MEASURED on production, from the terminator's own log:
+            #   [nocvault-tls] TLS: not configured - serving plain HTTP on port 3000
+            #   [nocvault-tls] netvault: listening on http://0.0.0.0:3000 -> 127.0.0.1:13000
+            # It bound all four public ports and served HTTP. Gate 3 then failed
+            # its HTTPS probe for an entirely honest reason - there was no HTTPS
+            # listener - and reverted. The TLS stack was never involved: every
+            # client on that box (HttpWebRequest on TLS 1.2, on 1.2|1.3, on
+            # SystemDefault, curl.exe, SslStream) reached a throwaway Node
+            # listener using this same certificate and got 200.
+            #
+            # The INSTALLER wrote these two keys through $NVEnvTail while
+            # composing a brand-new .env. Enable-NocVaultTls.ps1 deliberately
+            # has an EMPTY tail - correctly, since it must not duplicate keys in
+            # a file that already exists - and nothing replaced them. So turning
+            # HTTPS on for an ALREADY-INSTALLED suite could never have produced
+            # HTTPS, on any box. Gate 1 checked the filesystem; the terminator
+            # reads the configuration, and no step connected the two.
+            #
+            # Written with Set-EnvFileKey (rewrite in place, append when absent)
+            # into the two files loadEnvironment() reads - `<root>\.env` and
+            # `.next\standalone\.env.local` - so it is idempotent and a no-op on
+            # an install whose tail already carries them. The revert needs no new
+            # code: both files are in NetVault's EnvFiles, so the pre-cutover
+            # snapshot holds them verbatim and Restore-ConsoleTransport puts them
+            # back exactly as they were, including the absence of these keys.
+            $tlsPairs = @{}
+            if ($TlsCert) { $tlsPairs['TLS_CERT_PATH'] = $TlsCert }
+            if ($TlsKey)  { $tlsPairs['TLS_KEY_PATH']  = $TlsKey }
+            if ($TlsPublicHostValue) { $tlsPairs['TLS_PUBLIC_HOST'] = $TlsPublicHostValue }
+            if ($tlsPairs.Count -lt 2) {
+                Write-Warn "TLS_CERT_PATH/TLS_KEY_PATH are not both known - the terminator would serve plain HTTP. Refusing the cutover."
+                $moveOk = $false
+            } else {
+                $tlsWrote = 0
+                foreach ($f in @("$NVAppDir\.env", "$NVStandaloneDir\.env.local")) {
+                    if (Test-Path -LiteralPath $f) {
+                        foreach ($k in $tlsPairs.Keys) { if (Set-EnvFileKey $f $k $tlsPairs[$k]) { $tlsWrote++ } }
+                    }
+                }
+                if ($tlsWrote -lt 2) {
+                    Write-Warn "Could not write the certificate paths into NetVault's env - the terminator would serve plain HTTP. Refusing the cutover."
+                    $moveOk = $false
+                } else {
+                    Write-OK "Certificate paths written where the terminator reads them (TLS_CERT_PATH, TLS_KEY_PATH)"
+                }
+            }
         }
 
         if (-not $moveOk) {
@@ -787,6 +840,36 @@ if (-not $TlsGateOk) {
                 }
                 if ($tlsLogText -match 'NOT STARTED') {
                     Write-Warn "The terminator logged its 'NOT STARTED' banner - it is not serving anything"
+                    $gate3 = $false
+                }
+
+                # ⛔ AND THE 'disabled' BANNER, WHICH IS WORSE THAN A REFUSAL.
+                # describeTlsStatus() prints "TLS: not configured - serving plain
+                # HTTP on port <n>" when resolveTlsConfig() resolves 'disabled',
+                # and the terminator then binds all four public ports in
+                # PLAINTEXT. That is a perfectly healthy-looking service in front
+                # of four consoles that have just been moved to loopback, so the
+                # suite is reachable, answers 200, and is not encrypted.
+                #
+                # MEASURED on production: this is exactly what happened, and
+                # gate 3 could only report it as "no HTTPS 200" - the same
+                # message it gives for a broken certificate, a wrong cipher or a
+                # dead upstream, all of which need different fixes. The
+                # terminator says which in plain words; the gate was not reading
+                # it. The cutover reverts either way, so this costs nothing and
+                # names the cause.
+                if ($tlsLogText -match 'TLS: not configured') {
+                    Write-Warn "The terminator started but TLS is NOT CONFIGURED in the environment it reads - it bound the public ports in PLAINTEXT"
+                    Write-Info "  it logged  : $(($tlsLogText -split "`r?`n" | Where-Object { $_ -match 'TLS: not configured' } | Select-Object -First 1).Trim())"
+                    Write-Info "  it reads   : $NVAppDir\.env then $NVStandaloneDir\.env.local then its own service environment"
+                    Write-Info "  it needs   : TLS_CERT_PATH and TLS_KEY_PATH"
+                    $gate3 = $false
+                }
+                if ($tlsLogText -match 'TLS: configured but NOT active|TLS: failed') {
+                    Write-Warn "The terminator loaded a certificate configuration it could not use - see its log for the reason"
+                    foreach ($l in @($tlsLogText -split "`r?`n" | Where-Object { $_ -match 'TLS: (configured but NOT active|failed)' } | Select-Object -First 3)) {
+                        Write-Info "  $($l.Trim())"
+                    }
                     $gate3 = $false
                 }
 
