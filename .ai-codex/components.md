@@ -101,3 +101,20 @@ The group's display name is shown but labelled a label: it is never matched on a
 rename in Entra. `site_admin` is absent from the role select by construction (it comes from
 `DIRECTORY_PROVISIONABLE_ROLES` via the API), and choosing `super_admin` raises a warning that
 anyone who can add members to that group in Entra can grant themselves full control.
+
+### components/settings/TransportPanel.tsx — Settings → HTTPS (super_admin)
+The Certificate panel manages the certificate; this one manages whether the suite USES it. Reads
+`/api/system/tls-transport`, offers Preview / Turn HTTPS on / Turn HTTPS off, polls while a run is in
+flight, and shows the engine's gate lines verbatim.
+- ⛔ **IT DELIBERATELY DOES NOT AUTO-REDIRECT AFTER ENABLING.** HTTPS moves this console from http to
+  https on the SAME port — a different origin whose self-signed certificate the browser has not
+  accepted yet. A scripted redirect or cross-origin poll fails indistinguishably from "the cutover
+  broke". Only a human can click through a certificate warning, so the panel hands over a link and says
+  so. An auto-redirect here would be a worse lie than none.
+- ⛔ **A LOST POLL DURING A RUN IS EXPECTED, NOT AN ERROR.** The console is changing ports; rendering it
+  as a fault sends an operator chasing the feature working.
+- ⛔ The engine's exit code is shown as a FACT, labelled "not the verdict" — it is 0 for a successful
+  run and for one that undid itself.
+- The confirmation NAMES the four ports, warns that each console restarts, and states that a failed
+  gate undoes everything automatically. Turning HTTPS off says plainly that credentials will then cross
+  the network unencrypted.

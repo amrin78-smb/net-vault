@@ -427,3 +427,39 @@ just as well as the real root. Resolve by walking to the OUTERMOST checkout, bou
 `node server.js` (standalone), `cmd.exe /c next.cmd start --port 3004`, `next.cmd start -p 3006`,
 and `node .../next start -p 3008` — four shapes from four installer eras on one box. Anything that
 rewrites a command line must accept `-p` and `--port`, and must refuse rather than guess at a third.
+
+## A PowerShell installer's exit code is not its verdict
+`installer/Enable-NocVaultTls.ps1` exits **0** whether it enabled HTTPS or moved all four consoles,
+failed a gate, and put everything back. MEASURED on production twice on 2026-11-06: the successful run
+and the reverted run both ended `exit: 0`. Anything deciding "did that work" from `$LASTEXITCODE` or
+`r.status_code` will report success to an administrator whose suite is still on plain HTTP.
+
+Read the script's own closing banner instead — `lib/tlsTransport.ts`'s `parseRunLog` does, and
+`tests/tlsTransport.test.ts` asserts the two exit codes are identical precisely so the "simplification"
+of reading the exit code cannot land unnoticed. This is the same family as the GUI installer's
+status-file rule in CLAUDE.md (npm/nssm/sc leave a non-zero `$LASTEXITCODE` even on success), and the
+two together mean: on this codebase a PowerShell exit code is evidence of nothing in either direction.
+
+## A gate that gives up must say what it saw
+The TLS cutover's health probe was `catch {}` — every attempt's failure reason discarded — so a failing
+gate could only report "<console> did NOT answer". That one missing string cost two production evenings
+and **five** measured-and-disproved hypotheses (registration shape, a rejected `sc start` after a fixed
+4 s sleep, a slow cold `/api/health`, contention from four simultaneous restarts, the port move itself).
+The console was healthy every time; the probe was wrong, and nothing recorded how. Fixed in 1.59.2 by
+tallying every attempt's outcome and printing it.
+
+Related: a per-attempt timeout that differs wildly between things being checked is a gate with a
+hidden bias. The probe allowed 3 s while logvault's `/api/health` legitimately takes 1.2-1.9 s (it is a
+middleware rewrite to the Express API on :3005) and the other three take ~0.1 s — the slowest console
+had 2x headroom and the others 30x, for no stated reason.
+
+## Gate 1 checked the filesystem; the terminator reads the configuration
+`Enable-NocVaultTls.ps1` verified a certificate pair existed ON DISK and never wrote `TLS_CERT_PATH` /
+`TLS_KEY_PATH` anywhere. `Install-NocVault-Suite.ps1` writes them via `$NVEnvTail` while composing a new
+`.env`; the enable-on-an-existing-install path has an empty tail on purpose (it must not duplicate keys
+in a file that already exists) and nothing replaced them. So `resolveTlsConfig()` returned `disabled`,
+the terminator bound all four public ports in **plaintext**, logged `TLS: not configured - serving plain
+HTTP on port 3000`, and gate 3 failed honestly against a listener doing exactly what it was configured
+to do. **Enabling HTTPS on an already-installed suite could not have worked on any box.** Fixed in
+1.59.3. The lesson generalises: a gate that proves a FILE exists has not proved the process that needs
+it can find it.

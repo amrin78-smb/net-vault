@@ -219,3 +219,38 @@ button was filtered by `isSuperAdmin` while the `?tab=` allow-list admitted any 
 the exact split that effect's own comment warns about, left behind on one tab. Found while
 adding `sso`. A new super_admin-only tab belongs in BOTH the allow-list and its content block.
 (lib) lib/redirectUri.ts — classifyRedirectUri. ⛔ ZERO IMPORTS, AND THAT IS THE POINT: it is shared by an API route and by a 'use client' Settings panel, and it lived in `lib/entraSettings.ts` first, which reaches `node:fs` through `envFile.ts`. A client component importing that drags the Node fs shim into the browser bundle — the same failure as importing `lib/directoryRefusals.ts` into a client component, which pulled in the whole pg driver and failed the Turbopack build with 6 errors. ⛔ ENTRA WILL NOT ACCEPT AN IP ADDRESS AS A REDIRECT URI AND EVERY INSTALL STARTS ON ONE (`NEXTAUTH_URL` is baked to the server address at install time), so the derived URI the panel shows is unregisterable until a hostname is set. ⛔ It also refuses non-loopback `http` (Entra requires https, with loopback the only exception — so a correct hostname still fails before the TLS cutover) and a single-label host. ⛔ It CLASSIFIES, it does not block: refusing to save a tenant id because the hostname is not ready would be an obstacle, not a guard.
+
+## lib/tlsTransport.ts
+Turning HTTPS on and off from Settings. `lib/tlsConfig.ts` answers "is this console encrypted"; this
+answers "can I change that, and what happened when I did". Nothing here reimplements the cutover —
+`installer/Enable-NocVaultTls.ps1` owns the work, gates and automatic revert.
+
+- `TransportAction` / `TRANSPORT_ACTIONS` / `isTransportAction()` — `preview` | `enable` | `disable`.
+- `TRANSPORT_TASK_NAME` — `NocVault-TlsTransport`. Its OWN task, never `NetVaultUpdate`: that one is
+  registered permanently and deleting it as cleanup would remove a job the install must keep.
+- `transportPaths(repoRoot)` — `logs/tls-transport.{log,lock}`, `logs/tls-transport-run.ps1`,
+  `installer/Enable-NocVaultTls.ps1`. Beside the updater's own log, not a second convention.
+- `validatePublicHost(raw)` — hostname allow-list; blank is valid and means "echo the browser's Host".
+  ⛔ **AN IP IS REFUSED**: Entra will not accept one in a Redirect URI, so it can never be useful here.
+  ⛔ The value is interpolated into a script a scheduled task runs **as SYSTEM**, so a character class
+  wide enough to admit a quote or a semicolon is RCE as SYSTEM from a settings form.
+- `psLiteral(v)` — PowerShell single-quoted literal, doubling quotes. Belt and braces behind the validator.
+- `engineArgs(action, publicHost)` — the engine switches. `-TlsPublicHost` is never passed to `-Disable`.
+- `buildWrapperScript(...)` — the file the task runs. A FILE, not a longer `schtasks /tr`: capturing the
+  engine's output needs a redirect, which would mean three levels of quoting around a path with spaces.
+  ⛔ The sentinel is written in `finally` **before** the lock removal and the task self-delete, so a
+  failed cleanup can never cost us the verdict.
+- `parseRunLog(text)` → `RunReport` with `outcome`: `none` | `running` | `previewed` | `enabled` |
+  `disabled` | `reverted` | `unknown`.
+  ⛔ **THE BANNER IS THE VERDICT, NOT THE EXIT CODE.** MEASURED on production twice on 2026-11-06:
+  `Enable-NocVaultTls.ps1` exits **0** on a run that moved all four consoles, failed gate 3 and reverted
+  everything. Reading the exit code reports "HTTPS enabled" to an administrator still on plain HTTP.
+  ⛔ `reverted` is matched BEFORE `enabled`: "HTTPS was NOT enabled" contains "HTTPS".
+  ⛔ `parseRunLog(null)` is `none` (no run ever happened); a READ ERROR is reported separately by the
+  route and must never arrive here disguised as "nothing has happened".
+- `transportCapability({platform, scriptPresent, terminator, runInProgress})` — which buttons are legal.
+  ⛔ `terminator: 'unknown'` blocks BOTH directions; non-Windows blocks everything.
+- `SUITE_PUBLIC_PORTS` — the four ports, NAMED in the confirmation. "This will move 4 consoles" is not
+  something an administrator can check against their own install; the ports are.
+- `destinationUrl({action, browserHost, publicHost, port})` — where to send the operator afterwards.
+  The browser's own host by default, because a blank `TLS_PUBLIC_HOST` means the terminator echoes Host.

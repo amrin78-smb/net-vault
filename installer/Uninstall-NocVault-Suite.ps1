@@ -158,7 +158,34 @@ $Services = @(
     "SpanVault-API", "SpanVault-App", "SpanVault-Collector"
 )
 
-$Tasks = @("NetVault-HealthSnapshot", "NetVault-EnrichEol", "NetVault-SyncEol")
+# ⛔ THE RUNTIME-CREATED TASKS BELONG HERE TOO, AND WERE MISSING. Only the three
+# maintenance tasks are registered by an installer; the rest are created by the
+# APPS THEMSELVES while running, which is exactly why a list maintained
+# alongside the installer never knew about them:
+#
+#   <App>Update            written by each app's in-app "Update Now" button
+#                          (netvault: app/api/system/update/route.ts, and the
+#                          same shape in the three satellites' own repos)
+#   NocVault-TlsTransport  written by Settings -> HTTPS. It deletes itself at
+#                          the end of a run, so it is normally absent - but a
+#                          run killed before its cleanup leaves it behind.
+#   LogVault-Cleanup       runs <install>\logvault\scripts\cleanup.js. Observed
+#                          on a production install and registered by NOTHING in
+#                          any current repo, so it predates them or was made by
+#                          hand; either way it points into a directory this
+#                          script is about to delete.
+#
+# Measured on production 2026-11-06: five tasks survived an uninstall, every one
+# of them scheduled to run a script in a deleted directory. A scheduled task
+# pointing at nothing fails silently for ever, which is the quiet kind of mess.
+# The loop below skips a task that does not exist, so listing one that was never
+# created costs nothing.
+$Tasks = @(
+    "NetVault-HealthSnapshot", "NetVault-EnrichEol", "NetVault-SyncEol",
+    "NetVaultUpdate", "LogVaultUpdate", "DDIVaultUpdate", "SpanVaultUpdate",
+    "NocVault-TlsTransport",
+    "LogVault-Cleanup"
+)
 
 $FirewallRules = @(
     "NocVault NetVault 3000",

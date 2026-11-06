@@ -18,6 +18,7 @@ import MfaCard from './MfaCard'
 // section, and nothing else in this file had to move.
 import ConsoleAddressPanel from '@/components/settings/ConsoleAddressPanel'
 import CertificatePanel from '@/components/settings/CertificatePanel'
+import TransportPanel from '@/components/settings/TransportPanel'
 import SingleSignOnPanel from '@/components/settings/SingleSignOnPanel'
 
 /**
@@ -432,9 +433,9 @@ const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS
  * are the same shape as the existing license/updates ones.
  */
 type SettingsTab =
-  'general' | 'console' | 'certificate' | 'sso' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about'
+  'general' | 'console' | 'certificate' | 'https' | 'sso' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about'
 const ADMIN_TABS: SettingsTab[] =
-  ['general', 'console', 'certificate', 'sso', 'users', 'sites', 'security', 'license', 'updates', 'about']
+  ['general', 'console', 'certificate', 'https', 'sso', 'users', 'sites', 'security', 'license', 'updates', 'about']
 
 function SettingsInner() {
   const { showToast } = useToast()
@@ -496,8 +497,10 @@ function SettingsInner() {
       // fixed access-control bug is a fixed INSTANCE, not a fixed CLASS — when
       // you gate one surface, check its siblings in the same pass. Both tabs
       // are now gated in BOTH places; if a third super_admin-only tab is added,
-      // it belongs in both too.
-      ? ADMIN_TABS.filter(x => (x !== 'sso' && x !== 'license') || isSuperAdmin)
+      // it belongs in both too. `https` was the third, and this line is where
+      // it was nearly missed: the nav filter alone would have left
+      // /settings?tab=https open to an `admin` who can never see the button.
+      ? ADMIN_TABS.filter(x => (x !== 'sso' && x !== 'license' && x !== 'https') || isSuperAdmin)
       : ['security']
     if (allowed.includes(t)) {
       setActiveTab(t as SettingsTab)
@@ -854,7 +857,7 @@ function SettingsInner() {
             // this installation's address and transport. Single sign-on sits
             // under Access beside Users, because it decides WHO may sign in —
             // and it is the one entry here gated on super_admin alone.
-            ['System',   ['general', 'console', 'certificate', 'sites', 'updates', 'about']],
+            ['System',   ['general', 'console', 'certificate', 'https', 'sites', 'updates', 'about']],
             ['Access',   ['users', 'sso']],
             ['Billing',  ['license']],
             ['Personal', ['security']],
@@ -869,6 +872,11 @@ function SettingsInner() {
               // ⛔ super_admin, not admin. Whoever sets the tenant decides which
               // directory is trusted to issue identities for the whole suite.
               .filter(tab => tab !== 'sso' || isSuperAdmin)
+              // ⛔ super_admin TOO, and for a blunter reason: this is the one
+              // Settings tab that can move all four consoles and take the suite
+              // briefly offline. Reading the transport is admin+ (the GET), but
+              // switching it is not.
+              .filter(tab => tab !== 'https' || isSuperAdmin)
             if (visible.length === 0) return null
             return (
               <div key={group} className="settings-nav-group">
@@ -885,6 +893,7 @@ function SettingsInner() {
                       {tab === 'general' ? 'General'
                         : tab === 'console' ? 'Console address'
                         : tab === 'certificate' ? 'Certificate'
+                        : tab === 'https' ? 'HTTPS'
                         : tab === 'sso' ? 'Single sign-on'
                         : tab === 'users' ? 'Users & access'
                         : tab === 'sites' ? 'Organisation & sites'
@@ -1212,6 +1221,12 @@ function SettingsInner() {
       {/* CERTIFICATE TAB (admin+) — the three transport states and the
           certificate install, including the replace confirmation. */}
       {activeTab === 'certificate' && isAdmin && <CertificatePanel />}
+
+      {/* HTTPS TAB — ⛔ super_admin ONLY, and the check is on the CONTENT as
+          well as the nav: the nav filter hides the button, and this is what
+          makes /settings?tab=https mean nothing for an `admin`. Turning the
+          transport on or off restarts all four consoles. */}
+      {activeTab === 'https' && isSuperAdmin && <TransportPanel />}
 
       {/* SINGLE SIGN-ON TAB — ⛔ super_admin ONLY, and the role check is on the
           CONTENT, not only on the nav button: the nav filter hides the button
