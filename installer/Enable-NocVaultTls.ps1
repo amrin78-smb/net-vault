@@ -400,6 +400,31 @@ if ($Disable) {
     }
     Write-OK "Suite probes pointed back at the public ports"
 
+    # ⛔ AND THE SATELLITES' HUB URL, WHICH THE CUTOVER MOVED TO THE HUB'S
+    # LOOPBACK. Leaving it on 127.0.0.1:13000 after HTTPS is turned off points
+    # every satellite's server-side SSO verification at a port nothing listens
+    # on any more - and the failure is a sign-in that bounces with
+    # "CredentialsSignin" on a suite whose health checks are all green. An
+    # apply and its revert are two halves of one fact (1.58.5's lesson).
+    $hubPlain = 'http://127.0.0.1:3000'
+    foreach ($c in $back) {
+        if ($c.App -eq 'netvault') { continue }
+        foreach ($f in $c.EnvFiles) { $null = Set-EnvFileKeyBack $f 'NOCVAULT_HUB_URL' $hubPlain }
+        $raw = (( & $NssmExe get $c.Service AppEnvironmentExtra 2>&1 | Out-String) -replace "`0", '').Trim()
+        if ($raw -match '(?m)^\s*NOCVAULT_HUB_URL\s*=') {
+            $lines = @($raw -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' })
+            if ($lines.Count -ge 1) {
+                $out = @()
+                foreach ($l in $lines) {
+                    if ((($l -split '=', 2)[0]) -eq 'NOCVAULT_HUB_URL') { $out += "NOCVAULT_HUB_URL=$hubPlain" }
+                    else { $out += $l }
+                }
+                $null = & $NssmExe set $c.Service AppEnvironmentExtra ($out -join "`n") 2>&1
+            }
+        }
+    }
+    Write-OK "Satellite hub URLs pointed back at $hubPlain"
+
     # ⛔ AND THE CERTIFICATE PATHS COME OUT, OR THE SUITE LIES ABOUT ITSELF.
     # The cutover writes TLS_CERT_PATH/TLS_KEY_PATH into NetVault's env so the
     # terminator can find the certificate. Those same two keys are what

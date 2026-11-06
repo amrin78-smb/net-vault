@@ -83,10 +83,45 @@ export type TransportPresentation = {
  */
 export function transportPresentation(
   status: string | null | undefined,
-  opts: { httpsPort?: number | null; httpPort?: number | null; error?: string | null } = {},
+  opts: {
+    httpsPort?: number | null
+    httpPort?: number | null
+    error?: string | null
+    /**
+     * ⛔ WHETHER A TERMINATOR IS IN FRONT CHANGES WHAT EVERY PORT NUMBER MEANS.
+     * `resolveTlsConfig` reads `HTTPS_PORT || PORT` from THIS process, and
+     * after the TLS cutover this process's PORT is its LOOPBACK port — 13000 —
+     * where it serves PLAIN HTTP behind NocVault-Tls. Reported unchanged, the
+     * panel said "Serving HTTPS on port 13000", which is wrong twice over: the
+     * app is not serving HTTPS, and 13000 is not the port anyone connects to.
+     * Observed on production 2026-11-06.
+     *
+     * The decision layer is NOT changed to fix this — the terminator itself
+     * resolves its listening ports through the same function, so moving those
+     * semantics would move where it binds. This is a reporting frame, and it
+     * belongs in the reporting layer.
+     */
+    fronted?: boolean | null
+    /** The port the browser actually connects to when `fronted`. */
+    publicPort?: number | null
+  } = {},
 ): TransportPresentation {
   const httpsPort = typeof opts.httpsPort === 'number' ? opts.httpsPort : null
   const httpPort = typeof opts.httpPort === 'number' ? opts.httpPort : null
+  const publicPort = typeof opts.publicPort === 'number' ? opts.publicPort : null
+  if (status === 'active' && opts.fronted) {
+    return {
+      tone: 'ok',
+      label: 'HTTPS active',
+      headline:
+        `Served over HTTPS${publicPort ? ` on port ${publicPort}` : ''} by the NocVault-Tls front door, `
+        + `which holds the certificate. This console itself listens on `
+        + `127.0.0.1${httpsPort ? `:${httpsPort}` : ''} in plain HTTP behind it and is not reachable `
+        + 'directly. Plain HTTP on the public port is answered with a redirect to HTTPS.',
+      loud: false,
+      normal: false,
+    }
+  }
   if (status === 'active') {
     return {
       tone: 'ok',

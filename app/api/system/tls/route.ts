@@ -22,6 +22,7 @@ import {
 } from '@/lib/certImport.ts'
 
 import { recordSystemChanges } from '@/lib/systemAudit.ts'
+import { HUB_PUBLIC_PORT, readTerminatorState } from '@/lib/terminatorState.ts'
 
 export const dynamic = 'force-dynamic'
 
@@ -128,6 +129,11 @@ export async function GET() {
 
   const config = resolveTlsConfig(process.env)
   const consoleUrl = (process.env.NEXTAUTH_URL || '').trim() || null
+  // ⛔ WHICH PROCESS IS ACTUALLY TERMINATING TLS. config.httpsPort is read from
+  // THIS process's PORT, which behind the front door is its loopback port -
+  // so without this the panel reports "Serving HTTPS on port 13000" about a
+  // process serving plain HTTP on 13000. See transportPresentation's `fronted`.
+  const terminator = await readTerminatorState()
 
   // ⛔ describeCertificate, NOT validateCertificatePair. The latter refuses a
   // missing key BEFORE it parses anything — correct when installing a pair, and
@@ -167,6 +173,11 @@ export async function GET() {
     // precisely the state an operator lands in after uploading a bad
     // certificate.
     nextAuthUrlMismatch: nextAuthUrlMismatch(config, consoleUrl),
+    // The terminator holds the certificate, so "which service must restart to
+    // serve a new one" depends on this too.
+    terminator: terminator.state,
+    fronted: terminator.running,
+    publicPort: terminator.running ? HUB_PUBLIC_PORT : config.httpsPort,
     installTargets: targetPaths(config),
     ...shadowAnswer(measureShadows()),
   })
@@ -422,6 +433,14 @@ export async function POST(req: NextRequest) {
       daysRemaining: info.daysRemaining,
       selfSigned: info.selfSigned,
       chain: info.chain,
+      // ⛔ IT BELONGS IN HERE TOO, NOT ONLY AT THE TOP LEVEL. The panel renders
+      // this object, so omitting the count made every install report "Chain
+      // length unknown" — and `chainPresentation` correctly treats unknown as a
+      // WARNING. A real three-certificate chain (leaf + RapidSSL intermediate +
+      // DigiCert root) was reported to an operator as possibly leaf-only,
+      // observed on production 2026-11-06. The number was one level up the
+      // whole time.
+      chainLength,
     },
     // The env write is reported separately from the file write: the files can
     // land while the env write fails, and that partial state is benign but must

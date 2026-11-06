@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.60.1': [
+    'Fixed a fault that broke DDIVault sign-in on a site that had just moved to HTTPS with a real certificate. Each satellite verifies a single sign-on handover by calling the hub directly, server to server, and that call was still addressed to the hub by IP over plain HTTP. With HTTPS on, that address redirects to HTTPS, and a real certificate names the site rather than the server’s IP address — so the call failed on the certificate and the sign-in was refused with nothing to explain why. The suite looked completely healthy throughout.',
+    'Turning HTTPS on now repoints each satellite’s hub address at the hub’s internal port, where no redirect, no DNS name and no certificate stand between two processes on the same machine. Turning HTTPS off points it back.',
+    'Also corrected: with HTTPS on, the Console address and Certificate pages reported the internal port as though it were the public one — “Serving HTTPS on port 13000”, and an example address telling the administrator to use that port. The console does not serve HTTPS on that port; it serves plain HTTP there, behind the front door that holds the certificate.',
+    'And a certificate’s chain length is now reported after installing one. A complete three-certificate chain was being described as unknown, which reads as a possible problem with a certificate that is in fact correct.',
+  ],
   '1.60.0': [
     'HTTPS can now be turned on and off from Settings. Until now the certificate could be managed from the product but the decision to actually USE it lived in a PowerShell script on the server’s console — so the one transport setting that matters most was the one an administrator could not reach. Settings → HTTPS now shows whether this console is encrypted, whether the shared front door is running, which port each console is bound to, and offers Preview, Turn HTTPS on and Turn HTTPS off.',
     'Preview is safe at any time: it runs every check and reports exactly what a real change would do, without changing anything. A real change names the four ports it is about to move, warns that each console restarts, and states that if any console cannot be proven to serve HTTPS the entire change is undone automatically.',

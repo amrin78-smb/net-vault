@@ -661,6 +661,67 @@ if (-not $TlsGateOk) {
             }
             Write-OK "Suite health/stats probes repointed at the loopback ports"
 
+            # ⛔ AND THE SATELLITES' POINTER BACK AT THE HUB. The block above
+            # repoints the hub's probes TO the satellites; nothing repointed
+            # the satellites' NOCVAULT_HUB_URL back AT the hub, and that is a
+            # SERVER-SIDE fetch each satellite makes to verify an SSO token
+            # (ddivault's authorize() calls <hub>/api/auth/sso-verify before it
+            # will create a session).
+            #
+            # MEASURED on production 2026-11-06, after a real certificate was
+            # installed:
+            #   http://192.168.6.111:3000  -> FETCH FAILED: ERR_TLS_CERT_ALTNAME_INVALID
+            #   http://127.0.0.1:13000     -> 401 (reached the hub)
+            # The terminator answers the plain-HTTP URL with a 301 to https,
+            # node's fetch follows it, and the handshake then fails because a
+            # real certificate names the SITE, not the server's IP. DDIVault
+            # sign-in returned "Session creation failed: CredentialsSignin" on
+            # a suite that was otherwise completely healthy.
+            #
+            # ⛔ THE LOOPBACK, NOT THE PUBLIC URL. This is one process on this
+            # box calling another on the same box: routing it out through the
+            # TLS front door adds a redirect, a DNS name and a certificate to
+            # something that needs none of them, and makes sign-in depend on
+            # all three. NEXT_PUBLIC_NOCVAULT_HUB_URL is deliberately NOT
+            # touched - that one is read by a BROWSER and must stay a public
+            # address.
+            #
+            # ⛔ WRITTEN WHERE THE VALUE ACTUALLY LIVES. LogVault and DDIVault
+            # carry NOCVAULT_HUB_URL in their NSSM service environment, which
+            # beats every env file - the same trap as NEXTAUTH_URL in 1.58.4.
+            # Taken from the netvault console entry rather than written as a
+            # literal: the loopback mapping is defined once, above, and a second
+            # copy here is a second thing to keep in step.
+            $nvConsole = @($Consoles | Where-Object { $_.App -eq 'netvault' })[0]
+            $hubLoopback = "http://127.0.0.1:" + $(if ($nvConsole) { $nvConsole.Loopback } else { 13000 })
+            foreach ($c in $Consoles) {
+                if ($c.App -eq 'netvault') { continue }
+                $wrote = $false
+                foreach ($f in $c.EnvFiles) {
+                    if (Test-Path -LiteralPath $f) {
+                        if (Set-EnvFileKey $f 'NOCVAULT_HUB_URL' $hubLoopback) { $wrote = $true }
+                    }
+                }
+                $extra = Get-NssmSetting $NssmExe $c.Service 'AppEnvironmentExtra'
+                if ($extra -match '(?m)^\s*NOCVAULT_HUB_URL\s*=') {
+                    $lines = @($extra -split "`r?`n" |
+                        ForEach-Object { $_.Trim() } |
+                        Where-Object { $_ -match '^[A-Za-z_][A-Za-z0-9_]*=' })
+                    if ($lines.Count -ge 1) {
+                        $out = @()
+                        foreach ($l in $lines) {
+                            if ((($l -split '=', 2)[0]) -eq 'NOCVAULT_HUB_URL') { $out += "NOCVAULT_HUB_URL=$hubLoopback" }
+                            else { $out += $l }
+                        }
+                        $ErrorActionPreference = 'Continue'
+                        $null = & $NssmExe set $c.Service AppEnvironmentExtra ($out -join "`n") 2>&1
+                        $wrote = $true
+                    }
+                }
+                if ($wrote) { Write-OK "$($c.App): hub URL repointed at $hubLoopback (server-side SSO verification)" }
+                else { Write-Warn "$($c.App): no NOCVAULT_HUB_URL found to repoint - SSO verification may fail once the terminator owns :3000" }
+            }
+
             # ⛔ AND THE TERMINATOR IS TOLD WHERE THE CERTIFICATE IS. Gate 1
             # proves a certificate pair EXISTS ON DISK. It does NOT put the
             # paths anywhere the terminator reads, and `resolveTlsConfig()`
