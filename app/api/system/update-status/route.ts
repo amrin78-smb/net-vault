@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.59.2': [
+    'The HTTPS cutover has failed twice on the production server with a single line — that one console “did not answer” — and both times the console was in fact answering correctly, as the very next request in the same run proved. The check that gave up was discarding the reason it gave up, so five separate explanations were investigated and disproved against a server that was never broken.',
+    'The health check now reports exactly what it saw, every attempt tallied, so a console that is held to be unreachable has to say why.',
+    'It also no longer fails the slowest console for being slow. LogVault’s health endpoint passes an extra internal hop and takes around 1.5 seconds where the other three take a tenth of that; the check allowed it barely twice that long, while allowing the others thirty times over. Both health checks now allow 20 seconds per attempt, and the HTTPS one no longer has to absorb the terminator’s own startup inside a 5-second budget.',
+    'Both checks now use the same HTTP client — the one already measured to be the reliable one on this suite — and neither will route a request meant for this machine through a system proxy. Timeouts are also counted in seconds now, rather than in attempts that each took an unknown amount of time.',
+  ],
   '1.59.1': [
     'Two faults found on a staging rig built to reproduce the production cutover, both of which would have stopped NetVault\u2019s nightly jobs without any error being raised. Turning HTTPS on outside the installer failed to move the three maintenance tasks onto the new internal port \u2014 and then reported that it had. Turning HTTPS back off did not move them back at all.',
     'Either way the nightly health snapshot and both end-of-life jobs would have gone on posting to a port nothing was listening on: no error anywhere, just a health trend that stops gaining points and end-of-life data that quietly goes stale. Both directions now move the tasks and then read them back to confirm it, rather than announcing success.',

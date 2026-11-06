@@ -162,14 +162,66 @@ if (-not $TlsGateOk) {
         return $true
     }
 
+    # ⛔ WHY THE LAST POLL FAILED, KEPT. This used to be `catch {}` - every
+    # attempt's reason discarded - and the gate reported only "did NOT answer".
+    # That one missing string cost two production evenings and five disproved
+    # hypotheses: the console was healthy every time (HTTP 200 to the very next
+    # request from the diagnostics block), so the fault was always in the probe
+    # or in what the probe could not see, and nothing recorded which.
+    $script:LastProbeSummary = ''
+
     function Wait-HttpOk([string]$url, [int]$timeoutSec) {
-        for ($i = 0; $i -lt $timeoutSec; $i++) {
+        $script:LastProbeSummary = ''
+        $tally    = @{}
+        $attempts = 0
+        $deadline = (Get-Date).AddSeconds($timeoutSec)
+        # ⛔ A DEADLINE, NOT AN ITERATION COUNT. `for ($i -lt $timeoutSec)` with
+        # a 1 s sleep and a 3 s per-attempt cap meant "90" could mean anything
+        # from 90 to 360 seconds, so the one number a reader could check was the
+        # one number that was not true.
+        while ((Get-Date) -lt $deadline) {
+            $attempts++
+            $reason = ''
             try {
-                $r = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-                if ($r.StatusCode -eq 200) { return $true }
-            } catch {}
+                # ⛔ HttpWebRequest, NOT Invoke-WebRequest. Wait-HttpsOk's header
+                # records the measurement that forced this same choice for the
+                # HTTPS probe on this very suite: same server, same moment,
+                # Invoke-WebRequest failed where HttpWebRequest returned 200.
+                # Leaving the plain-HTTP probe on the client that was already
+                # measured to be the unreliable one was an inconsistency with
+                # nothing behind it.
+                $req = [System.Net.HttpWebRequest]::Create($url)
+                # 20 s, not 3. MEASURED on production: logvault's /api/health is
+                # a middleware REWRITE to the Express API on :3005, so it pays an
+                # extra internal hop and answers in 1.2-1.9 s where the other
+                # three answer in ~0.1 s. A 3 s cap left it 2x headroom while the
+                # others had 30x - a gate far tighter for one console than the
+                # rest, for no stated reason.
+                $req.Timeout          = 20000
+                $req.ReadWriteTimeout = 20000
+                $req.Method           = 'GET'
+                # A loopback probe must never be routed through a system proxy.
+                # WinINET's bypass list is somebody else's configuration and this
+                # request's destination is this machine.
+                $req.Proxy            = $null
+                $resp = $req.GetResponse()
+                $code = [int]$resp.StatusCode
+                $resp.Close()
+                if ($code -eq 200) { return $true }
+                $reason = "HTTP $code"
+            } catch {
+                $reason = $_.Exception.Message
+                if (-not $reason) { $reason = $_.Exception.GetType().FullName }
+            }
+            if (-not $tally.ContainsKey($reason)) { $tally[$reason] = 0 }
+            $tally[$reason] = $tally[$reason] + 1
             Start-Sleep -Seconds 1
         }
+        $parts = @()
+        foreach ($k in ($tally.Keys | Sort-Object { $tally[$_] } -Descending)) {
+            $parts += ("{0}x {1}" -f $tally[$k], $k)
+        }
+        $script:LastProbeSummary = "$attempts attempt(s) over ${timeoutSec}s: " + ($parts -join ' | ')
         return $false
     }
 
@@ -190,7 +242,7 @@ if (-not $TlsGateOk) {
     # customer certificate will ever name, so a validating probe could only
     # fail. The global callback is saved and restored in finally - it is
     # process-wide state and leaving it permissive would silently weaken every
-    # later Invoke-WebRequest in this script.
+    # later HTTPS request in this script.
     function Wait-HttpsOk([string]$url, [int]$timeoutSec) {
         $prevCallback = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
         $prevProtocol = [System.Net.ServicePointManager]::SecurityProtocol
@@ -202,7 +254,12 @@ if (-not $TlsGateOk) {
             }
             [System.Net.ServicePointManager]::SecurityProtocol = $proto
             [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-            for ($i = 0; $i -lt $timeoutSec; $i++) {
+            $tally    = @{}
+            $attempts = 0
+            $deadline = (Get-Date).AddSeconds($timeoutSec)
+            while ((Get-Date) -lt $deadline) {
+                $attempts++
+                $reason = ''
                 try {
                     # ⛔ HttpWebRequest, NOT Invoke-WebRequest. MEASURED on Windows 11
                     # / PowerShell 5.1 against this installer's own self-signed
@@ -227,9 +284,16 @@ if (-not $TlsGateOk) {
                     # not have engaged on ANY Windows box. Found only by running
                     # the install for real -- a parse check cannot see it.
                     $req = [System.Net.HttpWebRequest]::Create($url)
-                    $req.Timeout          = 5000
-                    $req.ReadWriteTimeout = 5000
+                    # 20 s, not 5. This probe pays the terminator hop ON TOP of
+                    # the console's own response time, and logvault's
+                    # /api/health is itself a rewrite to the Express API on
+                    # :3005 - measured at 1.2-1.9 s on production before any
+                    # TLS is involved. Gate 3 must not fail a console for being
+                    # the slowest of the four when it is answering correctly.
+                    $req.Timeout          = 20000
+                    $req.ReadWriteTimeout = 20000
                     $req.Method           = 'GET'
+                    $req.Proxy            = $null
                     # Per-request as well as the global above: the global callback
                     # is what Invoke-WebRequest was also relying on, so do not
                     # depend on it alone.
@@ -238,12 +302,25 @@ if (-not $TlsGateOk) {
                     $code = [int]$resp.StatusCode
                     $resp.Close()
                     if ($code -eq 200) { $ok = $true; break }
-                } catch {}
+                    $reason = "HTTP $code"
+                } catch {
+                    $reason = $_.Exception.Message
+                    if (-not $reason) { $reason = $_.Exception.GetType().FullName }
+                }
+                if (-not $tally.ContainsKey($reason)) { $tally[$reason] = 0 }
+                $tally[$reason] = $tally[$reason] + 1
                 Start-Sleep -Seconds 1
             }
         } finally {
             [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prevCallback
             [System.Net.ServicePointManager]::SecurityProtocol = $prevProtocol
+        }
+        if (-not $ok) {
+            $parts = @()
+            foreach ($k in ($tally.Keys | Sort-Object { $tally[$_] } -Descending)) {
+                $parts += ("{0}x {1}" -f $tally[$k], $k)
+            }
+            $script:LastProbeSummary = "$attempts attempt(s) over ${timeoutSec}s: " + ($parts -join ' | ')
         }
         return $ok
     }
@@ -597,6 +674,14 @@ if (-not $TlsGateOk) {
                     Write-OK "$($c.App) answering on 127.0.0.1:$($c.Loopback)"
                 } else {
                     Write-Warn "$($c.App) did NOT answer on 127.0.0.1:$($c.Loopback)"
+                    # The probe's OWN account of what it saw, every attempt
+                    # tallied. Without this the next line of defence is a fresh
+                    # request from the diagnostics block below - which, every
+                    # time this has fired on production, has returned HTTP 200
+                    # and left the actual failure unexplained.
+                    if ($script:LastProbeSummary) {
+                        Write-Info "  probe said      : $($script:LastProbeSummary)"
+                    }
                     # ⛔ SAY WHY, NOT JUST THAT. This line used to be the entire
                     # record of a failed cutover: "did NOT answer", then a
                     # revert, and nothing to work from. It cost a production
@@ -607,12 +692,13 @@ if (-not $TlsGateOk) {
                     $ErrorActionPreference = 'Continue'
                     try {
                         # ⛔ "DID NOT ANSWER" CONFLATES TWO VERY DIFFERENT
-                        # FAULTS. Wait-HttpOk uses Invoke-WebRequest with
-                        # -ErrorAction Stop, which THROWS on 4xx and 5xx - so a
-                        # console that never started and one that started and
-                        # returns 500 are indistinguishable in the loop above.
-                        # They need opposite fixes. One more request, reported
-                        # verbatim, separates them.
+                        # FAULTS. Wait-HttpOk treats anything that is not a 200
+                        # as a reason to keep waiting, so a console that never
+                        # started and one that started and returns 500 both end
+                        # up here. They need opposite fixes. The probe's own
+                        # tally (printed above) names which it was; this extra
+                        # request then reports the CURRENT state verbatim, which
+                        # is how we learned the console was healthy all along.
                         $probeUrl = "http://127.0.0.1:" + $c.Loopback + "/api/health"
                         try {
                             $pr = [Net.HttpWebRequest]::Create($probeUrl)
@@ -680,6 +766,9 @@ if (-not $TlsGateOk) {
                         Write-OK "HTTPS 200 for $($c.App) through the terminator on :$($c.Public)"
                     } else {
                         Write-Warn "No HTTPS 200 for $($c.App) on :$($c.Public)"
+                        if ($script:LastProbeSummary) {
+                            Write-Info "  probe said      : $($script:LastProbeSummary)"
+                        }
                         $gate3 = $false
                     }
                 }
