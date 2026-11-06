@@ -254,3 +254,26 @@ answers "can I change that, and what happened when I did". Nothing here reimplem
   something an administrator can check against their own install; the ports are.
 - `destinationUrl({action, browserHost, publicHost, port})` — where to send the operator afterwards.
   The browser's own host by default, because a blank `TLS_PUBLIC_HOST` means the terminator echoes Host.
+
+## lib/serviceRestart.ts
+"Apply it now" for the settings that are inert until a service restarts (NEXTAUTH_URL, the
+`ENTRA_*` values, a replaced certificate).
+- `resolveRestartTarget(purpose, terminatorPresent)` — ⛔ **A CERTIFICATE IS NOT APPLIED BY RESTARTING
+  THE APP.** NetVault never terminates TLS on this product; `NocVault-Tls` holds the certificate and
+  reads it at ITS startup. The Certificate panel said "Restart the NetVault service to begin serving
+  it" — text from before the terminator existed. Caught when a real wildcard certificate was installed
+  on production 2026-11-06. With no terminator the answer is `service: null` — nothing to restart.
+- `buildRestartWrapper({service, dependents, ...})` — ⛔ **`dependents` IS WHAT MAKES A HUB RESTART
+  RESTART ANYTHING** (the 1051 trap above). Captures the PID either side; the verdict is
+  `running && changed && depsBack`. Starts the service even if the stop timed out — the one thing
+  worse than a slow restart is a stop with no start after it.
+- `parseRestartLog(text)` — ⛔ `running=True` ALONE IS NOT SUCCESS; `changed=True` is the load-bearing
+  half. Same family as `lib/tlsTransport.ts`: on this codebase a PowerShell exit code is evidence of
+  nothing.
+
+## lib/terminatorState.ts  (SERVER ONLY — spawns sc.exe)
+One shared answer to "is the TLS front door there, and running", used by four routes.
+- ⛔ `sc.exe` exit **1060** means the service does not exist — an ANSWER. Every other failure is
+  `unknown`, with `present`/`running` as `null`, **never `false`**.
+- `HUB_PUBLIC_PORT` (3000) — ⛔ **NOT `process.env.PORT`**: behind the terminator that is the LOOPBACK
+  port, and reporting it as the address anyone connects to is the bug this module exists to stop.

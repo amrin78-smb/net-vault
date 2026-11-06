@@ -343,3 +343,51 @@ test('redirect URI: an unset console address produces no URI at all', () => {
   assert.equal(p.bothRequired, false)
   assert.equal(p.afterRestart, null)
 })
+
+// ─── the terminator frame (1.60.1) ──────────────────────────────────────────
+//
+// ⛔ BEHIND THE FRONT DOOR, EVERY PORT NUMBER MEANS SOMETHING ELSE.
+// `resolveTlsConfig` reads `HTTPS_PORT || PORT` from THIS process, and after
+// the TLS cutover that is the console's LOOPBACK port, where it serves PLAIN
+// HTTP. Reported unchanged the panel said "Serving HTTPS on port 13000" — the
+// app is not serving HTTPS, and 13000 is not an address anybody connects to.
+// Observed on production 2026-11-06.
+
+test('fronted: the sentence names the PUBLIC port and the front door', () => {
+  const p = transportPresentation('active', { httpsPort: 13000, publicPort: 3000, fronted: true })
+  assert.equal(p.tone, 'ok')
+  assert.equal(p.label, 'HTTPS active')
+  assert.match(p.headline, /port 3000/)
+  assert.match(p.headline, /NocVault-Tls/)
+  assert.ok(!/Serving HTTPS on port 13000/.test(p.headline), 'must never claim HTTPS on the loopback port')
+})
+
+test('fronted: it says the console itself is plain HTTP on the loopback', () => {
+  const p = transportPresentation('active', { httpsPort: 13000, publicPort: 3000, fronted: true })
+  assert.match(p.headline, /127\.0\.0\.1:13000/)
+  assert.match(p.headline, /plain HTTP/i)
+  assert.match(p.headline, /not reachable\s+directly/i)
+})
+
+test('fronted: it does not promise a dedicated redirect port that is closed', () => {
+  // The cutover leaves 3080/3084/3086/3088 CLOSED and answers plain HTTP on
+  // the public port itself with a 301, so "plain HTTP on 3080 redirects here"
+  // was false on every cut-over install.
+  const p = transportPresentation('active', { httpsPort: 13000, httpPort: 3080, publicPort: 3000, fronted: true })
+  assert.ok(!/3080/.test(p.headline), 'must not name the closed redirect port')
+  assert.match(p.headline, /redirect/i)
+})
+
+test('not fronted: the original sentence is unchanged', () => {
+  const p = transportPresentation('active', { httpsPort: 3000, httpPort: 3080 })
+  assert.match(p.headline, /Serving HTTPS on port 3000/)
+  assert.match(p.headline, /plain HTTP on 3080 redirects here/)
+})
+
+test('fronted does not rescue a failed or disabled transport', () => {
+  // `fronted` changes how `active` READS. It must not turn a broken transport
+  // into a working-looking one.
+  assert.equal(transportPresentation('failed', { fronted: true, publicPort: 3000 }).tone, 'danger')
+  assert.equal(transportPresentation('failed', { fronted: true, publicPort: 3000 }).loud, true)
+  assert.equal(transportPresentation('disabled', { fronted: true, publicPort: 3000 }).normal, true)
+})

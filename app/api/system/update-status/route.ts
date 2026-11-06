@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.61.0': [
+    'Settings that need a service restart can now be applied from Settings. The console address, an installed certificate and the single sign-on values are each saved instantly and do nothing until a service restarts — and until now the page simply said so, which is only useful to somebody with a console on the server. Each of those three pages now offers the restart, explains what it will interrupt and for how long, and confirms afterwards.',
+    'It restarts the RIGHT service, which is not always the same one. A certificate is served by the HTTPS front door, never by NetVault — the Certificate page previously said to restart NetVault, and following that leaves the old certificate being served while everything reports success. On a site not using HTTPS, installing a certificate now correctly reports that there is nothing to restart at all.',
+    'The restart proves it happened rather than assuming. Windows refuses to stop a service while another depends on it, and that refusal leaves the service running the whole time — so a check of “is it running afterwards” would report a restart that never occurred as a success. Dependent services are now stopped first and started again after, and the result is confirmed by the process actually having been replaced.',
+    'The page also proves it for itself: it waits until it is talking to a genuinely new process before confirming, because a page that simply loads again is no evidence of anything.',
+  ],
   '1.60.1': [
     'Fixed a fault that broke DDIVault sign-in on a site that had just moved to HTTPS with a real certificate. Each satellite verifies a single sign-on handover by calling the hub directly, server to server, and that call was still addressed to the hub by IP over plain HTTP. With HTTPS on, that address redirects to HTTPS, and a real certificate names the site rather than the server’s IP address — so the call failed on the certificate and the sign-in was refused with nothing to explain why. The suite looked completely healthy throughout.',
     'Turning HTTPS on now repoints each satellite’s hub address at the hub’s internal port, where no redirect, no DNS name and no certificate stand between two processes on the same machine. Turning HTTPS off points it back.',

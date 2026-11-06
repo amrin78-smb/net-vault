@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { useToast } from '@/app/providers'
+import RestartControl from './RestartControl.tsx'
 import {
   Callout,
   FactRow,
@@ -222,11 +223,13 @@ export default function ConsoleAddressPanel() {
 
         {pair.differs && (
           <div style={{ marginTop: 14 }}>
-            <Callout tone="warn" title="Saved, but not yet in force">
-              The saved address and the running address differ. NextAuth builds its options once at
-              startup, so sign-in keeps using the running address until the {service} service is
-              restarted.
-            </Callout>
+            {/* ⛔ THE RESTART IS OFFERED, NOT DESCRIBED. This used to be a
+                sentence ending "until the NetVault service is restarted",
+                which is only actionable by somebody with a console on the
+                server - so the product could save a change it could not
+                apply. The control asks the SERVER which service applies this
+                change; it never names one itself. */}
+            <RestartControl purpose="console-address" pending={pair.differs} />
           </div>
         )}
 

@@ -43,6 +43,7 @@ import {
   worstShadow,
   type ShadowVerdictLike,
 } from './systemPanelHelpers.ts'
+import RestartControl from './RestartControl.tsx'
 
 type CertDescription = {
   subject?: string
@@ -273,7 +274,7 @@ export default function CertificatePanel() {
       showToast(
         data.envWritten === false
           ? 'Certificate installed, but the TLS paths could not be saved'
-          : 'Certificate installed — restart NetVault to begin serving it',
+          : 'Certificate installed — restart below to begin serving it',
         data.envWritten === false ? 'info' : 'success',
       )
       await load()
@@ -552,6 +553,16 @@ export default function CertificatePanel() {
               )}
             </Callout>
             {result.certificate && <CertificateFacts cert={result.certificate} title="Installed certificate" />}
+            {/* ⛔ AND THE RESTART THAT MAKES IT REAL — against the RIGHT
+                service. A certificate is served by NocVault-Tls, never by
+                NetVault; this panel used to say "restart NetVault", and
+                following that leaves the OLD certificate being served while
+                everything reports success. The control asks the server which
+                service applies a certificate, and on a suite with no front
+                door it correctly answers "nothing to restart". */}
+            <div style={{ marginTop: 14 }}>
+              <RestartControl purpose="certificate" pending title="Installed — restart to begin serving it" />
+            </div>
           </div>
         )}
 
@@ -565,7 +576,11 @@ export default function CertificatePanel() {
             {busy && !prompt ? 'Installing…' : 'Install certificate'}
           </button>
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
-            Needs a NetVault service restart to begin serving it.
+            {/* ⛔ NOT "a NetVault restart". NetVault never terminates TLS on
+                this product — NocVault-Tls holds the certificate and reads it
+                at ITS startup. Naming the wrong service here sent an operator
+                to bounce a process that changes nothing. */}
+            A restart is needed before it is served; this page offers it once the certificate is installed.
           </span>
         </div>
       </PanelCard>

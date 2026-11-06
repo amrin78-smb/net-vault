@@ -463,3 +463,26 @@ HTTP on port 3000`, and gate 3 failed honestly against a listener doing exactly 
 to do. **Enabling HTTPS on an already-installed suite could not have worked on any box.** Fixed in
 1.59.3. The lesson generalises: a gate that proves a FILE exists has not proved the process that needs
 it can find it.
+
+## `sc stop` is refused while a dependent service is running (1051)
+`NocVault-Tls` declares `DependOnService` on all four consoles, so Windows REFUSES `sc.exe stop
+NetVault` (or any console) with **1051** while the terminator is running. What makes this dangerous is
+how it fails: the stop is refused, a following `sc start` returns 1056 (already running), and the
+service is `Running` the whole time — so any check of the form "is it running afterwards" reports a
+restart that never happened as a success, and the operator is told their new setting is live while the
+old process serves on.
+
+Stop the dependents first and start them after, and make the verdict a **changed PID**. Restarting a
+console by hand needs the same order.
+
+## A server-side call between two apps on the same box must not go through the front door
+Each satellite verifies an SSO handover by calling `<hub>/api/auth/sso-verify` **server side**. Those
+URLs pointed at `http://<server-ip>:3000`. Once the TLS terminator owns :3000 that is answered with a
+301 to https, node's fetch follows it, and the handshake then fails `ERR_TLS_CERT_ALTNAME_INVALID`
+because a REAL certificate names the site, not the server's IP. DDIVault sign-in broke with
+"CredentialsSignin" on a suite whose health checks were all green (2026-11-06); LogVault and SpanVault
+were fine because neither makes that call.
+
+Server-to-server on one box uses the **loopback** (`http://127.0.0.1:13000`): no redirect, no DNS, no
+certificate. `NEXT_PUBLIC_*` hub URLs are the opposite — a browser reads those and they must stay
+public. The cutover now repoints the first and leaves the second alone.

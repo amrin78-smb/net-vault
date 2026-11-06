@@ -55,6 +55,7 @@ import {
   worstShadow,
   type ShadowVerdictLike,
 } from './systemPanelHelpers.ts'
+import RestartControl from './RestartControl.tsx'
 
 /** Obviously-fake, and the same example the route's own refusal quotes. */
 const EXAMPLE_GUID = '11111111-2222-3333-4444-555555555555'
@@ -311,6 +312,9 @@ export default function SingleSignOnPanel() {
                 For a rotated secret that means every sign-in fails with nothing on screen saying why.
               </div>
             </Callout>
+            {/* And the restart that applies it, rather than a sentence telling
+                an administrator to go and find a console on the server. */}
+            <RestartControl purpose="sso" pending title="Restart to apply the directory settings" />
           </div>
         )}
 

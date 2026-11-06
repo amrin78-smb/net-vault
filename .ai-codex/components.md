@@ -118,3 +118,15 @@ flight, and shows the engine's gate lines verbatim.
 - The confirmation NAMES the four ports, warns that each console restarts, and states that a failed
   gate undoes everything automatically. Turning HTTPS off says plainly that credentials will then cross
   the network unencrypted.
+
+### components/settings/RestartControl.tsx — "apply it now" (shared by three panels)
+Console address, Certificate and Single sign-on all end with a saved-but-inert value. Each said
+"restart the NetVault service", which only somebody with a console on the server can do — so the
+product could save a change it could not apply.
+- ⛔ **ONE COMPONENT FOR ALL THREE.** Fixing one would leave the other two telling a customer to use
+  PowerShell (CLAUDE.md: a fixed instance is not a fixed class).
+- ⛔ **IT NEVER NAMES A SERVICE.** It sends a `purpose`; the server decides. That is what stops the
+  Certificate panel pointing at NetVault again.
+- ⛔ **A LOWER UPTIME IS THE PROOF.** "The page loaded again" is not evidence a restart happened — a
+  refused stop leaves the original process answering this very poll.
+- Losing contact mid-restart is rendered as expected, not as a fault.
