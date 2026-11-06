@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.61.2': [
+    'The NetVault updater now leaves the HTTPS front door running while it works, so updating NetVault no longer interrupts the other three consoles. It stopped the front door because Windows used to refuse to stop NetVault on its own; that restriction was removed in the previous version, so the updater now checks whether it still applies instead of assuming it does. Sites updated from an older version are still handled correctly.',
+    'The same change was made to the LogVault, DDIVault and SpanVault updaters.',
+  ],
   '1.61.1': [
     'Updating one app no longer takes the whole suite offline. With HTTPS on, the shared front door was registered as depending on all four consoles \u2014 which meant Windows refused to stop any single console while it was running, so every updater had to stop the front door instead, and the front door is what serves all four. Measured during the previous update: all four consoles were unreachable for the entire rebuild of one of them.',
     'That dependency bought only the order in which four services start after a reboot, and the code admitted Windows does not wait for them to be ready anyway. It is gone. A console can now be restarted on its own: the other three keep serving, and the front door answers that one console with a short-lived error until it is back \u2014 which is exactly what it already did during any restart.',

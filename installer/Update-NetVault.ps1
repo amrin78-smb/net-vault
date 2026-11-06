@@ -369,17 +369,53 @@ if ($script:TlsFronted) {
 # Stop / start the shared terminator alongside NetVault. No-ops - silently and
 # deliberately - on a suite that has no terminator, which is every install that
 # never configured a certificate.
+# ⛔ AND ONLY WHEN IT MUST. The terminator fronts ALL FOUR public ports, so
+# stopping it to update ONE app takes the whole suite down for the length of a
+# build. MEASURED during the 1.61.0 deploy: NocVault-Tls was Stopped for the
+# entire NetVault rebuild and all four consoles were unreachable.
+#
+# It was stopped because the terminator declared DependOnService on this
+# service and Windows refuses `sc stop` with 1051 while a dependent runs.
+# Cutovers from 1.61.1 no longer set that, so NetVault now stops on its own in
+# a few hundred milliseconds and the other three consoles keep serving. Legacy
+# boxes still carry it, so this ASKS instead of assuming.
+$script:StoppedTheTerminator = $false
+function Test-TlsTerminatorDependsOnNetVault {
+    if (-not (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue)) { return $false }
+    $ErrorActionPreference = 'Continue'
+    # `sc qc` lists the DEPENDENCIES of the named service, and prints extra
+    # ones on UNLABELLED continuation lines - so match the whole output, not
+    # the line carrying the word DEPENDENCIES.
+    $qc = (& sc.exe qc NocVault-Tls 2>&1 | Out-String)
+    if ($qc -match '(?m)^\s*(DEPENDENCIES\s*)?:?\s*NetVault\s*$') { return $true }
+    if ($qc -match 'DEPENDENCIES[^\r\n]*NetVault') { return $true }
+    # ⛔ A READ WE DID NOT GET MEANS "IT DEPENDS". Guessing the other way lets
+    # `sc stop` be refused, the rebuild run underneath a LIVE process, and the
+    # only sign be a discarded exit code.
+    if ($qc -notmatch 'DEPENDENCIES') { return $true }
+    return $false
+}
 function Stop-TlsTerminator {
+    $script:StoppedTheTerminator = $false
     if (-not (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue)) { return }
+    if (-not (Test-TlsTerminatorDependsOnNetVault)) {
+        Write-Host "    [--] NocVault-Tls does not depend on NetVault - leaving it running so the other consoles stay up" -ForegroundColor Gray
+        return
+    }
     $ErrorActionPreference = 'Continue'
     $null = & sc.exe stop NocVault-Tls 2>&1
+    $script:StoppedTheTerminator = $true
     Start-Sleep -Seconds 2
     Write-OK "NocVault-Tls stopped"
 }
 function Start-TlsTerminator {
     if (-not (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue)) { return }
+    # Only restart what this run stopped - claiming to have restored something
+    # we never touched is a line that gets believed later.
+    if (-not $script:StoppedTheTerminator) { return }
     $ErrorActionPreference = 'Continue'
     $null = & sc.exe start NocVault-Tls 2>&1
+    $script:StoppedTheTerminator = $false
     Start-Sleep -Seconds 3
     Write-OK "NocVault-Tls started"
 }
