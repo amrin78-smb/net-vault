@@ -979,12 +979,16 @@ if ($InstallSpanVault) {
 # On a FIRST install there is nothing to stop and no directory to move, so every
 # function below is a no-op and the common path is unchanged.
 
-# ⛔ NocVault-Tls IS FIRST AND THE ORDER IS LOAD-BEARING. Its DependOnService
-# names all four console services, and Windows REFUSES `sc stop` on a service
-# that still has a running dependent (1051, ERROR_DEPENDENT_SERVICES_RUNNING).
-# With the terminator anywhere later in this list, stopping NetVault /
-# LogVault-App / DDIVault-App / SpanVault-App would fail and their directories
-# would still be held. Same ordering, same reason, as the uninstaller's list.
+# ⛔ NocVault-Tls IS FIRST AND THE ORDER IS LOAD-BEARING. On any suite cut over
+# before 1.61.1 the terminator carries a DependOnService naming all four console
+# services, and Windows REFUSES `sc stop` on a service that still has a running
+# dependent (1051, ERROR_DEPENDENT_SERVICES_RUNNING). With the terminator
+# anywhere later in this list, stopping NetVault / LogVault-App / DDIVault-App /
+# SpanVault-App would fail and their directories would still be held. New
+# cutovers no longer set that dependency - it turned every one-app deploy into a
+# four-app outage - but this installer runs against boxes built by every earlier
+# version, and the front door belongs first regardless: it is what holds the
+# public ports. Same ordering, same reason, as the uninstaller's list.
 $SuiteServices = @(
     'NocVault-Tls',
     'NetVault',

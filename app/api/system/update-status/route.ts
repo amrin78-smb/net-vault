@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.61.1': [
+    'Updating one app no longer takes the whole suite offline. With HTTPS on, the shared front door was registered as depending on all four consoles \u2014 which meant Windows refused to stop any single console while it was running, so every updater had to stop the front door instead, and the front door is what serves all four. Measured during the previous update: all four consoles were unreachable for the entire rebuild of one of them.',
+    'That dependency bought only the order in which four services start after a reboot, and the code admitted Windows does not wait for them to be ready anyway. It is gone. A console can now be restarted on its own: the other three keep serving, and the front door answers that one console with a short-lived error until it is back \u2014 which is exactly what it already did during any restart.',
+    'Verified on the live site: stopping one console took a quarter of a second where it was previously refused outright, the other three answered normally throughout, and everything was back within seconds.',
+  ],
   '1.61.0': [
     'Settings that need a service restart can now be applied from Settings. The console address, an installed certificate and the single sign-on values are each saved instantly and do nothing until a service restarts — and until now the page simply said so, which is only useful to somebody with a console on the server. Each of those three pages now offers the restart, explains what it will interrupt and for how long, and confirms afterwards.',
     'It restarts the RIGHT service, which is not always the same one. A certificate is served by the HTTPS front door, never by NetVault — the Certificate page previously said to restart NetVault, and following that leaves the old certificate being served while everything reports success. On a site not using HTTPS, installing a certificate now correctly reports that there is nothing to restart at all.',

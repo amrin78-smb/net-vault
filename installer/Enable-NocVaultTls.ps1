@@ -312,10 +312,14 @@ if ($Disable) {
     $tls = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
     if (-not $tls) { Write-Info "NocVault-Tls is not installed - the consoles are already serving directly." }
 
-    # ⛔ THE TERMINATOR GOES FIRST. Its DependOnService names all four consoles,
-    # and Windows refuses `sc stop` on a service with a running dependent
-    # (1051) - so stopping a console while the terminator runs fails, and the
-    # console is then left half-reconfigured.
+    # ⛔ THE TERMINATOR STILL GOES FIRST, FOR LEGACY INSTALLS. Cutovers before
+    # 1.61.1 gave NocVault-Tls a DependOnService naming all four consoles, and
+    # Windows refuses `sc stop` on a service with a running dependent (1051) -
+    # so on those installs stopping a console while the terminator runs fails
+    # and leaves it half-reconfigured. New cutovers no longer set it (see
+    # NocVault-TlsCutover.ps1 for why), but this script runs against boxes cut
+    # over by every earlier version, and stopping the front door first is
+    # correct either way: it is what is holding the public ports.
     if ($tls) {
         $null = & sc.exe stop 'NocVault-Tls' 2>&1
         for ($i = 0; $i -lt 60; $i++) {

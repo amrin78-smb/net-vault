@@ -583,8 +583,6 @@ if (-not $TlsGateOk) {
         foreach ($lf in @($TlsLog, $TlsErrLog)) {
             if (Test-Path -LiteralPath $lf) { Remove-Item -LiteralPath $lf -Force -ErrorAction SilentlyContinue }
         }
-        $TlsDeps = @()
-        foreach ($c in $Consoles) { $TlsDeps += $c.Service }
 
         & $NssmExe stop NocVault-Tls confirm 2>$null
         & $NssmExe remove NocVault-Tls confirm 2>$null
@@ -606,11 +604,57 @@ if (-not $TlsGateOk) {
         & $NssmExe set NocVault-Tls DisplayName         "NocVault - TLS Terminator"
         & $NssmExe set NocVault-Tls Description         "NocVault Suite - shared HTTPS front door for all four consoles"
         & $NssmExe set NocVault-Tls Start               SERVICE_AUTO_START
-        # The four consoles, so a reboot brings the upstreams up first. This is
-        # ordering only - Windows does not wait for an upstream to be READY, and
-        # the terminator does not need it to be: a console that is still starting
-        # produces a 502 from that one listener, not a failure to bind.
-        & $NssmExe set NocVault-Tls DependOnService     ($TlsDeps -join "`n")
+        # ⛔ NO DependOnService, AND THE REASON IS MEASURED. It used to name all
+        # four consoles "so a reboot brings the upstreams up first" - but the
+        # same comment admitted Windows does not wait for an upstream to be
+        # READY, so it bought only the order of four `sc start` calls. What it
+        # COST was much larger, and both halves were observed on production:
+        #
+        #   1. Windows REFUSES `sc stop <console>` with 1051
+        #      (ERROR_DEPENDENT_SERVICES_RUNNING) while a dependent is running.
+        #      The refusal leaves the console RUNNING, so a restart that never
+        #      happened looks exactly like one that did - see
+        #      lib/serviceRestart.ts, which exists partly to survive this.
+        #   2. Every updater therefore has to stop the TERMINATOR to restart
+        #      ONE console - and the terminator fronts all four public ports.
+        #      MEASURED during the 1.61.0 deploy: NocVault-Tls was Stopped for
+        #      the whole NetVault build and ALL FOUR consoles were unreachable,
+        #      for an update to one of them.
+        #
+        # Without the dependency a console restarts on its own, the other three
+        # keep serving, and the terminator answers that one upstream with a 502
+        # for a few seconds - which is precisely what it already did during any
+        # console restart. At boot the terminator may start first and 502 until
+        # the consoles are up: the same few seconds, self-healing, and a far
+        # smaller cost than turning every one-app deploy into a four-app outage.
+        # ⛔ `sc config ... depend= ""` THROUGH cmd.exe, AND NOTHING ELSE WORKS.
+        # MEASURED on the staging lab against a real cut-over suite:
+        #     nssm set NocVault-Tls DependOnService ""   -> dependencies UNCHANGED
+        #     cmd /c 'sc config ... depend= ""'          -> cleared
+        # nssm reports no error for the first one, so a cutover that used it
+        # would print its [OK] over a dependency that is still there. The empty
+        # value has to go through cmd.exe: `depend=` and `""` are one argument
+        # pair that PowerShell's native argument handling does not pass through
+        # intact.
+        $null = & cmd.exe /c 'sc config NocVault-Tls depend= ""' 2>&1
+        # ⛔ READ IT BACK. `sc qc` prints extra dependencies on UNLABELLED
+        # continuation lines, so checking only the line containing the word
+        # DEPENDENCIES sees the first one and misses the rest.
+        $depQc = (& sc.exe qc NocVault-Tls 2>&1 | Out-String) -split "`r?`n"
+        $depLeft = @()
+        $inDeps = $false
+        foreach ($dl in $depQc) {
+            if ($dl -match '^\s*DEPENDENCIES\s*:\s*(.*)$') { $inDeps = $true; if ($Matches[1].Trim()) { $depLeft += $Matches[1].Trim() }; continue }
+            if ($inDeps) {
+                if ($dl -match '^\s*:\s*(\S.*)$') { $depLeft += $Matches[1].Trim(); continue }
+                if ($dl -match '^\s*[A-Z_]+\s*:') { $inDeps = $false }
+            }
+        }
+        if ($depLeft.Count -gt 0) {
+            Write-Warn "NocVault-Tls still depends on $($depLeft -join ', ') - restarting one console will stop all four. Clear it with: sc config NocVault-Tls depend= \"\""
+        } else {
+            Write-OK "NocVault-Tls has no service dependencies - a console can be restarted without taking the others down"
+        }
         & $NssmExe set NocVault-Tls AppStdout           $TlsLog
         & $NssmExe set NocVault-Tls AppStderr           $TlsErrLog
         & $NssmExe set NocVault-Tls AppRotateFiles      1
