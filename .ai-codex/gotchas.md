@@ -515,3 +515,33 @@ one test that crosses each join — see `tests/systemSeams.test.ts`, which
 asserts the panels actually pass the props the routes compute, and which caught
 a second un-fixed `examplePort` in the PUT handler the moment it was written.
 Testing each layer in isolation is what let all of this ship.
+
+### A leftover `.lastgood` snapshot can be the only path back
+
+Each updater deletes any existing `.lastgood` directory before snapshotting the
+live install, on the reasoning that it is debris from an interrupted run. It is
+not always: if a PRIOR run failed **and its own rollback also failed**, that
+snapshot is the last intact copy of a working install — and the next attempt
+deleted all of it before snapshotting its own, already-broken tree.
+
+All four updaters now refuse in that case, using the heuristic DDIVault's had
+from the start: `last-update-status.json` recording `success:false` AND
+`rolledBack:false` is exactly the "ROLLBACK ALSO FAILED" state. They restart the
+services and the TLS front door first, so aborting does not also leave the app
+down on top of the bad state being reported.
+
+### `Enable-NocVaultTls.ps1 -Disable` must not remove the terminator early
+
+The stop has to come first — it is what releases the public ports, so the
+consoles cannot rebind them until it happens. The REMOVAL does not. Deleting the
+service before the consoles were verified back left no way out: if a console's
+rewrite then failed (a locked env file, an `nssm get` returning `''`, whose
+return value was being discarded), that console stayed on `127.0.0.1:1300X` with
+nothing in front of it, permanently unreachable — and `-Disable` could not be
+re-run to repair it, because the terminator was already gone.
+
+It is now stopped, the consoles are restored and verified, and only then is it
+removed. On a failed verification it is left **stopped but installed**, which is
+recoverable: `sc.exe start NocVault-Tls` puts the suite back on HTTPS exactly as
+it was. `NocVault-TlsCutover.ps1`'s `Undo-TlsCutover` already had this ordering;
+`-Disable` did not.

@@ -320,6 +320,15 @@ if ($Disable) {
     # NocVault-TlsCutover.ps1 for why), but this script runs against boxes cut
     # over by every earlier version, and stopping the front door first is
     # correct either way: it is what is holding the public ports.
+    # ⛔ STOPPED NOW, REMOVED ONLY ONCE THE CONSOLES ARE PROVEN BACK.
+    # The stop is what releases the public ports, so it has to happen before
+    # the consoles can rebind them — that ordering is forced. The REMOVAL is
+    # not. Deleting the service here left no way back: if a console's rewrite
+    # then failed (a locked env file, an `nssm get` returning ''), that console
+    # stayed on 127.0.0.1:1300X with nothing in front of it, permanently
+    # unreachable, and `-Disable` could not be re-run to repair it because the
+    # terminator was already gone. Stopped-but-installed is recoverable: start
+    # the service and the suite is back on HTTPS exactly as before.
     if ($tls) {
         $null = & sc.exe stop 'NocVault-Tls' 2>&1
         for ($i = 0; $i -lt 60; $i++) {
@@ -327,8 +336,12 @@ if ($Disable) {
             $x = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
             if (-not $x -or $x.Status -eq 'Stopped') { break }
         }
-        $null = & $NssmExe remove 'NocVault-Tls' confirm 2>&1
-        Write-OK "NocVault-Tls stopped and removed"
+        $x = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
+        if ($x -and $x.Status -ne 'Stopped') {
+            Write-Warn "NocVault-Tls is still $($x.Status) - it still holds the public ports, so the consoles below may fail to bind"
+        } else {
+            Write-OK "NocVault-Tls stopped (left installed until the consoles are proven back)"
+        }
     }
 
     $host4 = if ($TlsPublicHost.Trim()) { $TlsPublicHost.Trim() } else { $ServerIP }
@@ -526,6 +539,20 @@ if ($Disable) {
         if ($ok) { Write-OK "$($c.App) answering on :$($c.Public) over plain HTTP" }
         else { Write-Warn "$($c.App) is NOT answering on :$($c.Public)"; $allBack = $false }
     }
+    # ⛔ THE POINT OF NO RETURN, AND IT IS GATED ON THE VERIFICATION ABOVE.
+    if ($allBack) {
+        if ($tls) {
+            $null = & $NssmExe remove 'NocVault-Tls' confirm 2>&1
+            $still = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
+            if ($still) { Write-Warn "nssm did not remove NocVault-Tls - it is stopped but still installed. Remove it with: nssm remove NocVault-Tls confirm" }
+            else { Write-OK "NocVault-Tls removed" }
+        }
+    } elseif ($tls) {
+        Write-Warn "NocVault-Tls was left STOPPED BUT INSTALLED on purpose, because not every console came back."
+        Write-Info "  To go back to HTTPS as it was:  sc.exe start NocVault-Tls"
+        Write-Info "  To retry turning it off:        re-run this script with -Disable"
+    }
+
     Write-Host ""
     if ($allBack) { Write-Host "  HTTPS is OFF - all consoles are serving directly again." -ForegroundColor Green }
     else { Write-Host "  HTTPS is off but at least one console did not come back - see above." -ForegroundColor Yellow }

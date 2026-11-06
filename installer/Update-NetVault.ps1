@@ -888,6 +888,28 @@ try {
     # wrong version while still reporting a "successful" rollback).
     # -ThrowOnFailure aborts the update in that case, before the live build
     # below has been touched at all (see Clear-StaleBackup near the top).
+    # ⛔ A LEFTOVER SNAPSHOT MAY BE THE ONLY PATH BACK, NOT CRUFT. If a PRIOR
+    # run failed AND its own rollback also failed, standalone.lastgood is the
+    # last intact copy of a working build — and clearing it here would destroy
+    # it before this run snapshots its own, already-broken tree. The heuristic
+    # is DDIVault's: last-update-status.json recording success:false AND
+    # rolledBack:false is exactly the "ROLLBACK ALSO FAILED" state.
+    if ((Test-Path $standaloneBackup) -and (Test-Path $StatusPath)) {
+        $prevStatus = $null
+        try {
+            $BOM = [char]0xfeff
+            $raw = Get-Content -LiteralPath $StatusPath -Raw -ErrorAction Stop
+            $prevStatus = ($raw.TrimStart($BOM)) | ConvertFrom-Json
+        } catch { $prevStatus = $null }
+        if ($prevStatus -and $prevStatus.success -eq $false -and $prevStatus.rolledBack -eq $false) {
+            Write-Warn "A leftover $standaloneBackup exists AND the last recorded update ($($prevStatus.timestamp), stage '$($prevStatus.stage)') shows its rollback ALSO failed."
+            Write-Warn "Refusing to overwrite it - it may be the ONLY remaining path back to a working build. Manual intervention required before the next update."
+            sc.exe start NetVault | Out-Null
+            Start-TlsTerminator
+            try { Stop-Transcript | Out-Null } catch {}
+            exit 1
+        }
+    }
     Clear-StaleBackup -Path $standaloneBackup -ThrowOnFailure | Out-Null
     if (Test-Path $standaloneDir) {
         Rename-Item -Path $standaloneDir -NewName 'standalone.lastgood' -ErrorAction Stop

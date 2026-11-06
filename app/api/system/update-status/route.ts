@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.62.1': [
+    "Hardening: turning HTTPS off no longer removes the front-door service until every console is proven to be answering again. Removing it first meant that if a console failed to come back, it was left unreachable with no way to put things back - the command could not even be re-run. It is now left stopped but installed, with the two commands to recover printed.",
+    "Hardening: a failed update whose own rollback also failed left behind the last intact copy of the working build - and the next update attempt deleted it before snapshotting its own broken copy. The next attempt now stops and says where that copy is instead.",
+  ],
   '1.62.0': [
     'Fixed: using the Restart button on Settings - Console address or Single sign-on could take all four consoles off the air, not just this one. It stopped the shared HTTPS front door whenever that service merely existed, rather than when it actually had to be stopped - while the confirmation box promised the other three were unaffected. It now checks, and only stops it when it genuinely must.',
     'Fixed: the Restart button could report success for a restart that never happened, and could spin forever on one that worked. It compared against a reading taken when the page was opened - so a console that had restarted for any other reason in between read as proof - and for a certificate restart it was watching the wrong service entirely. Each restart is now identified, so the result you see always belongs to the restart you asked for, and a restart that cannot be confirmed says so instead of waiting indefinitely.',
