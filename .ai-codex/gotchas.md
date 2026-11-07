@@ -659,3 +659,42 @@ removed. On a failed verification it is left **stopped but installed**, which is
 recoverable: `sc.exe start NocVault-Tls` puts the suite back on HTTPS exactly as
 it was. `NocVault-TlsCutover.ps1`'s `Undo-TlsCutover` already had this ordering;
 `-Disable` did not.
+
+## Installer / updater secrets + log-path traps (1.64.0)
+
+- ⛔ **`LOG_INTEGRITY_KEY` and `CRON_SECRET` were the only two secrets drawn fresh on EVERY
+  installer run and never persisted to `secrets.env`.** For `LOG_INTEGRITY_KEY` that silently
+  destroyed LogVault's tamper chain on any re-install (`collector.js` resumes from the last
+  `entry_hash` regardless of key), and a LogVault that was only ever UPDATED never got a key
+  at all. Both are now in the load-or-generate block. The updater half lives in
+  `logvault/installer/Update-LogVault.ps1`, and its resolution order is **NSSM collector env →
+  `.env.local` → `secrets.env` → mint**, because `collector.js` loads dotenv with
+  `override:false` — a pinned service value is the runtime authority, so the files must not
+  contradict it. An existing key is NEVER replaced.
+- ⛔ **A per-install seeded admin password breaks `-TestLogin` unless the tester is changed in
+  the SAME release.** `Test-NocVault-Suite.ps1` posted the shipped literal as a constant; once
+  the installer randomises it, that smoke test fails on every fresh install and looks like a
+  broken auth stack. It now reads `NV_ADMIN_PASSWORD` from `secrets.env` and falls back to the
+  shipped default — and *reaching the fallback is itself reported*, because it means the
+  shipped default is still live. It stays a warning, not a failure: this script cannot tell
+  "password deliberately changed" from "install predates per-install passwords".
+- ⛔ **`TLS_PUBLIC_HOST` was missing from `Update-NetVault.ps1`'s `$RuntimeSettableEnvKeys`**
+  while `TLS_CERT_PATH`/`TLS_KEY_PATH` were present. `Clear-NssmEnvKeys` is only ever handed
+  keys from that list, so a value pinned in `AppEnvironmentExtra` could never be removed — and
+  a pin beats both env files forever (`loadEnvironment()` merges `<root>\.env`, then
+  `.next\standalone\.env.local`, then `process.env`, least significant first). Added in
+  1.64.0 along with the four `*_WS_TLS`/`*_WS_FINGERPRINT` keys, which the installer stopped
+  pinning but which field boxes still carry. See [[tls-public-host-port-ordering]].
+- ⛔ **SpanVault's NSSM stdout/stderr paths diverged between installer and updater in BOTH
+  folder and filename.** The installer registers `<AppRoot>\logs\api|app|collector{,-err}.log`;
+  the updater re-pointed them at `<InstallDir>\logs\<ServiceName>{,.err}.log` — and on a suite
+  install `$InstallDir` is the PARENT of `$AppRoot`, so those are two different folders.
+  Measured on a live box: `C:\Apps\SpanVault\app\logs` did not exist at all, so the tester's
+  section 10d crash scan reported a crash-looping collector as a benign "clean start". Fixed in
+  the updater (the installer and tester already agreed). ⛔ The same `$InstallDir`-vs-`$AppRoot`
+  split is why `last-update-status.json` is at `<InstallDir>\logs`, NOT beside the service logs
+  — look in both before concluding a status file is missing.
+- ⛔ **A dangling-`else` check must target the ORPHANED shape.** A blank line or a comment
+  between `}` and `else`/`elseif` is legal PowerShell 5.1 and runs correctly. The shape that
+  parses clean and dies at runtime is a block keyword with no preceding construct at all,
+  which becomes a `CommandAst`. See [[dev-and-staging-machines]] for the working gate.

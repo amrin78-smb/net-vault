@@ -25,7 +25,18 @@
     reason this step exists. Pass this only when you are re-installing onto the
     same machine and want the same certificate and the same agent pins back.
 .PARAMETER RemoveDependencies
-    Also uninstall Node.js, Git, PostgreSQL and the VC++ Redistributable
+    Also uninstall Node.js, Git, PostgreSQL and the VC++ Redistributable.
+    PostgreSQL removal is REFUSED if this cluster still hosts a database that is
+    not one of the four suite databases (another product is likely running on
+    it), if -KeepDatabases was also passed, or if the check cannot be run.
+.PARAMETER RemoveSecrets
+    Also delete C:\ProgramData\NocVault\secrets.env - the machine-level file
+    holding POSTGRES_PASSWORD, NEXTAUTH_SECRET, NOCVAULT_RO_PASS and the four
+    per-app database passwords in CLEARTEXT. NOT the default: a re-install is
+    meant to reuse this file so the new install still matches a PostgreSQL that
+    was retained. Pass it when the machine is being decommissioned. It is
+    REFUSED while any suite database or login role is still on the cluster,
+    because by then this file is the last copy of their passwords.
 .PARAMETER Force
     Skip the confirmation prompt (for unattended use)
 .EXAMPLE
@@ -34,6 +45,7 @@
     .\Uninstall-NocVault-Suite.ps1 -KeepDatabases -KeepCertificates
     .\Uninstall-NocVault-Suite.ps1 -InstallDir "D:\Apps" -Force
     .\Uninstall-NocVault-Suite.ps1 -RemoveDependencies
+    .\Uninstall-NocVault-Suite.ps1 -RemoveDependencies -RemoveSecrets -Force
 #>
 param(
     [string]$InstallDir      = "C:\Apps",
@@ -41,6 +53,7 @@ param(
     [switch]$KeepDatabases,
     [switch]$KeepCertificates,
     [switch]$RemoveDependencies,
+    [switch]$RemoveSecrets,
     [switch]$Force
 )
 
@@ -57,6 +70,18 @@ function Get-EnvVal([string]$file, [string]$key) {
         if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") { return $Matches[1].Trim() }
     }
     return $null
+}
+# Key NAMES only. Everything this script says about secrets.env is said by name,
+# never by line and never by value - a transcript, a GUI log pane or a scrollback
+# is exactly where a cleartext password must not end up, and printing the line
+# "to show what is in there" is how that happens.
+function Get-SecretKeyNames([string]$file) {
+    $names = @()
+    if (-not (Test-Path -LiteralPath $file)) { return $names }
+    foreach ($line in (Get-Content -LiteralPath $file -ErrorAction SilentlyContinue)) {
+        if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=') { $names += $Matches[1] }
+    }
+    return $names
 }
 # Does this password actually authenticate as the postgres superuser? Nothing
 # else in this script can tell a right password from a wrong one, and a wrong one
@@ -136,6 +161,10 @@ $PgBin   = "C:\Program Files\PostgreSQL\16\bin"
 # Outside $InstallDir on purpose (the terminator and the agent listeners both
 # read it as a machine-level location), which is exactly why STEP 6 misses it.
 $CertDir = "C:\ProgramData\NocVault\certs"
+# One directory up from $CertDir and outside $InstallDir for the same reason, so
+# STEP 6 misses it too. Written by Install-NocVault-Suite.ps1 ($SecretsFile
+# there); handled in STEP 8.
+$SecretsFile = "C:\ProgramData\NocVault\secrets.env"
 
 # Repo (clone) directories used for git safe.directory entries
 $RepoDirs = @("$NVDir\app", "$LVDir\app", "$DDIDir\app", "$SVDir\app")
@@ -236,12 +265,20 @@ Write-Host "  Install directory  : $InstallDir" -ForegroundColor Gray
 Write-Host "  Remove databases   : $(-not $KeepDatabases)" -ForegroundColor Gray
 Write-Host "  Remove certs+keys  : $(-not $KeepCertificates) (C:\ProgramData\NocVault\certs)" -ForegroundColor Gray
 Write-Host "  Remove deps        : $RemoveDependencies (Node/Git/PostgreSQL/VC++)" -ForegroundColor Gray
+Write-Host "  Remove secrets.env : $RemoveSecrets ($SecretsFile)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  This will STOP and DELETE all NocVault services, scheduled tasks," -ForegroundColor Yellow
 Write-Host "  firewall rules and application files under $InstallDir." -ForegroundColor Yellow
 if (-not $KeepDatabases) {
     Write-Host "  It will also DROP the databases (ALL DATA WILL BE LOST):" -ForegroundColor Red
     Write-Host "    $($Databases -join ', ')" -ForegroundColor Red
+}
+if ($RemoveSecrets) {
+    # Stated up front because this is the one removal the operator cannot undo
+    # from anything left on the machine: STEP 6 deletes every app .env that held
+    # a copy of these values.
+    Write-Host "  It will also DELETE the machine-level secrets file:" -ForegroundColor Red
+    Write-Host "    $SecretsFile" -ForegroundColor Red
 }
 Write-Host ""
 
@@ -259,6 +296,11 @@ if (-not $Force) {
 # the operator has to be TOLD that, not reassured by a row of [OK] lines.
 $script:PgAuthOk     = $false
 $script:DbLeftBehind = $false
+# Set only when PostgreSQL really went (STEP 7). STEP 8 uses it to decide how
+# loud to be about secrets.env: with the cluster gone, every credential in that
+# file is worthless on this machine and nothing but a liability.
+$script:PgRemoved          = $false
+$script:SecretsLeftBehind  = $false
 if ($KeepDatabases) {
     $script:PgAuthOk = $false
 } elseif ($PgAdminPassword) {
@@ -557,11 +599,80 @@ if ($RemoveDependencies) {
     Write-Step "Removing shared dependencies"
 
     # PostgreSQL
+    #
+    # ⛔ NEVER UNINSTALL A CLUSTER SOMEONE ELSE IS ON. This used to run
+    # unconditionally, with no look at what the cluster actually holds - even
+    # though this switch's own help text admits "other software may depend on
+    # them", and even though STEP 4 above already proves the script can SEE
+    # another tenant: its DROP ROLE refusal branch exists because a measured
+    # staging box had nocvault_readonly holding privileges on 23 objects in a
+    # database belonging to a different product. On exactly that box, this line
+    # removed the engine that product runs on.
+    #
+    # "We installed it, so we remove it" was never true either: the documented
+    # way to install onto a PostgreSQL that already exists is to pass
+    # -PgAdminPassword, and then the installer only creates databases inside a
+    # cluster it found.
+    #
+    # The check is deliberately GENERIC - any database that is not one of the
+    # four suite databases, not 'postgres' and not a template counts as someone
+    # else's. No other product is named here on purpose: the uninstaller cannot
+    # know what a given customer also runs on this server, so it must not try to
+    # keep a list. The suite names come from $Databases so there is only ever one
+    # such list in this script.
+    #
+    # Every uncertain outcome REFUSES: no password, no psql, a failed query, a
+    # kept-databases contradiction. Refusing costs the operator one manual
+    # uninstall. Guessing wrong takes another product's data with it, and an
+    # uninstalled PostgreSQL cannot be put back from here.
     $pgUninstall = "C:\Program Files\PostgreSQL\16\uninstall-postgresql.exe"
-    if (Test-Path $pgUninstall) {
-        Write-Info "Uninstalling PostgreSQL 16..."
+    $pgRefuse    = $null
+    if ($KeepDatabases) {
+        $pgRefuse = "-KeepDatabases was passed, so the four suite databases are still on this cluster - uninstalling PostgreSQL would delete the data you asked to keep."
+    } elseif (-not $script:PgAuthOk) {
+        $pgRefuse = "there is no working postgres superuser password, so this script cannot check whether another product's database is on this cluster."
+    } elseif (-not (Test-Path "$PgBin\psql.exe")) {
+        $pgRefuse = "psql was not found at $PgBin, so this script cannot check whether another product's database is on this cluster."
+    } else {
+        # Same superuser connection STEP 4 used moments ago; $PgAdminPassword was
+        # verified by Test-PgSuperuserPassword before STEP 1.
+        $env:PGPASSWORD = $PgAdminPassword
+        $suiteList = ($Databases | ForEach-Object { "'" + $_ + "'" }) -join ','
+        $pgQuery   = "SELECT datname FROM pg_database WHERE datistemplate = false AND datname <> 'postgres' AND datname NOT IN ($suiteList) ORDER BY datname;"
+        # -w (never prompt) belongs on THIS call above all others: it is the one
+        # that decides whether a PostgreSQL cluster gets destroyed, and the GUI
+        # uninstaller drives this engine with -Force behind a hidden window where
+        # a psql password prompt does not fail, it hangs for ever. PGPASSWORD is
+        # set above and verified, so a prompt here could only mean something has
+        # gone wrong - and then refusing (below) is the right answer anyway.
+        $pgOut = & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -w -tA -v ON_ERROR_STOP=1 -c $pgQuery 2>&1
+        $pgRc  = $LASTEXITCODE
+        Remove-Item Env:\PGPASSWORD -ErrorAction SilentlyContinue
+        if ($pgRc -ne 0) {
+            $pgRefuse = "the pg_database check failed (exit $pgRc): $(($pgOut | Out-String).Trim())"
+        } else {
+            $pgForeign = @($pgOut | ForEach-Object { "$_".Trim() } | Where-Object { $_ -ne '' })
+            if ($pgForeign.Count -gt 0) {
+                $pgRefuse = "this cluster still hosts $($pgForeign.Count) database(s) that are not NocVault's: $($pgForeign -join ', ')."
+            }
+        }
+    }
+    if ($pgRefuse) {
+        Write-Warn "REFUSING to uninstall PostgreSQL - $pgRefuse"
+        Write-Info "PostgreSQL was left installed and running. Everything else in this step still ran."
+        Write-Info "If it really should go, confirm by hand that nothing else uses this cluster, then run: `"$pgUninstall`" --mode unattended"
+    } elseif (Test-Path $pgUninstall) {
+        Write-Info "Uninstalling PostgreSQL 16 (no non-NocVault database found on this cluster)..."
         Start-Process -Wait -FilePath $pgUninstall -ArgumentList "--mode unattended"
-        Write-OK "PostgreSQL uninstalled"
+        # Judged by the uninstaller binary being gone, not by an exit code: this
+        # flag decides how loud STEP 8 is about secrets.env, so it must only be
+        # set when the cluster really went.
+        if (-not (Test-Path $pgUninstall)) {
+            $script:PgRemoved = $true
+            Write-OK "PostgreSQL uninstalled"
+        } else {
+            Write-Warn "PostgreSQL may NOT have been uninstalled - $pgUninstall is still present. Check it by hand."
+        }
     } else {
         Write-Warn "PostgreSQL uninstaller not found - skipping"
     }
@@ -609,6 +720,98 @@ if ($RemoveDependencies) {
 }
 
 # ================================================================
+# STEP 8 - Machine-level secrets (secrets.env)
+# ================================================================
+# The same defect STEP 6b was written to fix, one directory up. secrets.env holds
+# SEVEN credentials in CLEARTEXT, all written by the installer:
+#
+#   POSTGRES_PASSWORD  superuser on the whole PostgreSQL cluster
+#   NEXTAUTH_SECRET    signs every SSO token across all four consoles AND is the
+#                      KDF input for DDIVault's stored-credential encryption, so
+#                      it is the one secret whose leak outlives this machine: it
+#                      is routinely carried to the REPLACEMENT server from a
+#                      backup of this file
+#   NOCVAULT_RO_PASS   the cross-DB read-only login
+#   NV_/LV_/DDI_/SV_DB_PASS  the four per-app database logins
+#
+# STEP 6 has already deleted every app .env that held copies, so from here on
+# this file is the ONLY copy on the disk.
+#
+# It is still NOT deleted by default, and that default is right: a re-install is
+# meant to reuse this file so the new install keeps matching a PostgreSQL that
+# was retained, and deleting it while a database or login role is still on the
+# cluster strands them with no recorded password. What was missing is that the
+# default is only defensible while that premise HOLDS - and it does not hold on
+# the two paths this script also supports. Once the databases have been dropped,
+# or the cluster itself uninstalled, the file is worthless for a re-install and
+# still a full set of live secrets sitting under a green "Uninstall Complete"
+# banner. Those paths now name the file and the secrets in it, and
+# -RemoveSecrets deletes it outright.
+#
+# Reported by NAME ONLY (Get-SecretKeyNames) - never a value, never a line.
+$secretsPresent = Test-Path -LiteralPath $SecretsFile
+# Worthless for a re-install: nothing it names still exists here.
+$secretsStale   = $script:PgRemoved -or ((-not $KeepDatabases) -and (-not $script:DbLeftBehind))
+# Must NOT be deleted yet: something still on the cluster needs these passwords.
+# Qualified by -not $script:PgRemoved on purpose - a database or role that could
+# not be dropped went with the cluster when PostgreSQL was uninstalled, so there
+# is nothing left for these passwords to strand and refusing to delete the file
+# would only leave the secrets on the disk for no benefit.
+$secretsNeeded  = (-not $script:PgRemoved) -and ($KeepDatabases -or $script:DbLeftBehind)
+if (-not $secretsPresent) {
+    Write-Step "Machine-level secrets"
+    Write-Info "$SecretsFile not present - nothing to remove"
+} elseif ($RemoveSecrets -and $secretsNeeded) {
+    # Refuse rather than remove more. -RemoveSecrets here would be the only
+    # irreversible step in the script: the databases or roles it unlocks are
+    # still on the cluster, and STEP 6 already deleted the app .env copies, so
+    # the passwords would exist nowhere.
+    Write-Step "Machine-level secrets"
+    Write-Warn "REFUSING to delete $SecretsFile despite -RemoveSecrets."
+    if ($KeepDatabases) {
+        Write-Warn "The four databases and their login roles were KEPT (-KeepDatabases). This file is now the only record of their passwords - STEP 6 deleted every app .env that held a copy."
+    } else {
+        Write-Warn "A database or login role could NOT be dropped (see the [!!] lines above). This file is now the only record of its password."
+    }
+    Write-Info "Finish the database step, or copy this file somewhere you control, and then delete $SecretsFile by hand."
+    $script:SecretsLeftBehind = $true
+} elseif ($RemoveSecrets) {
+    Write-Step "Removing machine-level secrets"
+    foreach ($k in @(Get-SecretKeyNames $SecretsFile)) { Write-Info "removing secret: $k" }
+    try {
+        Remove-Item -LiteralPath $SecretsFile -Force -ErrorAction Stop
+        Write-OK "Removed $SecretsFile"
+    } catch {
+        # Louder than a directory failure for the same reason as the TLS key in
+        # STEP 6b: the operator MUST act on this one before the disk moves.
+        Write-Warn "COULD NOT REMOVE $SecretsFile - $_"
+        Write-Warn "CLEARTEXT CREDENTIALS ARE STILL ON THIS DISK. Delete $SecretsFile by hand before the machine leaves your control."
+        $script:SecretsLeftBehind = $true
+    }
+} elseif ($secretsStale) {
+    Write-Step "Machine-level secrets"
+    Write-Warn "$SecretsFile WAS KEPT, AND IT IS NOW WORTHLESS BUT NOT HARMLESS."
+    if ($script:PgRemoved) {
+        Write-Info "PostgreSQL itself was uninstalled, so nothing these credentials protect still exists on this machine."
+    } else {
+        Write-Info "The four databases and their login roles were dropped. POSTGRES_PASSWORD in this file is STILL the live superuser password of the PostgreSQL cluster that was left installed."
+    }
+    $secretKeys = @(Get-SecretKeyNames $SecretsFile)
+    if ($secretKeys.Count -gt 0) {
+        Write-Warn "Cleartext secrets still in that file: $($secretKeys -join ', ')."
+    }
+    Write-Warn "NEXTAUTH_SECRET signs every NocVault SSO token and keys DDIVault's stored-credential encryption. If this file was ever backed up and restored onto a replacement server, deleting this machine does not retire that secret - rotate it there."
+    Write-Warn "Delete $SecretsFile by hand, or re-run with -RemoveSecrets, before this disk leaves your control."
+    $script:SecretsLeftBehind = $true
+} elseif ($KeepDatabases) {
+    Write-Step "Machine-level secrets"
+    Write-Info "Keeping $SecretsFile so a re-install still matches the databases preserved by -KeepDatabases."
+} else {
+    Write-Step "Machine-level secrets"
+    Write-Info "Keeping $SecretsFile - the database step did not finish, and it holds the passwords needed to complete it by hand."
+}
+
+# ================================================================
 # DONE
 # ================================================================
 Write-Host ""
@@ -629,6 +832,17 @@ if ($script:DbLeftBehind) {
     Write-Host "  +======================================================+" -ForegroundColor Green
     Write-Host "  |   NocVault Suite - Uninstall Complete                |" -ForegroundColor Green
     Write-Host "  +======================================================+" -ForegroundColor Green
+    Write-Host ""
+}
+if ($script:SecretsLeftBehind) {
+    # The banner above can legitimately say "Complete" while this file remains -
+    # keeping it is the documented default - but an operator who reads only the
+    # banner before wiping or shipping the disk must not miss it, so it is
+    # repeated here, after the last [!!] line has scrolled past.
+    Write-Host "  ACTION REQUIRED: cleartext credentials are still on this disk:" -ForegroundColor Yellow
+    Write-Host "        $SecretsFile" -ForegroundColor Yellow
+    Write-Host "        (see the [!!] lines above). Delete it before this machine" -ForegroundColor Yellow
+    Write-Host "        or its disk leaves your control." -ForegroundColor Yellow
     Write-Host ""
 }
 if ($KeepDatabases) {

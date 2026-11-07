@@ -215,8 +215,33 @@ function Set-EnvVar([string]$Path, [string]$Key, [string]$Value) {
 # no further installer change needed.
 $RuntimeSettableEnvKeys = @(
     'NEXTAUTH_URL',
-    'TLS_CERT_PATH', 'TLS_KEY_PATH',
-    'ENTRA_TENANT_ID', 'ENTRA_CLIENT_ID', 'ENTRA_CLIENT_SECRET'
+    # ⛔ TLS_PUBLIC_HOST BELONGS HERE WITH THE OTHER TWO, AND ITS ABSENCE WAS A
+    # TRAP. It is the same class of value as TLS_CERT_PATH/TLS_KEY_PATH (a
+    # lib/envTargets.ts MANAGED_KEY, which the suite installer's own comment says
+    # is exactly why these live in files and are never pinned in a service
+    # environment) - but it was the one of the three missing from this list, so
+    # Clear-NssmEnvKeys could never remove it. A value pinned in
+    # AppEnvironmentExtra beats both env files forever (loadEnvironment() merges
+    # <root>\.env, then .next\standalone\.env.local, then process.env - least
+    # significant first), so a pin would have been permanent AND invisible: the
+    # terminator would keep echoing a stale public host with nothing able to
+    # converge it. Added 2026-11-07, when TLS_PUBLIC_HOST was first set in the
+    # field and the asymmetry showed up.
+    'TLS_CERT_PATH', 'TLS_KEY_PATH', 'TLS_PUBLIC_HOST',
+    'ENTRA_TENANT_ID', 'ENTRA_CLIENT_ID', 'ENTRA_CLIENT_SECRET',
+    # ⛔ THE AGENT-INGEST TLS PAIR, FOR BOXES ALREADY PROVISIONED WITH IT PINNED.
+    # The suite installer no longer writes these four into NetVault's NSSM
+    # environment (it writes them to the env files like everything else), but a
+    # box installed before that change still carries the pin - and a pinned
+    # fingerprint is worse than a missing one: it gets baked into the agent
+    # enrollment commands the hub hands out, and a pinned *_WS_TLS=1 against a
+    # listener that is actually plaintext makes every agent's WS link fail
+    # closed. The installer fix only helps NEW installs; this is what makes the
+    # field converge. Safe for the same reason the TLS_*/ENTRA_* keys above are:
+    # Clear-NssmEnvKeys is handed only the keys the env file actually supplies,
+    # and this updater does write all four to the files.
+    'SPANVAULT_WS_TLS', 'SPANVAULT_WS_FINGERPRINT',
+    'DDIVAULT_WS_TLS', 'DDIVAULT_WS_FINGERPRINT'
 )
 
 # Which of $keys the env file at $path actually defines with a NON-EMPTY value.

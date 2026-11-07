@@ -457,6 +457,40 @@ $LvPass           = Get-EnvVal $SecretsFile 'LV_DB_PASS';        if (-not $LvPas
 $DdiPass          = Get-EnvVal $SecretsFile 'DDI_DB_PASS';       if (-not $DdiPass)          { $DdiPass          = New-Pass 28 }
 $SvPass           = Get-EnvVal $SecretsFile 'SV_DB_PASS';        if (-not $SvPass)           { $SvPass           = New-Pass 28 }
 
+# ⛔ THESE THREE ARE LOADED-OR-GENERATED LIKE THE REST. All three used to be drawn
+# fresh on EVERY run, below the secrets.env write, so none of them was persisted -
+# which makes this section's own promise at the top ("re-running the installer
+# reuses the same values") false for exactly the keys where a changed value does
+# damage.
+#
+# CRON_SECRET authorises NetVault's daily health-snapshot / EOL jobs (Bearer token)
+# and is shared by .env, the standalone .env.local, the NSSM service env and three
+# scheduled tasks. It is self-consistent only while every one of those writes
+# succeeds - and Register-MaintenanceTask is deliberately non-fatal, so a re-run
+# whose task registration merely WARNS leaves the old task holding the old token
+# against an .env that now carries a new one, and that task 401s silently forever.
+$CronSecret       = Get-EnvVal $SecretsFile 'CRON_SECRET';       if (-not $CronSecret)       { $CronSecret       = New-HexSecret 32 }
+# LOG_INTEGRITY_KEY keys LogVault's tamper-evident HMAC hash chain (prev_hash/
+# entry_hash on syslog_entries); if it is unset the chain is silently disabled, so a
+# fresh install must set it. It is also the one secret here that CANNOT be re-minted:
+# collector.js's initHashChain() resumes from the last persisted entry_hash
+# REGARDLESS of key, so a re-install that mints a new one (a repair run, or the
+# documented Uninstall -KeepDatabases then re-install) makes
+# scripts/verify-integrity.js report every pre-existing row AND the first new row as
+# tampered - permanently, because syslog_entries has UPDATE/DELETE revoked by design
+# and there is no repair path. A compliance feature turned into a false positive.
+# NOTE: drawn from its own CSPRNG read, not the same stream as $CronSecret above.
+# Under the old Get-Random both came from one time-seeded sequence a few statements
+# apart, so recovering either one materially helped predict the other.
+$LogIntegrityKey  = Get-EnvVal $SecretsFile 'LOG_INTEGRITY_KEY'; if (-not $LogIntegrityKey)  { $LogIntegrityKey  = New-HexSecret 32 }
+# NV_ADMIN_PASSWORD is the seeded super_admin's console password. setup.sql seeds a
+# FIXED bcrypt hash of a literal published in this repo, identical on every install,
+# and STEP 13 starts NetVault long before any operator can read the closing banner -
+# so without this the suite ships with a known super_admin live on the console port.
+# Per-install, persisted like every other credential, applied in STEP 8 and reported
+# by LOCATION only.
+$NvAdminPass      = Get-EnvVal $SecretsFile 'NV_ADMIN_PASSWORD'; if (-not $NvAdminPass)      { $NvAdminPass      = New-Pass 20 }
+
 # Persist ALL keys back (newly generated values become permanent; existing ones are
 # re-written unchanged). UTF-8 no BOM, one KEY=VALUE per line.
 $secretsContent = @(
@@ -466,7 +500,10 @@ $secretsContent = @(
     "NV_DB_PASS=$NvPass",
     "LV_DB_PASS=$LvPass",
     "DDI_DB_PASS=$DdiPass",
-    "SV_DB_PASS=$SvPass"
+    "SV_DB_PASS=$SvPass",
+    "CRON_SECRET=$CronSecret",
+    "LOG_INTEGRITY_KEY=$LogIntegrityKey",
+    "NV_ADMIN_PASSWORD=$NvAdminPass"
 ) -join "`r`n"
 [System.IO.File]::WriteAllText($SecretsFile, $secretsContent + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
 
@@ -488,18 +525,6 @@ $SVDbPass             = $SvPass
 $SharedSecret         = $NextAuthSecret
 $DefaultPgPassword    = $PostgresPassword
 $DefaultNocRoPassword = $NocRoPass
-# CRON_SECRET authorises NetVault's daily health-snapshot job (Bearer token).
-# Generated once here so .env, standalone .env.local, the NSSM service env and
-# the scheduled task all share the same value.
-$CronSecret   = New-HexSecret 32
-# LOG_INTEGRITY_KEY keys LogVault's tamper-evident HMAC hash chain (prev_hash/entry_hash
-# on syslog_entries). Generated once so the collector's NSSM env and LogVault .env.local
-# share one value; if it is unset the chain is silently disabled, so fresh installs must
-# set it for the Phase 3 log-integrity feature to work.
-# NOTE: drawn from a fresh CSPRNG read, not the same stream as $CronSecret above.
-# Under the old Get-Random both came from one time-seeded sequence a few statements
-# apart, so recovering either one materially helped predict the other.
-$LogIntegrityKey = New-HexSecret 32
 
 # ── Auto-detect server IP ─────────────────────────────────────────
 if (-not $ServerIP) {
@@ -837,12 +862,25 @@ if ($DDIWsTls -and $DDIWsTls.Ok) {
     $NVWsHubPairs += "DDIVAULT_WS_TLS=1"
     $NVWsHubPairs += "DDIVAULT_WS_FINGERPRINT=$($DDIWsTls.Fingerprint)"
 }
-# Two shapes: newline-terminated for the .env heredocs (empty => contributes
-# nothing at all, not a stray blank line), newline-PREFIXED for the NSSM
-# AppEnvironmentExtra strings, which are backtick-n joined already.
-$NVWsHubBlock = if ($NVWsHubPairs.Count) { $NVWsHubPairs -join "`n" } else { "" }
-$NVWsHubNssm  = if ($NVWsHubPairs.Count) { "`n" + ($NVWsHubPairs -join "`n") } else { "" }
-if ($NVWsHubPairs.Count) { Write-OK "Hub agent-ingest TLS flags set - agents will be told to dial wss://" }
+# ⛔ THESE FOUR KEYS GO IN THE ENV FILES ONLY - NEVER INTO NetVault's NSSM
+# AppEnvironmentExtra. They WERE pinned there (a newline-prefixed $NVWsHubNssm
+# appended to the service environment), which is precisely the trap the block below
+# spells out: the service environment is read at runtime and dotenv never overrides
+# a variable already in process.env, so the pinned value wins forever.
+#
+# What makes it worse than the usual Settings no-op is that nothing can converge it.
+# Update-NetVault.ps1 re-probes ports 3010/3011 on every upgrade and can only write
+# the result to $AppDir\.env and .next\standalone\.env.local - files - and the four
+# keys are not in its $RuntimeSettableEnvKeys list, so Clear-NssmEnvKeys never strips
+# them either. Two measured consequences, both of which the updater reports as
+# success: (a) a re-minted SpanVault/DDIVault WS certificate leaves the hub baking
+# the OLD fingerprint into every enroll command, so every newly enrolled agent fails
+# the pin, and (b) a listener that falls back to plaintext still gets
+# SPANVAULT_WS_TLS=1 handed out, pointing the whole fleet at wss:// on a socket that
+# only speaks ws:// - the control channel goes down and re-running the updater cannot
+# fix it. $NVEnvTailPairs below is now the only consumer of these pairs; there is
+# deliberately no NSSM shape of this block any more. Do not reintroduce one.
+if ($NVWsHubPairs.Count) { Write-OK "Hub agent-ingest TLS flags set (env files only) - agents will be told to dial wss://" }
 
 # ── The tail of NetVault's two env files ──────────────────────────
 # ⛔ TLS_CERT_PATH / TLS_KEY_PATH GO IN THE ENV FILES AND **NOT** IN ANY NSSM
@@ -908,7 +946,21 @@ if ($PgPreInstalled) {
     }
 }
 
+# ⛔ CREATE USER *AND* ALTER USER, FOR EVERY ROLE. On any re-run CREATE USER fails
+# ("role already exists"), and every psql call in this step ends in 2>$null with no
+# $LASTEXITCODE check - so the failure is invisible while the freshly generated
+# password is still written into every .env/.env.local/DATABASE_URL/NSSM env below.
+# The case that bites: secrets.env is lost (C:\Apps restored from backup without
+# C:\ProgramData, or an operator cleared it) while the cluster and its roles survive,
+# e.g. after the documented Uninstall -KeepDatabases. The operator re-runs with
+# -PgAdminPassword <real password>, which passes the superuser probe above, four new
+# passwords are generated, all four CREATE USERs silently do nothing, and all four
+# apps then crash-loop on "password authentication failed" with STEP 13 reporting
+# only "NOT running (check logs)". ALTER USER re-asserts the password we are about to
+# hand the apps, so the role and the .env can never disagree. nocvault_readonly below
+# has had this since it was written - this is the same one-line fix on the other four.
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER netvault WITH PASSWORD '$NVDbPass';" 2>$null
+& "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "ALTER USER netvault WITH PASSWORD '$NVDbPass';" 2>$null
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE netvault OWNER netvault;" 2>$null
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE netvault TO netvault;" 2>$null
 Write-OK "NetVault database ready"
@@ -922,6 +974,7 @@ Write-OK "NocVault read-only role ready"
 
 if ($InstallLogVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER logvault_user WITH PASSWORD '$LVDbPass';" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "ALTER USER logvault_user WITH PASSWORD '$LVDbPass';" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE logvault OWNER logvault_user;" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE logvault TO logvault_user;" 2>$null
     Write-OK "LogVault database ready"
@@ -929,6 +982,7 @@ if ($InstallLogVault) {
 
 if ($InstallDDIVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER ddivault_user WITH PASSWORD '$DDIDbPass';" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "ALTER USER ddivault_user WITH PASSWORD '$DDIDbPass';" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE ddivault OWNER ddivault_user;" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE ddivault TO ddivault_user;" 2>$null
     Write-OK "DDIVault database ready"
@@ -936,6 +990,7 @@ if ($InstallDDIVault) {
 
 if ($InstallSpanVault) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE USER spanvault_user WITH PASSWORD '$SVDbPass';" 2>$null
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "ALTER USER spanvault_user WITH PASSWORD '$SVDbPass';" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "CREATE DATABASE spanvault OWNER spanvault_user;" 2>$null
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -c "GRANT ALL PRIVILEGES ON DATABASE spanvault TO spanvault_user;" 2>$null
     Write-OK "SpanVault database ready"
@@ -1182,7 +1237,16 @@ GrantNocRoRead "netvault"
 if ($LASTEXITCODE -ne 0) { throw "NetVault schema.sql failed to apply (exit $LASTEXITCODE) - installation aborted; a security-relevant grant/view may not have applied. Check the psql output above." }
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO netvault;"
 & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO netvault;"
-& "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -f "$NVAppDir\setup.sql"
+# ⛔ ON_ERROR_STOP + AN EXIT CHECK HERE TOO. setup.sql seeds the ONLY super_admin
+# and nothing else, and it was the one apply in this script the 2026-07-23
+# ON_ERROR_STOP pass missed: no flag, no exit-code test, and the unconditional
+# "NetVault schema applied" on the next line reported it as success either way. A
+# failure therefore ended with the closing banner telling the operator to log in as
+# admin@yourcompany.com - an account that does not exist, with no local login path
+# on the three satellites either. It stays idempotent: its single INSERT is
+# ON CONFLICT (email) DO NOTHING, which is not an error on a re-run.
+& "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -v ON_ERROR_STOP=1 -f "$NVAppDir\setup.sql"
+if ($LASTEXITCODE -ne 0) { throw "NetVault setup.sql failed to apply (exit $LASTEXITCODE) - installation aborted; the default super_admin was not seeded, so nobody would be able to log in. Check the psql output above." }
 Write-OK "NetVault schema applied"
 
 # Create .env
@@ -1215,6 +1279,67 @@ Write-Info "Building NetVault (3-5 minutes)..."
 & npm run build 2>&1 | Tee-Object -FilePath "$NVDir\logs\npm-build.log"
 if ($LASTEXITCODE -ne 0) { throw "NetVault build failed. Check $NVDir\logs\npm-build.log" }
 Write-OK "NetVault built"
+
+# ── Per-install password for the seeded super_admin ───────────────
+# ⛔ setup.sql SEEDS A PASSWORD THAT IS IDENTICAL ON EVERY INSTALL. It carries a
+# fixed bcrypt hash of a literal that is published in this repo, so between STEP 13
+# starting NetVault and an operator reading checklist item [1] a known super_admin
+# is live on the console port - with HTTPS already terminating in front of it, and
+# on an unattended GUI install nobody watching the console at all. Replace it with
+# the per-install value generated into secrets.env, like every other credential.
+#
+# It has to happen HERE rather than next to setup.sql: the hash must be produced by
+# the same bcryptjs the app verifies with (app/api/users/route.ts, cost 10), and
+# node_modules only exists after the npm install above. $env:PGPASSWORD is still the
+# superuser password set before the schema step.
+#
+# ⛔ GUARDED ON THE SEED HASH, so a re-run can never reset a password the customer
+# has since changed from Settings: the UPDATE matches only a row that still holds
+# setup.sql's literal hash. A re-run with the same secrets.env is then a no-op
+# because the row already holds this password - that is what idempotent means here.
+# NON-FATAL on purpose: throwing this late would abandon an otherwise-complete
+# install, so a failure WARNS and the closing banner says the shipped default is
+# still live.
+$script:NvAdminPassState = 'failed'
+$NvSeedHash = '$2b$12$QPxM2WDeRI1QO/u/5e17OOSG7Uy/fLB3Xwq.o/iU06IaP2.2PpFQ6'
+$NvHashJs   = Join-Path $NVAppDir '.nocvault-seed-hash.js'
+try {
+    # A file rather than `node -e` so require('bcryptjs') resolves out of
+    # $NVAppDir\node_modules regardless of the current directory, and the password is
+    # read from the environment rather than argv so it never appears in a command
+    # line (Win32_Process.CommandLine is readable, and this installer itself greps it).
+    @'
+const bcrypt = require('bcryptjs');
+const pw = process.env.NOCVAULT_SEED_PW || '';
+if (!pw) { process.exit(2); }
+process.stdout.write(bcrypt.hashSync(pw, 10));
+'@ | Out-File -FilePath $NvHashJs -Encoding ASCII -NoNewline
+    $env:NOCVAULT_SEED_PW = $NvAdminPass
+    $NvAdminHash = (& node $NvHashJs 2>$null | Out-String).Trim()
+    $env:NOCVAULT_SEED_PW = ''
+    if ($LASTEXITCODE -ne 0 -or $NvAdminHash -notmatch '^\$2[aby]\$\d\d\$') { throw "bcrypt hashing produced no usable hash (node exit $LASTEXITCODE)" }
+    # -f, NOT string interpolation: a bcrypt hash is full of $ signs and PowerShell
+    # would expand them inside a double-quoted string ($2b becomes the - empty -
+    # variable named 2b), silently writing a mangled hash nobody could log in with.
+    $NvAdminSql = "UPDATE users SET password_hash = '{0}' WHERE email = 'admin@yourcompany.com' AND password_hash = '{1}' RETURNING email;" -f $NvAdminHash, $NvSeedHash
+    $NvAdminOut = (& "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d netvault -v ON_ERROR_STOP=1 -tA -c $NvAdminSql 2>$null | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "psql exited $LASTEXITCODE" }
+    if ($NvAdminOut -match 'admin@yourcompany\.com') {
+        $script:NvAdminPassState = 'set'
+        Write-OK "Seeded super_admin password replaced with a per-install value (stored in $SecretsFile)"
+    } else {
+        # Nothing still held the seed hash, so this account's password was set by an
+        # earlier run or changed by the customer. Leave it alone and SAY SO, because
+        # NV_ADMIN_PASSWORD in secrets.env is then not what the account answers to.
+        $script:NvAdminPassState = 'kept'
+        Write-Info "Admin password was already changed from the shipped default - left untouched"
+    }
+} catch {
+    Write-Warn "Could not replace the seeded super_admin password ($($_.Exception.Message)) - the SHIPPED DEFAULT password is still live on this account. Change it at first login."
+} finally {
+    $env:NOCVAULT_SEED_PW = ''
+    Remove-Item -LiteralPath $NvHashJs -Force -ErrorAction SilentlyContinue
+}
 
 # Copy static files into standalone
 $NVStandalone = "$NVAppDir\.next\standalone"
@@ -1259,11 +1384,16 @@ Write-OK "NetVault standalone .env.local written (incl. SERVER_IP, CRON_SECRET)"
 # change from Settings: PORT/HOSTNAME/NODE_ENV, the DB URL, and the secrets the
 # app has no other source for. The same rule will apply to TLS_CERT_PATH /
 # TLS_KEY_PATH / ENTRA_TENANT_ID / ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET once
-# Settings manages them - never pin those here either.
+# Settings manages them - never pin those here either. SPANVAULT_WS_TLS /
+# SPANVAULT_WS_FINGERPRINT / DDIVAULT_WS_TLS / DDIVAULT_WS_FINGERPRINT were pinned
+# here until this was fixed: Update-NetVault.ps1 re-derives them from a live TLS
+# probe on every upgrade and can only write them to the env files, so the pin made
+# a re-minted certificate or a listener that fell back to plaintext unfixable. They
+# now live in $NVEnvTail only - see the block that builds $NVWsHubPairs.
 # Existing installs: Update-NetVault.ps1 clears these keys out of the service
 # environment on upgrade, since NSSM persists them in the registry and a box
 # provisioned before this change would otherwise never converge.
-& $NssmExe set NetVault AppEnvironmentExtra "PORT=3000`nHOSTNAME=0.0.0.0`nNODE_ENV=production`nDATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault`nNEXTAUTH_SECRET=$SharedSecret`nSSL_DISABLED=true`nSERVER_IP=$ServerIP`nCRON_SECRET=$CronSecret`nNOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$NocReadOnlyPass$NVWsHubNssm"
+& $NssmExe set NetVault AppEnvironmentExtra "PORT=3000`nHOSTNAME=0.0.0.0`nNODE_ENV=production`nDATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault`nNEXTAUTH_SECRET=$SharedSecret`nSSL_DISABLED=true`nSERVER_IP=$ServerIP`nCRON_SECRET=$CronSecret`nNOCVAULT_RO_HOST=localhost`nNOCVAULT_RO_PORT=5432`nNOCVAULT_RO_USER=nocvault_readonly`nNOCVAULT_RO_PASS=$NocReadOnlyPass"
 & $NssmExe set NetVault DisplayName         "NetVault - Network Asset Management"
 & $NssmExe set NetVault Description         "NocVault Suite - Network Asset Management"
 & $NssmExe set NetVault Start               SERVICE_AUTO_START
@@ -2017,8 +2147,25 @@ if ($script:TlsCutoverApplied) {
     Write-Host "       TLS_KEY_PATH in NetVault's env files) and restart NocVault-Tls." -ForegroundColor Gray
 }
 Write-Host ""
-Write-Host "  Default login : admin@yourcompany.com / Admin1234!" -ForegroundColor Yellow
-Write-Host "  IMPORTANT: Change the default password immediately!" -ForegroundColor Yellow
+# ⛔ LOCATION, NEVER THE VALUE - the same rule as the generated credentials below.
+# This line used to print the seeded account's password in full: a fixed literal,
+# identical on every install, written out in this script, in setup.sql's hash and in
+# the test script, and live from the moment STEP 13 starts NetVault. STEP 8 now
+# replaces it with a per-install value, so all this prints is where an administrator
+# can read that value. The literal itself is deliberately no longer written here.
+Write-Host "  Default login : admin@yourcompany.com" -ForegroundColor Yellow
+if ($script:NvAdminPassState -eq 'set') {
+    Write-Host "  Password      : generated for THIS install - read NV_ADMIN_PASSWORD from" -ForegroundColor Yellow
+    Write-Host "                  $SecretsFile" -ForegroundColor White
+    Write-Host "  (Readable by Administrators/SYSTEM only. Change it in Settings after the" -ForegroundColor Gray
+    Write-Host "   first login, and the value in that file no longer applies.)" -ForegroundColor Gray
+} elseif ($script:NvAdminPassState -eq 'kept') {
+    Write-Host "  Password      : unchanged - this account already had a password other than" -ForegroundColor Yellow
+    Write-Host "                  the shipped default, so this run did not touch it." -ForegroundColor Gray
+} else {
+    Write-Host "  IMPORTANT: the per-install password could NOT be applied, so this account" -ForegroundColor Yellow
+    Write-Host "  still has the SHIPPED DEFAULT password. Change it at the first login." -ForegroundColor Yellow
+}
 # ⛔ LOCATION, NEVER THE VALUE. These two used to print the generated
 # POSTGRES_PASSWORD and nocvault_readonly password in full. The console is the
 # least private place a secret can be put: an unattended install is normally
@@ -2029,10 +2176,13 @@ Write-Host "  IMPORTANT: Change the default password immediately!" -ForegroundCo
 if ($Unattended -and -not $script:SecretsExisted) {
     Write-Host ""
     Write-Host "  Generated credentials (PostgreSQL superuser, nocvault_readonly," -ForegroundColor Yellow
-    Write-Host "  NEXTAUTH_SECRET and the four per-app DB passwords) are stored in:" -ForegroundColor Yellow
+    Write-Host "  NEXTAUTH_SECRET, the four per-app DB passwords, CRON_SECRET," -ForegroundColor Yellow
+    Write-Host "  LOG_INTEGRITY_KEY and the admin console password) are stored in:" -ForegroundColor Yellow
     Write-Host "    $SecretsFile" -ForegroundColor White
     Write-Host "  Readable by Administrators and SYSTEM only. Back it up somewhere" -ForegroundColor Gray
-    Write-Host "  safe - the uninstaller needs POSTGRES_PASSWORD from it." -ForegroundColor Gray
+    Write-Host "  safe - the uninstaller needs POSTGRES_PASSWORD from it, and" -ForegroundColor Gray
+    Write-Host "  LOG_INTEGRITY_KEY cannot be re-minted: a re-install with a different" -ForegroundColor Gray
+    Write-Host "  one makes every existing LogVault row read as tampered, for good." -ForegroundColor Gray
 }
 Write-Host ""
 Write-Host "  Post-install checklist:" -ForegroundColor White

@@ -17,17 +17,23 @@
        is https:// in every env file, and the terminator logged no
        "NOT STARTED" banner. On a plain-HTTP suite the section reports that and
        checks nothing further - that is a supported configuration, not a fault
-    4. HTTP health + deployed versions for all 4 apps
+    4. HTTP health + deployed versions for all 4 apps: /api/health must report
+       the SAME version as that app's own root package.json on disk (catches a
+       service still serving an older build than its checkout), plus a coarse
+       floor for a checkout that is itself ancient
     5. Public endpoints + launcher performance (suite probes, cache, license)
     6. NextAuth / login smoke (best-effort)
-    7. Scheduled tasks (the 3 NetVault cron tasks)
+    7. Scheduled tasks (the 3 NetVault cron tasks): enabled with a live trigger,
+       posting to the port the console really listens on, with a Bearer token
+       that matches the live CRON_SECRET
     8. Firewall rules (NocVault*)
     9. Database deep checks (schema, the 3 bug-fixes, tamper model, grants, seed,
        Hub cross-DB reads incl. column-level grants, and the credential/secret
        exclusions -- readonly role blocked from secret columns + *_public views)
    10. COLLECTORS:
         - LogVault : live synthetic syslog packet -> confirm it lands in the DB
-                     (full pipeline: socket -> parser -> taxonomy -> DB)
+                     (full pipeline: socket -> parser -> taxonomy -> DB) AND that
+                     the row it wrote is hash-chained (tamper evidence is on)
         - SpanVault: ping/SNMP poll heartbeat (recent rows)
         - DDIVault : poll heartbeat (server_health_history) / liveness
         - crash-pattern scan of every collector error log
@@ -683,12 +689,66 @@ if (-not $script:TlsFronted) {
 
 # ---------------------------------------------------------------
 Section "4. HTTP Health + Versions"
+# ⛔ WHAT THIS SECTION IS FOR: proving the install deployed a REAL, RECENT build -
+# not that it is exactly version X. The old form carried nothing but a hardcoded
+# $Min per app, and by the time anyone read them they were 40-90 releases stale
+# (netvault floor 1.19.7 against a 1.63.x that was shipping), so the assertion
+# could not fail for any plausible install - and it was only a Wn even when it
+# did. Re-pinning the numbers to today's would have been stale again next week.
+# So the check now has two independent halves:
+#
+#   1. The PRIMARY assertion is SELF-MAINTAINING and has no number in it: read
+#      the app's OWN root package.json off the install directory and require
+#      /api/health to report that exact version. That is what catches the real
+#      defect this section is supposed to catch - a service still serving an
+#      OLDER build than the checkout it was installed from (an updater that
+#      pulled and built but never restarted the service, a rollback that put
+#      .next/node_modules back but not the code, a stale *.replaced-* copy
+#      still live). All four apps report the ROOT package.json version and
+#      nothing else: netvault imports it in app/api/health/route.ts, and the
+#      three Express apps do require('../package.json') (api/server.js) - so
+#      equality here is exact, not approximate. The frontend/package.json
+#      versions drift behind on purpose and are NOT what /api/health reports;
+#      do not "fix" this to read those.
+#
+#   2. The floor stays, but only as a coarse backstop for the one case half 1
+#      cannot see: a checkout that is ITSELF ancient (disk and health agree
+#      perfectly at 1.19.7). It is marked >>> BUMP ME <<< below, is the only
+#      place to edit, and a version under it is now a Bad, not a Wn.
+#
+# >>> BUMP ME <<< Coarse "is this checkout ancient" floor - one line per app.
+# Deliberately a ROUND number a few releases BELOW what currently ships: it is a
+# backstop, not a pin, so it does not need to move every release and must never
+# be set to the exact shipping version (that turns every install made the day
+# before a bump into a FAIL). Reviewed 2026-11-07 against netvault 1.63.2 /
+# logvault 2.38.0 / ddivault 1.33.0 / spanvault 1.115.9.
 $apps = @(
-    @{ Name="netvault";  Port=3000; Min="1.19.7" },
-    @{ Name="logvault";  Port=3004; Min="2.18.2" },
-    @{ Name="ddivault";  Port=3006; Min="1.17.0" },
-    @{ Name="spanvault"; Port=3008; Min="1.48.4" }
+    @{ Name="netvault";  Port=3000; Min="1.60.0";  Dir="NetVault"  },
+    @{ Name="logvault";  Port=3004; Min="2.36.0";  Dir="LogVault"  },
+    @{ Name="ddivault";  Port=3006; Min="1.32.0";  Dir="DDIVault"  },
+    @{ Name="spanvault"; Port=3008; Min="1.114.0"; Dir="SpanVault" }
 )
+
+# The DEPLOYED root package.json. The install layout is NOT uniform across the
+# four apps - the installer lays every app down under '<App>\app', but installs
+# that predate that (and the LogVault/DDIVault boxes where the repo root IS the
+# install root) have it one level up, which is why Resolve-PgPassword above
+# carries the same two-candidate list. Probe both and report which one answered.
+# ⛔ Finding nothing is a Wn, never a Bad: a layout we failed to guess must not
+# fail an otherwise healthy install - that would be exactly the kind of noise
+# that got the old floors ignored.
+function DiskVer([string]$appDir) {
+    foreach ($cand in @((Join-Path $InstallDir ($appDir + '\app\package.json')),
+                        (Join-Path $InstallDir ($appDir + '\package.json')))) {
+        if (-not (Test-Path -LiteralPath $cand)) { continue }
+        try {
+            $pk = (Get-Content -LiteralPath $cand -Raw -ErrorAction Stop | ConvertFrom-Json)
+            if ($pk -and $pk.version) { return @{ Ver = ([string]$pk.version).Trim(); Path = $cand } }
+        } catch {}
+    }
+    return $null
+}
+
 # ⛔ $ConsoleBase, not the public port. Behind the TLS terminator the public port
 # is the TERMINATOR: an http:// probe there is answered with the demux 301, and
 # Invoke-WebRequest then follows it to https://127.0.0.1 and fails certificate
@@ -698,14 +758,39 @@ $apps = @(
 # through the terminator is checked in 3c, where a failure can be attributed.
 foreach ($a in $apps) {
     $r = Http (($ConsoleBase[$a.Name]) + "/api/health") 20
-    if ($r.Code -eq 200 -and $r.Content) {
-        $ver = $null
-        try { $ver = ($r.Content | ConvertFrom-Json).version } catch {}
-        if ($ver) {
-            if (VerGE $ver $a.Min) { Ok ($a.Name + " health 200, version " + $ver + " (>= " + $a.Min + "), " + $r.Ms + "ms") }
-            else { Wn ($a.Name + " health 200 but version " + $ver + " BELOW expected " + $a.Min) }
-        } else { Wn ($a.Name + " health 200 but no version field; raw: " + $r.Content) }
-    } else { Bad ($a.Name + " health FAILED (code=" + $r.Code + " err=" + $r.Err + ")") }
+    if (-not ($r.Code -eq 200 -and $r.Content)) {
+        Bad ($a.Name + " health FAILED (code=" + $r.Code + " err=" + $r.Err + ")")
+        continue
+    }
+
+    $ver = $null
+    try { $ver = ($r.Content | ConvertFrom-Json).version } catch {}
+    if (-not $ver) {
+        # ⛔ A Bad, not a Wn. No version field means the running build cannot be
+        # IDENTIFIED, so neither assertion below can run at all - and every app
+        # does report it (the per-app updaters' own post-update health checks key
+        # off this same field, so a health response without it breaks them too).
+        Bad ($a.Name + " health 200 but reports NO version field - the deployed build cannot be identified, and the updater's post-update version check reads this same field; raw: " + $r.Content)
+        continue
+    }
+
+    $disk = DiskVer $a.Dir
+    if ($null -eq $disk) {
+        Wn ($a.Name + " health 200, version " + $ver + " - but no root package.json was found under " + (Join-Path $InstallDir $a.Dir) + " (looked in '\app\' and the directory root), so the RUNNING build could not be compared with the checkout on disk")
+    } elseif ($disk.Ver -eq $ver) {
+        Ok ($a.Name + " health 200, version " + $ver + " matches the deployed package.json, " + $r.Ms + "ms")
+    } elseif (VerGE $disk.Ver $ver) {
+        Bad ($a.Name + " is SERVING AN OLDER BUILD than its own checkout: /api/health reports " + $ver + " but " + $disk.Path + " is " + $disk.Ver + " - the files were updated and the service was never restarted (or a rollback restored .next/node_modules without the code). Restart this app's service and re-check.")
+    } else {
+        Bad ($a.Name + " version MISMATCH: /api/health reports " + $ver + " but " + $disk.Path + " is " + $disk.Ver + " - the running process is NEWER than the files on disk, so what is being served is not this directory (wrong -InstallDir, or a leftover *.replaced-* copy is the live one; see section 8b)")
+    }
+
+    # Coarse floor - see >>> BUMP ME <<< above. Deliberately separate from the
+    # match check: an ancient CHECKOUT passes the match (disk and health agree)
+    # and this is the only half that can see it.
+    if (-not (VerGE $ver $a.Min)) {
+        Bad ($a.Name + " version " + $ver + " is BELOW the minimum expected build " + $a.Min + " - this install came from a stale checkout; pull and re-run this app's updater")
+    }
 }
 
 # ---------------------------------------------------------------
@@ -847,17 +932,55 @@ if ($csrf.Code -eq 200 -and $csrf.Content) {
 } else { Bad ("NextAuth csrf FAILED (code=" + $csrf.Code + ")") }
 
 if ($TestLogin) {
-    Inf "Attempting credentials login with default admin (admin@yourcompany.com / Admin1234!) ..."
+    # â THE SEEDED ADMIN PASSWORD IS PER-INSTALL NOW, SO IT CANNOT BE A LITERAL
+    # HERE. The suite installer generates it and persists it as NV_ADMIN_PASSWORD in
+    # secrets.env; it used to seed the same shipped default on every install, and this
+    # block posted that default as a constant. Left as a constant, -TestLogin would
+    # fail on every freshly installed suite and the failure would look like a broken
+    # auth stack rather than a tester that no longer knows the password.
+    #
+    # â THE FALLBACK IS THE SHIPPED DEFAULT, AND REACHING IT IS ITSELF A FINDING.
+    # A box installed before per-install passwords existed still has the shipped
+    # default live, which is exactly the weakness that change closed - so say so
+    # rather than quietly logging in. It stays a Wn, not a Bad: the password may also
+    # have been changed deliberately by the customer, and this script cannot tell
+    # those two apart from the outside.
+    #
+    # â NEVER PRINTED. The whole point of moving it into secrets.env is that it
+    # stops appearing in console output and logs; this block reports the SOURCE it
+    # resolved the password from, never the value.
+    $adminEmail  = "admin@yourcompany.com"
+    $adminPw     = Get-EnvVal 'C:\ProgramData\NocVault\secrets.env' 'NV_ADMIN_PASSWORD'
+    $adminPwFrom = 'NV_ADMIN_PASSWORD in secrets.env'
+    $usingShippedDefault = $false
+    if (-not $adminPw) {
+        $adminPw = "Admin1234!"
+        $adminPwFrom = 'the SHIPPED DEFAULT (no NV_ADMIN_PASSWORD in secrets.env)'
+        $usingShippedDefault = $true
+    }
+    Inf ("Attempting credentials login as " + $adminEmail + ", password from " + $adminPwFrom + " (value not shown) ...")
     try {
         $sess = $null
         $c = Invoke-WebRequest "$NVBase/api/auth/csrf" -UseBasicParsing -SessionVariable sess -TimeoutSec 12
         $tk = ($c.Content | ConvertFrom-Json).csrfToken
-        $body = @{ csrfToken = $tk; email = "admin@yourcompany.com"; password = "Admin1234!"; redirect = "false"; json = "true" }
+        $body = @{ csrfToken = $tk; email = $adminEmail; password = $adminPw; redirect = "false"; json = "true" }
         $null = Invoke-WebRequest "$NVBase/api/auth/callback/credentials" -Method Post -Body $body -WebSession $sess -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 12 -ErrorAction SilentlyContinue
         $hasSession = $false
         foreach ($ck in $sess.Cookies.GetCookies("$NVBase")) { if ($ck.Name -like "*session-token*") { $hasSession = $true } }
-        if ($hasSession) { Ok "Login smoke: session cookie issued (default admin login works)" }
-        else { Wn "Login smoke: no session cookie - default password may have changed, or flow differs. Verify in browser." }
+        if ($hasSession) {
+            if ($usingShippedDefault) {
+                Wn ("Login smoke: session cookie issued, but using " + $adminPwFrom + " - the shipped default admin password is STILL LIVE on this box. Change it in Settings -> Users, or re-run the suite installer so a per-install password is generated.")
+            } else {
+                Ok "Login smoke: session cookie issued (per-install admin password from secrets.env works)"
+            }
+        }
+        else {
+            if ($usingShippedDefault) {
+                Wn "Login smoke: no session cookie, and secrets.env has no NV_ADMIN_PASSWORD. Either the admin password was changed by hand (fine - verify in a browser), or this install predates per-install admin passwords and the seed never matched."
+            } else {
+                Wn "Login smoke: no session cookie although NV_ADMIN_PASSWORD was found - the admin password was changed after install, or the credentials flow differs. Verify in browser."
+            }
+        }
     } catch { Wn ("Login smoke error: " + $_.Exception.Message) }
 } else {
     Inf "Skipping live login (pass -TestLogin). Verify a real browser login + SSO into each app manually."
@@ -912,9 +1035,115 @@ foreach ($rsa in @(
 
 # ---------------------------------------------------------------
 Section "7. Scheduled Tasks (NetVault cron)"
-foreach ($t in @("NetVault-HealthSnapshot","NetVault-EnrichEol","NetVault-SyncEol")) {
-    $task = Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue
-    if ($task) { Ok ($t + " registered (State=" + $task.State + ")") } else { Bad ($t + " NOT registered") }
+# ⛔ "REGISTERED" IS NOT "WILL RUN". This section used to PRINT the state it had
+# just read - Ok ("... registered (State=" + $task.State + ")") - so a Disabled
+# task, a task with no trigger, a task still posting at the TERMINATOR's port and
+# a task carrying a stale Bearer token all passed the one independent check the
+# suite has. Every one of those failure modes is SILENT by construction: curl -s
+# discards the response body, so Task Scheduler records "0x0 completed
+# successfully" whether the endpoint answered 200, a demux 301 or a 401, and the
+# only visible symptom is a health trend that never gains a point.
+#
+# So the three things that actually decide whether the job runs are now asserted:
+# the task is enabled AND has a live trigger, the action targets the port the
+# console really listens on with the right endpoint, and its Bearer token equals
+# the CRON_SECRET the route will compare against.
+
+# ---- the live CRON_SECRET, resolved the way the ROUTE will see it ----
+# ⛔ NEVER PRINTED, ONLY COMPARED. The Bad line below says "does not match" and
+# stops there - this is a credential and the tester's output gets pasted into
+# tickets. lib/cronAuth.ts reads process.env.CRON_SECRET and fails CLOSED when it
+# is unset, so the token baked into the task argument has to be equal byte for
+# byte or the task 401s forever.
+# Precedence here is the PROCESS's, not the file's: NSSM's AppEnvironmentExtra is
+# already in the environment when the Next standalone server starts and @next/env
+# never overwrites a key that is already set - so the service env wins over
+# .env.local, the same precedence section 6 above checks for NEXTAUTH_URL.
+$cronLive = ''
+foreach ($line in @((WsSvcEnv 'NetVault') -split "`r?`n")) {
+    if ($line.Trim() -match '^CRON_SECRET\s*=\s*(\S+)$') { $cronLive = $Matches[1] }
+}
+if (-not $cronLive) {
+    foreach ($cf in @((Join-Path $InstallDir 'NetVault\app\.next\standalone\.env.local'),
+                      (Join-Path $InstallDir 'NetVault\app\.env'))) {
+        if ($cronLive) { continue }
+        $cv = Get-EnvVal $cf 'CRON_SECRET'
+        if ($cv) { $cronLive = $cv }
+    }
+}
+
+# The port the tasks MUST post to is wherever the NetVault console itself
+# listens, which section 3c already worked out - 3000 on a plain-HTTP suite,
+# 13000 behind the terminator. Derived from $NVBase rather than re-deciding it
+# here, so this cannot drift from the rest of the script.
+$nvCronPort = 3000
+if ($NVBase -match ':(\d+)$') { $nvCronPort = [int]$Matches[1] }
+
+foreach ($ct in @(
+    @{ Name='NetVault-HealthSnapshot'; Path='/api/system/health-snapshot'; Does='the daily fleet health snapshot (health_score_history)' },
+    @{ Name='NetVault-EnrichEol';      Path='/api/system/enrich-eol';      Does='the daily EOL/EOS enrichment' },
+    @{ Name='NetVault-SyncEol';        Path='/api/system/sync-eol';        Does='the weekly EOL feed sync' }
+)) {
+    $tn   = $ct.Name
+    $task = Get-ScheduledTask -TaskName $tn -ErrorAction SilentlyContinue
+    if (-not $task) {
+        Bad ($tn + " NOT registered - " + $ct.Does + " will never run")
+        continue
+    }
+
+    # ---- enabled + actually triggered ----
+    # Register-MaintenanceTask is deliberately non-fatal in the installer, and a
+    # hand-edited or Disabled task looks identical to a healthy one in the list.
+    # A task with zero (or only disabled) triggers is Ready and never fires.
+    $tState = [string]$task.State
+    $tTrig  = @($task.Triggers)
+    $tLive  = @($tTrig | Where-Object { $_.Enabled -ne $false })
+    if ($tState -eq 'Disabled') {
+        Bad ($tn + " is DISABLED (State=Disabled) - it is registered but will never run, so " + $ct.Does + " silently stops")
+    } elseif ($tState -eq 'Unknown') {
+        Bad ($tn + " is in State=Unknown - Task Scheduler cannot run it (usually a broken principal; it must be registered against SID S-1-5-18)")
+    } elseif ($tTrig.Count -eq 0) {
+        Bad ($tn + " has NO trigger - State=" + $tState + " but nothing will ever start it, so " + $ct.Does + " silently stops")
+    } elseif ($tLive.Count -eq 0) {
+        Bad ($tn + " has " + $tTrig.Count + " trigger(s) and every one of them is DISABLED - it will never start")
+    } else {
+        Ok ($tn + " is enabled with a live trigger (State=" + $tState + ", " + $tLive.Count + " trigger(s))")
+    }
+
+    # ---- the action: right port, right endpoint ----
+    $tArg = ''
+    try { $tArg = (@($task.Actions | ForEach-Object { $_.Arguments }) -join ' ') } catch { $tArg = '' }
+    $tPort = 0; $tPath = ''
+    if ($tArg -match 'http://127\.0\.0\.1:(\d+)(/api/system/[A-Za-z0-9\-]+)') { $tPort = [int]$Matches[1]; $tPath = $Matches[2] }
+    if ($tPort -eq 0) {
+        Bad ($tn + " action has no http://127.0.0.1:<port>/api/system/... target (Execute/Arguments were hand-edited, or the task was registered by something other than the installer) - it cannot be doing " + $ct.Does)
+    } elseif ($tPath -ne $ct.Path) {
+        Bad ($tn + " action posts to " + $tPath + " but must post to " + $ct.Path + " - " + $ct.Does + " never happens")
+    } elseif ($tPort -ne $nvCronPort) {
+        # ⛔ THE TLS-CUTOVER TRAP. Behind the terminator the public port IS the
+        # terminator: a plaintext POST there is answered with the demux 301 and
+        # curl (no -L) does nothing with it. NocVault-TlsCutover.ps1 re-points
+        # these three tasks at the console's loopback port for exactly this
+        # reason, but a box cut over by an older Enable-NocVaultTls.ps1, a
+        # non-fatal Register-MaintenanceTask failure during the cutover, or a
+        # hand-edited task all land here - and nothing else in the suite notices.
+        Bad ($tn + " action posts to 127.0.0.1:" + $tPort + " but the NetVault console listens on " + $nvCronPort + " - the request goes to the TLS terminator and is answered with the demux 301, which curl ignores, so " + $ct.Does + " stops with no error anywhere. Re-run Enable-NocVaultTls.ps1 or re-point the task by hand.")
+    } else {
+        Ok ($tn + " action posts to 127.0.0.1:" + $nvCronPort + $ct.Path + " (the console's real listening port)")
+    }
+
+    # ---- the Bearer token ----
+    $tTok = ''
+    if ($tArg -match 'Authorization:\s*Bearer\s+([^\s"]+)') { $tTok = $Matches[1] }
+    if (-not $cronLive) {
+        Wn ($tn + " Bearer token could not be verified - CRON_SECRET was not readable from NetVault's service environment or its .env files (nssm.exe may not have been located in section 2, or the env files are missing)")
+    } elseif (-not $tTok) {
+        Bad ($tn + " action carries NO 'Authorization: Bearer' header - isCronAuthorized fails closed, so every run is answered 401 and " + $ct.Does + " never happens")
+    } elseif ($tTok -ceq $cronLive) {
+        Ok ($tn + " Bearer token matches the live CRON_SECRET")
+    } else {
+        Bad ($tn + " Bearer token does NOT match the live CRON_SECRET (values deliberately not shown) - every run is answered 401 and " + $ct.Does + " silently stops. The secret was rotated (or the app re-installed) without re-registering the task.")
+    }
 }
 
 # ---------------------------------------------------------------
@@ -1250,8 +1479,35 @@ if ($sent -and $script:DbReady) {
     }
     if ($hit) {
         Ok "LogVault collector INGESTED the test packet (socket -> parser -> DB round-trip confirmed)"
-        $det = Pg "logvault" "SELECT vendor||' | cat='||COALESCE(category,'(null)')||' | risk='||risk_score::text||' | hashed='||(entry_hash IS NOT NULL)::text FROM syslog_entries WHERE raw_message LIKE '%$token%' ORDER BY received_at DESC LIMIT 1;"
+        $det = Pg "logvault" "SELECT vendor||' | cat='||COALESCE(category,'(null)')||' | risk='||risk_score::text FROM syslog_entries WHERE raw_message LIKE '%$token%' ORDER BY received_at DESC LIMIT 1;"
         Inf ("  parsed: " + $det)
+
+        # ⛔ ASSERTED, NOT PRINTED. 'hashed=' used to be just another field inside
+        # the Inf line above, so an install where LOG_INTEGRITY_KEY never reached
+        # the collector showed "hashed=false" in a grey INFO line among ~150 PASS
+        # lines and the suite still ended on 0 FAIL. Tamper evidence is the one
+        # security control in LogVault, the installer goes to real trouble to
+        # provision the key, and the related REVOKE UPDATE/DELETE check in
+        # section 9 hard-fails already - this has to as well.
+        # Without the key the collector logs '[Integrity] LOG_INTEGRITY_KEY not
+        # set - hash chain disabled' once at startup and then writes entry_hash
+        # NULL on every row, so the row just ingested is a complete and current
+        # test of the whole feature.
+        # ⛔ "NO ROWS" IS NOT A FAILURE, and the two cases must not be conflated.
+        # An empty result means there was nothing to judge (the test row was
+        # removed by retention or another cleanup between the two queries, or
+        # psql errored) -> Wn. Only a row that EXISTS and is UNHASHED is a Bad.
+        # The legitimate no-logs-yet install cannot reach here at all: this block
+        # only runs once the synthetic packet has been confirmed in the table.
+        $hashed = Pg "logvault" "SELECT (entry_hash IS NOT NULL)::text FROM syslog_entries WHERE raw_message LIKE '%$token%' ORDER BY received_at DESC LIMIT 1;"
+        if ($script:PgExit -ne 0 -or $hashed -eq "") {
+            Wn "  could not read the test row's entry_hash back - hash-chain state UNVERIFIED (no row to judge, which is not the same as an unhashed one)"
+        } elseif ($hashed -eq "t") {
+            Ok "  test row is HASH-CHAINED (entry_hash present) - LOG_INTEGRITY_KEY reached the collector"
+        } else {
+            Bad "LogVault tamper evidence is OFF: the row just ingested has entry_hash NULL - the collector is running without LOG_INTEGRITY_KEY, so NOTHING it writes is hash-chained and scripts/verify-integrity.js has nothing to verify. Set LOG_INTEGRITY_KEY in LogVault's root .env.local (and check it is not missing from the LogVault-Collector service environment), then restart the collector."
+        }
+
         $del = Pg "logvault" "DELETE FROM syslog_entries WHERE raw_message LIKE '%$token%' OR message LIKE '%$token%';"
         if ($script:PgExit -eq 0) { Inf "  cleaned up test row(s)" } else { Wn "  could not delete test row (harmless, clearly marked)" }
     } else {

@@ -75,6 +75,14 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.64.0': [
+    "Installer: the tamper-evidence key for LogVault's log chain is now generated once and kept, instead of being replaced on every installer run. Re-running the installer used to silently break the chain for every log already stored, and an installation that was only ever updated never received a key at all - so the tamper evidence it reports was never actually being produced.",
+    "Installer: the first administrator account no longer gets the same password on every installation. It is now generated per install and kept in the machine-level secrets file; the summary at the end tells you where to read it, never what it is. An installation whose password you have already changed is left alone.",
+    "Installer: re-running the installer over existing databases now re-applies the database passwords it generated, instead of leaving four accounts on their old passwords and all four consoles unable to start. A failure applying the NetVault seed data is now reported as a failure rather than announced as success.",
+    "Uninstaller: removing the shared prerequisites now refuses if any database that is not part of this suite is present, rather than taking the database engine - and everything else using it - with it. It also refuses when you asked to keep the databases, which previously destroyed the data you asked to preserve.",
+    "Uninstaller: the machine-level secrets file is no longer left behind silently once the databases are gone. You are told it is there, which credentials it holds and why they still matter, with a new option to delete it when you are decommissioning the server for good.",
+    "Post-install test: the checks that merely printed what they found now assert it. Scheduled tasks are checked for being enabled and actually pointing at this console with a working token, the reported version is compared against the build on disk rather than a fixed floor that had gone stale, and log entries stored without tamper evidence are now a failure instead of a grey note.",
+  ],
   '1.63.2': [
     "Fixed, before it could bite: the login-page redirect repaired in 1.63.1 took the port from the address the browser asked for. Pinning that address at the HTTPS front door - the next step of the TLS hardening, and the point of it - removes the port from it, which would have put the 1.63.1 dead end straight back. The port is now read from the front door's own header, which already carries the correct one for each of the four consoles.",
   ],
