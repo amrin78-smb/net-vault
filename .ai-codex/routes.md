@@ -36,7 +36,9 @@ POST /api/agents/[id]/revoke [auth] [db] — set revoked_at, status='revoked' (s
 
 ## audit
 GET /api/audit/device/[id] [auth] [db] — device audit log, site-scoped
-GET /api/audit [auth] [db] — recent-activity feed (?limit=) or full paginated audit log (admin)
+GET /api/audit [auth] [db] — recent-activity feed (?limit=) or full paginated audit log (admin).
+  ⛔ `page` is CLAMPED via `lib/pagination.ts` with `fixedLimit: 50` (1.63.0) — `page=0` built a
+  negative OFFSET, which PostgreSQL rejects, so a hand-typed query string answered 500.
 
 ## auth
 GET /api/auth/[...nextauth] [public] [db] — NextAuth credentials login/session handler
@@ -73,7 +75,10 @@ PUT /api/devices/[id] [auth] [db] — update device + write audit_log
 DELETE /api/devices/[id] [auth] [db] — delete device, cascades EOL rows + audit_log
 PUT /api/devices/bulk [auth] [db] — bulk-update one field across devices + audit_log
 GET /api/devices/duplicates [auth] [db] — find duplicate-IP/serial devices with classification
-GET /api/devices [auth] [db] — list/filter/paginate devices, site-scoped
+GET /api/devices [auth] [db] — list/filter/paginate devices, site-scoped.
+  ⛔ `page`/`limit` are CLAMPED via `lib/pagination.ts` (1.63.0). Bare `parseInt` let any
+  authenticated session send `limit=99999999` (a DoS-sized scan of `v_devices_flat`), `page=0`
+  (negative OFFSET → 500) or `limit=abc` (NaN into a query parameter → 500).
 POST /api/devices [auth] [db] — create device
 
 ## export
@@ -93,7 +98,11 @@ POST /api/import/preview [auth] [none] — preview parsed device import file (fi
 POST /api/import [auth] [db] — bulk import/upsert devices from CSV/XLSX
 
 ## license
-GET /api/license [public] [db] — license/trial status, server ID, entitled modules
+GET /api/license [public, payload trimmed by role] [db] — licence/trial status + entitled modules.
+  ⛔ **STAYS PUBLIC ON PURPOSE** (all three satellites poll it server-to-server with no credential
+  and FAIL OPEN on any non-2xx), but `serverId`/`maxDevices`/`installDate` are now sent ONLY to a
+  super_admin session — see lib/licensePayload.ts. Until 1.63.0 the GET had no session check at all
+  while the POST did, which is why grepping the file for auth passed.
 POST /api/license [auth] [db] — activate a license key (super_admin)
 
 ## lookup
@@ -126,9 +135,19 @@ DELETE /api/sites/manage [auth] [db] — delete site (super_admin), blocked if d
 GET /api/sites [auth] [db] — list sites with device/EOL/circuit counts
 
 ## sso
-GET /api/sso/ddivault [auth] [db] — mint SSO JWT, redirect to DDIVault
-GET /api/sso/logvault [auth] [db] — mint SSO JWT, redirect to LogVault
-GET /api/sso/spanvault [auth] [db] — mint SSO JWT, redirect to SpanVault
+GET /api/sso/ddivault [auth: getServerSession] [db] — mint SSO JWT, redirect to DDIVault
+GET /api/sso/logvault [auth: getServerSession] [db] — mint SSO JWT, redirect to LogVault
+GET /api/sso/spanvault [auth: getServerSession] [db] — mint SSO JWT, redirect to SpanVault
+  ⛔ **ALL THREE USE `getServerSession`, AND TWO OF THEM DID NOT UNTIL 1.63.0.** `getToken({ req,
+  secret })` only DECODES the cookie — it runs no callbacks, so `[...nextauth]`'s `jwt` callback (the
+  mid-session revocation layer) never ran on the ddivault and spanvault handoffs. A directory user
+  whose group→role mapping had been revoked was refused by logvault's and handed a token carrying
+  the OLD mapped role by the other two. Enumerated by `tests/systemSeams.test.ts`.
+  ⛔ A session whose `role` the jwt callback CLEARED is now refused like no session at all
+  (`handoffIdentity` → `null`): SpanVault reads `payload.role || 'viewer'`, so passing one on would
+  turn a revocation into a working viewer. The claim set (`userId, email, role, name, app, apps`) is
+  built by `lib/ssoHandoff.ts` because SpanVault's `authorize()` REQUIRES `userId` and
+  `app === '<slug>'`.
 
 ## suite
 GET /api/suite/health [public] [external] — aggregate sibling apps' /api/health (cached 20s)
@@ -274,4 +293,30 @@ a saved value and a running value are genuinely different things until the servi
 - `GET /api/system/tls-transport` no longer returns `keyPath` (the PRIVATE key's path, to a role that cannot act on the tab, never rendered); it returns `keyPresent` instead. It also returns `runDied` — a run that started and never wrote its sentinel, which used to be indistinguishable from one still running.
 - `GET /api/system/tls` returns `fronted: boolean | null` and `publicPort: number | null` — tri-state, so "we could not read the front door" no longer renders as "no front door, the public port is the loopback port".
 - `GET/POST /api/system/service-restart` return `runId`; GET also returns `logUnreadable`. The POST derives its dependents from `terminatorDependsOn`, not from the terminator merely existing.
+
+### The run lock, on BOTH SYSTEM-task routes (1.63.0)
+`GET`/`POST` on `/api/system/service-restart` and `/api/system/tls-transport` now share
+`lib/runLock.ts`. Four things changed, each of which had a different one-line wrong version:
+- ⛔ **`service-restart` NEVER CLAIMED THE LOCK.** Its 409 guard read a lock only the WRAPPER
+  writes, so two super_admin tabs ~2 s apart both passed it and POST 2 truncated the log —
+  destroying run A's `runId=` header, which is the entire mechanism that makes reading another run's
+  verdict impossible. `tls-transport` got `flag: 'wx'` for exactly this; its sibling did not.
+- ⛔ **THE CLAIM IS PENDING AND EXPIRES.** `tls-transport` claimed with `String(process.pid)` — the
+  hub's own, permanently-alive pid — so a wrapper that never started left `runInProgress: true`
+  forever while `blockedReason` hid the entire action card (Preview included), i.e. the only code
+  that could clear it was the POST the panel refused to send.
+- ⛔ **GET REAPS, AND REMOVES THE ORPHANED TASK.** Reaping used to be on the POST path while the
+  gate it unblocks is drawn from GET. Nothing deleted the task when the wrapper STARTED and then
+  DIED, and a `/sc once /st 00:00` trigger whose start time has passed fires the FOLLOWING day — so
+  a reboot during a cutover at 14:00 re-ran `-Disable` unattended at midnight. The wrapper's arm
+  guard refuses that fire and deletes the task itself.
+- ⛔ **CLEANUP MAY ONLY WITHDRAW A PENDING CLAIM.** `schtasks /run` can SUCCEED and still exceed its
+  20 s timeout; the old catch then deleted the task and unlinked the lock a live wrapper owned, and
+  a second POST started a SECOND engine instance against the same four services. Both routes now
+  report `started: true` in that case, because it was.
+
+`POST /api/system/service-restart` also returns `dependencyDetail` (the reason
+`terminatorDependsOn` could not tell — the branch where the restart is GUARANTEED to fail with
+1051, previously computed and discarded) and `stopsDependents`. `selfRestart` was REMOVED: computed,
+returned and read by nobody.
 - `GET/PUT /api/system/console-url`'s `examplePort` is the PUBLIC port, in BOTH handlers. It was the loopback port, printed as the field's own placeholder, and saving it locks everyone out.

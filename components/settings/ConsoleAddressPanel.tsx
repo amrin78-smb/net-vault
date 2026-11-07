@@ -94,7 +94,13 @@ type SaveResult = {
   message?: string
 }
 
-export default function ConsoleAddressPanel() {
+/**
+ * ⛔ `canRestart` IS A PROP, NOT A SESSION READ IN HERE. The settings page
+ * already holds `isSuperAdmin` and passes the same distinction to
+ * `CertificatePanel` as `canInstall`; a second, independent way of answering
+ * "who is this" inside a panel is how two parts of one tab end up disagreeing.
+ */
+export default function ConsoleAddressPanel({ canRestart = true }: { canRestart?: boolean }) {
   const { showToast } = useToast()
   const [state, setState] = useState<ConsoleUrlState | null>(null)
   const [loading, setLoading] = useState(true)
@@ -244,7 +250,13 @@ export default function ConsoleAddressPanel() {
                 server - so the product could save a change it could not
                 apply. The control asks the SERVER which service applies this
                 change; it never names one itself. */}
-            <RestartControl purpose="console-address" pending={pair.differs} />
+            {/* ⛔ `canRestart` — `POST /api/system/service-restart` IS super_admin
+                WHILE THIS PANEL IS admin+. An `admin` may legitimately save a
+                console address (an outage is not a privilege escalation, which
+                is why the save route is admin+), but bouncing the service for
+                the whole site is a step beyond editing a value. Rendered with no
+                role prop, this showed them an enabled button that answered 403. */}
+            <RestartControl purpose="console-address" pending={pair.differs} canRestart={canRestart} />
           </div>
         )}
 

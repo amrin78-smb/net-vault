@@ -2,8 +2,10 @@
 // lib/terminatorState.ts — is the shared TLS front door there, and running?
 //
 // ⛔ SERVER ONLY. This spawns `sc.exe`; it must never be imported by a client
-// component. `lib/tlsTransport.ts` is the client-safe half of this feature and
-// deliberately imports nothing.
+// component. `lib/tlsTransport.ts` is the client-safe half of this feature: it
+// imports only `./runLock.ts`, which itself imports nothing (its `fs` and its
+// liveness probe are injected by the routes) — so neither reaches a Node
+// built-in, which is what a `'use client'` component may not survive.
 //
 // ⛔ ONE IMPLEMENTATION, BECAUSE FOUR ROUTES NEED THE SAME ANSWER and the
 // interesting part is the error handling, not the command. `sc.exe` exits 1060
@@ -44,27 +46,89 @@ export type TerminatorReading = {
   running: boolean | null
 }
 
+/**
+ * The numeric service state out of `sc query` output, locale-independently.
+ *
+ * ⛔ THE WORDS ARE LOCALISED AND THE NUMBER IS NOT. `parseScQcDependencies`
+ * twenty lines below was hardened against localised FIELD NAMES in the same
+ * commit that left `readTerminatorState` keying on the English state words
+ * RUNNING / STOPPED / START_PENDING — so on a German or French Windows every
+ * reading was `unknown`, and `transportCapability` turns `unknown` into
+ * "blocked in both directions", which disables enable, disable AND Preview.
+ * The entire HTTPS tab was dead on any non-English host, permanently, with the
+ * panel reporting it as an unchecked condition rather than a parser failure.
+ *
+ * ⛔ IT IS FOUND BY SHAPE, NOT BY LABEL. `sc query` prints its fields in a
+ * fixed order whatever the locale, and exactly two of them carry a value of the
+ * form `<number><space><WORD>`: TYPE first, then STATE. So the SECOND such
+ * value is the state code — 1 STOPPED, 2 START_PENDING, 3 STOP_PENDING,
+ * 4 RUNNING, 5 CONTINUE_PENDING, 6 PAUSE_PENDING, 7 PAUSED. Counting is ugly
+ * and it is the only thing in that output that does not change language.
+ *
+ * Returns `null` when the shape is not there at all, which is a real "we could
+ * not tell" rather than a guess.
+ */
+export function parseScQueryState(stdout: string): number | null {
+  const numeric: number[] = []
+  for (const line of String(stdout || '').split(/\r?\n/)) {
+    // A labelled field whose value begins with a number and then a word. The
+    // label itself is deliberately unconstrained — that is the localised part.
+    const m = /:\s*(\d+)\s+\S/.exec(line)
+    if (!m) continue
+    const n = Number.parseInt(m[1], 10)
+    if (Number.isFinite(n)) numeric.push(n)
+    if (numeric.length === 2) break
+  }
+  if (numeric.length < 2) return null
+  const code = numeric[1]
+  return code >= 1 && code <= 7 ? code : null
+}
+
+/**
+ * `sc query` output → a reading.
+ *
+ * ⛔ SEPARATED FROM THE SPAWN SO IT CAN BE EXERCISED. A pure parser nothing
+ * consumes is this codebase's own worst regression of the family: a route
+ * COMPUTED `fronted`/`publicPort` while no panel read either, with five passing
+ * tests over the dead branch because they called the helper directly. Testing
+ * `parseScQueryState` alone would repeat that — the mapping, not the number, is
+ * what decides whether a German host can use the HTTPS tab at all.
+ *
+ * ⛔ THE ENGLISH FAST PATH IS FIRST AND UNCHANGED. It is what every install
+ * this has ever been measured on produces, so the numeric fallback cannot
+ * change the answer on those hosts even if its shape rule is ever wrong.
+ */
+export function readingFromScQuery(stdout: string): TerminatorReading {
+  if (/STATE\s*:\s*\d+\s+RUNNING/i.test(stdout)) {
+    return { state: 'running', detail: null, present: true, running: true }
+  }
+  if (/STATE\s*:\s*\d+\s+(STOPPED|PAUSED)/i.test(stdout)) {
+    return { state: 'stopped', detail: null, present: true, running: false }
+  }
+  if (/STATE\s*:\s*\d+\s+(START_PENDING|STOP_PENDING)/i.test(stdout)) {
+    return { state: 'stopped', detail: 'The service is changing state.', present: true, running: false }
+  }
+  const code = parseScQueryState(stdout)
+  if (code === 4) return { state: 'running', detail: null, present: true, running: true }
+  if (code === 1 || code === 7) return { state: 'stopped', detail: null, present: true, running: false }
+  if (code !== null) {
+    return { state: 'stopped', detail: 'The service is changing state.', present: true, running: false }
+  }
+  return {
+    state: 'unknown',
+    detail: 'sc.exe returned output this build does not recognise.',
+    present: null,
+    running: null,
+  }
+}
+
 export async function readTerminatorState(): Promise<TerminatorReading> {
   if (process.platform !== 'win32') {
     return { state: 'unknown', detail: 'Not a Windows host.', present: null, running: null }
   }
   try {
     const { stdout } = await execFileAsync('sc.exe', ['query', TERMINATOR_SERVICE], { timeout: 10_000 })
-    if (/STATE\s*:\s*\d+\s+RUNNING/i.test(stdout)) {
-      return { state: 'running', detail: null, present: true, running: true }
-    }
-    if (/STATE\s*:\s*\d+\s+(STOPPED|PAUSED)/i.test(stdout)) {
-      return { state: 'stopped', detail: null, present: true, running: false }
-    }
-    if (/STATE\s*:\s*\d+\s+(START_PENDING|STOP_PENDING)/i.test(stdout)) {
-      return { state: 'stopped', detail: 'The service is changing state.', present: true, running: false }
-    }
-    return {
-      state: 'unknown',
-      detail: 'sc.exe returned output this build does not recognise.',
-      present: null,
-      running: null,
-    }
+    return readingFromScQuery(stdout)
   } catch (err: unknown) {
     const e = err as { code?: number; stdout?: string; stderr?: string; message?: string }
     const text = `${e?.stdout || ''}${e?.stderr || ''}`

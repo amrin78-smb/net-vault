@@ -20,6 +20,7 @@
 // is the hub.
 
 import { psLiteral } from './tlsTransport.ts'
+import { psArmGuard, psLockHeartbeat, psLockTakeover } from './runLock.ts'
 
 /**
  * What the operator is trying to apply. ⛔ A PURPOSE, NEVER A SERVICE NAME FROM
@@ -88,8 +89,11 @@ export function resolveRestartTarget(purpose: RestartPurpose, terminatorPresent:
   }
 }
 
-/** Kept for callers that only ever meant the hub. */
-export const RESTART_SERVICE = HUB_SERVICE
+// ⛔ `RESTART_SERVICE` WAS REMOVED (1.63.0). It was an alias of `HUB_SERVICE`
+// "kept for callers that only ever meant the hub", and it had none — so it was
+// an inviting second name for the one fact this module is careful about
+// (`resolveRestartTarget` exists precisely because the service is NOT always
+// the hub). A future caller reaching for it would be reaching past that.
 
 /** Deleted by the wrapper at the end of a run, so it is normally absent. */
 export const RESTART_TASK_NAME = 'NocVault-ServiceRestart'
@@ -118,9 +122,17 @@ export function restartPaths(repoRoot: string): RestartPaths {
  * STOP_PENDING is REJECTED, and the old code in the cutover ignored that
  * return — the same defect this file must not repeat.
  *
- * ⛔ AND IT STARTS THE SERVICE EVEN IF THE STOP TIMED OUT. The one thing worse
- * than a slow restart is a stop with no start after it: that is the hub left
- * down by a settings page.
+ * ⛔ AND IT KEEPS TRYING TO START THE SERVICE UNTIL IT IS RUNNING, WHICH IS
+ * NOT THE SAME AS "even if the stop timed out" — the wording this header
+ * carried, and which the loop below has never matched. A start issued while the
+ * service is still `StopPending` is REJECTED by the SCM (1056/1061), so firing
+ * one at that moment is guaranteed to fail; the loop deliberately SKIPS a
+ * pending transition and asks again a second later, for up to 150 s. The
+ * guarantee is therefore about the END STATE, not about one unconditional
+ * attempt: the only way this returns without having started the service is the
+ * service never leaving a pending state for 150 s. That still rules out the one
+ * thing worse than a slow restart — a stop with no start after it, i.e. the hub
+ * left down by a settings page.
  */
 export function buildRestartWrapper(opts: {
   service: string
@@ -140,6 +152,16 @@ export function buildRestartWrapper(opts: {
    * process, with the old NEXTAUTH_URL, never went anywhere.
    */
   dependents?: string[]
+  /**
+   * The run the ROUTE armed this wrapper for.
+   *
+   * ⛔ WITHOUT IT THE ORPHANED TASK RE-RUNS THIS UNATTENDED. See `psArmGuard`
+   * in lib/runLock.ts: nothing deleted `NocVault-ServiceRestart` when the
+   * wrapper STARTED and then died (reboot, task terminated, PowerShell crash),
+   * and a `/sc once /st 00:00` trigger whose start time has passed fires the
+   * following day — so a restart nobody asked for happened at midnight.
+   */
+  runId: string
 }): string {
   const svc = psLiteral(opts.service)
   const deps = (opts.dependents || []).filter((d) => d && d !== opts.service)
@@ -151,7 +173,12 @@ export function buildRestartWrapper(opts: {
     `$lock = ${psLiteral(opts.lock)}`,
     `$svc  = ${svc}`,
     'New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null',
-    '$PID | Out-File -FilePath $lock -Encoding ascii -Force',
+    // ⛔ BEFORE ANY `sc.exe` CALL. An un-armed wrapper must stop a service.
+    ...psArmGuard({ runId: opts.runId, taskName: opts.taskName, quote: psLiteral }),
+    // ⛔ THE TAKEOVER, NOT THE CLAIM. The ROUTE claims the lock atomically
+    // before the task exists (lib/runLock.ts, defect 1); this overwrites that
+    // pending claim with the wrapper's own PID, which is the handover signal.
+    psLockTakeover(),
     // ⛔ APPEND, NOT -Force. The ROUTE truncates this log and writes the
     // `runId=` header before scheduling the task, so the panel can tell ITS
     // run's verdict from the previous run's. If the wrapper truncated here,
@@ -181,6 +208,7 @@ export function buildRestartWrapper(opts: {
     '    $sw = [Diagnostics.Stopwatch]::StartNew()',
     '    while ($sw.Elapsed.TotalSeconds -lt 60) {',
     '        if ((Get-Service -Name $svc -ErrorAction SilentlyContinue).Status -eq \'Stopped\') { break }',
+    `        ${psLockHeartbeat()}`,
     '        Start-Sleep -Milliseconds 250',
     '    }',
     '    $state = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status',
@@ -201,12 +229,29 @@ export function buildRestartWrapper(opts: {
     '    while ($sw2.Elapsed.TotalSeconds -lt 150) {',
     '        $st = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status',
     '        if ($st -eq \'Running\') { $running = $true; break }',
+    // ⛔ AN ABSENT SERVICE IS NOT A PENDING ONE. `$st` is `$null` when
+    // `Get-Service` finds nothing, and `$null` passes both `-ne` tests below —
+    // so this loop used to issue `sc.exe start` ONCE A SECOND FOR 150 SECONDS
+    // against a name the SCM does not have, writing 150 log lines and hammering
+    // the SCM for two and a half minutes before ending in a (correct) `failed`.
+    // Reachable through the route's own tri-state: `present === null` means "we
+    // could not ask", `present !== false` offers the target anyway, and
+    // `serviceExists() === null` does not block it either — both deliberately,
+    // so the honest place to notice is here. One line, and stop.
+    '        if ($null -eq $st) {',
+    '            "[NV-RESTART] $svc is not installed on this host - nothing to start." |',
+    '                Out-File -FilePath $log -Append -Encoding UTF8',
+    '            break',
+    '        }',
     // Never fire into a pending transition: that is the rejection above.
     '        if ($st -ne \'StartPending\' -and $st -ne \'StopPending\') {',
     '            $attempt = $attempt + 1',
     '            $startOut = (& sc.exe start $svc 2>&1 | Out-String).Trim()',
     '            "[NV-RESTART] start attempt $attempt : $($startOut -replace \'\\s+\', \' \')" | Out-File -FilePath $log -Append -Encoding UTF8',
     '        }',
+    // ⛔ THE HEARTBEAT. `LOCK_IDLE_MS` is a death signal only because this
+    // runs; with one write at start, age alone reaped a live run's lock.
+    `        ${psLockHeartbeat()}`,
     '        Start-Sleep -Milliseconds 1000',
     '    }',
     // The dependents go back up LAST, and whether they do is part of the
@@ -218,6 +263,7 @@ export function buildRestartWrapper(opts: {
     '        $ok = $false',
     '        while ($dw2.Elapsed.TotalSeconds -lt 90) {',
     '            if ((Get-Service -Name $d -ErrorAction SilentlyContinue).Status -eq \'Running\') { $ok = $true; break }',
+    `            ${psLockHeartbeat()}`,
     '            Start-Sleep -Milliseconds 500',
     '        }',
     '        if (-not $ok) { $depsBack = $false }',
@@ -250,14 +296,6 @@ export type RestartReport = {
   runId: string | null
 }
 
-/**
- * What the last restart did.
- *
- * ⛔ `running=True` IS THE VERDICT, NOT THE EXIT CODE — same rule as
- * `lib/tlsTransport.ts`, and for the same reason: on this codebase a
- * PowerShell exit code is evidence of nothing. The wrapper writes whether the
- * service actually came back, and that line is what is read.
- */
 /** The header the ROUTE writes before scheduling, stamping this run's id. */
 export const RESTART_RUN_PREFIX = '[NV-RESTART] runId='
 
@@ -265,6 +303,20 @@ export function buildRestartHeader(runId: string, service: string): string {
   return `${RESTART_RUN_PREFIX}${runId} service=${service}\r\n`
 }
 
+/**
+ * What the last restart did.
+ *
+ * ⛔ THIS DOC BELONGS TO `parseRestartLog` AND SAT ABOVE A STRING CONSTANT.
+ * `RESTART_RUN_PREFIX`/`buildRestartHeader` were inserted BETWEEN the comment
+ * and the function it describes, so "What the last restart did" documented a
+ * prefix literal and the function that reads the verdict had none. Moved, not
+ * rewritten.
+ *
+ * ⛔ `running=True` IS THE VERDICT, NOT THE EXIT CODE — same rule as
+ * `lib/tlsTransport.ts`, and for the same reason: on this codebase a
+ * PowerShell exit code is evidence of nothing. The wrapper writes whether the
+ * service actually came back, and that line is what is read.
+ */
 export function parseRestartLog(text: string | null | undefined): RestartReport {
   if (text === null || text === undefined) return { outcome: 'none', finished: false, lines: [], runId: null }
   const lines = String(text).split(/\r?\n/).map((l) => l.replace(/\s+$/, '')).filter((l) => l !== '')

@@ -119,6 +119,9 @@ const wrapperArgs = {
   log: 'C:\\Apps\\NetVault\\app\\logs\\service-restart.log',
   lock: 'C:\\Apps\\NetVault\\app\\logs\\service-restart.lock',
   taskName: RESTART_TASK_NAME,
+  // ⛔ The arm token. Without it the wrapper refuses to touch a service, which
+  // is what stops an orphaned task re-running it unattended. See lib/runLock.ts.
+  runId: 'run-under-test',
 }
 
 test('the hub wrapper stops its dependents BEFORE the service and starts them after', () => {
@@ -147,18 +150,73 @@ test('the sentinel is written before the cleanup, inside finally', () => {
   const sentinel = s.indexOf(RESTART_SENTINEL)
   assert.ok(sentinel > 0)
   assert.ok(s.indexOf('Remove-Item -LiteralPath $lock') > sentinel, 'lock removal after the sentinel')
-  assert.ok(s.indexOf('/delete') > sentinel, 'task self-delete after the sentinel')
+  // ⛔ `lastIndexOf`, BECAUSE THERE ARE NOW TWO `/delete` CALLS AND THE FIRST
+  // IS SUPPOSED TO COME EARLY. The arm guard deletes the task and exits when a
+  // wrapper was not armed for this run (an orphaned task firing at midnight);
+  // the SELF-delete is the one that has to follow the sentinel.
+  assert.ok(s.lastIndexOf('/delete') > sentinel, 'task self-delete after the sentinel')
   assert.ok(s.includes('} finally {'))
 })
 
-test('the service is started even when the stop timed out', () => {
-  // ⛔ The one thing worse than a slow restart is a stop with no start after
-  // it: that is the console left down by a settings page.
+test('the start is retried until the service runs, and never fired into a pending transition', () => {
+  // ⛔ THIS TEST USED TO BE CALLED "the service is started even when the stop
+  // timed out", which is what the function's header claimed and what the loop
+  // has never done. A start issued while the service is STOP_PENDING is
+  // REJECTED by the SCM (1056/1061) — and the only way the stop poll times out
+  // is the service still being STOP_PENDING, so one unconditional attempt at
+  // that moment is guaranteed to be refused. The real guarantee is about the
+  // END state: skip a pending transition, ask again a second later, for 150 s.
   const s = buildRestartWrapper({ ...wrapperArgs, dependents: [] })
   const stopLoopEnd = s.indexOf('state after $([int]$sw.ElapsedMilliseconds) ms')
   const start = s.indexOf('sc.exe start $svc')
-  assert.ok(start > stopLoopEnd, 'the start is unconditional, after the stop poll')
+  assert.ok(start > stopLoopEnd, 'the start comes after the stop poll')
   assert.ok(!/if \(\$state -eq .Stopped.\)[^\n]*sc\.exe start/.test(s), 'the start must not be conditional on the stop')
+  assert.match(s, /while \(\$sw2\.Elapsed\.TotalSeconds -lt 150\)/, 'it must RETRY, not try once')
+  assert.match(
+    s,
+    /if \(\$st -ne 'StartPending' -and \$st -ne 'StopPending'\)/,
+    'it must skip a pending transition rather than fire into a guaranteed rejection',
+  )
+})
+
+test('an ABSENT service is noticed once, not hammered for 150 seconds', () => {
+  // ⛔ `$st` IS `$null` WHEN Get-Service FINDS NOTHING, and `$null` passes both
+  // `-ne` tests — so the loop used to issue `sc.exe start` once a second for
+  // 150 seconds against a name the SCM does not have, writing 150 log lines.
+  // Reachable through the route's own tri-state (`present === null` still
+  // offers the target, and `serviceExists() === null` does not block it).
+  const s = buildRestartWrapper({ ...wrapperArgs, dependents: [] })
+  const nullGuard = s.indexOf('if ($null -eq $st) {')
+  const startCall = s.indexOf('sc.exe start $svc')
+  assert.ok(nullGuard > 0, 'the absent-service branch must exist')
+  assert.ok(nullGuard < startCall, 'and it must be checked BEFORE a start is attempted')
+  assert.match(s, /is not installed on this host - nothing to start/)
+})
+
+test('the wrapper refuses to act unless the route armed it for THIS run', () => {
+  // ⛔ THE ORPHANED TASK. Nothing deleted `NocVault-ServiceRestart` when the
+  // wrapper started and then died (reboot, task terminated, PowerShell crash),
+  // and a `/sc once /st 00:00` trigger whose start time has passed fires the
+  // FOLLOWING day — so a restart nobody asked for ran at midnight. The guard
+  // has to come before any `sc.exe`, and it has to take the task with it.
+  const s = buildRestartWrapper({ ...wrapperArgs, dependents: [TERMINATOR_SERVICE] })
+  const guard = s.indexOf("$runId = 'run-under-test'")
+  const refuse = s.indexOf('[NV-LOCK] refusing')
+  const firstSc = s.indexOf('sc.exe')
+  assert.ok(guard > 0, 'the run id must be baked into the wrapper')
+  assert.ok(refuse > 0, 'there must be a refusal branch')
+  assert.ok(refuse < firstSc, 'the refusal must be decided before any sc.exe call')
+  assert.ok(s.indexOf('exit 0') < firstSc, 'and it must exit, not fall through')
+  assert.match(s, /pending\\s\+" \+ \[regex\]::Escape\(\$runId\)/, 'it must match THIS run, not any claim')
+})
+
+test('the wrapper heartbeats the lock while it works', () => {
+  // ⛔ WITHOUT THIS, AGE IS NOT A DEATH SIGNAL. The old reaper was
+  // `dead || old` against an mtime written once at wrapper start, so `old`
+  // alone removed the lock of a run that was still working.
+  const s = buildRestartWrapper({ ...wrapperArgs, dependents: [TERMINATOR_SERVICE] })
+  const writes = s.split('$PID | Out-File -FilePath $lock').length - 1
+  assert.ok(writes >= 4, `the lock must be rewritten as the run proceeds, found ${writes} writes`)
 })
 
 test('a terminator restart carries no dependents', () => {

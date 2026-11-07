@@ -1216,7 +1216,8 @@ function SettingsInner() {
 
       {/* CONSOLE ADDRESS TAB (admin+) — NEXTAUTH_URL, saved vs running, the
           per-file state, and the lockout confirmation. */}
-      {activeTab === 'console' && isAdmin && <ConsoleAddressPanel />}
+      {/* ⛔ `canRestart` — the panel is admin+, the restart POST is super_admin. */}
+      {activeTab === 'console' && isAdmin && <ConsoleAddressPanel canRestart={isSuperAdmin} />}
 
       {/* CERTIFICATE TAB (admin+) — the three transport states and the
           certificate install, including the replace confirmation. */}

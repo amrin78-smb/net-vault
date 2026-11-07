@@ -508,7 +508,12 @@ export default function CertificatePanel({ canInstall = true }: { canInstall?: b
               title="A certificate is already installed here. Replace it?"
               actions={
                 <>
-                  <button className="btn-primary" disabled={busy} onClick={() => { void install(true) }}>
+                  {/* ⛔ `!canInstall` TOO. This prompt is only reachable after an
+                      install attempt, which the main button already gates — but
+                      the confirmation of a super_admin-only write must not be the
+                      one control in the panel that forgets, and a disabled-only-
+                      on-busy button here contradicts the read-only notice below. */}
+                  <button className="btn-primary" disabled={busy || !canInstall} onClick={() => { void install(true) }}>
                     {busy ? 'Installing…' : 'Replace the installed certificate'}
                   </button>
                   <button className="btn-secondary" disabled={busy} onClick={() => setPrompt(null)}>
@@ -571,7 +576,12 @@ export default function CertificatePanel({ canInstall = true }: { canInstall?: b
                 service applies a certificate, and on a suite with no front
                 door it correctly answers "nothing to restart". */}
             <div style={{ marginTop: 14 }}>
-              <RestartControl purpose="certificate" pending title="Installed — restart to begin serving it" />
+              {/* ⛔ `canRestart={canInstall}` — BOTH ARE super_admin. This used to
+                  render with no role prop while `POST /api/system/service-restart`
+                  is super_admin, so an `admin` got an enabled "Restart
+                  NocVault-Tls now" that answered a bare 403 — in the same commit
+                  that added the `canInstall` gate to the install button below. */}
+              <RestartControl purpose="certificate" pending canRestart={canInstall} title="Installed — restart to begin serving it" />
             </div>
           </div>
         )}

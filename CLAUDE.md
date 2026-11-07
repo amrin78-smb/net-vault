@@ -608,8 +608,7 @@ NetVault is the hub and the source of truth for which of the 4 suite apps a
 user may reach. `lib/appAccess.ts`:
 
 - `ALL_APPS = ['netvault','logvault','ddivault','spanvault']`.
-- `getUserApps(userId, role)` resolves the allowed set:
-  - `super_admin` → **all** apps.
+- `getUserApps(userId, role?)` resolves the allowed set:
   - **no `user_apps` rows** → all apps (legacy / default-all; deploying the
     feature must not lock anyone out).
   - otherwise → the explicit set stored in `user_apps(user_id, app)`.
@@ -618,8 +617,50 @@ user may reach. `lib/appAccess.ts`:
     have blocked. Note the asymmetry: because `[]` means "no extra apps" but
     *no rows* means "all apps", a closed failure can only be expressed as the
     empty set — never conflate "no rows" with "query failed".
+  - ⛔ **`super_admin` NO LONGER SHORT-CIRCUITS (changed 1.63.0).** This used to
+    return all four apps for `super_admin` BEFORE any DB read, so an explicit
+    `user_apps` deny was never consulted for the one role whose sessions matter
+    most. Combined with a `role` that was written once at sign-in on a JWT with
+    no `maxAge` (NextAuth v4's default is 30 days), a demoted-and-restricted
+    super_admin kept a satellite token for every app: the SSO handoff read
+    `super_admin` off the stale token, this function answered "all four" without
+    a query, and the row that said otherwise was never read on any hop. The DB
+    is always asked now. `role` stays in the signature — every caller has it and
+    the handoffs stamp it into the satellite token beside this result — but it
+    may not decide the answer. A super_admin with an explicit deny can still
+    always reach the hub (`canAccessApp` allows `netvault` unconditionally) and
+    fix their own row.
+
+**The hub's session is itself an access-control surface (1.63.0).**
+- `session.maxAge` **and** `jwt.maxAge` are both set
+  (`SESSION_MAX_AGE_SECONDS`, 12 h). Setting only the first leaves the sign-in
+  token verifying for 30 days under `getToken()`, because `core/init.js` builds
+  `options.jwt.maxAge` from its own constant rather than from `session`. Do not
+  add `updateAge`: it does nothing on the jwt strategy (the jwt branch of
+  `core/routes/session.js` re-encodes on every call, so the window already
+  rolls) and writing it there would read as the thing keeping that true.
+- The `jwt` callback re-resolves the role on EVERY token use for **both** kinds
+  of account. The directory half is `reresolveDirectoryRole` (fails CLOSED — a
+  small mapping table); the local half is `lib/localIdentity.ts` (leaves the
+  token alone on a failed read, because the table it reads is `users` and its
+  failure means the whole hub is down — the reasoning is written out in that
+  file, and the privilege stays bounded by `maxAge`).
+- All three SSO handoff routes use `getServerSession`, **never `getToken`**.
+  `getToken` only decodes the cookie: it runs no callbacks, so it skips the
+  re-resolution above entirely. Two of the three used it until 1.63.0.
+- A session whose `role` the callback CLEARED is refused by the handoffs like no
+  session at all. SpanVault reads `payload.role || 'viewer'`, so passing one on
+  would turn a revocation into a working viewer.
+
 - `canAccessApp(apps, slug)` → **netvault is always allowed**; any other slug
   must be in the set.
+
+**Pagination is a guard too.** Any route reading `page`/`limit` must go through
+`lib/pagination.ts` `resolvePaging()`. A bare `parseInt` handed every
+authenticated session three reachable failures: a caller-sized `LIMIT`, a
+negative `OFFSET` (PostgreSQL refuses it → 500) and `NaN` travelling into a
+query parameter. `tests/systemSeams.test.ts` walks `app/api/**` to find the next
+offender rather than listing the two that were fixed.
 
 Enforcement is in **two** places and both must carry the apps:
 - **NextAuth** injects `session.user.apps` (jwt + session callbacks) at login.

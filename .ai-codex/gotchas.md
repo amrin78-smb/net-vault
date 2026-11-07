@@ -4,6 +4,115 @@
 - ⛔ **`app/api/system/tls/route.ts`'s GET must never return `keyPath`, and `CertificatePanel` must never branch on one.** 1.62.0 claimed the private key's location was no longer disclosed; it had been removed from `tls-transport` (the route nothing read it from) and left on `tls` — the route the panel actually renders. Removing it there in 1.62.2 then broke the panel the other way: the "Private key file" row branched on `state.keyPath`, so with the field gone it reported **"Not configured" for a key that was configured and present**. A redaction that silently changes what the page *claims* is a new bug, not a fix. The row now reads `keyConfigured` + `keyPresent` — two booleans that separate "none configured" from "configured but the file is gone" — and `tests/systemSeams.test.ts` pins the seam in BOTH directions (the panel must not reference a key path; the route must send `keyConfigured`; the panel must branch on it). Both halves were mutation-tested.
 - The lesson generalises: when you remove a field from a payload, grep every consumer for it in the same change. A `doesNotMatch` assertion on the payload alone will pass while the UI quietly starts lying.
 
+## The hub's own session was the weakest link in its access control (1.63.0)
+
+⛔ **A STALE `role` ON A JWT WITH NO `maxAge` DEFEATED THE ENTIRE APP-ACCESS FEATURE FOR UP TO
+THIRTY DAYS.** Four separate things had to be true at once, and they all were:
+1. `session: { strategy: 'jwt' }` with no `maxAge` — NextAuth v4 then issues a **30-day** session
+   (`core/init.js`: `const maxAge = 30 * 24 * 60 * 60`).
+2. The `jwt` callback set `token.role` only inside `if (user)`, i.e. once at sign-in, and re-resolved
+   it per request ONLY for `token.provider === ENTRA_PROVIDER_ID` — while the comment beside it
+   claimed local users' roles were "re-read from `users` on every token use". They were not.
+3. Hub routes read `session.user.role` straight off that token, and nothing invalidated a JWT on a
+   role change or a user deletion.
+4. `getUserApps` answered `[...ALL_APPS]` for `super_admin` **before any DB read**.
+The scenario: Alice is `super_admin` and signs in. An operator demotes her to `viewer` and grants
+her only `netvault` in `user_apps`. Her browser still holds a JWT saying `super_admin`.
+`GET /api/sso/spanvault` → `getUserApps(id, 'super_admin')` short-circuits to all four apps WITHOUT
+querying `user_apps` at all → a satellite token is minted with `role: super_admin, apps: [all]`. The
+explicit deny is never consulted on any hop.
+Fixed: `maxAge` + `jwt.maxAge` (both — see below), per-request re-resolution for LOCAL users too
+(`lib/localIdentity.ts`), and the short-circuit removed.
+
+⛔ **SETTING `session.maxAge` ALONE IS NOT ENOUGH.** `session.maxAge` governs the cookie's expiry and
+the `exp` written by `/api/auth/session`; the SIGN-IN callback signs with `options.jwt.maxAge`, which
+`core/init.js` builds from the 30-day constant rather than from `session`. Set only the first and the
+freshly-minted token still verifies for 30 days under `getToken()` — the browser drops the cookie on
+time while a copy replayed anywhere else does not. Also: **`updateAge` does nothing on the jwt
+strategy** (`core/routes/session.js` consults it only in the database branch; the jwt branch
+re-encodes on every call), so the window already rolls — setting it would read as the thing keeping
+that true.
+
+⛔ **`getToken()` RUNS NO CALLBACKS, SO IT SKIPS EVERY REVOCATION LAYER.** `app/api/sso/logvault`
+used `getServerSession`; `ddivault` and `spanvault` used `getToken({ req, secret })`, which only
+decodes the cookie. A directory user whose group→role mapping an administrator had revoked was
+refused by logvault's handoff and handed a token carrying the old mapped role by the other two — the
+exact layer whose own header says "a mapping an administrator revokes must stop working at once".
+All three now use `getServerSession`, and `tests/systemSeams.test.ts` ENUMERATES `app/api/sso/*`
+rather than naming the two that were fixed.
+
+⛔ **A SESSION WHOSE ROLE WAS CLEARED IS STILL A SESSION.** The jwt callback nulls `token.role` on a
+revoked mapping or a deleted account, but the handoffs carried on from there and would have minted a
+satellite token with `role: null` — which SpanVault's `authorize()` reads as
+`payload.role || 'viewer'`. A revocation that silently becomes "viewer on SpanVault" is not a
+revocation. `lib/ssoHandoff.ts`'s `handoffIdentity` returns `null` for that, and the routes treat it
+like no session at all.
+
+⛔ **`GET /api/license` HAD NO SESSION CHECK AND ITS `POST` DID**, which is why grepping that file
+for auth passed. It returned `serverId` (this machine's fingerprint — hostname + MachineGuid hashed,
+the value a licence key is ISSUED against), `maxDevices` and `installDate` to anyone who could reach
+port 3000, and all three satellites re-publish the whole object on their OWN unauthenticated
+`license-status`. **It is TRIMMED, not authenticated**, and that choice is load-bearing: the
+satellites poll it server-to-server with no credential and every one of them does
+`if (!res.ok) return null` → `{ mode: 'unreachable', canWrite: true }`, so a session gate would turn
+licence enforcement OFF in three products, silently, with nothing logged. `customer`/`expiry` stay
+public because every satellite re-publishes them anyway.
+
+⛔ **UNCLAMPED `page`/`limit` IS A CLASS, AND THE CORRECT VERSION EXISTED BUT WAS INLINE.**
+`app/api/admin/eol-seed` clamped its pair properly; `app/api/devices` and `app/api/audit` used bare
+`parseInt`, which gave any authenticated session `limit=99999999` (a DoS-sized scan of
+`v_devices_flat`), `page=0` (negative OFFSET → PostgreSQL refuses → 500) and `limit=abc` (NaN into a
+query parameter → 500). `lib/pagination.ts` is now the only way a route may read them, and the test
+walks `app/api/**` to find the next one instead of listing the two that were fixed.
+
+⛔ **`sc.exe` LOCALISES ITS STATE WORDS TOO, NOT JUST ITS FIELD NAMES — AND THE HTTPS TAB WAS DEAD
+ON EVERY NON-ENGLISH HOST.** `parseScQcDependencies` was hardened against localised field names in
+the same commit that left `readTerminatorState` twenty lines above keying on `RUNNING`/`STOPPED`/
+`START_PENDING`. On a German or French Windows every reading was `unknown`, and
+`transportCapability` turns `unknown` into "blocked in both directions" — disabling enable, disable
+AND Preview permanently, while the panel reported it as an unchecked condition rather than a parser
+failure. `parseScQueryState` reads the NUMERIC state code (the second `<number> <WORD>` field in
+`sc query` output, which is TYPE then STATE in every locale); the English regexes stay as a fast
+path so nothing changes where they already worked.
+
+⛔ **A LOCK THE ROUTE CLAIMS WITH ITS OWN PID CAN NEVER GO STALE, AND A REAP ON THE WRITE PATH
+CANNOT CLEAR WHAT THE READ PATH BLOCKS.** Four lock defects across the two SYSTEM-task routes, now
+all in `lib/runLock.ts` with the reasoning attached: `service-restart` never claimed the lock at all
+(two tabs, two admins, one truncated log and a verdict assembled from both runs); `tls-transport`
+claimed with the hub's permanently-alive pid (so a wrapper that never started wedged the panel
+forever, with the only clearing code behind the button the panel had hidden); `dead || old` against
+an mtime written once at wrapper start reaped a LIVE run at 30 minutes; and the catch around
+`/delete`+`/create`+`/run` deleted the task and dropped the lock of a wrapper that WAS running,
+because `schtasks /run` can succeed and still exceed its timeout. The wrappers now heartbeat the
+lock (so age is an idle timeout), GET reaps, and cleanup may only ever withdraw a PENDING claim.
+
+⛔ **NOTHING DELETED THE SCHEDULED TASK WHEN THE WRAPPER STARTED AND THEN DIED.** Both routes delete
+it when `schtasks /run` FAILS. A host reboot mid-run, a terminated task or a PowerShell crash leaves
+`NocVault-TlsTransport` / `NocVault-ServiceRestart` registered with a `/sc once /st 00:00` trigger
+and the wrapper still on disk holding the last requested action — and by those same files' stated
+reasoning a `once` trigger whose start time has passed fires THE FOLLOWING DAY. A reboot during a
+cutover at 14:00 therefore re-ran `-Disable` unattended at **midnight**, dropping the whole suite to
+plain HTTP. Only the next POST reaped the task, and midnight comes first. The real fix is in the
+WRAPPER: `psArmGuard` refuses to touch anything unless the lock still carries THIS run's pending
+claim, and deletes the task on its way out — its one unauthorised fire is the only moment anything
+is running that can remove the orphan.
+
+⛔ **A CLOSING BANNER THAT IS PRINTED ON TWO DIFFERENT PATHS CANNOT BE THE VERDICT FOR EITHER.**
+`HTTPS was NOT enabled - the suite is unchanged` is printed whenever `$script:TlsCutoverApplied` is
+false — including when the gates never passed and nothing was touched at all. Mapped to `reverted`,
+every REAL enable with a failing gate rendered "a gate did not pass after the move had started, so
+the engine put every console back the way it found it": a four-console cutover and rollback that
+never happened. And `Gates did NOT pass` only ever appears on the `-DryRun` branch, so `refused`
+could not be reached by a real run at all. `REVERTING the TLS cutover` (written only by
+`Undo-TlsCutover`) is the single line that proves consoles moved, and it promotes `refused` →
+`reverted`.
+
+⛔ **A LOWER UPTIME PROVES A RESTART STARTED, NEVER THAT IT FINISHED.** See
+`.ai-codex/components.md`'s `RestartControl` entry: the hub answers HTTP before the wrapper has
+brought `NocVault-Tls` back, so an uptime-only `done` went green while all four public ports were
+dead — and polling stops at `done`, so it stayed green forever. It also made
+`parseRestartLog`'s `depsFailed` term unreachable on the only path where dependents exist.
+
 ## Framework / build
 - AGENTS.md warns Next.js version here has breaking changes vs training data — check `node_modules/next/dist/docs/` before assuming API shape.
 - No `next/font/google` — Inter loads via `@import` in `app/globals.css`. Reintroducing `next/font/google` breaks offline/restricted-network installs (fixed 1.20.4).

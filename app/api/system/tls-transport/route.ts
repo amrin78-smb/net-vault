@@ -47,22 +47,14 @@ import {
 // duplicate returned only {state, detail}, with no `running`, which is why the
 // terminator frame could not be reported from this route at all.
 import { HUB_PUBLIC_PORT, TERMINATOR_SERVICE, readTerminatorState } from '@/lib/terminatorState.ts'
+import { claimRunLock, readRunLock, releaseRunLock, type LockEnv } from '@/lib/runLock.ts'
+import { randomUUID } from 'node:crypto'
 
 const execFileAsync = promisify(execFile)
 
 type SessionUser = { id?: string | number; role?: string }
 function userOf(session: unknown): SessionUser {
   return ((session as { user?: SessionUser } | null)?.user || {}) as SessionUser
-}
-
-function readLockPid(lockPath: string): number | null {
-  try {
-    const raw = fs.readFileSync(lockPath, 'utf8').trim()
-    const pid = Number.parseInt(raw, 10)
-    return Number.isFinite(pid) && pid > 0 ? pid : null
-  } catch {
-    return null
-  }
 }
 
 /** Same liveness check the updater's concurrency guard uses. */
@@ -75,30 +67,43 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
-/** A run that cannot still be going. Beyond this, the lock is debris. */
-const LOCK_STALE_MS = 30 * 60 * 1000
+/**
+ * The lock rules, shared with `service-restart`.
+ *
+ * ⛔ THREE DEFECTS LIVED IN THE PRIVATE COPY THIS REPLACES, and each one is
+ * written out in lib/runLock.ts's header:
+ *
+ *   - the claim was `String(process.pid)` — the HUB's own, permanently-alive
+ *     pid — so a wrapper that never started left `runInProgress: true` forever
+ *     while the panel hid the only button that could have cleared it;
+ *   - `reapStaleLock` was `dead || old` against an mtime written once at
+ *     wrapper start, so `old` alone removed a LIVE run's lock at 30 minutes,
+ *     contradicting its own "age is the second condition" comment;
+ *   - the reap was on the WRITE path while the gate it unblocks is on the READ
+ *     path (`runInProgress` → `blockedReason` → the action card, Preview
+ *     included, disappears). GET never reaped.
+ *
+ * The wrappers now heartbeat the lock as they work, so age is an IDLE timeout,
+ * and GET reaps.
+ */
+const lockEnv: LockEnv = { fs, isPidAlive }
 
 /**
- * Remove a lock that cannot belong to a live run.
+ * Remove the scheduled task, best effort.
  *
- * ⛔ WITHOUT THIS, THE FEATURE WEDGES WITH NO WAY OUT OF THE UI. The lock is
- * removed only by the wrapper's `finally`, so a reboot mid-cutover leaves it
- * behind — and Windows recycles PIDs aggressively, so an unrelated process
- * inheriting the recorded PID makes the liveness check say "a run is in
- * progress" forever. Every POST then 409s and the panel hides the whole action
- * section, including the harmless Preview, until someone deletes a file from
- * the server console — precisely the thing this panel exists to avoid needing.
- * Age is the second condition because PID liveness alone cannot distinguish
- * "still running" from "PID reused".
+ * ⛔ ALSO CALLED WHEN A LOCK IS REAPED. Nothing used to delete the task when
+ * the wrapper STARTED AND THEN DIED — a host reboot mid-cutover, the task being
+ * terminated, a PowerShell crash — and a `/sc once /st 00:00` trigger whose
+ * start time has passed fires the FOLLOWING day, re-running the wrapper still on
+ * disk holding the last requested action. A reboot during a cutover at 14:00
+ * therefore dropped the whole suite to plain HTTP, unattended, at midnight. The
+ * wrapper's own arm guard (lib/runLock.ts) refuses that fire; this stops the
+ * orphan having to wait for midnight to be noticed.
  */
-function reapStaleLock(lockPath: string): void {
+async function deleteTransportTask(): Promise<void> {
   try {
-    const st = fs.statSync(lockPath)
-    const pid = readLockPid(lockPath)
-    const dead = pid === null || !isPidAlive(pid)
-    const old = Date.now() - st.mtimeMs > LOCK_STALE_MS
-    if (dead || old) fs.unlinkSync(lockPath)
-  } catch { /* no lock, or someone else just removed it */ }
+    await execFileAsync('schtasks.exe', ['/delete', '/tn', TRANSPORT_TASK_NAME, '/f'], { timeout: 15_000 })
+  } catch { /* no such task is the normal case */ }
 }
 
 /**
@@ -129,8 +134,14 @@ export async function GET() {
   const paths = transportPaths(repoRoot)
   const config = resolveTlsConfig(process.env)
   const terminator = await readTerminatorState()
-  const lockPid = readLockPid(paths.lock)
-  const runInProgress = lockPid !== null && isPidAlive(lockPid)
+  // ⛔ THE REAP IS HERE, ON THE READ PATH. It used to be in POST only, and the
+  // gate it unblocks is drawn from this very payload — `runInProgress` becomes
+  // `blockedReason`, which hides the entire action card including Preview, so
+  // the only code that could clear a stuck lock was the POST the panel refused
+  // to let anybody send. Reaping also removes the orphaned task.
+  const lock = readRunLock(paths.lock, lockEnv)
+  if (lock.reaped) await deleteTransportTask()
+  const runInProgress = lock.held
   const { text, error: logError } = readLog(paths.log)
   const run = parseRunLog(text)
 
@@ -246,14 +257,6 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const lockPid = readLockPid(paths.lock)
-  if (lockPid !== null && isPidAlive(lockPid)) {
-    return NextResponse.json(
-      { error: `A transport change is already running (process ${lockPid}). Wait for it to finish.` },
-      { status: 409 },
-    )
-  }
-
   const terminator = await readTerminatorState()
   const capability = transportCapability({
     platform: process.platform,
@@ -274,33 +277,45 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // ⛔ THE ROUTE CLAIMS THE LOCK, NOT THE WRAPPER. The 409 guard above reads a
-  // lock the WRAPPER writes — which only happens once Task Scheduler has
-  // launched it, seconds after this request returns. In that window a second
-  // click (two tabs, two admins, or a Preview launched "safely at any time"
-  // on top of a live cutover) passed the guard, truncated the running log with
-  // `-Force`, and started a second engine instance stopping and starting the
-  // same four services. `flag: 'wx'` fails if the file exists, so the claim is
-  // atomic rather than check-then-write.
+  // ⛔ THE ROUTE CLAIMS THE LOCK, NOT THE WRAPPER — and the claim is PENDING
+  // until the wrapper takes it over. The wrapper only writes its own pid once
+  // Task Scheduler has launched it, seconds after this request returns; in that
+  // window a second click (two tabs, two admins, or a Preview launched "safely
+  // at any time" on top of a live cutover) used to pass the guard, truncate the
+  // running log with `-Force`, and start a second engine instance stopping and
+  // starting the same four services. `claimRunLock` writes with `flag: 'wx'`,
+  // so the claim is atomic, and it reaps debris first so it cannot be
+  // permanently busy.
+  const runId = randomUUID()
   try {
     fs.mkdirSync(paths.log.replace(/[\\/][^\\/]+$/, ''), { recursive: true })
-    reapStaleLock(paths.lock)
-    fs.writeFileSync(paths.lock, String(process.pid), { encoding: 'utf8', flag: 'wx' })
-  } catch (err: unknown) {
-    const code = (err as { code?: string })?.code
-    if (code === 'EEXIST') {
+  } catch { /* the wrapper write below reports a real failure */ }
+  const claim = claimRunLock(paths.lock, runId, process.pid, lockEnv)
+  if (!claim.ok) {
+    if (claim.reason === 'busy') {
       return NextResponse.json(
-        { error: 'A transport change was just started. Wait for it to finish.' },
+        {
+          error: claim.claim.pending
+            ? 'A transport change was just started. Wait for it to finish.'
+            : `A transport change is already running (process ${claim.claim.pid}). Wait for it to finish.`,
+        },
         { status: 409 },
       )
     }
-    const message = err instanceof Error ? err.message : String(err)
-    return NextResponse.json({ error: `Could not claim the run lock: ${message}` }, { status: 500 })
+    return NextResponse.json({ error: `Could not claim the run lock: ${claim.message}` }, { status: 500 })
   }
 
-  const releaseLock = () => {
-    try { fs.unlinkSync(paths.lock) } catch { /* the wrapper may own it by now */ }
-  }
+  // ⛔ ONLY EVER WITHDRAWS A **PENDING** CLAIM. The old `releaseLock` unlinked
+  // the file unconditionally, and it was called from the catch around
+  // `/delete`+`/create`+`/run` — where `schtasks /run` can have SUCCEEDED on the
+  // box and merely exceeded its 20 s timeout on a loaded host. The wrapper was
+  // then mid-cutover and this route deleted the task and unlinked the lock the
+  // wrapper owned: GET reported `runInProgress: false`, the panel re-enabled
+  // every button, and a second POST started a SECOND engine instance against
+  // the same four services — the exact disaster the `wx` claim exists to
+  // prevent, reached through its own cleanup. Returns whether the claim was
+  // still ours, which is also the answer to "may I delete the task".
+  const withdraw = () => releaseRunLock(paths.lock, lockEnv, { onlyIfPending: true, runId })
 
   try {
     fs.writeFileSync(
@@ -312,11 +327,15 @@ export async function POST(req: NextRequest) {
         lock: paths.lock,
         taskName: TRANSPORT_TASK_NAME,
         publicHost,
+        // ⛔ THE ARM TOKEN. The wrapper refuses to run the engine unless the
+        // lock still carries THIS run's pending claim — which is what stops an
+        // orphaned task re-running `-Disable` unattended at midnight.
+        runId,
       }),
       'utf8',
     )
   } catch (err: unknown) {
-    releaseLock()
+    withdraw()
     const message = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: `Could not write the run script: ${message}` }, { status: 500 })
   }
@@ -341,17 +360,29 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const e = err as { message?: string; stderr?: string }
     const message = (e?.stderr || e?.message || 'unknown error').toString().slice(0, 400)
-    // ⛔ REMOVE THE TASK AND RELEASE THE LOCK. Returning here used to leave
-    // `NocVault-TlsTransport` registered with a `/sc once /st 00:00` trigger
-    // and the wrapper still on disk holding the last requested action — and a
-    // `once` trigger whose start time has already passed is scheduled for the
-    // FOLLOWING day. A failed click could therefore drop the whole suite to
-    // plain HTTP, unattended, at midnight. The wrapper's own self-delete never
-    // runs, because the wrapper never ran.
-    try {
-      await execFileAsync('schtasks.exe', ['/delete', '/tn', TRANSPORT_TASK_NAME, '/f'], { timeout: 15_000 })
-    } catch { /* best effort */ }
-    releaseLock()
+    // ⛔ THE TASK IS REMOVED ONLY IF THE RUN NEVER STARTED. Returning here used
+    // to leave `NocVault-TlsTransport` registered with a `/sc once /st 00:00`
+    // trigger and the wrapper still on disk holding the last requested action —
+    // and a `once` trigger whose start time has already passed is scheduled for
+    // the FOLLOWING day, so a failed click could drop the whole suite to plain
+    // HTTP, unattended, at midnight.
+    //
+    // ⛔ BUT `schtasks /run` CAN SUCCEED AND STILL TIME OUT. If the wrapper has
+    // taken the lock over, the cutover IS running — deleting its task and
+    // dropping its lock is how this cleanup became the second-engine disaster
+    // described at `withdraw` above. So the withdrawal decides: ours, tidy up
+    // and report the failure; not ours, report it as started.
+    const stillOurs = withdraw()
+    if (!stillOurs) {
+      return NextResponse.json({
+        started: true,
+        action,
+        publicHost: publicHost || null,
+        logPath: paths.log,
+        note: 'The scheduler took longer than expected to answer, but the change did start.',
+      })
+    }
+    await deleteTransportTask()
     return NextResponse.json({ error: `Could not schedule the change: ${message}` }, { status: 500 })
   }
 

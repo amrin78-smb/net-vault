@@ -21,8 +21,77 @@ agentBundle.ts
 
 appAccess.ts
   ALL_APPS — const list of the 4 suite app slugs
-  getUserApps(userId, role) — resolve apps a user can access (fail-closed on DB error)
+  getUserApps(userId, role?) — resolve apps a user can access (fail-closed `[]` on DB error).
+    ⛔ **`role` NO LONGER SHORT-CIRCUITS (1.63.0).** It used to answer all four apps for
+    `super_admin` BEFORE any query, so an explicit `user_apps` deny was never consulted for the one
+    role whose sessions matter most — and combined with a role that was only written at sign-in, a
+    demoted-and-restricted super_admin kept satellite tokens for every app. The DB is always asked
+    now; `role` stays in the signature (every caller has it, the SSO handoffs stamp it beside the
+    result) but cannot decide the answer. The asymmetry is unchanged: NO ROWS = all apps (legacy),
+    `[]` = deny-all and the only shape a closed failure can take.
   canAccessApp(apps, slug) — check slug allowed (netvault always true)
+
+localIdentity.ts  (SERVER ONLY — reads `users` + `user_apps`)
+  LocalIdentityReading (type) — `{ read, role, apps }`. ⛔ `read: false` is "we could not ask", NOT
+    "no such user"; `read: true` with `role: null` is a DELETED account.
+  LOCAL_IDENTITY_TTL_MS (15_000) — how long one answer is reused per process.
+  readLocalIdentity(userId) — uncached: role from `users`, apps via `getUserApps`.
+  resolveLocalIdentity(userId) — memoised form; the `jwt` callback calls this on EVERY token use.
+    ⛔ Only a SUCCESSFUL read is cached, so a DB blip is retried on the next request.
+  clearLocalIdentityCache(userId?) — for tests, and after changing a user's row.
+  ⛔ **THIS IS THE LOCAL HALF OF THE MID-SESSION REVOCATION LAYER (new 1.63.0).** `token.role` was
+  set once, inside `if (user)`, and re-resolved per request only for a DIRECTORY account — while the
+  comment beside it claimed local users had had the equivalent "since RBAC shipped". They had not.
+  ⛔ It is the ONE place in this suite that does not fail closed, and the reasoning is stated in the
+  file: the read that fails is `SELECT role FROM users`, so its failure means the hub's own database
+  is down and every page is already broken; clearing every live session's role on a pool blip would
+  be a product-wide sign-out caused by a hiccup. Bounded by `session.maxAge` instead.
+
+licensePayload.ts
+  LicenseFacts / PublicLicensePayload / PrivilegedLicensePayload (types)
+  PRIVILEGED_LICENSE_FIELDS — `serverId`, `maxDevices`, `installDate`
+  publicLicensePayload(f) / privilegedLicensePayload(f) / licensePayloadFor(role, f)
+  ⛔ `GET /api/license` had NO session check (its POST does, which is why grepping the file for auth
+  passed) and all three satellites re-publish its answer on their own PUBLIC `license-status`.
+  Trimmed rather than authenticated: the satellites poll it server-to-server with no credential and
+  FAIL OPEN on any non-2xx, so a session gate would disable licence enforcement in three products
+  silently. `customer`/`expiry` stay public deliberately — every satellite re-publishes both anyway.
+
+pagination.ts  (NO IMPORTS — usable from a route, a component or a test)
+  DEFAULT_PAGE_SIZE (50), MAX_PAGE_SIZE (200), Paging / ParamSource (types)
+  resolvePaging(params, { defaultLimit?, maxLimit?, fixedLimit? }) — clamped `{page, limit, offset}`
+  ⛔ **THE ONLY WAY A ROUTE MAY READ `page`/`limit`** (`tests/systemSeams.test.ts` enumerates
+  `app/api/**` and requires it). Bare `parseInt` gave three reachable failures to any authenticated
+  session: `limit=99999999` (a DoS-sized scan of `v_devices_flat`), `page=0` (negative OFFSET → 500)
+  and `limit=abc` (NaN into a query parameter → 500).
+
+runLock.ts  (NO IMPORTS — `fs` and the liveness probe are injected)
+  ARM_WINDOW_MS (2 min) — how long a ROUTE's pending claim may sit un-taken-over.
+  LOCK_IDLE_MS (30 min) — an IDLE timeout, meaningful only because the wrappers heartbeat the lock.
+  LockClaim / LockEnv / LockReading / ClaimResult (types)
+  pendingLockBody(pid, runId) / parseLockBody(raw) — a BARE pid still parses (that is what the
+    wrappers write); `<pid> pending <runId>` is the route's claim, and the wrapper's takeover
+    overwrites it with a bare pid, which IS the handover signal.
+  readRunLock(path, env) — ⛔ **A READ THAT WRITES.** Reaps debris, so it can be called from GET;
+    reaping used to live on POST while the gate it unblocks is drawn from GET.
+  claimRunLock(path, runId, pid, env) — atomic (`flag: 'wx'`), reaps first.
+  releaseRunLock(path, env, { onlyIfPending, runId }) — ⛔ may NEVER drop a wrapper-owned lock.
+  psArmGuard({runId, taskName, quote}) — the PowerShell lines a wrapper runs FIRST: refuse, delete
+    the task and exit unless the lock still carries THIS run's pending claim. The only reliable
+    answer to an orphaned `/sc once /st 00:00` task firing the following midnight.
+  psLockTakeover() / psLockHeartbeat() — `$PID | Out-File $lock`, as handover and as heartbeat.
+  ⛔ Four defects it closes, each written out in the file header: service-restart never claimed the
+  lock at all; claiming with the hub's own (permanently alive) pid wedged the panel; `dead || old`
+  reaped a LIVE run; and the `/run` catch could delete a live run's lock and task.
+
+ssoHandoff.ts  (NO IMPORTS)
+  SatelliteSlug / SsoClaims (types), SSO_CLAIM_KEYS, SSO_TOKEN_TTL ('2m')
+  handoffIdentity(sessionUser) — `null` when there is no `id` or no `role`. ⛔ A session whose role
+    the `jwt` callback CLEARED (revoked mapping / deleted account) must not be handed to a satellite:
+    SpanVault reads `payload.role || 'viewer'`, so a revocation would become a working viewer.
+  ssoClaims(user, app, apps) — ⛔ the ONLY place `userId`/`app` are spelled. SpanVault's
+    `authorize()` REQUIRES `userId` and `app === 'spanvault'`; renaming either breaks SpanVault
+    sign-in entirely and nothing in this repo fails.
 
 compliance.ts
   MIN_POP_PCT — const threshold % for a check to count toward risk score
@@ -263,10 +332,13 @@ answers "can I change that, and what happened when I did". Nothing here reimplem
   reads it at ITS startup. The Certificate panel said "Restart the NetVault service to begin serving
   it" — text from before the terminator existed. Caught when a real wildcard certificate was installed
   on production 2026-11-06. With no terminator the answer is `service: null` — nothing to restart.
-- `buildRestartWrapper({service, dependents, ...})` — ⛔ **`dependents` IS WHAT MAKES A HUB RESTART
-  RESTART ANYTHING** (the 1051 trap above). Captures the PID either side; the verdict is
-  `running && changed && depsBack`. Starts the service even if the stop timed out — the one thing
-  worse than a slow restart is a stop with no start after it.
+- `buildRestartWrapper({service, dependents, runId, ...})` — ⛔ **`dependents` IS WHAT MAKES A HUB
+  RESTART RESTART ANYTHING** (the 1051 trap above). Captures the PID either side; the verdict is
+  `running && changed && depsBack`. It RETRIES the start until the service runs, skipping a pending
+  transition — not "even if the stop timed out", which is what the header used to claim and the loop
+  has never done (a start fired at STOP_PENDING is rejected 1056/1061). An ABSENT service now ends
+  the loop with one log line instead of 150 `sc.exe start` calls over 150 s. `runId` is the arm token
+  (`lib/runLock.ts` `psArmGuard`) without which an orphaned task re-runs this unattended.
 - `parseRestartLog(text)` — ⛔ `running=True` ALONE IS NOT SUCCESS; `changed=True` is the load-bearing
   half. Same family as `lib/tlsTransport.ts`: on this codebase a PowerShell exit code is evidence of
   nothing.
@@ -282,13 +354,18 @@ One shared answer to "is the TLS front door there, and running", used by four ro
 - `TERMINATOR_SERVICE`, `HUB_PUBLIC_PORT` — the front-door service name and the hub's PUBLIC port (never `process.env.PORT`, which is the loopback port behind a cutover).
 - `readTerminatorState(): Promise<TerminatorReading>` — tri-state (`running`/`stopped`/`absent`/`unknown`); `present`/`running` are `null` on every unknown, NEVER `false`.
 - `parseScQcDependencies(stdout): string[] | null` — reads `sc qc`'s dependency list INCLUDING its unlabelled continuation lines. `null` means no label was found at all (e.g. a localised Windows), which is not an empty list.
+- `readingFromScQuery(stdout): TerminatorReading` — the stdout→reading mapping, split out of the spawn so it can be exercised. ⛔ `readTerminatorState` is now `return readingFromScQuery(stdout)` and nothing else: testing `parseScQueryState` alone would have repeated this codebase's worst regression of the family (a route COMPUTED `fronted`/`publicPort` while no panel read either, with five PASSING tests over the dead branch because they called the helper directly).
+- `parseScQueryState(stdout): number | null` — the numeric service state (1 STOPPED … 4 RUNNING … 7 PAUSED) taken as the SECOND `<number> <WORD>` field in `sc query` output. ⛔ **ADDED 1.63.0 BECAUSE THE WHOLE HTTPS TAB WAS DEAD ON A NON-ENGLISH HOST.** `readTerminatorState` keyed on the English state WORDS while `parseScQcDependencies` twenty lines below was hardened against localised field names in the same commit — so on a German or French Windows every reading was `unknown`, and `transportCapability` turns `unknown` into "blocked in both directions", disabling enable, disable AND Preview permanently. The English regexes are kept as a fast path so nothing changes where they already worked.
 - `terminatorDependsOn(service): Promise<DependencyReading>` — `dependsOn: boolean | null`. ⛔ The two callers resolve `null` OPPOSITELY on purpose: an updater assumes it DOES depend (guessing wrong there corrupts a build), the restart button assumes it does NOT (guessing wrong there is a four-console outage).
 - `serviceExists(name): Promise<boolean | null>` — tri-state. Replaced a boolean version that returned `false` for non-Windows and for ANY exception.
 
 ### `lib/serviceRestart.ts` additions
 - `RESTART_RUN_PREFIX`, `buildRestartHeader(runId, service)` — the ROUTE writes this header and truncates the log before scheduling, so a panel can never read the previous run's verdict as this run's.
-- `parseRestartLog` now returns `runId`, and requires `running=True` AND `changed=True` AND no `dependent <x> back: False`.
+- `parseRestartLog` now returns `runId`, and requires `running=True` AND `changed=True` AND no `dependent <x> back: False`. ⛔ That `depsFailed` term was UNREACHABLE on the only path where dependents exist until 1.63.0, because `RestartControl` reached `done` on a bare uptime proof before the wrapper had brought the front door back — see components.md.
+- `RESTART_SERVICE` was REMOVED: an alias of `HUB_SERVICE` "kept for callers that only ever meant the hub", with none — i.e. an inviting second name for the one fact `resolveRestartTarget` exists to be careful about.
 
 ### `lib/tlsTransport.ts` changes
 - `RunOutcome` gained `refused` — the engine stopped BEFORE moving anything, distinct from `reverted` (moved, then put back). Conflating them made a failing Preview claim a cutover-and-rollback that never happened.
+- ⛔ **`HTTPS was NOT enabled` NOW MAPS TO `refused`, NOT `reverted` (1.63.0).** That closing banner is printed whenever `$script:TlsCutoverApplied` is false — INCLUDING when the gates never passed and nothing was touched (`NocVault-TlsCutover.ps1`'s `if (-not $TlsGateOk)` branch) — and `Gates did NOT pass` only ever appears on the `-DryRun` branch. So a REAL enable with failing gates could not reach `refused` at all: every one of them rendered `reverted`'s copy, which promises the engine "put every console back the way it found it". `REVERTING the TLS cutover` (written only by `Undo-TlsCutover`) promotes `refused` → `reverted`, which is the only evidence consoles were actually moved.
+- `buildWrapperScript` now takes `runId` and emits `psArmGuard` + a per-line lock heartbeat.
 - `parseRunLog` scans banners from the END of the log (the documented rule; the old loop let pattern order outrank chronology) and disqualifies a `disabled` verdict on a non-zero exit.

@@ -26,6 +26,23 @@ import { Callout, Mono } from './panelChrome.tsx'
 
 export type RestartPurpose = 'console-address' | 'certificate' | 'sso'
 
+/**
+ * ⛔ `POST /api/system/service-restart` IS super_admin, SO THE BUTTON HAS TO
+ * BE TOO. Both panels rendered this with no role prop at all, so an `admin` —
+ * who legitimately reaches both tabs, and for whom the Certificate panel's
+ * install button 20 lines below is correctly gated by `canInstall` — met an
+ * enabled "Restart NetVault now" that answered a bare 403. A button the server
+ * will refuse is worse than no button; it reads as the product being broken.
+ */
+export type RestartControlProps = {
+  purpose: RestartPurpose
+  /** Whether anything is actually waiting on a restart. */
+  pending: boolean
+  title?: string
+  /** Defaults to `true` so an un-updated call site keeps today's behaviour. */
+  canRestart?: boolean
+}
+
 type RestartState = {
   available: boolean
   terminatorPresent: boolean | null
@@ -41,17 +58,49 @@ type RestartState = {
   }
 }
 
+/** What POST hands back, for the facts only it knows. */
+type StartedRun = {
+  started?: boolean
+  runId?: string
+  reason?: string
+  previousUptimeSeconds?: number
+  /** ⛔ Tri-state: `null` only when `terminatorDependsOn` could not tell. */
+  dependencyDetail?: string | null
+  /** Whether the wrapper will stop and restart the shared TLS front door. */
+  stopsDependents?: boolean
+  error?: string
+}
+
 type Phase = 'idle' | 'starting' | 'waiting' | 'done' | 'failed' | 'unconfirmed'
 
-/** How long to keep waiting before admitting we cannot confirm. */
-const WAIT_LIMIT_MS = 4 * 60 * 1000
+/**
+ * The sentence that turns a bare failure into something actionable.
+ *
+ * ⛔ `terminatorDependsOn` RETURNS `null` WITH A REASON AND NOBODY READ IT.
+ * `null` is the branch where the restart is GUARANTEED to fail with 1051: the
+ * hub's dependents are not stopped, so Windows refuses `sc stop NetVault`, the
+ * following start returns 1056, the service is Running the whole time, and the
+ * verdict is `failed` with no clue why.
+ */
+const DEPENDENCY_HINT =
+  'Whether NocVault-Tls depends on this service could not be read, so the shared front door was '
+  + 'left running — Windows refuses to stop a service while a dependent is running (error 1051), '
+  + 'which is the most likely reason this did not take effect. The probe said:'
 
-export default function RestartControl({ purpose, pending, title }: {
-  purpose: RestartPurpose
-  /** Whether anything is actually waiting on a restart. */
-  pending: boolean
-  title?: string
-}) {
+/**
+ * How long to keep waiting before admitting we cannot confirm.
+ *
+ * ⛔ IT HAS TO COVER THE WRAPPER'S OWN WORST CASE, and at four minutes it did
+ * not. `buildRestartWrapper`'s bounds add up: up to 45 s stopping each
+ * dependent, 60 s polling for Stopped, 150 s of start attempts, then up to 90 s
+ * waiting for each dependent to come back — 345 s before the sentinel is
+ * written on a slow host. Now that the verdict (not the hub's uptime) is what
+ * declares success, a limit shorter than that would report "could not confirm"
+ * for restarts that were still working normally.
+ */
+const WAIT_LIMIT_MS = 7 * 60 * 1000
+
+export default function RestartControl({ purpose, pending, title, canRestart = true }: RestartControlProps) {
   const [state, setState] = useState<RestartState | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -64,6 +113,12 @@ export default function RestartControl({ purpose, pending, title }: {
   const waitingSince = useRef<number | null>(null)
   const poll = useRef<ReturnType<typeof setInterval> | null>(null)
   const [failReason, setFailReason] = useState<string | null>(null)
+  /** Why the dependency probe could not tell — the 1051 branch. */
+  const [dependencyDetail, setDependencyDetail] = useState<string | null>(null)
+  /** Whether THIS run stops and restarts the shared TLS front door. */
+  const stopsDependents = useRef(false)
+  /** The console answered again. Progress, NEVER a verdict — see `load`. */
+  const [backOnline, setBackOnline] = useState(false)
 
   const load = useCallback(async (quiet = false) => {
     try {
@@ -97,10 +152,30 @@ export default function RestartControl({ purpose, pending, title }: {
         //    in that file during the seconds before the wrapper starts.
         const mine = myRunId.current !== null && data.lastRun.runId === myRunId.current
         const uptimeProof = baselineUptime.current !== null && data.uptimeSeconds < baselineUptime.current
+        // ⛔ THE UPTIME PROOF IS PROGRESS, NOT A VERDICT, AND TREATING IT AS ONE
+        // WAS A FALSE ALL-CLEAR. It used to be enough on its own to reach
+        // `done`. On an install where NocVault-Tls really does declare
+        // `DependOnService NetVault`, the wrapper's order is: stop the
+        // terminator → stop and start the hub → START THE TERMINATOR AGAIN (up
+        // to 90 s) → write `dependent … back:` → write the sentinel. The hub
+        // answers HTTP before `Get-Service` even reports it Running, so the
+        // FIRST poll after that gives a lower uptime, `finished: false` — and
+        // the panel went green with "Restarted — the change is now in force"
+        // while the front door was still stopped and ALL FOUR consoles' public
+        // ports were dead. Polling stops at `done`, so if the terminator never
+        // came back the panel stayed green forever. That also made
+        // `parseRestartLog`'s `depsFailed` term unreachable on the only path
+        // where dependents exist — the term added specifically to refuse this.
+        //
+        // So the RUN'S OWN VERDICT is the only thing that reaches `done`, for
+        // every target. The uptime proof still has a job: it is what tells the
+        // operator the console is back while the wrapper finishes bringing the
+        // front door up, which is the honest thing to say in that window.
+        if (uptimeProof) setBackOnline(true)
         if (mine && data.lastRun.finished && data.lastRun.outcome === 'failed') {
           setFailReason(data.lastRun.lines.slice(-4).join(' · ') || null)
           setPhase('failed')
-        } else if (uptimeProof || (mine && data.lastRun.finished && data.lastRun.outcome === 'succeeded')) {
+        } else if (mine && data.lastRun.finished && data.lastRun.outcome === 'succeeded') {
           setPhase('done')
         } else if (waitingSince.current !== null && Date.now() - waitingSince.current > WAIT_LIMIT_MS) {
           // ⛔ NEVER SPIN FOREVER. A wrapper killed before it wrote its
@@ -136,6 +211,9 @@ export default function RestartControl({ purpose, pending, title }: {
     setError(null)
     setPhase('starting')
     setFailReason(null)
+    setDependencyDetail(null)
+    setBackOnline(false)
+    stopsDependents.current = false
     myRunId.current = null
     try {
       const res = await fetch('/api/system/service-restart', {
@@ -143,7 +221,7 @@ export default function RestartControl({ purpose, pending, title }: {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ purpose }),
       })
-      const body = await res.json().catch(() => ({}))
+      const body = (await res.json().catch(() => ({}))) as StartedRun
       if (!res.ok) throw new Error(body?.error || `The server answered ${res.status}.`)
       if (body?.started === false) {
         // Nothing to restart — a real answer, not a failure. ⛔ SHOW THE
@@ -163,6 +241,15 @@ export default function RestartControl({ purpose, pending, title }: {
         ? body.previousUptimeSeconds
         : (state?.uptimeSeconds ?? null)
       myRunId.current = typeof body?.runId === 'string' ? body.runId : null
+      // ⛔ CARRIED FROM THE RESPONSE, BECAUSE ONLY POST KNOWS IT.
+      // `terminatorDependsOn` computes a `detail` saying WHY it could not read
+      // the dependency field, and the route used to read only the boolean and
+      // throw the explanation away — while `null` is exactly the branch where
+      // the restart is guaranteed to fail with 1051, because the front door is
+      // left running and Windows refuses the stop. The operator got "The
+      // restart did not take effect" and nothing else.
+      setDependencyDetail(typeof body?.dependencyDetail === 'string' ? body.dependencyDetail : null)
+      stopsDependents.current = body?.stopsDependents === true
       waitingSince.current = Date.now()
       setPhase('waiting')
     } catch (err: unknown) {
@@ -201,6 +288,20 @@ export default function RestartControl({ purpose, pending, title }: {
             is back.
           </div>
         )}
+        {/* ⛔ THE CONSOLE BEING BACK IS NOT THE RESTART BEING DONE, and saying
+            so is the whole point of this line. When the shared front door has
+            to be stopped first it is brought back LAST, after this console
+            already answers — so there is a real window in which the page works
+            and the four public ports do not. This panel used to call that
+            window success. */}
+        {backOnline && (
+          <div style={{ marginTop: 8 }}>
+            {stopsDependents.current
+              ? 'This console is answering again. Still waiting for NocVault-Tls, the shared front '
+                + 'door, to come back — until it does, the four public ports do not answer.'
+              : 'This console is answering again. Waiting for the run to report its own verdict.'}
+          </div>
+        )}
       </Callout>
     )
   }
@@ -229,6 +330,7 @@ export default function RestartControl({ purpose, pending, title }: {
           process. It may still have worked. Check the service on the server before assuming the saved
           value is in force.
         </div>
+        {dependencyDetail && <div style={{ marginTop: 8 }}>{DEPENDENCY_HINT} <Mono>{dependencyDetail}</Mono></div>}
         <div style={{ marginTop: 8 }}>
           <button type="button" className="btn-secondary" onClick={() => { setPhase('idle'); void load() }} style={{ padding: '8px 16px' }}>
             Check again
@@ -245,6 +347,11 @@ export default function RestartControl({ purpose, pending, title }: {
           {service} was asked to restart and the process did not change, so the old value is still in
           use.
         </div>
+        {/* ⛔ THE LIKELIEST CAUSE, NAMED. An unreadable dependency field means
+            the front door was left running, and Windows then REFUSES the stop
+            with 1051 — so this failure is not mysterious, it is predicted. The
+            route computed the explanation and discarded it. */}
+        {dependencyDetail && <div style={{ marginTop: 8 }}>{DEPENDENCY_HINT} <Mono>{dependencyDetail}</Mono></div>}
         <div style={{ marginTop: 8 }}><Mono>{failReason}</Mono></div>
         <div style={{ marginTop: 8 }}>
           <button type="button" className="btn-secondary" onClick={() => { setPhase('idle'); setFailReason(null); void load() }} style={{ padding: '8px 16px' }}>
@@ -273,7 +380,20 @@ export default function RestartControl({ purpose, pending, title }: {
           use. The server log has the detail.
         </Callout>
       )}
-      {confirming ? (
+      {/* ⛔ A BUTTON THE SERVER WILL REFUSE IS WORSE THAN NO BUTTON. The POST is
+          super_admin; both call sites used to render this with no role prop, so
+          an `admin` got an enabled "Restart NetVault now" that answered a bare
+          403 — in the same commit that correctly gated the Certificate panel's
+          install button 20 lines below it. */}
+      {!canRestart ? (
+        <Callout tone="info" title={title || 'Saved, but not yet in force'}>
+          <div>{target?.why || 'This change takes effect when the service restarts.'}</div>
+          <div style={{ marginTop: 8 }}>
+            Restarting a service interrupts it for everyone, so it is restricted to a super admin. Ask
+            one to apply this, or it takes effect at the next restart.
+          </div>
+        </Callout>
+      ) : confirming ? (
         <Callout
           tone="warn"
           title={service === 'NocVault-Tls' ? 'Reload the TLS front door?' : 'Restart the console now?'}

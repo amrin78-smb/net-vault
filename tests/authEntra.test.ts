@@ -73,6 +73,12 @@ register('data:text/javascript,' + encodeURIComponent(HOOK), import.meta.url)
 
 const db: any = await import(DB_URL)
 const route: any = await import('../app/api/auth/[...nextauth]/route.ts')
+// ⛔ THE REAL MODULE, ON THE REAL (STUBBED) `lib/db`. The local
+// re-resolution's seam IS the database, so stubbing the function would assert
+// nothing about the query it runs or how it reads the result. The cache has to
+// be cleared between tests because it is per-process and 15 seconds long.
+const { clearLocalIdentityCache } = await import('../lib/localIdentity.ts')
+const { getUserApps, canAccessApp, ALL_APPS: APPS } = await import('../lib/appAccess.ts')
 
 const { authOptions, entraProviders, tokenRoleFrom, directoryDeps, ENTRA_PROVIDER_ID } = route
 const signIn = authOptions.callbacks.signIn
@@ -161,7 +167,30 @@ function stubDeps(over: Record<string, unknown> = {}): Recorder {
     return inner()
   }
   Object.assign(directoryDeps, merged)
+  // Every test starts with no memoised local identity.
+  clearLocalIdentityCache()
   return rec
+}
+
+/**
+ * Make `SELECT role FROM users WHERE id = $1` answer, and `user_apps` with it.
+ *
+ * `rows: null` means the row is GONE (a deleted account); `undefined` apps
+ * means no `user_apps` rows at all, which lib/appAccess.ts reads as "all apps".
+ */
+function stubUsersRow(role: string | null, apps?: string[]): { queries: string[] } {
+  const queries: string[] = []
+  db.setDb(async (text: string) => {
+    queries.push(text)
+    if (/FROM users WHERE id/.test(text)) {
+      return { rows: role === null ? [] : [{ role }] }
+    }
+    if (/FROM user_apps WHERE user_id/.test(text)) {
+      return { rows: (apps ?? []).map((app) => ({ app })) }
+    }
+    return { rows: [] }
+  })
+  return { queries }
 }
 
 async function captured<T>(fn: () => Promise<T>): Promise<{ value: T; warns: string[]; logs: string[] }> {
@@ -536,24 +565,124 @@ test('tokenRoleFrom reads the outcome, not the truthiness of the role', () => {
   assert.equal(tokenRoleFrom({ outcome: 'mappings_unreadable', role: 'admin' } as any), null)
 })
 
-test('a local token is not re-resolved against the directory mappings', async () => {
+test('a local token is re-resolved against `users`, never against the directory mappings', async () => {
   const rec = stubDeps()
+  stubUsersRow('admin', ['netvault'])
   const token: any = { provider: 'credentials', role: 'admin', id: '3' }
   const { value } = await captured<any>(() => jwt({ token }))
   assert.equal(value.role, 'admin')
+  // ⛔ THE MAPPINGS ARE NOT TOUCHED. A local account has no group claims, and
+  // the directory branch would null its role — signing out every local session.
   assert.equal(rec.mappingLoads, 0)
 
-  // A token issued BEFORE this feature shipped carries no provider at all, and
-  // must stay on the local path rather than being nulled by the directory
-  // branch — that would sign out every existing session on deploy.
+  // A token issued BEFORE the directory feature shipped carries no provider at
+  // all, and must take the LOCAL path rather than the directory one.
+  clearLocalIdentityCache()
+  stubUsersRow('super_admin')
   const legacy: any = { role: 'super_admin', id: '1' }
   const { value: out } = await captured<any>(() => jwt({ token: legacy }))
   assert.equal(out.role, 'super_admin')
   assert.equal(rec.mappingLoads, 0)
 })
 
+test('a LOCAL demotion applies to the token already in the browser', async () => {
+  // ⛔ THE BUG THIS CLOSES. `token.role` was written once, inside `if (user)`
+  // — i.e. at sign-in — and re-resolved on every later use ONLY for a
+  // directory account, while the comment beside it claimed local users had had
+  // the equivalent "since RBAC shipped". They had not. Every hub route reads
+  // `session.user.role` straight off this token, and with no `session.maxAge`
+  // the default was THIRTY DAYS: an operator who demoted a super_admin changed
+  // nothing about the session that person was still holding.
+  stubDeps()
+  stubUsersRow('viewer', ['netvault'])
+  const token: any = { provider: 'credentials', role: 'super_admin', id: '7', apps: [...ALL_APPS] }
+  const { value } = await captured<any>(() => jwt({ token }))
+  assert.equal(value.role, 'viewer')
+  // ⛔ AND THE APPS FOLLOW TOO. `session.user.apps` decides which launcher
+  // tiles render; frozen at sign-in it disagreed with the SSO handoffs, which
+  // re-resolve live.
+  assert.deepEqual(value.apps, ['netvault'])
+})
+
+test('a DELETED local account carries no role at all', async () => {
+  // ⛔ ZERO ROWS IS A REAL ANSWER, NOT A FAILED READ. `users.role` is NOT NULL
+  // with a CHECK constraint, so the only way the role comes back empty is the
+  // row being gone — and a deleted account's cookie must stop working.
+  stubDeps()
+  stubUsersRow(null)
+  const token: any = { provider: 'credentials', role: 'super_admin', id: '9' }
+  const { value } = await captured<any>(() => jwt({ token }))
+  assert.equal(value.role, null)
+})
+
+test('an unreadable `users` table leaves the token exactly as it was', async () => {
+  // ⛔ THE ONE PLACE THIS SUITE DOES NOT FAIL CLOSED, AND THE REASONING IS
+  // STATED. The read that failed is `SELECT role FROM users`, so its failure
+  // means the hub's own database is unreachable and every page is already
+  // broken; clearing every live session's role on a pool blip would be a
+  // product-wide sign-out triggered by a hiccup, including for the operator
+  // trying to fix it. The privilege stays bounded by `session.maxAge`.
+  //
+  // Contrast the directory branch three tests above, which fails CLOSED on its
+  // own unreadable table — a small MAPPING table, whose failure says nothing
+  // about the health of anything else.
+  stubDeps()
+  db.setDb(async () => { throw new Error('pool timeout') })
+  const token: any = { provider: 'credentials', role: 'admin', id: '11', apps: ['netvault'] }
+  const { value } = await captured<any>(() => jwt({ token }))
+  assert.equal(value.role, 'admin')
+  assert.deepEqual(value.apps, ['netvault'])
+})
+
+test('the re-resolution is memoised, so a page load is not a query per request', async () => {
+  // ⛔ IT RUNS ON EVERY TOKEN USE, so without this it is two queries per
+  // request per user. 15 seconds of staleness against the 30 days the bug it
+  // replaces allowed.
+  stubDeps()
+  const { queries } = stubUsersRow('admin', ['netvault'])
+  const token: any = { provider: 'credentials', role: 'admin', id: '13' }
+  await captured<any>(() => jwt({ token }))
+  const afterFirst = queries.filter((q) => /FROM users WHERE id/.test(q)).length
+  await captured<any>(() => jwt({ token }))
+  await captured<any>(() => jwt({ token }))
+  const afterThird = queries.filter((q) => /FROM users WHERE id/.test(q)).length
+  assert.equal(afterFirst, 1)
+  assert.equal(afterThird, 1, 'three token uses must not be three reads of `users`')
+
+  // ⛔ AND A FAILURE IS NOT CACHED. Caching one would extend a database blip
+  // into a window in which nobody's privileges are re-checked at all.
+  clearLocalIdentityCache()
+  let calls = 0
+  db.setDb(async () => { calls++; throw new Error('pool timeout') })
+  await captured<any>(() => jwt({ token }))
+  await captured<any>(() => jwt({ token }))
+  assert.ok(calls >= 2, `a failed read must be retried, saw ${calls} attempts`)
+})
+
+test('the session has a maxAge, and the JWT itself has the same one', async () => {
+  // ⛔ AN ABSENT FIELD WAS THE DEFECT, so the only thing that can refuse its
+  // return is reading the number the options actually carry. NextAuth v4
+  // defaults to 30 days when `session.maxAge` is omitted
+  // (core/init.js: `const maxAge = 30 * 24 * 60 * 60`), and it builds
+  // `options.jwt.maxAge` from that SAME constant rather than from `session` —
+  // so setting only one of the two leaves the freshly-minted sign-in token
+  // verifying for 30 days under `getToken()` while the cookie expires on time.
+  const { SESSION_MAX_AGE_SECONDS } = route
+  assert.equal(authOptions.session.strategy, 'jwt')
+  assert.equal(authOptions.session.maxAge, SESSION_MAX_AGE_SECONDS)
+  assert.equal(authOptions.jwt.maxAge, SESSION_MAX_AGE_SECONDS)
+  assert.ok(
+    SESSION_MAX_AGE_SECONDS > 0 && SESSION_MAX_AGE_SECONDS < 30 * 24 * 60 * 60,
+    'it must be shorter than the 30-day default it replaces',
+  )
+})
+
 test('apps and siteIds survive onto the token and into the session', async () => {
   stubDeps()
+  // The re-resolution runs on the sign-in call too, so the row has to agree
+  // with what `authorize()` just handed over — which in production it does, by
+  // construction: both read the same two tables.
+  stubUsersRow('site_admin', ['netvault', 'logvault'])
   const { value: token } = await captured<any>(() =>
     jwt({
       token: {},
@@ -646,4 +775,46 @@ test('the hub MFA policy does not apply to a directory account', async () => {
   const ok: any = await authorize({ email: EMAIL, password: 'right-password', totp: '' })
   assert.ok(ok, 'a directory account must not be held to the local MFA policy')
   assert.equal(ok.role, 'super_admin')
+})
+
+// ─── 5. per-user app access (lib/appAccess.ts) ─────────────────────────
+
+test('a super_admin no longer short-circuits before the database is asked', async () => {
+  // ⛔ THIS WAS THE SECOND HALF OF THE STALE-ROLE HOLE. `getUserApps` returned
+  // `[...ALL_APPS]` for `super_admin` BEFORE touching the database, so an
+  // explicit `user_apps` deny was never consulted for the one role whose
+  // sessions matter most. Combined with a role that was only ever written at
+  // sign-in, a demoted-and-restricted super_admin kept a satellite token for
+  // every app: the SSO handoff read `super_admin` off the token, this function
+  // answered "all four" without a query, and the row that said otherwise was
+  // never read on any hop.
+  const seen: string[] = []
+  db.setDb(async (text: string) => {
+    seen.push(text)
+    return { rows: [{ app: 'netvault' }] }
+  })
+  const apps = await getUserApps('5', 'super_admin')
+  assert.ok(seen.some((q) => /FROM user_apps WHERE user_id/.test(q)), 'the database must be asked')
+  assert.deepEqual(apps, ['netvault'], 'the stored decision must win')
+  assert.equal(canAccessApp(apps, 'spanvault'), false, 'and an explicit deny must deny')
+})
+
+test('no user_apps rows still means all apps, for every role', async () => {
+  // ⛔ THE ASYMMETRY IS LOAD-BEARING AND MUST SURVIVE THE FIX ABOVE. NO ROWS
+  // means "all apps" (legacy / default-all, so deploying the feature locks
+  // nobody out); `[]` means "no extra apps", which is the only shape a closed
+  // failure can take. Conflating them is how one of them becomes fail-open.
+  db.setDb(async () => ({ rows: [] }))
+  assert.deepEqual(await getUserApps('5', 'super_admin'), [...APPS])
+  assert.deepEqual(await getUserApps('5', 'viewer'), [...APPS])
+})
+
+test('a DB error still fails CLOSED, including for a super_admin', async () => {
+  db.setDb(async () => { throw new Error('pool timeout') })
+  assert.deepEqual(await getUserApps('5', 'super_admin'), [])
+  assert.deepEqual(await getUserApps('5', 'viewer'), [])
+  // ⛔ netvault itself stays reachable, so a closed failure never locks an
+  // operator out of the console that can fix it.
+  assert.equal(canAccessApp([], 'netvault'), true)
+  assert.equal(canAccessApp([], 'logvault'), false)
 })

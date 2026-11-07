@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { getServerId, validateLicenseKey, getLicenseStatus } from '@/lib/license'
+import { licensePayloadFor } from '@/lib/licensePayload.ts'
 
 export async function checkWriteAllowed(): Promise<NextResponse | null> {
   try {
@@ -25,6 +26,20 @@ export async function checkWriteAllowed(): Promise<NextResponse | null> {
   }
 }
 
+/**
+ * The licence record.
+ *
+ * ⛔ INTENTIONALLY REACHABLE WITH NO SESSION, AND THE PAYLOAD IS TRIMMED
+ * INSTEAD. All three satellites poll this server-to-server with no credential
+ * and FAIL OPEN on any non-2xx (`logvault/api/licenseCheck.js` and its two
+ * siblings: `if (!res.ok) return null` → `mode: 'unreachable', canWrite: true`),
+ * so requiring a session here would disable licence enforcement in three
+ * products silently. What it used to disclose — `serverId` (this machine's
+ * fingerprint, the value a licence key is issued against), `maxDevices`,
+ * `installDate` — is now sent only to a super_admin session, which is the only
+ * role with a screen that reads any of them. See lib/licensePayload.ts for the
+ * field-by-field account of what each satellite consumes.
+ */
 export async function GET() {
   try {
     const serverId = getServerId()
@@ -40,7 +55,20 @@ export async function GET() {
 
     const { status, daysRemaining, payload } = getLicenseStatus(installDate, licenseKey, serverId)
 
-    return NextResponse.json({
+    // ⛔ THE SESSION READ IS BEST-EFFORT AND MUST NOT BE ABLE TO FAIL THE
+    // REQUEST. An unauthenticated satellite poll is the COMMON case here, and a
+    // throw out of getServerSession (a cookie this build cannot decode, a
+    // rotated NEXTAUTH_SECRET) answering 500 would read as "hub unreachable" in
+    // three satellites — i.e. licence enforcement off. No session simply means
+    // the public shape.
+    let role: string | null = null
+    try {
+      const session = await getServerSession(authOptions)
+      const u = session?.user as { role?: string } | undefined
+      role = typeof u?.role === 'string' ? u.role : null
+    } catch { role = null }
+
+    return NextResponse.json(licensePayloadFor(role, {
       status,
       daysRemaining,
       serverId,
@@ -50,7 +78,7 @@ export async function GET() {
       maxDevices:  payload?.maxDevices  ?? null,
       trialDaysTotal: 30,
       installDate: installDate || null,
-    })
+    }))
   } catch (err) {
     console.error('[license GET]', err)
     return NextResponse.json({ error: 'Failed to get license status' }, { status: 500 })

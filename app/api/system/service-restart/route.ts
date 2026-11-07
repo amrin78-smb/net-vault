@@ -38,6 +38,7 @@ import {
   HUB_SERVICE,
   buildRestartHeader,
   RESTART_PURPOSES,
+  RESTART_SENTINEL,
   RESTART_TASK_NAME,
   TERMINATOR_SERVICE,
   buildRestartWrapper,
@@ -46,6 +47,7 @@ import {
   resolveRestartTarget,
   restartPaths,
 } from '@/lib/serviceRestart.ts'
+import { claimRunLock, readRunLock, releaseRunLock, type LockEnv } from '@/lib/runLock.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -71,15 +73,6 @@ async function terminatorPresent(): Promise<boolean | null> {
   return reading.present
 }
 
-function readLockPid(lockPath: string): number | null {
-  try {
-    const pid = Number.parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10)
-    return Number.isFinite(pid) && pid > 0 ? pid : null
-  } catch {
-    return null
-  }
-}
-
 function isPidAlive(pid: number): boolean {
   try {
     process.kill(pid, 0)
@@ -89,29 +82,37 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
-/** Beyond this, a restart lock is debris from a run that died. */
-const LOCK_STALE_MS = 15 * 60 * 1000
+/**
+ * The lock rules, which are shared with `tls-transport`.
+ *
+ * ⛔ THIS ROUTE USED TO HAVE NO CLAIM AT ALL. Its 409 guard read a lock only
+ * the WRAPPER writes (`lib/serviceRestart.ts`), so between `schtasks /run` and
+ * the wrapper's `$PID | Out-File` nothing was held — two super_admin tabs ~2 s
+ * apart both passed the guard, and POST 2 then TRUNCATED the log, destroying
+ * run A's `runId=` header and whatever lines wrapper A had already written.
+ * Either wrapper A never ran while its panel had been told `started: true`
+ * (→ "Could not confirm the restart" for a restart that never happened), or
+ * both ran and the panel read a verdict assembled from BOTH wrappers' lines.
+ * The sibling route got `flag: 'wx'` for exactly this; this one did not.
+ * See lib/runLock.ts for all four defects and the reasoning.
+ */
+const lockEnv: LockEnv = { fs, isPidAlive }
 
 /**
- * ⛔ A STALE LOCK MUST NOT WEDGE THE BUTTON FOREVER. The wrapper removes the
- * lock in its `finally`; a reboot mid-restart skips that, and Windows reuses
- * PIDs, so the recorded PID can come back alive as something unrelated and
- * every future click gets a 409 with no way to clear it from the product.
+ * Remove the scheduled task, best effort.
+ *
+ * ⛔ CALLED WHEN A LOCK IS REAPED, NOT ONLY WHEN `/run` FAILS. Nothing used to
+ * delete the task when the wrapper STARTED AND THEN DIED — and a `/sc once
+ * /st 00:00` trigger whose start time has passed fires the following day, so a
+ * restart nobody asked for ran at midnight. The wrapper's own arm guard
+ * (lib/runLock.ts `psArmGuard`) refuses that fire and deletes the task itself;
+ * this is the second half, so the orphan does not have to wait for midnight to
+ * be removed.
  */
-function lockHeld(lockPath: string): number | null {
-  const pid = readLockPid(lockPath)
-  if (pid === null) return null
-  let ageMs = 0
-  try { ageMs = Date.now() - fs.statSync(lockPath).mtimeMs } catch { ageMs = 0 }
-  if (ageMs > LOCK_STALE_MS) {
-    try { fs.unlinkSync(lockPath) } catch { /* best effort */ }
-    return null
-  }
-  if (!isPidAlive(pid)) {
-    try { fs.unlinkSync(lockPath) } catch { /* best effort */ }
-    return null
-  }
-  return pid
+async function deleteRestartTask(): Promise<void> {
+  try {
+    await execFileAsync('schtasks.exe', ['/delete', '/tn', RESTART_TASK_NAME, '/f'], { timeout: 15_000 })
+  } catch { /* no such task is the normal case */ }
 }
 
 /**
@@ -138,6 +139,14 @@ export async function GET() {
   const logUnreadable = text === null && fs.existsSync(paths.log)
   const present = await terminatorPresent()
 
+  // ⛔ THE REAP IS ON THE READ PATH. It used to be on POST only, while the
+  // thing a stale lock BLOCKS (`inProgress` → a disabled button) is drawn from
+  // GET — so the only code that could clear the lock was the request the panel
+  // refused to let anyone send. Reaping here also removes the orphaned task,
+  // which nothing did when the wrapper started and then died.
+  const lock = readRunLock(paths.lock, lockEnv)
+  if (lock.reaped) await deleteRestartTask()
+
   const targets: Record<string, { service: string | null; why: string }> = {}
   for (const purpose of RESTART_PURPOSES) {
     // ⛔ `present !== false`, NOT `present === true`. `null` means we could not
@@ -152,7 +161,7 @@ export async function GET() {
     available: process.platform === 'win32',
     terminatorPresent: present,
     targets,
-    inProgress: lockHeld(paths.lock) !== null,
+    inProgress: lock.held,
     // ⛔ So the panel can prove the hub answering it is a NEW process rather
     // than the old one that never went down. "The page loaded again" is not
     // evidence that anything restarted.
@@ -223,15 +232,20 @@ export async function POST(req: NextRequest) {
   }
 
   const paths = restartPaths(findGitRoot(process.cwd()))
-  const heldBy = lockHeld(paths.lock)
-  if (heldBy !== null) {
-    return NextResponse.json({ error: `A restart is already running (process ${heldBy}).` }, { status: 409 })
-  }
 
   let hubDependents: string[] = []
+  let dependencyDetail: string | null = null
   if (target.service === HUB_SERVICE) {
     const dep = await terminatorDependsOn(HUB_SERVICE)
+    // ⛔ THE REASON `null` LEAVES IT OUT IS WORTH SURFACING, NOT DISCARDING.
+    // `terminatorDependsOn` computes a `detail` explaining why it could not
+    // tell, and this route read only `.dependsOn` — while `null` is precisely
+    // the branch where the restart is GUARANTEED to fail with 1051, because the
+    // terminator is left running and Windows refuses the stop. The operator got
+    // "The restart did not take effect" with no hint that an unreadable
+    // dependency field was the cause. Carried into the response below.
     if (dep.dependsOn === true) hubDependents = [TERMINATOR_SERVICE]
+    dependencyDetail = dep.dependsOn === null ? dep.detail : null
   }
 
   // ⛔ THE ROUTE OWNS THE LOG HEADER. Without a run id written BEFORE the task
@@ -241,8 +255,38 @@ export async function POST(req: NextRequest) {
   // successful run is the worst possible thing to show while a restart is
   // actually still pending.
   const runId = randomUUID()
+
+  // ⛔ CLAIMED BEFORE THE LOG IS TRUNCATED, AND ATOMICALLY. This is the whole
+  // of defect 1 in lib/runLock.ts: the 409 above used to read a lock only the
+  // WRAPPER writes, so two clicks ~2 s apart both got here and the second one
+  // destroyed the first one's log — including the `runId=` header the handshake
+  // exists to make a cross-run verdict impossible. `flag: 'wx'` means the claim
+  // cannot be lost to a check-then-write race.
   try {
     fs.mkdirSync(paths.log.replace(/[\\/][^\\/]+$/, ''), { recursive: true })
+  } catch { /* the write below reports a real failure */ }
+  const claim = claimRunLock(paths.lock, runId, process.pid, lockEnv)
+  if (!claim.ok) {
+    if (claim.reason === 'busy') {
+      return NextResponse.json(
+        {
+          error: claim.claim.pending
+            ? 'A restart was just started. Wait for it to finish.'
+            : `A restart is already running (process ${claim.claim.pid}).`,
+        },
+        { status: 409 },
+      )
+    }
+    return NextResponse.json({ error: `Could not claim the restart lock: ${claim.message}` }, { status: 500 })
+  }
+
+  // From here on every failure path must give the claim back. ⛔ ONLY EVER A
+  // PENDING CLAIM — see defect 4 in lib/runLock.ts: once the wrapper has taken
+  // the lock over, a cleanup that drops it hands a second POST a live run's
+  // services.
+  const withdraw = () => releaseRunLock(paths.lock, lockEnv, { onlyIfPending: true, runId })
+
+  try {
     fs.writeFileSync(paths.log, buildRestartHeader(runId, target.service), 'utf8')
     fs.writeFileSync(
       paths.wrapper,
@@ -251,6 +295,10 @@ export async function POST(req: NextRequest) {
         log: paths.log,
         lock: paths.lock,
         taskName: RESTART_TASK_NAME,
+        // ⛔ THE ARM TOKEN. The wrapper refuses to touch a service unless the
+        // lock still carries THIS run's pending claim, which is what stops an
+        // orphaned task re-running it unattended at midnight.
+        runId,
         // ⛔ ONLY WHEN THE TERMINATOR ACTUALLY DECLARES THE DEPENDENCY.
         // This used to key on the terminator merely EXISTING, and the comment
         // here asserted the dependency as a standing fact. It stopped being
@@ -270,6 +318,7 @@ export async function POST(req: NextRequest) {
       'utf8',
     )
   } catch (err: unknown) {
+    withdraw()
     const message = err instanceof Error ? err.message : String(err)
     return NextResponse.json({ error: `Could not write the restart script: ${message}` }, { status: 500 })
   }
@@ -285,6 +334,22 @@ export async function POST(req: NextRequest) {
     ], { timeout: 20_000 })
   } catch (err: unknown) {
     const e = err as { message?: string; stderr?: string }
+    // ⛔ THE LOG HAS ALREADY BEEN TRUNCATED BY THIS POINT, so returning without
+    // tidying up left it holding nothing but this run's `runId=` header — which
+    // `parseRestartLog` reads as `outcome: 'running'`, FOREVER, with no sentinel
+    // ever coming and nothing in the panel surfacing it. The header is replaced
+    // with the sentinel so the state is `failed`, which is the truth, and the
+    // task we may have half-created goes with it.
+    await deleteRestartTask()
+    try {
+      fs.appendFileSync(
+        paths.log,
+        `[NV-RESTART] could not schedule the task: ${(e?.stderr || e?.message || 'unknown').toString().slice(0, 300)}\r\n`
+          + `${RESTART_SENTINEL} exit=1\r\n`,
+        'utf8',
+      )
+    } catch { /* the response below is the operator's answer either way */ }
+    withdraw()
     return NextResponse.json(
       { error: `Could not schedule the restart: ${(e?.stderr || e?.message || '').toString().slice(0, 300)}` },
       { status: 500 },
@@ -309,13 +374,35 @@ export async function POST(req: NextRequest) {
     // FOLLOWING day when the start time has passed. A failed click could
     // therefore restart a service unattended at midnight. The wrapper's own
     // self-delete never runs, because the wrapper never ran.
-    try {
-      await execFileAsync('schtasks.exe', ['/delete', '/tn', RESTART_TASK_NAME, '/f'], { timeout: 15_000 })
-    } catch { /* best effort: the task may not have been created at all */ }
-    return NextResponse.json(
-      { error: `Could not start the restart: ${(e?.stderr || e?.message || '').toString().slice(0, 300)}` },
-      { status: 500 },
-    )
+    //
+    // ⛔ AND IT MAY ONLY WITHDRAW A **PENDING** CLAIM. `schtasks /run` can
+    // SUCCEED on the box and still exceed its timeout on a loaded host, in which
+    // case the wrapper is already running and owns this lock — dropping it would
+    // let a second POST start a second wrapper against the same service. If the
+    // wrapper has taken over, the claim stays and so does the task.
+    const stillOurs = releaseRunLock(paths.lock, lockEnv, { onlyIfPending: true, runId })
+    if (stillOurs) {
+      await deleteRestartTask()
+      try {
+        fs.appendFileSync(paths.log, `${RESTART_SENTINEL} exit=1\r\n`, 'utf8')
+      } catch { /* best effort */ }
+      return NextResponse.json(
+        { error: `Could not start the restart: ${(e?.stderr || e?.message || '').toString().slice(0, 300)}` },
+        { status: 500 },
+      )
+    }
+    // The wrapper owns the lock: the task DID launch and the call merely timed
+    // out. Report it as started, because it was.
+    return NextResponse.json({
+      started: true,
+      service: target.service,
+      why: target.why,
+      runId,
+      dependencyDetail,
+      stopsDependents: hubDependents.length > 0,
+      previousUptimeSeconds: Math.floor(process.uptime()),
+      note: 'The scheduler took longer than expected to answer, but the restart did start.',
+    })
   }
 
   return NextResponse.json({
@@ -323,10 +410,31 @@ export async function POST(req: NextRequest) {
     service: target.service,
     why: target.why,
     runId,
-    // ⛔ Whether THIS request's own process is the one going down decides the
-    // entire client experience: a hub restart means the page loses contact, a
-    // terminator restart means a few seconds of 502 on the public port.
-    selfRestart: target.service !== TERMINATOR_SERVICE,
+    // ⛔ `selfRestart` WAS REMOVED (1.63.0): it was computed, returned, and read
+    // by nobody. The panel already decides the same thing from `service`
+    // (`service === 'NocVault-Tls'`), and a second, derived spelling of one fact
+    // is how the two drift apart. Whether the request's own process is the one
+    // going down still decides the entire client experience — it is just not
+    // this route's job to say it twice.
+    //
+    // ⛔ `dependencyDetail` IS NEW, AND IT IS THE BRANCH WHERE THE RESTART IS
+    // GUARANTEED TO FAIL. `terminatorDependsOn` returns `null` with a reason
+    // when it could not read the dependency field; this route consumed only the
+    // boolean, so the operator got "The restart did not take effect" with no
+    // hint that an unreadable `sc qc` was the cause — and a `null` reading means
+    // the terminator is left running, so Windows refuses the stop with 1051.
+    dependencyDetail,
+    // ⛔ THE PANEL HAS TO KNOW. When the terminator really does declare
+    // `DependOnService NetVault`, the wrapper's order is: stop the terminator →
+    // stop/start the hub → START THE TERMINATOR AGAIN (up to 90 s) → write
+    // `dependent … back:` and only then the sentinel. The hub answers HTTP
+    // before `Get-Service` even reports it Running, so the panel's uptime proof
+    // fires while NocVault-Tls is still STOPPED and all four consoles' public
+    // ports are dead. The panel used that proof alone to declare success, which
+    // made `parseRestartLog`'s `depsFailed` term — added specifically to refuse
+    // that false all-clear — unreachable on the only path where dependents
+    // exist. See components/settings/RestartControl.tsx.
+    stopsDependents: hubDependents.length > 0,
     previousUptimeSeconds: Math.floor(process.uptime()),
   })
 }

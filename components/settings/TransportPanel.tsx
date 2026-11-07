@@ -106,6 +106,16 @@ function runPresentation(run: TransportState['lastRun']): { tone: Tone; title: s
       return { tone: 'ok', title: 'HTTPS was turned on', text: 'Every installed console answered over HTTPS through the front door.' }
     case 'disabled':
       return { tone: 'ok', title: 'HTTPS was turned off', text: 'The consoles are serving directly over plain HTTP again.' }
+    // ⛔ ONLY REACHABLE WHEN THE ENGINE REALLY MOVED THE CONSOLES. The verdict
+    // is `reverted` only if `Undo-TlsCutover` printed its own line
+    // ("REVERTING the TLS cutover"), which is written on no other path — so
+    // this sentence can be stated as strongly as it is. It could not be before:
+    // the closing banner "HTTPS was NOT enabled - the suite is unchanged" is
+    // printed whenever the cutover was not applied, INCLUDING when the gates
+    // never passed and nothing was touched, and that banner used to map
+    // straight here. Every real enable with a failing gate therefore rendered
+    // this paragraph, asserting a four-console cutover and rollback that had
+    // not happened. See `parseRunLog` in lib/tlsTransport.ts.
     case 'reverted':
       return {
         tone: 'warn',
@@ -117,15 +127,18 @@ function runPresentation(run: TransportState['lastRun']): { tone: Tone; title: s
       }
     // ⛔ SEPARATE FROM `reverted`, AND THE WORDING IS THE WHOLE POINT. Nothing
     // was moved here, so claiming the engine "put every console back" would
-    // assert a cutover and rollback that never happened — which is what a
-    // failing Preview, the action we recommend doing FIRST, used to render.
+    // assert a cutover and rollback that never happened. This is the verdict for
+    // BOTH a failing Preview (the action we recommend doing FIRST) and a real
+    // enable whose gates refused before anything moved — the second of which
+    // used to be mapped to `reverted` instead, so the lie was being told on the
+    // path that matters most.
     case 'refused':
       return {
         tone: 'warn',
         title: 'The engine refused before changing anything',
         text:
-          'A gate did not pass, so nothing was moved and nothing needed putting back — the suite is '
-          + 'serving exactly as it was. The lines below say which gate and why.',
+          'A gate did not pass, so nothing was moved and nothing needed putting back — the four '
+          + 'consoles are serving exactly as they were. The lines below say which gate and why.',
       }
     default:
       return {

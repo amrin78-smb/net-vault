@@ -5,6 +5,7 @@ import { query } from '@/lib/db'
 import { calcTechnicalDebt } from '@/lib/techDebt'
 import { stripBrandFromModel } from '@/lib/model'
 import { checkWriteAllowed } from '@/app/api/license/route'
+import { resolvePaging } from '@/lib/pagination'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -21,9 +22,13 @@ export async function GET(req: NextRequest) {
   const supportExpiry = searchParams.get('support_expiry') || ''
   const brand = searchParams.get('brand') || ''
   const eol = searchParams.get('eol') || ''
-  const page = parseInt(searchParams.get('page') || '1')
-  const limit = parseInt(searchParams.get('limit') || '50')
-  const offset = (page - 1) * limit
+  // ⛔ CLAMPED, NEVER A BARE parseInt. `limit=99999999` was a full scan of
+  // `v_devices_flat` sized by the caller, `page=0` was a negative OFFSET that
+  // PostgreSQL rejects (500), and `limit=abc` was NaN travelling into a query
+  // parameter (500 again) — all three reachable by any authenticated session.
+  // See lib/pagination.ts; the same helper is the only way the other paginated
+  // routes may read these two values.
+  const { limit, offset } = resolvePaging(searchParams)
 
   const conditions: string[] = []
   const params: unknown[] = []

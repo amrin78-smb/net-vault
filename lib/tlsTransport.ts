@@ -22,6 +22,8 @@
 // to make impossible. The script's closing banner is unambiguous and is the
 // only thing `parseRunLog` trusts for the verdict.
 
+import { psArmGuard, psLockHeartbeat, psLockTakeover } from './runLock.ts'
+
 /** What the panel can ask for. */
 export type TransportAction = 'preview' | 'enable' | 'disable'
 
@@ -169,6 +171,17 @@ export function buildWrapperScript(opts: {
   lock: string
   taskName: string
   publicHost?: string
+  /**
+   * The run the ROUTE armed this wrapper for.
+   *
+   * ⛔ WITHOUT IT THE ORPHANED TASK RE-RUNS THIS AT MIDNIGHT. See
+   * `psArmGuard` in lib/runLock.ts — a reboot during a cutover leaves
+   * `NocVault-TlsTransport` registered with a `/sc once /st 00:00` trigger and
+   * this file still on disk holding the last requested action, and a `once`
+   * trigger whose start time has passed fires the FOLLOWING day. Unattended,
+   * that re-ran `-Disable` and dropped the whole suite to plain HTTP.
+   */
+  runId: string
 }): string {
   const args = ['-File', psLiteral(opts.script), ...engineArgs(opts.action, opts.publicHost || '')]
   return [
@@ -177,7 +190,11 @@ export function buildWrapperScript(opts: {
     `$log  = ${psLiteral(opts.log)}`,
     `$lock = ${psLiteral(opts.lock)}`,
     'New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null',
-    '$PID | Out-File -FilePath $lock -Encoding ascii -Force',
+    // ⛔ BEFORE ANYTHING ELSE, AND BEFORE THE LOG IS TRUNCATED. A wrapper that
+    // was not armed for this run must leave both the log and the four consoles
+    // exactly as it found them.
+    ...psArmGuard({ runId: opts.runId, taskName: opts.taskName, quote: psLiteral }),
+    psLockTakeover(),
     // ⛔ `psLiteral`, EVEN THOUGH `isTransportAction` ALREADY GUARDS THIS.
     // These are DOUBLE-quoted PowerShell strings, where `$(...)` is evaluated —
     // so a raw interpolation here means the quoting depends entirely on the
@@ -188,7 +205,11 @@ export function buildWrapperScript(opts: {
     `("[NV-TRANSPORT] action=" + ${psLiteral(opts.action)} + " started $(Get-Date -Format s)") | Out-File -FilePath $log -Encoding UTF8 -Force`,
     'try {',
     `    & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass ${args.join(' ')} 2>&1 |`,
-    '        ForEach-Object { $s = "$_"; $s | Out-File -FilePath $log -Append -Encoding UTF8; $s }',
+    // ⛔ THE LOCK IS REWRITTEN ON EVERY ENGINE LINE, AND THAT IS WHAT MAKES
+    // `LOCK_IDLE_MS` A DEATH SIGNAL RATHER THAN AN AGE LIMIT. The old reaper
+    // was `dead || old` against an mtime written once at start, so a run still
+    // working had its lock removed at 30 minutes.
+    `        ForEach-Object { $s = "$_"; $s | Out-File -FilePath $log -Append -Encoding UTF8; ${psLockHeartbeat()}; $s }`,
     '    $rc = $LASTEXITCODE',
     '} catch {',
     '    "[NV-TRANSPORT] wrapper error: $($_.Exception.Message)" | Out-File -FilePath $log -Append -Encoding UTF8',
@@ -251,12 +272,37 @@ export type RunReport = {
   highlights: string[]
 }
 
+/**
+ * The line the engine prints ONLY when it has actually moved the consoles and
+ * is putting them back.
+ *
+ * ⛔ THIS IS WHAT SEPARATES `reverted` FROM `refused`, AND IT IS THE ONLY
+ * THING THAT CAN. `installer/NocVault-TlsCutover.ps1`'s `Undo-TlsCutover` is
+ * the sole writer of it, and that function is reached only from a failure path
+ * AFTER the cutover has begun.
+ */
+const REVERT_MARKER = /REVERTING the TLS cutover/i
+
 const BANNERS: Array<{ re: RegExp; outcome: RunOutcome }> = [
   // ⛔ ORDER MATTERS AND THE FAILURE COMES FIRST. "HTTPS was NOT enabled"
   // contains "HTTPS"; a looser match tested earlier would claim success on the
   // exact run that reverted.
-  { re: /HTTPS was NOT enabled/i, outcome: 'reverted' },
-  { re: /REVERTING the TLS cutover/i, outcome: 'reverted' },
+  //
+  // ⛔ AND IT IS `refused`, NOT `reverted`. This closing banner says only
+  // "HTTPS was NOT enabled - the suite is unchanged"; it is printed whenever
+  // `$script:TlsCutoverApplied` is false, which includes the case where the
+  // GATES NEVER PASSED and nothing was touched at all
+  // (`NocVault-TlsCutover.ps1`'s `if (-not $TlsGateOk)` branch just prints
+  // "Not installed. <reason>" and leaves the consoles alone). Mapping it to
+  // `reverted` made the panel tell an operator that "a gate did not pass after
+  // the move had started, so the engine put every console back the way it found
+  // it" — a four-console cutover and rollback that never happened — on EVERY
+  // real enable whose gates failed. `Gates did NOT pass` only ever appears on
+  // the `-DryRun` branch (`Enable-NocVaultTls.ps1`), so before this fix a real
+  // run could not reach `refused` at all, and `reverted`'s copy had just been
+  // sharpened to assert the rollback more strongly.
+  { re: /HTTPS was NOT enabled/i, outcome: 'refused' },
+  { re: REVERT_MARKER, outcome: 'reverted' },
   { re: /HTTPS is ON\b/i, outcome: 'enabled' },
   // ⛔ ANCHORED ON THE SUCCESS WORDING, NOT ON "HTTPS is OFF".
   // Enable-NocVaultTls.ps1 prints TWO banners for a disable:
@@ -339,6 +385,15 @@ export function parseRunLog(text: string | null | undefined): RunReport {
   // must not be able to claim success, so require the exit code to agree too.
   if (outcome === 'disabled' && exitCode !== null && exitCode !== 0) {
     outcome = 'unknown'
+  }
+  // ⛔ A REFUSAL THAT FOLLOWS A REVERT IS A REVERT. The closing banner is the
+  // LAST line either way, so scanning backwards finds "HTTPS was NOT enabled"
+  // on both paths; the difference is whether `Undo-TlsCutover` ran earlier in
+  // the same log. Promoting here keeps the chronology rule intact (the final
+  // banner still decides the FAMILY of outcome) while letting the one line that
+  // proves consoles were actually moved decide which of the two it is.
+  if (outcome === 'refused' && lines.some((l) => REVERT_MARKER.test(l))) {
+    outcome = 'reverted'
   }
   return { outcome, action, exitCode, finished: true, lines, highlights: lines.filter(isHighlight) }
 }

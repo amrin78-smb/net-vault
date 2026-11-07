@@ -127,11 +127,47 @@ product could save a change it could not apply.
   PowerShell (CLAUDE.md: a fixed instance is not a fixed class).
 - ⛔ **IT NEVER NAMES A SERVICE.** It sends a `purpose`; the server decides. That is what stops the
   Certificate panel pointing at NetVault again.
-- ⛔ **A LOWER UPTIME IS THE PROOF.** "The page loaded again" is not evidence a restart happened — a
-  refused stop leaves the original process answering this very poll.
+- ⛔ **THE RUN'S OWN VERDICT IS THE PROOF; A LOWER UPTIME IS ONLY PROGRESS (changed 1.63.0).** "The
+  page loaded again" is not evidence a restart happened — a refused stop leaves the original process
+  answering this very poll — but a lower uptime is not evidence the restart FINISHED either. On an
+  install where `NocVault-Tls` really declares `DependOnService NetVault`, the wrapper's order is:
+  stop the terminator → stop/start the hub → START THE TERMINATOR AGAIN (up to 90 s) → write
+  `dependent … back:` → write the sentinel. The hub answers HTTP before `Get-Service` reports it
+  Running, so the first poll gave a lower uptime with `finished: false` and the panel went green with
+  "Restarted — the change is now in force" while the front door was stopped and **all four consoles'
+  public ports were dead**. Polling stops at `done`, so a terminator that never came back left it
+  green forever — and it made `parseRestartLog`'s `depsFailed` term, added specifically to refuse
+  this, unreachable on the only path where dependents exist. `done` now requires
+  `mine && finished && outcome === 'succeeded'`; `uptimeProof` sets `backOnline`, which is how the
+  panel says "this console is answering, the front door is still coming back".
+- `WAIT_LIMIT_MS` is 7 minutes, because the wrapper's own bounds add to 345 s (45 s per dependent
+  stop + 60 s stop poll + 150 s of start attempts + 90 s per dependent returning). At 4 minutes the
+  new verdict-based rule would have reported "could not confirm" for restarts that were working.
+- `canRestart?: boolean` (default true) — ⛔ `POST /api/system/service-restart` is super_admin and
+  both call sites rendered this with NO role prop, so an `admin` met an enabled "Restart NetVault
+  now" that answered a bare 403 — in the same commit that correctly gated `CertificatePanel`'s
+  install button 20 lines below it. `ConsoleAddressPanel` gained `canRestart` for the same reason
+  (the panel is admin+, the restart is not).
+- `dependencyDetail` — `terminatorDependsOn` returns a REASON when it cannot tell, and `null` is
+  precisely the branch where the restart is guaranteed to fail with 1051 (the front door is left
+  running, Windows refuses the stop). The route computed it and threw it away; the panel now names
+  it in both the `failed` and `unconfirmed` callouts.
 - Losing contact mid-restart is rendered as expected, not as a fault.
 
 ### Changed 1.62.0
 - `CertificatePanel` takes `canInstall?: boolean` (default true). Settings passes `isSuperAdmin`; a plain admin sees the tab read-only rather than a button the server will 403.
 - `RestartControl` gained the `unconfirmed` phase (a restart it cannot prove, instead of an endless spinner) and reports the server's reason when there is nothing to restart.
 - `TransportPanel` renders the log-read error and a died-run notice OUTSIDE the "Last change" card — the card is skipped in exactly the case those messages describe.
+
+### Changed 1.63.0
+- `RestartControl` takes `canRestart?`; `ConsoleAddressPanel` takes `canRestart?`; both default to
+  `true` so an un-updated call site keeps today's behaviour. `app/(app)/settings/page.tsx` passes
+  `isSuperAdmin` to both, beside the `canInstall={isSuperAdmin}` it already passed.
+- `CertificatePanel`'s "Replace the installed certificate" confirmation is `disabled={busy ||
+  !canInstall}`; it was `disabled={busy}` only, which contradicted the read-only notice in the same
+  panel.
+- `TransportPanel`'s `reverted` copy is now only reachable when the engine really moved the consoles
+  (`parseRunLog` requires `REVERTING the TLS cutover`, written only by `Undo-TlsCutover`). Before,
+  the closing banner "HTTPS was NOT enabled" mapped straight to `reverted`, so EVERY real enable
+  with a failing gate rendered a paragraph asserting a four-console cutover and rollback that had
+  not happened — and `refused` was unreachable outside Preview.

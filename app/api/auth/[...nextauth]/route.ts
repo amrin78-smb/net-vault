@@ -3,6 +3,7 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import AzureADProvider from 'next-auth/providers/azure-ad'
 import { query } from '@/lib/db'
 import { getUserApps } from '@/lib/appAccess'
+import { resolveLocalIdentity } from '@/lib/localIdentity.ts'
 import { verifySecondFactor, mfaRequiredForRole } from '@/lib/mfaGate'
 import bcrypt from 'bcryptjs'
 import { isEntraConfigured } from '@/lib/entraSettings.ts'
@@ -40,6 +41,15 @@ import {
 // product that was working yesterday. Pinned by a test for that reason.
 //
 export const ENTRA_PROVIDER_ID = 'entra'
+
+/**
+ * How long a signed-in session stays usable.
+ *
+ * ⛔ EXPORTED SO IT CAN BE ASSERTED. The defect being fixed is an ABSENT
+ * value — a field nobody wrote — and the only way a test can refuse its return
+ * is to read the number the options actually carry.
+ */
+export const SESSION_MAX_AGE_SECONDS = 12 * 60 * 60
 
 /**
  * The claims we carry off the id_token.
@@ -517,11 +527,14 @@ const authOptions = {
       }
 
       // ⛔ THIS IS THE LAYER THAT CATCHES A MID-SESSION REVOCATION, and signIn()
-      // above cannot: by then the front door has already been passed. Local
-      // users have had the equivalent since RBAC shipped (their role is
-      // re-read from `users` on every token use elsewhere in this suite); a
-      // directory user exempted from it would hold a mapping an administrator
-      // removed for the whole life of the JWT.
+      // above cannot: by then the front door has already been passed. It runs
+      // for BOTH kinds of account, and until 1.63.0 it ran only for directory
+      // ones — while the comment here asserted that local users had had the
+      // equivalent "since RBAC shipped". They had not: `token.role` was set
+      // inside `if (user)` above, i.e. once, at sign-in, and nothing re-read it
+      // or invalidated the JWT on a demotion or a deletion. Hub routes read
+      // `session.user.role` straight off that token, so an operator who demoted
+      // a super_admin changed nothing about the session that person was holding.
       if (token.provider === ENTRA_PROVIDER_ID) {
         token.role = await reresolveDirectoryRole(token.entraClaims as EntraClaims | undefined)
 
@@ -539,6 +552,35 @@ const authOptions = {
               'The session carries no role and will be denied.',
           )
         }
+      } else {
+        // —— the LOCAL half of the same layer ——
+        //
+        // ⛔ A TOKEN WITH NO `provider` LANDS HERE, AND THAT IS CORRECT. Tokens
+        // minted before the directory feature carry no provider and are local;
+        // the directory branch would null their role and sign out every
+        // existing session on deploy.
+        //
+        // ⛔ `read === false` LEAVES THE TOKEN ALONE, ON PURPOSE, AND THAT IS
+        // THE ONE PLACE THIS SUITE DOES NOT FAIL CLOSED. The read that failed
+        // is `SELECT role FROM users`, so its failure means the hub's own
+        // database is unreachable and every page is already broken — clearing
+        // every live session's role on a pool blip would be a product-wide
+        // sign-out triggered by a hiccup, including for the operator trying to
+        // fix it. The privilege stays BOUNDED by `session.maxAge` below, and
+        // lib/localIdentity.ts does not cache a failure, so the next request
+        // asks again. The directory branch above fails the other way for a
+        // stated reason: the table IT reads is a small mapping table, whose
+        // failure says nothing about the health of anything else.
+        const again = await resolveLocalIdentity(token.id as string | number)
+        if (again.read) {
+          // `null` here means the row is GONE — a deleted account's token now
+          // carries no role, and every role check in the hub refuses it.
+          token.role = again.role
+          // ⛔ THE APPS TOO. `session.user.apps` decides which launcher tiles
+          // render; leaving it frozen at sign-in made the hub's own page
+          // disagree with the SSO handoffs, which re-resolve live.
+          if (again.apps) token.apps = again.apps
+        }
       }
       return token
     },
@@ -555,7 +597,31 @@ const authOptions = {
   // sign-in page, carrying NextAuth's own generic token and nothing about the
   // cause.
   pages: { signIn: '/login', error: '/login' },
-  session: { strategy: 'jwt' as const },
+  // ⛔ BOTH `session.maxAge` AND `jwt.maxAge`, AND SETTING ONLY ONE IS A TRAP.
+  // `session.maxAge` was omitted, so NextAuth v4 used its 30-day default
+  // (core/init.js: `const maxAge = 30 * 24 * 60 * 60`) — a bearer token the hub
+  // reads `role` off, that the three SSO handoffs mint satellite tokens from,
+  // and that nothing in NextAuth can revoke once issued.
+  //
+  // `session.maxAge` governs the COOKIE's expiry and the `exp` written by
+  // /api/auth/session; `jwt.maxAge` governs the `exp` written by the SIGN-IN
+  // callback, and it comes from that same 30-day constant rather than from
+  // `session` (core/init.js builds `jwt: { secret, maxAge, ... }` from the
+  // constant). Set only `session.maxAge` and the freshly-minted token still
+  // verifies for 30 days under `getToken()` — the browser would drop the cookie
+  // on time while a copy of it replayed anywhere else would not. So both.
+  //
+  // ⛔ `updateAge` IS DELIBERATELY NOT SET: IT DOES NOTHING ON THIS STRATEGY.
+  // core/routes/session.js consults it only in the DATABASE branch; the jwt
+  // branch re-encodes with a fresh `maxAge` on every /api/auth/session call. So
+  // this is already a rolling window — an active session keeps extending and an
+  // idle one expires 12 hours after the last poll. Setting `updateAge` here
+  // would read as the thing keeping that true, and it is not.
+  session: {
+    strategy: 'jwt' as const,
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  },
+  jwt: { maxAge: SESSION_MAX_AGE_SECONDS },
   secret: process.env.NEXTAUTH_SECRET,
 }
 

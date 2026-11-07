@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
+import { resolvePaging } from '@/lib/pagination'
 
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
@@ -30,13 +31,16 @@ export async function GET(req: NextRequest) {
 
   if (user.role !== 'admin' && user.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
-  const page     = parseInt(searchParams.get('page') || '1')
   const action   = searchParams.get('action') || ''
   const userId   = searchParams.get('user') || ''
   const dateFrom = searchParams.get('from') || ''
   const dateTo   = searchParams.get('to') || ''
-  const limit    = 50
-  const offset   = (page - 1) * limit
+  // ⛔ CLAMPED. `page=0` built a negative OFFSET, which PostgreSQL rejects
+  // outright, so the audit log answered 500 to a hand-typed query string; a
+  // huge `page` is now simply an empty page rather than a 500. The page SIZE is
+  // fixed at 50 here (`fixedLimit`), so a caller cannot widen it either — see
+  // lib/pagination.ts, which is the only place these two values may be read.
+  const { limit, offset } = resolvePaging(searchParams, { fixedLimit: 50 })
 
   const conditions: string[] = []
   const params: unknown[] = []

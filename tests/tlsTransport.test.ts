@@ -66,10 +66,40 @@ test('a successful run is enabled, with the same exit code as the failed one', (
   assert.equal(ok.exitCode, bad.exitCode)
 })
 
-test('"HTTPS was NOT enabled" is not matched as "HTTPS is ON"', () => {
+test('"HTTPS was NOT enabled" is not matched as "HTTPS is ON" — and ALONE it is a refusal', () => {
   // The failure banner contains the word HTTPS; a looser matcher ordered the
-  // other way round would report the reverted run as a success.
-  assert.equal(parseRunLog(`x\n  HTTPS was NOT enabled\n${RUN_SENTINEL} exit=0 action=enable`).outcome, 'reverted')
+  // other way round would report the failed run as a success.
+  const r = parseRunLog(`x\n  HTTPS was NOT enabled\n${RUN_SENTINEL} exit=0 action=enable`)
+  assert.notEqual(r.outcome, 'enabled')
+  // ⛔ AND IT IS `refused`, NOT `reverted`, WHICH IS WHAT THIS ASSERTED BEFORE.
+  // That banner is printed whenever `$script:TlsCutoverApplied` is false —
+  // INCLUDING when the gates never passed and nothing was touched at all
+  // (`NocVault-TlsCutover.ps1`'s `if (-not $TlsGateOk)` branch). `Gates did NOT
+  // pass` is only ever printed on the `-DryRun` branch, so with this mapping a
+  // REAL enable with failing gates could not reach `refused` at all: every one
+  // of them rendered `reverted`'s copy, which promises the engine "put every
+  // console back the way it found it". Nothing had been moved.
+  assert.equal(r.outcome, 'refused')
+})
+
+test('a revert and a refusal are told apart by the line only a REVERT prints', () => {
+  // ⛔ THE CLOSING BANNER IS THE SAME ON BOTH PATHS, so the only evidence that
+  // four consoles were actually moved is `Undo-TlsCutover`'s own line — written
+  // nowhere else in the engine. With it, the stronger copy is earned.
+  const refused = parseRunLog([
+    '[NV-TRANSPORT] action=enable started now',
+    '  Not installed. A certificate pair was not found.',
+    '  HTTPS was NOT enabled - the suite is unchanged',
+    `${RUN_SENTINEL} exit=0 action=enable`,
+  ].join('\r\n'))
+  const reverted = parseRunLog([
+    '[NV-TRANSPORT] action=enable started now',
+    '  REVERTING the TLS cutover - netvault did NOT answer https on :3000',
+    '  HTTPS was NOT enabled - the suite is unchanged',
+    `${RUN_SENTINEL} exit=0 action=enable`,
+  ].join('\r\n'))
+  assert.equal(refused.outcome, 'refused')
+  assert.equal(reverted.outcome, 'reverted')
 })
 
 test('a run with no sentinel is still running, and claims no outcome', () => {
@@ -180,9 +210,12 @@ test('the wrapper writes its sentinel before it cleans up, and deletes its own t
     log: 'C:\\Apps\\NetVault\\app\\logs\\tls-transport.log',
     lock: 'C:\\Apps\\NetVault\\app\\logs\\tls-transport.lock',
     taskName: TRANSPORT_TASK_NAME,
+    runId: 'run-under-test',
   })
   const sentinelAt = script.indexOf(RUN_SENTINEL)
-  const deleteAt = script.indexOf('/delete')
+  // ⛔ `lastIndexOf`: the arm guard also deletes the task (early, on a refusal
+  // — an orphan firing at midnight), so the SELF-delete is the last one.
+  const deleteAt = script.lastIndexOf('/delete')
   const lockRemoveAt = script.indexOf('Remove-Item -LiteralPath $lock')
   assert.ok(sentinelAt > 0, 'the sentinel must be written')
   assert.ok(deleteAt > sentinelAt, 'the task delete must come after the sentinel')
@@ -198,6 +231,7 @@ test('the wrapper quotes a path containing spaces', () => {
     log: 'C:\\Program Files\\NocVault\\logs\\tls-transport.log',
     lock: 'C:\\Program Files\\NocVault\\logs\\tls-transport.lock',
     taskName: TRANSPORT_TASK_NAME,
+    runId: 'run-under-test',
   })
   assert.ok(script.includes("'C:\\Program Files\\NocVault\\installer\\Enable-NocVaultTls.ps1'"))
   assert.ok(script.includes('-DryRun'))
