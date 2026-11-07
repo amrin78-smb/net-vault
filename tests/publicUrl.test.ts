@@ -65,6 +65,87 @@ test("the scheme's default port is not echoed back", () => {
     'https://nv.example.com')
 })
 
+// ── TLS_PUBLIC_HOST: the port arrives in a header instead of in the host ────
+
+test('a PINNED forwarded host takes its port from x-forwarded-port', () => {
+  // ⛔ THE REASON THIS SOURCE EXISTS. Setting TLS_PUBLIC_HOST (the next step of
+  // the TLS hardening) makes the terminator pin x-forwarded-host to a BARE
+  // hostname, so "keep the inbound port" has nothing left to keep and every
+  // sessionless SSO redirect would have gone back to the dead :443 that 1.63.1
+  // fixed. This is that exact request shape.
+  const o = resolveOrigin(
+    req({
+      host: '127.0.0.1:13000',
+      'x-forwarded-host': 'nocvault.thaiunion.com',
+      'x-forwarded-port': '3000',
+      'x-forwarded-proto': 'https',
+    }),
+    null, FALLBACK, {})
+  assert.equal(o, 'https://nocvault.thaiunion.com:3000')
+  // The loopback console port the app is actually reached on must never leak
+  // into a URL handed to a browser.
+  assert.ok(!o.includes('13000'))
+})
+
+test('a port in the host still wins over x-forwarded-port', () => {
+  // Both present and disagreeing: the host we are building the URL from is the
+  // more specific statement, so it decides.
+  const o = resolveOrigin(
+    req({
+      'x-forwarded-host': 'nocvault.thaiunion.com:3000',
+      'x-forwarded-port': '3004',
+      'x-forwarded-proto': 'https',
+    }),
+    null, FALLBACK, {})
+  assert.equal(o, 'https://nocvault.thaiunion.com:3000')
+})
+
+test('x-forwarded-port is ignored when the forwarded host was NOT trusted', () => {
+  // ⛔ Same header set, same trust decision. The allow-list rejects the
+  // forwarded host, so we fall back to the request's own Host — and must take
+  // the port from that Host too, not from the header family we just declined
+  // to believe. Taking :9999 here would let a direct caller steer the port of a
+  // redirect that carries a signed token.
+  const o = resolveOrigin(
+    req({
+      host: 'nv.example.com:3000',
+      'x-forwarded-host': 'evil.example.com',
+      'x-forwarded-port': '9999',
+      'x-forwarded-proto': 'https',
+    }),
+    null, FALLBACK, { TRUST_PROXY_HEADERS: 'nv.example.com' })
+  assert.equal(o, 'https://nv.example.com:3000')
+  assert.ok(!o.includes('evil'))
+  assert.ok(!o.includes('9999'))
+
+  // ⛔ AND AGAIN WITH NO PORT ON THE REAL HOST, WHICH IS THE CASE THAT ACTUALLY
+  // PINS THE TRUST DECISION. Above, the Host's own :3000 wins before
+  // x-forwarded-port is ever consulted, so that assertion passes even if the
+  // header is trusted unconditionally — mutation-testing caught exactly that.
+  // Here x-forwarded-port is the ONLY port on offer, so dropping the
+  // `useForwarded` guard makes :9999 appear.
+  const bare = resolveOrigin(
+    req({
+      host: 'nv.example.com',
+      'x-forwarded-host': 'evil.example.com',
+      'x-forwarded-port': '9999',
+      'x-forwarded-proto': 'https',
+    }),
+    null, FALLBACK, { TRUST_PROXY_HEADERS: 'nv.example.com' })
+  assert.equal(bare, 'https://nv.example.com')
+  assert.ok(!bare.includes('9999'))
+})
+
+test('a junk or default x-forwarded-port is dropped, not concatenated', () => {
+  const base = { 'x-forwarded-host': 'nv.example.com', 'x-forwarded-proto': 'https' }
+  for (const bad of ['notaport', '', '0', '99999', '-1', '3000x', '443']) {
+    assert.equal(
+      resolveOrigin(req({ ...base, 'x-forwarded-port': bad }), null, FALLBACK, {}),
+      'https://nv.example.com',
+      `x-forwarded-port=${JSON.stringify(bad)} must not reach the origin`)
+  }
+})
+
 test('no usable host falls back, never throws', () => {
   assert.equal(resolveOrigin(req({}), null, FALLBACK, {}), FALLBACK)
   assert.equal(resolveOrigin(req({ host: '  ' }), null, FALLBACK, {}), FALLBACK)

@@ -160,7 +160,7 @@ model.ts
   stripBrandFromModel(brand, model) — strip redundant leading brand token from a model string
 
 publicUrl.ts
-  resolveOrigin(req, port, legacyFallback) — derive request origin (host/proto) for cross-app SSO redirect targets
+  resolveOrigin(req, port, legacyFallback, env?) — derive request origin (host/proto/PORT) for cross-app SSO redirect targets
   SIBLING_PORTS — const port map for logvault/ddivault/spanvault
 
 rateLimit.ts
@@ -223,6 +223,40 @@ guard here, re-run its mutation, don't trust a green suite.
 (installer) installer/terminator/{start.mjs,nocvault-tls-terminator.ts,tlsTerminator.ts} — the suite's shared TLS terminator: ONE process fronting all four consoles (3000/3004/3006/3008 → 127.0.0.1:1300X), rather than a custom server per app. ⛔ **NETVAULT IS `output: 'standalone'` AND NSSM RUNS NEXT'S OWN GENERATED server.js, so SecVault's per-app wrapper cannot be used here**; at four apps it would also mean four certificate installs and four renewals. Reuses `lib/tlsConfig.ts` unchanged for the three transport states. ⛔ THE SAME-PORT DEMUX: a plaintext request into a TLS listener is a protocol failure, not a redirect, so an old `http://host:3000` bookmark would give an unexplained connection error — it peeks byte 1, routes `0x16` to TLS and anything else to a 301. `socket.unshift` is load-bearing (deleting it breaks 9 of 19 tests; the byte is already consumed and every request loses its first character). ⛔ **IT OVERWRITES EVERY CLIENT `x-forwarded-*`, NEVER APPENDS** — `resolveOrigin` takes `.split(',')[0]` for the proto, so a client's `http` would win and silently downgrade every URL the app builds over a genuinely-TLS connection; and a two-value host fails `HOSTNAME_RE` and falls back to the install-time `NEXTAUTH_URL`, reintroducing the exact bug `resolveOrigin` was written to fix. Those redirects carry a short-lived signed SSO token. ⛔ **BLOCKED ON NODE: it cannot run on the Node 20.19.0 the installer bundles**, which cannot execute TypeScript (22.6 flagged / 22.18 unflagged) — and Node 20 LTS has been end-of-life since April 2026. `start.mjs` detects this by ATTEMPTING the import, never from a version table, and REFUSES with a named error rather than serving plaintext: with the decision layer unloadable it cannot tell a configured certificate from an unconfigured one, and plaintext there is indistinguishable from a deliberate `disabled` install — SecVault's 2026-09-24 outage shape exactly.
 
 (lib) lib/localAccountPolicy.ts — decideLocalAccountEmail/decideDirectoryAccountEdit/sameRow + LOCAL_EMAIL_OUTCOME/DIRECTORY_EDIT_OUTCOME. Who may write what to `users`. ⛔ **A LOCAL ACCOUNT MUST NOT USE A DIRECTORY EMAIL ADDRESS** (policy, 2026-11-05) — this is the symmetric half of `directoryUser.ts`'s EMAIL_COLLISION, so the refusal lands in front of whoever typed it instead of surfacing later as a failed sign-in for someone else. There is deliberately NO "link these two accounts" action and none is planned; the fix is to remove or re-address the local account. ⛔ `decideDirectoryAccountEdit` refuses a password, a role CHANGE or an email CHANGE on a directory row. The password case closes a real hole: `PUT /api/users/[id]` wrote `password_hash` from the body regardless of whose row it was, and a hash on an `entra` row makes `canUsePassword()` true. ⛔ CHANGES are compared, not mere presence — the Users form posts every field on every save, so refusing any request CONTAINING `role` would make a directory account's name and app access unsavable, which is the blanket refusal this avoids. The password is the exception: there is no "unchanged password" to compare against. Provenance comes from the shared `isDirectoryAccount`, so an unrecognised provider gets the stricter treatment.
+
+### lib/publicUrl.ts — where the PORT comes from (1.63.1, 1.63.2)
+
+⛔ **`port: null` MEANS "KEEP THE PORT WE WERE REACHED ON", NOT "NO PORT".** It meant the
+latter until 1.63.1, and the three `ownOrigin` call sites in the SSO handoffs pass `null`
+precisely because they mean *this host, this port* — so a sessionless user was redirected to
+`https://host/login`, i.e. port 443, on a suite whose public ports are 3000/3004/3006/3008
+and which listens on neither 443 nor 80. MEASURED on production 2026-11-07. It survived
+because only the no-session and access-denied branches build `ownOrigin`: a signed-in user
+clicking a launcher tile never does. 1.63.0's cut from a 30-day session to 12 hours would
+have turned it from rare into daily, so the session hardening and this fix belong together.
+
+⛔ **THE PORT HAS THREE SOURCES, AND `x-forwarded-port` IS NOT BELT-AND-BRACES (1.63.2).**
+Precedence: an explicitly requested `port`, then a port carried in the host being used, then
+`x-forwarded-port`. The third exists because keeping the inbound port works only while the
+forwarded host CARRIES one — and it carries one only while `TLS_PUBLIC_HOST` is unset, which
+makes the terminator echo the browser's own `Host` (`…:3000`). **Setting that variable pins
+`x-forwarded-host` to a bare hostname, so 1.63.1's fix would have silently stopped working
+the moment the TLS hardening it was written alongside actually landed.** The terminator
+already sends the correct per-app port in `x-forwarded-port` (`forwardedHeaders()`), so that
+is where the port comes from once the host no longer has one. Order these two the other way
+round and the suite ships a hardening step that re-opens the bug it just closed.
+
+⛔ `x-forwarded-port` is consulted ONLY when `x-forwarded-host` was itself trusted — the same
+header set, so the same trust decision. If the allow-list sent us back to the request's own
+`Host`, that `Host`'s own port is the only honest answer; taking a port from a header we just
+declined to believe would be worse than having no port at all. `usablePort()` additionally
+drops the scheme's default port (so an install genuinely fronted on 443 keeps a clean origin)
+and anything outside 1–65535 (so junk is dropped, never concatenated into a URL).
+
+⛔ The three satellites' own `resolveOrigin` copies do NOT need this and must not be "kept in
+sync" reflexively: every satellite call site passes an explicit `3000` (the hub's port), which
+wins over both carried sources, so they are unaffected by `port: null` and by `TLS_PUBLIC_HOST`
+alike. NetVault is the only app with `null` call sites.
 
 ### lib/publicUrl.ts — `TRUST_PROXY_HEADERS` (1.56.0)
 

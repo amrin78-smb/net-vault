@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.63.2': [
+    "Fixed, before it could bite: the login-page redirect repaired in 1.63.1 took the port from the address the browser asked for. Pinning that address at the HTTPS front door - the next step of the TLS hardening, and the point of it - removes the port from it, which would have put the 1.63.1 dead end straight back. The port is now read from the front door's own header, which already carries the correct one for each of the four consoles.",
+  ],
   '1.63.1': [
     "Fixed: signing in after your session expired could send you to an address that does not exist. The redirect to the login page was built without the port, so from a console on port 3000 it pointed at the default HTTPS port, where nothing is listening. Found on the live server immediately after the 1.63.0 deploy. It only ever affected the expired-session and access-denied paths, which is why it went unnoticed - but 1.63.0 shortened sessions from 30 days to 12 hours, which would have turned a rare dead end into a daily one.",
   ],

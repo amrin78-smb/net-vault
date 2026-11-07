@@ -30,6 +30,22 @@ export type EnvLike = Record<string, string | undefined>
 const HOSTNAME_RE = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/
 
 /**
+ * A port this module is willing to put in a redirect URL, or `''`.
+ *
+ * The scheme's own default port is dropped so an install genuinely fronted on
+ * 443 keeps a clean origin, and anything that is not a real port number is
+ * dropped rather than concatenated into a URL.
+ */
+function usablePort(value: string, proto: string): string {
+  if (!/^\d{1,5}$/.test(value)) return ''
+  const n = Number(value)
+  if (n < 1 || n > 65535) return ''
+  if (proto === 'https' && n === 443) return ''
+  if (proto === 'http' && n === 80) return ''
+  return String(n)
+}
+
+/**
  * Hostnames that may legitimately appear in `x-forwarded-host`.
  *
  * ⛔ THIS IS THE `TRUST_PROXY_HEADERS` GAP CLAUDE.md HAS RECORDED AS KIV, AND
@@ -114,12 +130,28 @@ export function resolveOrigin(
   //
   // An explicitly requested port still wins, and the scheme's default port is
   // left off so an install genuinely fronted on 443 keeps a clean origin.
+  //
+  // ⛔ AND `x-forwarded-port` IS THE THIRD SOURCE, WHICH IS NOT BELT-AND-BRACES.
+  // Keeping the inbound port works only while the forwarded host CARRIES one,
+  // and it carries one only because `TLS_PUBLIC_HOST` is unset, which makes the
+  // terminator echo the browser's own `Host` (`…:3000`). Setting that variable
+  // — the next step of the TLS hardening, and the whole point of it — pins
+  // `x-forwarded-host` to a bare hostname, so the fix above would have silently
+  // stopped working the moment the hardening landed and every sessionless SSO
+  // redirect would have gone back to port 443. The terminator already sends the
+  // correct PER-APP public port in `x-forwarded-port` (`forwardedHeaders()` in
+  // installer/terminator/tlsTerminator.ts), so that is where the port comes
+  // from once the host no longer has one.
+  //
+  // ⛔ Consulted ONLY when `x-forwarded-host` was itself trusted. It is the same
+  // header set and therefore the same trust decision: if the allow-list sent us
+  // back to the request's own `Host`, that Host's own port is the only honest
+  // answer available, and taking the port from a header we just declined to
+  // believe would be worse than having no port at all.
   const inboundPort = rawHost.includes(':') ? rawHost.split(':')[1].trim() : ''
-  const keepInbound =
-    /^\d{1,5}$/.test(inboundPort) &&
-    !(proto === 'https' && inboundPort === '443') &&
-    !(proto === 'http' && inboundPort === '80')
-  const portPart = port ? `:${port}` : keepInbound ? `:${inboundPort}` : ''
+  const forwardedPort = useForwarded ? (req.headers.get('x-forwarded-port') || '').trim() : ''
+  const carriedPort = usablePort(inboundPort, proto) || usablePort(forwardedPort, proto)
+  const portPart = port ? `:${port}` : carriedPort ? `:${carriedPort}` : ''
 
   if (hostname && hostname.length <= 253 && HOSTNAME_RE.test(hostname) && (proto === 'http' || proto === 'https')) {
     return `${proto}://${hostname}${portPart}`
