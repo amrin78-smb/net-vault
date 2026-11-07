@@ -25,7 +25,18 @@
     reason this step exists. Pass this only when you are re-installing onto the
     same machine and want the same certificate and the same agent pins back.
 .PARAMETER RemoveDependencies
-    Also uninstall Node.js, Git, PostgreSQL and the VC++ Redistributable.
+    Also uninstall Node.js, Git and PostgreSQL. The VC++ Redistributable is
+    always left in place (commonly shared).
+
+    Each of the three is removed ONLY if nothing else on the server appears to
+    need it. PostgreSQL is kept if the cluster holds any database that is not
+    one of the four suite databases. Node.js and Git are kept if the installer
+    recorded that they were already present before NocVault
+    (C:\ProgramData\NocVault\install-state.env), or if any service, scheduled
+    task or running process outside this suite references them. Anything that
+    cannot be determined - no psql, a failed query, an unreadable service list
+    - also keeps the dependency. Refusing costs one manual uninstall; guessing
+    wrong takes down software that was here first.
     PostgreSQL removal is REFUSED if this cluster still hosts a database that is
     not one of the four suite databases (another product is likely running on
     it), if -KeepDatabases was also passed, or if the check cannot be run.
@@ -677,6 +688,106 @@ if ($RemoveDependencies) {
         Write-Warn "PostgreSQL uninstaller not found - skipping"
     }
 
+    # ── Is anyone else on Node.js / Git? ──────────────────────────
+    # ⛔ THESE TWO USED TO BE REMOVED UNCONDITIONALLY, WHICH IS THE SAME BUG THE
+    # POSTGRESQL STEP ABOVE EXISTS TO FIX - just with a shared runtime instead of a
+    # shared cluster. The PostgreSQL comment already says it: "we installed it, so
+    # we remove it" was never true. It is not true here either, and provably so -
+    # the installer's STEP 3 and STEP 4 both DETECT a pre-existing Node/Git and skip
+    # installing it, so on a build agent, a developer box, or any server already
+    # running something else on Node, this switch uninstalled software that was here
+    # first and that nothing in this suite ever owned.
+    #
+    # Two independent signals, and BOTH must clear:
+    #
+    #   1. OWNERSHIP - install-state.env, written by the installer at the moment it
+    #      decided whether to install each tool. '0' means it was already present
+    #      (including the case where we only upgraded someone else's Node in place),
+    #      and that is a hard stop. Installs that predate this record have no key;
+    #      that is "unknown", not "ours", so signal 2 has to carry it.
+    #
+    #   2. FOREIGN USE - any Windows service, scheduled task or running process that
+    #      is not part of this suite and references the tool. Services and tasks are
+    #      durable, machine-level declarations of a dependency, which is exactly the
+    #      kind of evidence worth refusing on. Our own names are excluded from both
+    #      lists ($Services/$Tasks) so a half-finished uninstall cannot block itself.
+    #
+    # Every uncertain outcome LEAVES THE TOOL INSTALLED, matching the PostgreSQL
+    # step: refusing costs the operator one manual uninstall, and getting it wrong
+    # costs somebody else their runtime. Note this can only ever ADD a refusal -
+    # a genuinely clean box with no record still removes both, as before.
+    $InstallStateFile = 'C:\ProgramData\NocVault\install-state.env'
+
+    # ⛔ RETURNS A HASHTABLE, NOT AN ARRAY, AND THAT IS NOT STYLE. A PowerShell
+    # function that returns an EMPTY array hands the caller $null - measured on
+    # staging PS 5.1.26100: `function f { return @() }; $null -eq (f)` is True. So
+    # the obvious shape here (return the list of foreign users, $null if we could
+    # not look) makes "clean box" and "could not look" the SAME value, and since
+    # this guard refuses on "could not look", -RemoveDependencies would have
+    # silently stopped removing Node and Git on every machine, for ever, with the
+    # reason printed being an enumeration failure that never happened.
+    # { Looked = $false } is the only "we could not look"; Items may be empty.
+    function Get-ForeignToolUsers([string]$exeName) {
+        $found = New-Object System.Collections.ArrayList
+        try {
+            foreach ($s in @(Get-CimInstance -ClassName Win32_Service -ErrorAction Stop)) {
+                if ($Services -contains $s.Name) { continue }
+                if ([string]$s.PathName -match [regex]::Escape($exeName)) {
+                    $null = $found.Add("service '" + $s.Name + "'")
+                }
+            }
+        } catch { return @{ Looked = $false; Items = @() } }
+        try {
+            foreach ($t in @(Get-ScheduledTask -ErrorAction Stop)) {
+                if ($Tasks -contains $t.TaskName) { continue }
+                $act = ''
+                try { $act = (@($t.Actions | ForEach-Object { [string]$_.Execute + ' ' + [string]$_.Arguments }) -join ' ') } catch { $act = '' }
+                if ($act -match [regex]::Escape($exeName)) {
+                    $null = $found.Add("scheduled task '" + $t.TaskName + "'")
+                }
+            }
+        } catch { return @{ Looked = $false; Items = @() } }
+        # A running process is the weakest of the three, so it is matched on its
+        # COMMAND LINE rather than its image path: the suite's own consoles run the
+        # shared C:\Program Files\nodejs\node.exe, so an image-path test would call
+        # our own leftovers foreign and block the removal on every single run.
+        try {
+            foreach ($pr in @(Get-CimInstance -ClassName Win32_Process -ErrorAction Stop |
+                              Where-Object { [string]$_.Name -eq $exeName })) {
+                $cl = [string]$pr.CommandLine
+                if ($cl -and ($cl -like "*$InstallDir*")) { continue }
+                $null = $found.Add("running process " + $pr.Name + " (pid " + $pr.ProcessId + ")")
+            }
+        } catch { }
+        return @{ Looked = $true; Items = @($found | Select-Object -Unique) }
+    }
+
+    function Test-RemoveSharedTool([string]$label, [string]$exeName, [string]$ownKey) {
+        $owned = Get-EnvVal $InstallStateFile $ownKey
+        if ($owned -eq '0') {
+            Write-Warn "$label was ALREADY INSTALLED on this server before NocVault (recorded in $InstallStateFile) - LEAVING it installed."
+            return $false
+        }
+        $scan = Get-ForeignToolUsers $exeName
+        if (-not $scan.Looked) {
+            Write-Warn "Could not enumerate this server's services and scheduled tasks, so whether anything else needs $label is UNKNOWN - LEAVING it installed. Remove it by hand once you are sure."
+            return $false
+        }
+        $foreign = @($scan.Items)
+        if ($foreign.Count -gt 0) {
+            Write-Warn "LEAVING $label installed - something outside this suite uses it:"
+            foreach ($f in $foreign) { Write-Warn "    $f" }
+            Write-Info "Uninstall $label by hand if those are being retired too."
+            return $false
+        }
+        if ($owned -eq '1') {
+            Write-Info "$label was installed by NocVault and nothing else references it - removing."
+        } else {
+            Write-Info "No record of who installed $label (this install predates that record) and nothing else references it - removing."
+        }
+        return $true
+    }
+
     # Node.js (MSI)
     #
     # Read the uninstall registry rather than querying Win32_Product. Enumerating
@@ -695,7 +806,9 @@ if ($RemoveDependencies) {
     ) | ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } |
         Where-Object { $_.DisplayName -like 'Node.js*' -and $_.PSChildName -match '^\{[0-9A-Fa-f-]{36}\}$' } |
         Select-Object -First 1
-    if ($nodeProduct) {
+    if (-not (Test-RemoveSharedTool 'Node.js' 'node.exe' 'NODE_OWNED_BY_NOCVAULT')) {
+        # left installed on purpose - Test-RemoveSharedTool already said why
+    } elseif ($nodeProduct) {
         Write-Info "Uninstalling Node.js ($($nodeProduct.DisplayName))..."
         Start-Process -Wait -FilePath "msiexec.exe" -ArgumentList "/x", $nodeProduct.PSChildName, "/quiet", "/norestart"
         Write-OK "Node.js uninstalled"
@@ -706,7 +819,9 @@ if ($RemoveDependencies) {
     # Git (silent uninstaller)
     $gitUninstall = Get-ChildItem "C:\Program Files\Git\unins*.exe" -ErrorAction SilentlyContinue |
         Select-Object -First 1
-    if ($gitUninstall) {
+    if (-not (Test-RemoveSharedTool 'Git' 'git.exe' 'GIT_OWNED_BY_NOCVAULT')) {
+        # left installed on purpose - Test-RemoveSharedTool already said why
+    } elseif ($gitUninstall) {
         Write-Info "Uninstalling Git..."
         Start-Process -Wait -FilePath $gitUninstall.FullName -ArgumentList "/VERYSILENT", "/NORESTART"
         Write-OK "Git uninstalled"

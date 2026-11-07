@@ -211,9 +211,20 @@ or can be added to the powershell line inside Install-NocVault.cmd.
 8. DEFAULT CREDENTIALS & ROLES
 ---------------------------------------------------------------
   Email    : admin@yourcompany.com
-  Password : Admin1234!
+  Password : GENERATED FOR THIS INSTALL - read NV_ADMIN_PASSWORD from
+             C:\ProgramData\NocVault\secrets.env
+             (that file is readable by Administrators and SYSTEM only)
 
-  IMPORTANT: Change this password immediately after first login.
+  There is no shared default password. The installer seeds this account
+  and then replaces the seeded password with a random per-install value,
+  so no two installs share a super_admin credential.
+
+  If the installer reported that it could NOT set that password, the
+  shipped default is still live on the account - log in and change it
+  immediately. Changing the password from Settings is always safe: a
+  re-run of the installer will not reset a password you have changed.
+
+  IMPORTANT: Change this password after first login anyway.
 
   All apps share the same user accounts (SSO). Roles:
     super_admin - Full access to all settings and data

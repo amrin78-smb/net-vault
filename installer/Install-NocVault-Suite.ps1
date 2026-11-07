@@ -437,6 +437,40 @@ New-Item -ItemType Directory -Force 'C:\ProgramData\NocVault' | Out-Null
 $SecretsFile = 'C:\ProgramData\NocVault\secrets.env'
 $script:SecretsExisted = Test-Path $SecretsFile
 
+# ── Who installed the SHARED prerequisites (Node.js, Git) ─────
+# ⛔ NOT A SECRET, SO NOT IN secrets.env - it lives in its own file because
+# -RemoveSecrets deletes secrets.env and this record has to outlive that.
+#
+# The uninstaller's -RemoveDependencies used to remove Node.js and Git
+# unconditionally, on the assumption that this installer had put them there. That
+# assumption is false in exactly the case that hurts: STEP 3 and STEP 4 below BOTH
+# detect a pre-existing Node/Git and skip installing it, so a server that already
+# had them - a build agent, a developer box, anything else running Node - would
+# have its own runtime uninstalled by a NocVault uninstall. The PostgreSQL step in
+# that script already refuses on evidence of another tenant and says in its own
+# comment that "we installed it, so we remove it" was never true; this is what
+# makes the same statement CHECKABLE for the other two, instead of assumed.
+#
+# '1' = this installer installed it and nothing else was there first.
+# '0' = it was already present (or we only upgraded someone else's copy in place).
+$InstallStateFile = 'C:\ProgramData\NocVault\install-state.env'
+function Set-InstallStateKey([string]$key, [string]$value) {
+    $keep = @()
+    if (Test-Path -LiteralPath $InstallStateFile) {
+        try {
+            $keep = @(Get-Content -LiteralPath $InstallStateFile -ErrorAction Stop |
+                      Where-Object { $_ -notmatch ('^\s*' + [regex]::Escape($key) + '\s*=') } |
+                      Where-Object { $_.Trim() -ne '' })
+        } catch { $keep = @() }
+    }
+    $keep += "$key=$value"
+    try {
+        [System.IO.File]::WriteAllText($InstallStateFile, ($keep -join "`r`n") + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
+    } catch {
+        Write-Warn "Could not record $key in $InstallStateFile - the uninstaller will fall back to checking for other users of this tool."
+    }
+}
+
 # ⛔ -PgAdminPassword WINS, AND IT MUST ALSO BE WHAT secrets.env RECORDS.
 # This line used to generate a password unconditionally when secrets.env had
 # none, and the generated value was written to secrets.env below even on an
@@ -686,16 +720,25 @@ $nodeCurrent  = $null
 if ($nodeVer -match '^v?(\d+\.\d+\.\d+)') { $nodeCurrent = [version]$Matches[1] }
 if ($nodeCurrent -and $nodeCurrent -ge $NodeRequired) {
     Write-OK "Node.js $nodeVer already installed (>= v$NodeRequired required)"
+    # Someone else's Node. Record that, so an uninstall never removes it.
+    Set-InstallStateKey 'NODE_OWNED_BY_NOCVAULT' '0'
 } else {
     # An OLDER Node already on the box is upgraded in place by the MSI. That is a
     # deliberate change of behaviour from the Node 20 era: a Node 20 left here
     # would build and run all four apps perfectly and then silently make the TLS
     # terminator unstartable, which STEP 4b turns into "no HTTPS" rather than an
     # outage - but it is still not what the operator asked for.
+    $nodeWasAbsent = (-not $nodeCurrent)
     if ($nodeCurrent) { Write-Warn "Node.js $nodeVer is older than v$NodeRequired - upgrading in place" }
     Start-Process -Wait -FilePath "msiexec.exe" -ArgumentList "/I `"$NodeMsi`" /quiet"
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + $env:PATH
     Write-OK "Node.js installed from $([System.IO.Path]::GetFileName($NodeMsi))"
+    # ⛔ AN IN-PLACE UPGRADE IS NOT OWNERSHIP. The branch above deliberately
+    # upgrades a too-old Node that was already here; that is still someone else's
+    # runtime, now at a newer version, and uninstalling it would be exactly the
+    # damage this record exists to prevent. Only a genuinely ABSENT Node is ours.
+    if ($nodeWasAbsent) { Set-InstallStateKey 'NODE_OWNED_BY_NOCVAULT' '1' }
+    else                { Set-InstallStateKey 'NODE_OWNED_BY_NOCVAULT' '0' }
 }
 
 # ================================================================
@@ -715,10 +758,12 @@ Write-Step "Installing Git"
 $gitVer = try { & git --version 2>$null } catch { $null }
 if ($gitVer) {
     Write-OK "Git already installed: $gitVer"
+    Set-InstallStateKey 'GIT_OWNED_BY_NOCVAULT' '0'
 } elseif (Test-Path $GitInstaller) {
     Start-Process -Wait -FilePath $GitInstaller -ArgumentList '/VERYSILENT','/NORESTART'
     $env:PATH = [System.Environment]::GetEnvironmentVariable("PATH","Machine") + ";" + $env:PATH
     Write-OK "Git installed"
+    Set-InstallStateKey 'GIT_OWNED_BY_NOCVAULT' '1'
 } else {
     throw "Git installer not found and Git is not installed. Cannot continue."
 }
@@ -1273,8 +1318,19 @@ $NVEnvTail
 # Build
 Set-Location $NVAppDir
 Write-Info "Installing NetVault dependencies..."
-& npm install 2>&1 | Tee-Object -FilePath "$NVDir\logs\npm-install.log"
-if ($LASTEXITCODE -ne 0) { throw "NetVault npm install failed" }
+# ⛔ npm ci, NOT npm install. A fresh install must reproduce the dependency tree
+# the release was built and tested against: npm install is free to resolve newer
+# versions that satisfy the semver ranges in package.json, so two installs of the
+# same NocVault tag can ship different transitive dependencies - and the one that
+# breaks is always the customer's, weeks later, with no way to tell what changed.
+# npm ci installs package-lock.json exactly (all four repos track theirs) and
+# fails loudly if the lock and package.json disagree, which is the right outcome
+# here rather than silently installing something else. Safe for a FRESH install
+# specifically because npm ci starts by deleting node_modules - that is why the
+# per-app UPDATERS deliberately keep npm install instead (incremental, preserves
+# node_modules and the build cache; see netvault's CLAUDE.md performance notes).
+& npm ci 2>&1 | Tee-Object -FilePath "$NVDir\logs\npm-install.log"
+if ($LASTEXITCODE -ne 0) { throw "NetVault npm ci failed" }
 Write-Info "Building NetVault (3-5 minutes)..."
 & npm run build 2>&1 | Tee-Object -FilePath "$NVDir\logs\npm-build.log"
 if ($LASTEXITCODE -ne 0) { throw "NetVault build failed. Check $NVDir\logs\npm-build.log" }
@@ -1290,7 +1346,7 @@ Write-OK "NetVault built"
 #
 # It has to happen HERE rather than next to setup.sql: the hash must be produced by
 # the same bcryptjs the app verifies with (app/api/users/route.ts, cost 10), and
-# node_modules only exists after the npm install above. $env:PGPASSWORD is still the
+# node_modules only exists after the npm ci above. $env:PGPASSWORD is still the
 # superuser password set before the schema step.
 #
 # ⛔ GUARDED ON THE SEED HASH, so a re-run can never reset a password the customer
@@ -1502,17 +1558,17 @@ if ($InstallLogVault) {
     $lvEnv | Out-File -FilePath "$LVAppDir\frontend\.env.local" -Encoding UTF8 -NoNewline
     Write-OK "LogVault .env.local created (root + frontend)"
 
-    # npm install root + build frontend
+    # npm ci root + build frontend
     Set-Location $LVAppDir
     Write-Info "Installing LogVault root dependencies..."
-    & npm install 2>&1 | Tee-Object -FilePath "$LVDir\logs\npm-install-root.log"
-    if ($LASTEXITCODE -ne 0) { throw "LogVault root npm install failed" }
+    & npm ci 2>&1 | Tee-Object -FilePath "$LVDir\logs\npm-install-root.log"
+    if ($LASTEXITCODE -ne 0) { throw "LogVault root npm ci failed" }
 
     $LVFrontendDir = "$LVAppDir\frontend"
     Set-Location $LVFrontendDir
     Write-Info "Installing LogVault frontend dependencies..."
-    & npm install 2>&1 | Tee-Object -FilePath "$LVDir\logs\npm-install-frontend.log"
-    if ($LASTEXITCODE -ne 0) { throw "LogVault frontend npm install failed" }
+    & npm ci 2>&1 | Tee-Object -FilePath "$LVDir\logs\npm-install-frontend.log"
+    if ($LASTEXITCODE -ne 0) { throw "LogVault frontend npm ci failed" }
     Write-Info "Building LogVault frontend..."
     & npm run build 2>&1 | Tee-Object -FilePath "$LVDir\logs\npm-build.log"
     if ($LASTEXITCODE -ne 0) { throw "LogVault frontend build failed. Check $LVDir\logs\npm-build.log" }
@@ -1697,16 +1753,16 @@ $$;
     $ddiEnv | Out-File -FilePath "$DDIFrontendDir\.env.local" -Encoding UTF8 -NoNewline
     Write-OK "DDIVault .env.local created (root + frontend)"
 
-    # npm install root + build frontend
+    # npm ci root + build frontend
     Set-Location $DDIAppDir
     Write-Info "Installing DDIVault root dependencies..."
-    & npm install 2>&1 | Tee-Object -FilePath "$DDIDir\logs\npm-install-root.log"
-    if ($LASTEXITCODE -ne 0) { throw "DDIVault root npm install failed" }
+    & npm ci 2>&1 | Tee-Object -FilePath "$DDIDir\logs\npm-install-root.log"
+    if ($LASTEXITCODE -ne 0) { throw "DDIVault root npm ci failed" }
 
     Set-Location $DDIFrontendDir
     Write-Info "Installing DDIVault frontend dependencies..."
-    & npm install 2>&1 | Tee-Object -FilePath "$DDIDir\logs\npm-install-frontend.log"
-    if ($LASTEXITCODE -ne 0) { throw "DDIVault frontend npm install failed" }
+    & npm ci 2>&1 | Tee-Object -FilePath "$DDIDir\logs\npm-install-frontend.log"
+    if ($LASTEXITCODE -ne 0) { throw "DDIVault frontend npm ci failed" }
     Write-Info "Building DDIVault frontend..."
     & npm run build 2>&1 | Tee-Object -FilePath "$DDIDir\logs\npm-build.log"
     if ($LASTEXITCODE -ne 0) { throw "DDIVault frontend build failed. Check $DDIDir\logs\npm-build.log" }
@@ -1867,17 +1923,17 @@ $$;
     $svEnv | Out-File -FilePath "$SVFrontendDir\.env.local" -Encoding UTF8 -NoNewline
     Write-OK "SpanVault .env.local created (root + frontend)"
 
-    # npm install root
+    # npm ci root
     Set-Location $SVAppDir
     Write-Info "Installing SpanVault root dependencies..."
-    & npm install 2>&1 | Tee-Object -FilePath "$SVDir\logs\npm-install-root.log"
-    if ($LASTEXITCODE -ne 0) { throw "SpanVault root npm install failed" }
+    & npm ci 2>&1 | Tee-Object -FilePath "$SVDir\logs\npm-install-root.log"
+    if ($LASTEXITCODE -ne 0) { throw "SpanVault root npm ci failed" }
 
-    # npm install + build frontend
+    # npm ci + build frontend
     Set-Location $SVFrontendDir
     Write-Info "Installing SpanVault frontend dependencies..."
-    & npm install 2>&1 | Tee-Object -FilePath "$SVDir\logs\npm-install-frontend.log"
-    if ($LASTEXITCODE -ne 0) { throw "SpanVault frontend npm install failed" }
+    & npm ci 2>&1 | Tee-Object -FilePath "$SVDir\logs\npm-install-frontend.log"
+    if ($LASTEXITCODE -ne 0) { throw "SpanVault frontend npm ci failed" }
     Write-Info "Building SpanVault frontend..."
     & npm run build 2>&1 | Tee-Object -FilePath "$SVDir\logs\npm-build.log"
     if ($LASTEXITCODE -ne 0) { throw "SpanVault frontend build failed. Check $SVDir\logs\npm-build.log" }

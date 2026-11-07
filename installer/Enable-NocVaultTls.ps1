@@ -290,12 +290,42 @@ if (-not $ServerIP) {
 }
 if (-not $ServerIP) { throw "Could not determine this server's address." }
 
-# CronSecret: the cutover takes a health snapshot afterwards. Read it from the
-# existing .env; an absent one costs a snapshot, not the cutover.
+# CronSecret: the cutover takes a health snapshot afterwards, AND the -Disable
+# path re-registers all three maintenance tasks with it as a Bearer token.
+#
+# ⛔ RESOLVED THE WAY THE ROUTE WILL SEE IT, NOT FROM $nvEnv ALONE. This read
+# only $NVAppDir\.env, but the suite installer PINS CRON_SECRET into NetVault's
+# NSSM AppEnvironmentExtra (Install-NocVault-Suite.ps1) and CRON_SECRET is NOT in
+# Update-NetVault.ps1's $RuntimeSettableEnvKeys - so Clear-NssmEnvKeys never
+# removes it and the service environment wins forever: it is already in the
+# environment when the Next standalone server starts and @next/env never
+# overwrites a key that is already set. lib/cronAuth.ts reads
+# process.env.CRON_SECRET.
+#
+# So on any box where the two copies have diverged, this read the value the route
+# will NOT compare against, and -Disable then re-registered all three tasks with
+# it. Every one of them 401s from that moment on, for ever, with no symptom
+# anywhere: curl -s discards the body and Task Scheduler records "0x0 completed
+# successfully" whether the endpoint answered 200 or 401. The only visible trace
+# is a health trend that stops gaining points.
+#
+# This precedence is the same one Test-NocVault-Suite.ps1 section 7 already uses
+# to assert the tasks' tokens ($cronLive) - that assertion is the reason to match
+# it here rather than keep a second, disagreeing answer in the writer.
 $CronSecret = ''
-if (Test-Path -LiteralPath $nvEnv) {
-    foreach ($line in (Get-Content -LiteralPath $nvEnv -ErrorAction SilentlyContinue)) {
-        if ($line -match '^\s*CRON_SECRET\s*=\s*(.+?)\s*$') { $CronSecret = $Matches[1].Trim() }
+foreach ($line in @((( & $NssmExe get NetVault AppEnvironmentExtra 2>&1 | Out-String) -replace "`0", '') -split "`r?`n")) {
+    if ($line.Trim() -match '^CRON_SECRET\s*=\s*(\S+)$') { $CronSecret = $Matches[1] }
+}
+if ($CronSecret) {
+    Write-OK "CRON_SECRET resolved from the NetVault service environment (what the route reads)"
+} else {
+    foreach ($cf in @((Join-Path $NVAppDir '.next\standalone\.env.local'), $nvEnv)) {
+        if ($CronSecret) { continue }
+        if (-not (Test-Path -LiteralPath $cf)) { continue }
+        foreach ($line in (Get-Content -LiteralPath $cf -ErrorAction SilentlyContinue)) {
+            if ($line -match '^\s*CRON_SECRET\s*=\s*(.+?)\s*$') { $CronSecret = $Matches[1].Trim() }
+        }
+        if ($CronSecret) { Write-OK "CRON_SECRET resolved from $cf" }
     }
 }
 
@@ -516,7 +546,7 @@ if ($Disable) {
         if ($taskBad.Count -eq 0) { Write-OK "NetVault cron tasks pointed back at 127.0.0.1:$pubPort" }
         else { Write-Warn "These scheduled tasks were NOT pointed back and will fail silently: $($taskBad -join ', ')" }
     } else {
-        Write-Warn "CRON_SECRET not found in NetVault's .env, so the three maintenance tasks were left pointing at the loopback port. They will fail silently until re-pointed at 127.0.0.1:3000."
+        Write-Warn "CRON_SECRET was found in neither the NetVault service environment nor its env files, so the three maintenance tasks were left pointing at the loopback port. They will fail silently until re-pointed at 127.0.0.1:3000."
     }
 
     Write-Step "Restarting the consoles"

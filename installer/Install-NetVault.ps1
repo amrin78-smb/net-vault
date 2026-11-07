@@ -44,6 +44,44 @@ function Write-Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
 function Write-OK($msg)   { Write-Host "    [OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg) { Write-Host "    [!!] $msg" -ForegroundColor Yellow }
 
+# CSPRNG, alnum-only so the value is safe inside a KEY=VALUE .env line, a
+# postgresql:// URL and a single-quoted SQL literal. Same generator as the suite
+# installer's New-Pass, for the same reasons.
+function New-Pass([int]$len = 20) {
+    $chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+    $bytes = New-Object byte[] $len
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+    -join ($bytes | ForEach-Object { $chars[$_ % $chars.Length] })
+}
+
+function Get-EnvVal([string]$file, [string]$key) {
+    if (-not (Test-Path -LiteralPath $file)) { return $null }
+    foreach ($line in (Get-Content -LiteralPath $file -ErrorAction SilentlyContinue)) {
+        if ($line -match "^\s*$([regex]::Escape($key))\s*=\s*(.+?)\s*$") { return $Matches[1].Trim() }
+    }
+    return $null
+}
+
+# Write one key, PRESERVING every other key already in the file - this machine may
+# already carry a suite install's secrets.env with nine other credentials in it,
+# and clobbering those would lock the suite out of its own databases.
+function Set-SecretKey([string]$file, [string]$key, [string]$value) {
+    $keep = @()
+    if (Test-Path -LiteralPath $file) {
+        try {
+            $keep = @(Get-Content -LiteralPath $file -ErrorAction Stop |
+                      Where-Object { $_ -notmatch ('^\s*' + [regex]::Escape($key) + '\s*=') } |
+                      Where-Object { $_.Trim() -ne '' })
+        } catch { $keep = @() }
+    }
+    $keep += "$key=$value"
+    [System.IO.File]::WriteAllText($file, ($keep -join "`r`n") + "`r`n", (New-Object System.Text.UTF8Encoding($false)))
+    # SYSTEM + Administrators only. Without this it inherits ProgramData's ACL,
+    # which grants BUILTIN\Users read on a file full of credentials.
+    try { & icacls.exe $file /inheritance:r /grant '*S-1-5-18:(R)' /grant '*S-1-5-32-544:(F)' | Out-Null } catch {}
+}
+
 # ── Banner ─────────────────────────────────────────────────────
 Clear-Host
 Write-Host @"
@@ -62,6 +100,29 @@ Write-Host "  Install directory : $InstallDir" -ForegroundColor Gray
 Write-Host "  App port          : $AppPort" -ForegroundColor Gray
 Write-Host "  PostgreSQL port   : $PgPort" -ForegroundColor Gray
 Write-Host ""
+
+# ⛔ LEGACY SCRIPT - Install-NocVault-Suite.ps1 IS THE SUPPORTED INSTALLER.
+# This one predates the suite and has diverged: it never runs schema.sql, carrying
+# its own smaller hardcoded migration block instead, so it does NOT create
+# user_apps, eol_seed, eol_enrichment_jobs, eol_discrepancies or eol_recommendations,
+# nor the support_*/os_* device columns (recorded in .ai-codex/schema.md). An
+# install from here therefore produces a materially incomplete NetVault. Said out
+# loud rather than left as a comment nobody reads, because the failure appears
+# later as missing features rather than as an error.
+Write-Host "  [!] LEGACY INSTALLER - produces an INCOMPLETE schema (no schema.sql:" -ForegroundColor Yellow
+Write-Host "      user_apps, eol_seed and the EOL tables are never created)." -ForegroundColor Yellow
+Write-Host "      Use installer\Install-NocVault-Suite.ps1 instead." -ForegroundColor Yellow
+Write-Host ""
+
+# The seeded super_admin's console password, per install. setup.sql below seeds a
+# FIXED bcrypt hash of a literal published in this repo, so without this every
+# install of this script ships the same known super_admin - and the service is
+# started further down, long before anyone reads the closing banner. Persisted
+# alongside the suite's own credentials and reported by LOCATION only.
+New-Item -ItemType Directory -Force 'C:\ProgramData\NocVault' | Out-Null
+$SecretsFile = 'C:\ProgramData\NocVault\secrets.env'
+$NvAdminPass = Get-EnvVal $SecretsFile 'NV_ADMIN_PASSWORD'
+if (-not $NvAdminPass) { $NvAdminPass = New-Pass 20 }
 
 # ── Collect passwords ──────────────────────────────────────────
 $PgPassword = Read-Host "Enter PostgreSQL password for 'netvault' user" -AsSecureString
@@ -265,7 +326,10 @@ $env:PGPASSWORD = $PgAdminPasswordPlain
 $setupSql = "$AppDir\setup.sql"
 if (Test-Path $setupSql) {
     & "$PgBin\psql.exe" -U postgres -h localhost -p $PgPort -d $DbName -f $setupSql
-    Write-OK "Default admin user created (admin@yourcompany.com / Admin1234!)"
+    # The password is NOT printed: it is setup.sql's shipped default at this point
+    # and is replaced with the per-install value further down, once node_modules
+    # (and therefore bcryptjs) exists.
+    Write-OK "Default admin user created (admin@yourcompany.com)"
 } else {
     Write-Warn "setup.sql not found - no default user created"
 }
@@ -286,13 +350,67 @@ Write-OK ".env created (NEXTAUTH_URL=http://${ServerIP}:${AppPort})"
 # ── Install dependencies and build ────────────────────────────
 Write-Step "Installing dependencies"
 Set-Location $AppDir
-& npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
+# npm ci, not npm install: a fresh install must reproduce the locked dependency
+# tree the release was tested against, and fail loudly if the lock disagrees with
+# package.json. (The UPDATER keeps npm install on purpose - incremental.)
+& npm ci 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
 Write-OK "Dependencies installed"
 
 Write-Step "Building NetVault"
 & npm run build 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-build.log"
 if ($LASTEXITCODE -ne 0) { throw "Build failed. Check $InstallDir\logs\npm-build.log" }
 Write-OK "Build complete"
+
+# ── Per-install password for the seeded super_admin ───────────
+# ⛔ GUARDED ON THE SEED HASH, so a re-run can never reset a password the
+# customer has since changed: the UPDATE matches only a row still holding
+# setup.sql's literal hash. NON-FATAL - failing here would abandon an otherwise
+# complete install, so it warns and the closing banner says the default is live.
+# Mirrors Install-NocVault-Suite.ps1's block; the hash must come from the same
+# bcryptjs the app verifies with (cost 10), which only exists after npm ci.
+Write-Step "Setting a per-install admin password"
+$NvAdminPassState = 'failed'
+$NvSeedHash = '$2b$12$QPxM2WDeRI1QO/u/5e17OOSG7Uy/fLB3Xwq.o/iU06IaP2.2PpFQ6'
+$NvHashJs   = Join-Path $AppDir '.nocvault-seed-hash.js'
+try {
+    # A file rather than `node -e` so require('bcryptjs') resolves out of
+    # $AppDir\node_modules whatever the current directory is, and the password is
+    # read from the environment rather than argv so it never reaches a command
+    # line (Win32_Process.CommandLine is readable by any local user).
+    @'
+const bcrypt = require('bcryptjs');
+const pw = process.env.NOCVAULT_SEED_PW || '';
+if (!pw) { process.exit(2); }
+process.stdout.write(bcrypt.hashSync(pw, 10));
+'@ | Out-File -FilePath $NvHashJs -Encoding ASCII -NoNewline
+    $env:NOCVAULT_SEED_PW = $NvAdminPass
+    $NvAdminHash = (& node $NvHashJs 2>$null | Out-String).Trim()
+    $env:NOCVAULT_SEED_PW = ''
+    if ($LASTEXITCODE -ne 0 -or $NvAdminHash -notmatch '^\$2[aby]\$\d\d\$') { throw "bcrypt hashing produced no usable hash (node exit $LASTEXITCODE)" }
+    # -f, NOT interpolation: a bcrypt hash is full of $ signs and PowerShell would
+    # expand them inside a double-quoted string, writing a mangled hash nobody
+    # could ever log in with.
+    $NvAdminSql = "UPDATE users SET password_hash = '{0}' WHERE email = 'admin@yourcompany.com' AND password_hash = '{1}' RETURNING email;" -f $NvAdminHash, $NvSeedHash
+    $env:PGPASSWORD = $PgAdminPasswordPlain
+    $NvAdminOut = (& "$PgBin\psql.exe" -U postgres -h localhost -p $PgPort -d $DbName -v ON_ERROR_STOP=1 -tA -c $NvAdminSql 2>$null | Out-String)
+    if ($LASTEXITCODE -ne 0) { throw "psql exited $LASTEXITCODE" }
+    if ($NvAdminOut -match 'admin@yourcompany\.com') {
+        Set-SecretKey $SecretsFile 'NV_ADMIN_PASSWORD' $NvAdminPass
+        $NvAdminPassState = 'set'
+        Write-OK "Seeded super_admin password replaced with a per-install value (stored in $SecretsFile)"
+    } else {
+        # Nothing held the seed hash, so this account's password was set by an
+        # earlier run or changed by the customer. Leave it, and do NOT record a
+        # value the account does not answer to.
+        $NvAdminPassState = 'kept'
+        Write-OK "Admin password was already changed from the shipped default - left untouched"
+    }
+} catch {
+    Write-Warn "Could not replace the seeded super_admin password ($($_.Exception.Message)) - the SHIPPED DEFAULT is still live on this account. Change it at first login."
+} finally {
+    $env:NOCVAULT_SEED_PW = ''
+    Remove-Item -LiteralPath $NvHashJs -Force -ErrorAction SilentlyContinue
+}
 
 # ── Copy static files into standalone output ──────────────────
 Write-Step "Copying static files into standalone output"
@@ -417,8 +535,16 @@ Write-Host "  Access NetVault at : http://${ServerIP}:${AppPort}" -ForegroundCol
 Write-Host "  Local access       : http://localhost:${AppPort}" -ForegroundColor White
 Write-Host ""
 Write-Host "  Default login      : admin@yourcompany.com" -ForegroundColor Gray
-Write-Host "  Default password   : Admin1234!" -ForegroundColor Gray
-Write-Host "  Change immediately after first login via Settings." -ForegroundColor Gray
+if ($NvAdminPassState -eq 'set') {
+    Write-Host "  Password           : generated for THIS install - read NV_ADMIN_PASSWORD from" -ForegroundColor Yellow
+    Write-Host "                       $SecretsFile" -ForegroundColor Yellow
+} elseif ($NvAdminPassState -eq 'kept') {
+    Write-Host "  Password           : unchanged - this account already had a non-default password" -ForegroundColor Gray
+} else {
+    Write-Host "  Password           : the SHIPPED DEFAULT is still live on this account -" -ForegroundColor Red
+    Write-Host "                       change it at first login (see the warning above)." -ForegroundColor Red
+}
+Write-Host "  Change it after first login via Settings." -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Logs               : $InstallDir\logs\" -ForegroundColor Gray
 Write-Host "  Service commands:" -ForegroundColor Gray

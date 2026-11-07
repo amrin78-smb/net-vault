@@ -1033,6 +1033,34 @@ foreach ($rsa in @(
     }
 }
 
+# ---- the agent-ingest TLS pins: NSSM must not hold them ----
+# ⛔ THESE ARE OPTIONAL KEYS, SO ONLY THE *PIN* IS A FAILURE - NEVER THEIR
+# ABSENCE. That is why they cannot simply join $runtimeKeys above: that loop runs
+# over all four consoles and ends in a Bad for any key it finds nowhere, while
+# these four are read ONLY by NetVault (lib/agentIdentity.ts and
+# app/api/agents/enroll-tokens/route.ts) and are legitimately unset whenever
+# agent-ingest TLS is off - which is the default. Adding them there would print
+# four confident failures on a perfectly healthy install, once per app.
+#
+# The state that IS worth asserting is the one that breaks silently: pinned in the
+# NSSM service environment, which beats both env files for ever. Update-NetVault.ps1
+# clears exactly these four for that reason ($RuntimeSettableEnvKeys), because a
+# pinned fingerprint is baked into every agent enrollment command the hub hands
+# out, and a pinned *_WS_TLS=1 against a listener that is really plaintext makes
+# every agent's WS link fail closed.
+$nvWsPinned = @()
+$nvWsSvcEnv = WsSvcEnv 'NetVault'
+foreach ($wk in @('SPANVAULT_WS_TLS','SPANVAULT_WS_FINGERPRINT','DDIVAULT_WS_TLS','DDIVAULT_WS_FINGERPRINT')) {
+    if ($nvWsSvcEnv -match ("(?m)^\s*" + $wk + "\s*=\s*\S")) { $nvWsPinned += $wk }
+}
+if (-not $nssm) {
+    Wn "nssm.exe was not located - could not check whether the agent-ingest TLS keys are pinned in the NetVault service environment"
+} elseif ($nvWsPinned.Count -gt 0) {
+    Bad ("NetVault: " + ($nvWsPinned -join ', ') + " pinned in the NSSM service environment - a pin there overrides both env files permanently, so Settings cannot change it and the pinned value is handed out in every agent enrollment command. Fix: re-run Update-NetVault.ps1 (it clears these four), or inspect with 'nssm get NetVault AppEnvironmentExtra'")
+} else {
+    Ok "NetVault: the agent-ingest TLS keys are not pinned in the service environment (Settings can manage them)"
+}
+
 # ---------------------------------------------------------------
 Section "7. Scheduled Tasks (NetVault cron)"
 # ⛔ "REGISTERED" IS NOT "WILL RUN". This section used to PRINT the state it had

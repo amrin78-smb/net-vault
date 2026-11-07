@@ -371,6 +371,47 @@ function Get-NssmSettingValue([string]$nssmExe, [string]$service, [string]$setti
     return $raw.Trim()
 }
 
+# The live CRON_SECRET, resolved the way the ROUTE will see it.
+#
+# ⛔ THE SERVICE ENVIRONMENT IS THE AUTHORITY, NOT $AppDir\.env. The suite
+# installer PINS CRON_SECRET into NetVault's NSSM AppEnvironmentExtra, and
+# CRON_SECRET is deliberately NOT in $RuntimeSettableEnvKeys above - so
+# Clear-NssmEnvKeys never removes it and that pin wins for ever: it is already in
+# the environment when the Next standalone server starts and @next/env never
+# overwrites a key that is already set. lib/cronAuth.ts reads
+# process.env.CRON_SECRET and fails CLOSED when it is unset.
+#
+# Both call sites in this script used to read $AppDir\.env on its own, which is
+# wrong in the two ways that matter:
+#   1. the mint-if-missing block below would draw a BRAND-NEW secret on a box
+#      whose service environment already had one, then register all three tasks
+#      with the new value while the route kept comparing against the old pin;
+#   2. the task registration would re-stamp a stale file value over tasks that
+#      were previously correct.
+# Either way all three tasks 401 for ever with no symptom anywhere - curl -s
+# discards the body and Task Scheduler records "0x0 completed successfully" for a
+# 401 exactly as for a 200. The only trace is a health trend that stops gaining.
+#
+# Same precedence Test-NocVault-Suite.ps1 section 7 uses to ASSERT these tokens.
+# Returns the value and where it came from; never logs the value itself.
+function Resolve-CronSecret([string]$appDir) {
+    $svcExtra = Get-NssmSettingValue (Get-NssmForService 'NetVault') 'NetVault' 'AppEnvironmentExtra'
+    foreach ($line in @($svcExtra -split "`r?`n")) {
+        if ($line.Trim() -match '^CRON_SECRET\s*=\s*(\S+)$') {
+            return @{ Value = $Matches[1]; From = 'the NetVault service environment' }
+        }
+    }
+    foreach ($f in @("$appDir\.next\standalone\.env.local", "$appDir\.env")) {
+        if (-not (Test-Path -LiteralPath $f)) { continue }
+        $txt = ''
+        try { $txt = Get-Content -LiteralPath $f -Raw -ErrorAction Stop } catch { $txt = '' }
+        foreach ($line in @($txt -split "`r?`n")) {
+            if ($line.Trim() -match '^CRON_SECRET\s*=\s*(\S+)$') { return @{ Value = $Matches[1]; From = $f } }
+        }
+    }
+    return @{ Value = ''; From = '' }
+}
+
 $script:NvAppPort   = 3000
 $script:TlsFronted  = $false
 function Resolve-NetVaultTransport {
@@ -1091,16 +1132,32 @@ try {
             Add-Content -Path "$AppDir\.env" -Value "`nSERVER_IP=$ServerIp"
             Write-OK "SERVER_IP added to .env"
         }
-        # Existing installs predate CRON_SECRET - generate one if missing
+        # Existing installs predate CRON_SECRET - adopt the live one, or mint one.
+        #
+        # ⛔ ADOPT BEFORE MINTING. Minting whenever $AppDir\.env lacks the key is
+        # how a box whose NSSM service environment already pins CRON_SECRET (every
+        # suite install does) ends up with two different secrets: the new one in
+        # the file and in all three scheduled tasks, the old one still winning in
+        # process.env. The route then 401s every task for ever, silently. See
+        # Resolve-CronSecret above for the full precedence and why it is the
+        # route's, not the file's.
         if (-not (Select-String -Path "$AppDir\.env" -Pattern "^CRON_SECRET=" -Quiet -ErrorAction SilentlyContinue)) {
-            # CSPRNG, not Get-Random (System.Random, time-seeded) - this value is a
-            # Bearer token authorising NetVault system endpoints.
-            $csBytes = New-Object byte[] 32
-            $csRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
-            try { $csRng.GetBytes($csBytes) } finally { $csRng.Dispose() }
-            $CronSecret = -join ($csBytes | ForEach-Object { '{0:x2}' -f $_ })
-            Set-EnvVar -Path "$AppDir\.env" -Key 'CRON_SECRET' -Value $CronSecret
-            Write-OK "CRON_SECRET generated and added to .env"
+            $csLive = Resolve-CronSecret $AppDir
+            if ($csLive.Value) {
+                # Copy it into the file so both agree from here on. The value is
+                # never printed - only where it was found.
+                Set-EnvVar -Path "$AppDir\.env" -Key 'CRON_SECRET' -Value $csLive.Value
+                Write-OK "CRON_SECRET adopted from $($csLive.From) and written to .env (NOT re-minted - the tasks and the route must agree)"
+            } else {
+                # CSPRNG, not Get-Random (System.Random, time-seeded) - this value is a
+                # Bearer token authorising NetVault system endpoints.
+                $csBytes = New-Object byte[] 32
+                $csRng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+                try { $csRng.GetBytes($csBytes) } finally { $csRng.Dispose() }
+                $CronSecret = -join ($csBytes | ForEach-Object { '{0:x2}' -f $_ })
+                Set-EnvVar -Path "$AppDir\.env" -Key 'CRON_SECRET' -Value $CronSecret
+                Write-OK "CRON_SECRET generated and added to .env (none was set anywhere)"
+            }
         }
         # NocVault Hub cross-DB read role (added for existing installs that predate the Hub).
         # nocvault_readonly is SELECT-only across all suite DBs; the Hub reads via it.
@@ -1478,8 +1535,11 @@ try {
     }
 
     Write-Step "Registering daily health-snapshot task"
-    $cronLine = Get-Content "$AppDir\.env" | Where-Object { $_ -match '^CRON_SECRET=' } | Select-Object -First 1
-    $CronSecret = if ($cronLine) { $cronLine.Substring('CRON_SECRET='.Length) } else { '' }
+    # Resolved the way the route sees it (service env first) - NOT from .env
+    # alone, which is what used to stamp a value the route would never accept.
+    $cronRes    = Resolve-CronSecret $AppDir
+    $CronSecret = $cronRes.Value
+    if ($CronSecret) { Write-OK "CRON_SECRET resolved from $($cronRes.From)" }
     if ($CronSecret) {
         $action = New-ScheduledTaskAction -Execute "curl.exe" -Argument "-s -X POST http://127.0.0.1:$($script:NvAppPort)/api/system/health-snapshot -H `"Authorization: Bearer $CronSecret`""
         $trigger = New-ScheduledTaskTrigger -Daily -At "00:00"
@@ -1487,7 +1547,7 @@ try {
         # No immediate baseline snapshot here - the daily scheduled task above takes
         # it tonight. Skipping it keeps the update from blocking on a post-deploy curl.
     } else {
-        Write-Warn "CRON_SECRET not found in .env - skipping scheduled task registration"
+        Write-Warn "CRON_SECRET found in neither the NetVault service environment nor its env files - skipping scheduled task registration"
     }
 
     Write-Step "Registering daily EOL enrichment task"
@@ -1500,7 +1560,7 @@ try {
         # button for on-demand use. Skipping it shortens the update and avoids loading
         # the freshly-started server with a full ~2,500-device scan mid-deploy.
     } else {
-        Write-Warn "CRON_SECRET not found in .env - skipping EOL enrichment task"
+        Write-Warn "CRON_SECRET not resolvable - skipping EOL enrichment task"
     }
 
     Write-Step "Registering weekly EOL feed-sync task"
@@ -1513,7 +1573,7 @@ try {
         $syncTrigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At "00:15"
         Register-MaintenanceTask "NetVault-SyncEol" $syncAction $syncTrigger "weekly Sun 00:15"
     } else {
-        Write-Warn "CRON_SECRET not found in .env - skipping EOL feed-sync task"
+        Write-Warn "CRON_SECRET not resolvable - skipping EOL feed-sync task"
     }
 
     # Update succeeded and is confirmed healthy - the pre-update snapshot is no

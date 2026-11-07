@@ -166,7 +166,7 @@ dead — and polling stops at `done`, so it stayed green forever. It also made
 
 ## Installer / ops (see CLAUDE.md "Installer parity" for full detail)
 - ANY change affecting provisioning (env var, scheduled task, schema/grant, service, port, build step) MUST update both `installer/Install-NocVault-Suite.ps1` AND `installer/Update-NetVault.ps1` in the same change — fresh installs and upgrades diverge otherwise.
-- `installer/Install-NetVault.ps1` (the older standalone, non-suite installer) does NOT run `schema.sql` — it has its own smaller hardcoded schema block, missing several tables/columns. Treat it as legacy/divergent, not authoritative.
+- `installer/Install-NetVault.ps1` (the older standalone, non-suite installer) does NOT run `schema.sql` — it has its own smaller hardcoded schema block, missing several tables/columns. Treat it as legacy/divergent, not authoritative. **As of 1.64.1 it says so on screen** (a yellow banner naming the missing tables and pointing at `Install-NocVault-Suite.ps1`) rather than only in this index, because the consequence shows up later as missing features, never as an error. It also no longer seeds the published default admin password — same per-install generation as the suite installer, written to `secrets.env`, reported by location only.
 - PowerShell "is tool X installed" checks must use `try/catch` around the direct invocation (`& node --version`), never bare `2>$null` — `2>$null` only redirects a native command's OWN stderr; if the command itself fails to resolve, PowerShell throws before that redirect applies, crashing a truly clean machine's install silently-until-tested.
 - Installer `.exe`s are gitignored build artifacts, UNSIGNED (SmartScreen warns) — a GUI-wrapper (.ps1) code change ships via git clone at install time, no exe rebuild needed; only a `param()` surface change on the wrapped `.ps1` needs a rebuilt exe.
 - DB passwords/secrets are auto-generated per install (no shared hardcoded defaults) and persisted in `C:\ProgramData\NocVault\secrets.env` — never re-introduce shared/hardcoded credentials.
@@ -698,3 +698,47 @@ it was. `NocVault-TlsCutover.ps1`'s `Undo-TlsCutover` already had this ordering;
   between `}` and `else`/`elseif` is legal PowerShell 5.1 and runs correctly. The shape that
   parses clean and dies at runtime is a block keyword with no preceding construct at all,
   which becomes a `CommandAst`. See [[dev-and-staging-machines]] for the working gate.
+- ⛔ **A PowerShell function that returns an EMPTY ARRAY hands the caller `$null`.** Measured
+  on PS 5.1.26100: `function f { return @() }; $null -eq (f)` is `True`, and the same is true
+  for `return @($list | Select-Object -Unique)` when the list is empty. So the natural shape
+  for "here is what I found, or `$null` if I could not look" makes **"found nothing" and
+  "could not look" the same value** — which inverts any guard that refuses on "could not
+  look". This bit the `-RemoveDependencies` Node/Git guard while it was being written (1.64.1):
+  a clean server would have reported an enumeration failure that never happened and the switch
+  would have silently stopped removing anything, for ever. Return `@{ Looked = $bool; Items =
+  @(...) }` instead. ⛔ Note `ParseFile` and the AST gate CANNOT see this — it is a runtime
+  value semantic, not a syntax error.
+- ⛔ **An alias outranks a function of the same name**, so a single-letter test helper is not
+  safe: `function h { ... }` is shadowed by the built-in `h` (→ `Get-History`), and the call
+  returns history, not your value. Cost a wrong conclusion while measuring the above. Also
+  `$null.Anything.Count` is `0`, not an error, so a null result can look like a real empty one.
+- ⛔ **`CRON_SECRET`'s authority is the NSSM service environment, NOT `<AppDir>\.env`.** The
+  suite installer pins it in `AppEnvironmentExtra`, and it is deliberately **absent** from
+  `$RuntimeSettableEnvKeys`, so `Clear-NssmEnvKeys` never removes it and the pin wins forever
+  (`lib/cronAuth.ts` reads `process.env.CRON_SECRET`). Until 1.64.1 both WRITERS read the file
+  alone: `Update-NetVault.ps1` would mint a brand-new secret when the file lacked the key even
+  though the service env already had one, and `Enable-NocVaultTls.ps1 -Disable` re-registered
+  all three tasks from the file. Either way the tasks carry a token the route rejects — and a
+  401 is indistinguishable from success in Task Scheduler (`curl -s` discards the body, so the
+  task records `0x0 completed successfully`). The only symptom is a health trend that stops
+  gaining points. `Resolve-CronSecret` in the updater is now the one shape, matching
+  `Test-NocVault-Suite.ps1` section 7's `$cronLive`, which already did it correctly — **the
+  tester was right and the writers were wrong**, which is why the assertion existed and the
+  bug survived anyway.
+- ⛔ **`-RemoveDependencies` must not assume "we installed it, so we remove it".** The
+  installer's Node and Git steps both DETECT a pre-existing copy and skip installing, so that
+  assumption is false exactly where it does damage. `C:\ProgramData\NocVault\install-state.env`
+  (`NODE_OWNED_BY_NOCVAULT` / `GIT_OWNED_BY_NOCVAULT`, written at the moment the installer
+  decides) records it instead; an **in-place upgrade of a too-old Node is NOT ownership** and
+  records `0`. It is a separate file from `secrets.env` on purpose — `-RemoveSecrets` deletes
+  that one and this record has to outlive it. Boxes installed before 1.64.1 have no record, so
+  the uninstaller also scans services, scheduled tasks and running processes for foreign
+  references; the process scan matches on **CommandLine, not image path**, because the suite's
+  own consoles run the shared `C:\Program Files\nodejs\node.exe` and an image-path test would
+  call our own leftovers foreign and block every run.
+- ⛔ **The suite installer uses `npm ci`; the per-app updaters deliberately keep `npm install`.**
+  A fresh install must reproduce the locked tree the release was tested against (and fail loudly
+  if lock and `package.json` disagree) — all four repos track `package-lock.json`, root and
+  `frontend/`. `npm ci` deletes `node_modules` first, which is exactly why the updaters must NOT
+  adopt it: they rely on an incremental install plus a preserved `.next/cache` (see CLAUDE.md's
+  performance notes). Don't "unify" these two.
