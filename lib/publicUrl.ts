@@ -90,8 +90,39 @@ export function resolveOrigin(
     .split(',')[0]
     .trim()
 
+  // ⛔ `port: null` MEANS "KEEP THE PORT WE WERE REACHED ON", NOT "NO PORT".
+  // It used to mean the latter, and that made every no-session SSO handoff
+  // redirect to a dead address. MEASURED on production 2026-11-07:
+  //
+  //   GET https://nocvault.thaiunion.com:3000/api/sso/spanvault   (no cookie)
+  //     -> 307 https://nocvault.thaiunion.com/login?callbackUrl=...
+  //   https://nocvault.thaiunion.com:443/login -> no response
+  //   http://nocvault.thaiunion.com:80/login   -> no response
+  //
+  // `hostname` deliberately strips the inbound port so the host can be
+  // shape-checked, and the old return then only re-added a port when the
+  // CALLER named one. The three `ownOrigin` call sites in the SSO handoffs pass
+  // null precisely because they want this host, this port — so they produced a
+  // 443 URL on a suite whose public ports are 3000/3004/3006/3008 and which
+  // listens on neither 443 nor 80.
+  //
+  // It survived because it is only reachable on the no-session and
+  // access-denied branches: a signed-in user clicking a launcher tile never
+  // builds ownOrigin. 1.63.0 cut the session from 30 days to 12 hours, which
+  // turns "your session expired, click a tile" from rare into daily — so this
+  // is a latent bug that release would have made routine.
+  //
+  // An explicitly requested port still wins, and the scheme's default port is
+  // left off so an install genuinely fronted on 443 keeps a clean origin.
+  const inboundPort = rawHost.includes(':') ? rawHost.split(':')[1].trim() : ''
+  const keepInbound =
+    /^\d{1,5}$/.test(inboundPort) &&
+    !(proto === 'https' && inboundPort === '443') &&
+    !(proto === 'http' && inboundPort === '80')
+  const portPart = port ? `:${port}` : keepInbound ? `:${inboundPort}` : ''
+
   if (hostname && hostname.length <= 253 && HOSTNAME_RE.test(hostname) && (proto === 'http' || proto === 'https')) {
-    return `${proto}://${hostname}${port ? ':' + port : ''}`
+    return `${proto}://${hostname}${portPart}`
   }
   return legacyFallback
 }

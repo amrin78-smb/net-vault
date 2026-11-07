@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.63.1': [
+    "Fixed: signing in after your session expired could send you to an address that does not exist. The redirect to the login page was built without the port, so from a console on port 3000 it pointed at the default HTTPS port, where nothing is listening. Found on the live server immediately after the 1.63.0 deploy. It only ever affected the expired-session and access-denied paths, which is why it went unnoticed - but 1.63.0 shortened sessions from 30 days to 12 hours, which would have turned a rare dead end into a daily one.",
+  ],
   '1.63.0': [
     "Security: a signed-in session now expires after 12 hours instead of 30 days, and a user's role and app access are re-checked against the database on every request rather than being fixed at sign-in. Previously, demoting someone or removing their access to an app had no effect on a browser they were already signed in to - for up to a month - and the handoff to another app read the old role straight off that stale session.",
     "Security: an account deleted while signed in is now refused at the handoff to every other app. Two of the three handoffs also skipped the directory revocation check entirely, so a group mapping an administrator had revoked kept working in those two apps; all three now take the same path.",

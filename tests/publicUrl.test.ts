@@ -28,6 +28,43 @@ test('the forwarded proto is what carries https through the terminator', () => {
   assert.equal(o, 'https://nv.example.com:3008')
 })
 
+test('port=null KEEPS the port we were reached on - the dead-login-redirect bug', () => {
+  // ⛔ REGRESSION PIN, MEASURED ON PRODUCTION 2026-11-07. `port: null` used to
+  // mean "emit no port", so the three ownOrigin call sites in the SSO handoffs
+  // — which pass null because they mean "this host, this port" — redirected a
+  // sessionless user to https://host/login, i.e. port 443. The suite's public
+  // ports are 3000/3004/3006/3008 and nothing listens on 443 or 80, so the
+  // login redirect went nowhere. Only the no-session and access-denied
+  // branches build ownOrigin, which is why it went unnoticed; cutting the
+  // session to 12 hours in 1.63.0 would have made it a daily occurrence.
+  const o = resolveOrigin(
+    req({ host: 'nocvault.thaiunion.com:3000', 'x-forwarded-host': 'nocvault.thaiunion.com:3000', 'x-forwarded-proto': 'https' }),
+    null, FALLBACK, {})
+  assert.equal(o, 'https://nocvault.thaiunion.com:3000')
+})
+
+test('an explicitly requested port still wins over the inbound one', () => {
+  // The sibling-app call sites pass a real port and must be unaffected.
+  const o = resolveOrigin(
+    req({ host: 'nocvault.thaiunion.com:3000', 'x-forwarded-host': 'nocvault.thaiunion.com:3000', 'x-forwarded-proto': 'https' }),
+    3008, FALLBACK, {})
+  assert.equal(o, 'https://nocvault.thaiunion.com:3008')
+})
+
+test("the scheme's default port is not echoed back", () => {
+  // An install genuinely fronted on 443 keeps a clean origin rather than :443.
+  assert.equal(
+    resolveOrigin(req({ host: 'nv.example.com:443', 'x-forwarded-proto': 'https' }), null, FALLBACK, {}),
+    'https://nv.example.com')
+  assert.equal(
+    resolveOrigin(req({ host: 'nv.example.com:80', 'x-forwarded-proto': 'http' }), null, FALLBACK, {}),
+    'http://nv.example.com')
+  // A junk port is dropped rather than concatenated into the origin.
+  assert.equal(
+    resolveOrigin(req({ host: 'nv.example.com:notaport', 'x-forwarded-proto': 'https' }), null, FALLBACK, {}),
+    'https://nv.example.com')
+})
+
 test('no usable host falls back, never throws', () => {
   assert.equal(resolveOrigin(req({}), null, FALLBACK, {}), FALLBACK)
   assert.equal(resolveOrigin(req({ host: '  ' }), null, FALLBACK, {}), FALLBACK)
@@ -51,7 +88,12 @@ test('a forwarded host NOT on the list is DISCARDED, falling back to the real Ho
   // ⛔ Discarded, not refused: a misconfigured allow-list must not become an
   // outage on every page that builds a cross-app link.
   const o = resolveOrigin(req({ host: 'nv.example.com:3000', 'x-forwarded-host': 'evil.example.com', 'x-forwarded-proto': 'https' }), null, FALLBACK, ENV)
-  assert.equal(o, 'https://nv.example.com', 'the attacker-supplied host must not survive')
+  // The port moved into the expectation in 1.63.1 (port=null now preserves the
+  // port we were reached on). What this test is FOR is unchanged: the
+  // attacker's hostname must not survive. Asserting the whole origin, rather
+  // than just the hostname, also pins that the fallback keeps its own port.
+  assert.equal(o, 'https://nv.example.com:3000', 'the attacker-supplied host must not survive')
+  assert.ok(!o.includes('evil'), 'and must not appear anywhere in the origin')
 })
 
 test('the allow-list ignores case and a port on BOTH sides', () => {
@@ -67,7 +109,7 @@ test('the allow-list ignores case and a port on BOTH sides', () => {
   )
   assert.equal(
     resolveOrigin(req({ host: 'fallback.example.com', 'x-forwarded-host': 'NV.EXAMPLE.COM:3000' }), null, FALLBACK, env),
-    'http://NV.EXAMPLE.COM',
+    'http://NV.EXAMPLE.COM:3000',
     'and an upper-case one must too, port and all',
   )
 })
