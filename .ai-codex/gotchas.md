@@ -1,5 +1,9 @@
 # NetVault Gotchas — non-obvious behaviours
 
+## Redacting a field is only half a fix — check what was READING it
+- ⛔ **`app/api/system/tls/route.ts`'s GET must never return `keyPath`, and `CertificatePanel` must never branch on one.** 1.62.0 claimed the private key's location was no longer disclosed; it had been removed from `tls-transport` (the route nothing read it from) and left on `tls` — the route the panel actually renders. Removing it there in 1.62.2 then broke the panel the other way: the "Private key file" row branched on `state.keyPath`, so with the field gone it reported **"Not configured" for a key that was configured and present**. A redaction that silently changes what the page *claims* is a new bug, not a fix. The row now reads `keyConfigured` + `keyPresent` — two booleans that separate "none configured" from "configured but the file is gone" — and `tests/systemSeams.test.ts` pins the seam in BOTH directions (the panel must not reference a key path; the route must send `keyConfigured`; the panel must branch on it). Both halves were mutation-tested.
+- The lesson generalises: when you remove a field from a payload, grep every consumer for it in the same change. A `doesNotMatch` assertion on the payload alone will pass while the UI quietly starts lying.
+
 ## Framework / build
 - AGENTS.md warns Next.js version here has breaking changes vs training data — check `node_modules/next/dist/docs/` before assuming API shape.
 - No `next/font/google` — Inter loads via `@import` in `app/globals.css`. Reintroducing `next/font/google` breaks offline/restricted-network installs (fixed 1.20.4).

@@ -159,7 +159,19 @@ export async function GET() {
     httpsPort: config.httpsPort,
     httpPort: config.httpPort,
     certPath: config.certPath,
-    keyPath: config.keyPath,
+    // ⛔ `keyPath` IS NOT RETURNED. 1.62.0's note said the private key's
+    // location was no longer disclosed; it was removed from `tls-transport`,
+    // the route nothing read it from, and left here — on the route
+    // CertificatePanel actually renders.
+    //
+    // Removing it alone was not enough: the panel's "Private key file" row
+    // branched on `keyPath`, so dropping the field made the row claim "Not
+    // configured" for a key that IS configured and present — a disclosure
+    // turned into a lie. `keyConfigured` + `keyPresent` carry the two facts
+    // the row needs (is one set, and is the file there) without the path, so
+    // the panel can tell "not configured" from "configured but missing".
+    // `installTargets.keyPath` still says where a key WOULD be written.
+    keyConfigured: Boolean(config.keyPath),
     certPresent: Boolean(config.certPath && fs.existsSync(config.certPath)),
     // ⛔ Whether a key FILE is there. Never the key, never its contents, never
     // its length.

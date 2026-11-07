@@ -42,45 +42,17 @@ import {
   type TerminatorState,
   type TransportAction,
 } from '@/lib/tlsTransport.ts'
+// ⛔ ONE IMPLEMENTATION. This file carried a byte-level duplicate of the 1060
+// probe that lib/terminatorState.ts exists to be the single copy of — and the
+// duplicate returned only {state, detail}, with no `running`, which is why the
+// terminator frame could not be reported from this route at all.
+import { HUB_PUBLIC_PORT, TERMINATOR_SERVICE, readTerminatorState } from '@/lib/terminatorState.ts'
 
 const execFileAsync = promisify(execFile)
-
-const TERMINATOR_SERVICE = 'NocVault-Tls'
 
 type SessionUser = { id?: string | number; role?: string }
 function userOf(session: unknown): SessionUser {
   return ((session as { user?: SessionUser } | null)?.user || {}) as SessionUser
-}
-
-/**
- * Whether the terminator is running.
- *
- * ⛔ THREE OUTCOMES PLUS `unknown`, AND A FAILED READ IS NEVER `absent`.
- * `sc.exe query` exits 1060 for a service that does not exist — that is an
- * answer. Any other failure (not Windows, no permission, sc.exe missing) is
- * NOT an answer, and reporting it as "absent" would tell the panel the switch
- * is off and offer to turn on a suite that may already be on.
- */
-async function readTerminatorState(): Promise<{ state: TerminatorState; detail: string | null }> {
-  if (process.platform !== 'win32') return { state: 'unknown', detail: 'Not a Windows host.' }
-  try {
-    const { stdout } = await execFileAsync('sc.exe', ['query', TERMINATOR_SERVICE], { timeout: 10_000 })
-    if (/STATE\s*:\s*\d+\s+RUNNING/i.test(stdout)) return { state: 'running', detail: null }
-    if (/STATE\s*:\s*\d+\s+(STOPPED|PAUSED)/i.test(stdout)) return { state: 'stopped', detail: null }
-    if (/STATE\s*:\s*\d+\s+(START_PENDING|STOP_PENDING)/i.test(stdout)) {
-      return { state: 'stopped', detail: 'The service is changing state.' }
-    }
-    return { state: 'unknown', detail: 'sc.exe returned output this build does not recognise.' }
-  } catch (err: unknown) {
-    const e = err as { code?: number; stdout?: string; stderr?: string; message?: string }
-    const text = `${e?.stdout || ''}${e?.stderr || ''}`
-    // 1060 = ERROR_SERVICE_DOES_NOT_EXIST. The suite has never had HTTPS turned
-    // on, which is a real state and the common one.
-    if (e?.code === 1060 || /1060/.test(text) || /does not exist as an installed service/i.test(text)) {
-      return { state: 'absent', detail: null }
-    }
-    return { state: 'unknown', detail: (e?.message || 'sc.exe could not be run').slice(0, 200) }
-  }
 }
 
 function readLockPid(lockPath: string): number | null {
@@ -195,6 +167,16 @@ export async function GET() {
     terminatorDetail: terminator.detail,
     // Where this console is bound right now — 1300x means the cutover is
     // applied and the public port belongs to the terminator.
+    // ⛔ THE TERMINATOR FRAME, ON THIS ROUTE TOO. 1.62.0 wired `fronted`/
+    // `publicPort` into the Certificate and Console-address panels and missed
+    // THIS one — the HTTPS tab, the page an operator actually uses to judge a
+    // cutover, which went on saying "Serving HTTPS on port 13000". There were
+    // three call sites of `transportPresentation`, not two.
+    fronted: terminator.running,
+    publicPort:
+      terminator.running === true ? HUB_PUBLIC_PORT
+      : terminator.running === false ? config.httpsPort
+      : null,
     boundPort: (process.env.PORT || '').trim() || null,
     boundHostname: (process.env.HOSTNAME || '').trim() || null,
     ports: SUITE_PUBLIC_PORTS,

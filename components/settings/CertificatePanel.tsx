@@ -71,8 +71,9 @@ type TlsState = {
   publicPort?: number | null
   terminator?: string | null
   certPath?: string | null
-  keyPath?: string | null
   certPresent?: boolean
+  /** A key path is configured. The path itself is deliberately never sent. */
+  keyConfigured?: boolean
   keyPresent?: boolean
   certReadError?: string | null
   certificate?: CertDescription | null
@@ -256,7 +257,6 @@ export default function CertificatePanel({ canInstall = true }: { canInstall?: b
       setPrompt(null)
       setResult({
         certPath: data.certPath,
-        keyPath: data.keyPath,
         backups: Array.isArray(data.backups) ? data.backups : [],
         chainLength: data.chainLength,
         chainOnly: data.chainOnly,
@@ -362,11 +362,11 @@ export default function CertificatePanel({ canInstall = true }: { canInstall?: b
               : <span style={{ color: 'var(--text-muted)' }}>Not configured</span>}
           </FactRow>
           <FactRow label="Private key file">
-            {state.keyPath
-              ? <>
-                  <Mono>{state.keyPath}</Mono>{' '}
-                  <StatePill tone={state.keyPresent ? 'ok' : 'danger'}>{state.keyPresent ? 'Present' : 'Missing'}</StatePill>
-                </>
+            {/* No path, by design — see app/api/system/tls/route.ts. The two
+                booleans separate "none configured" from "configured but the
+                file is gone", which is the only distinction this row needs. */}
+            {state.keyConfigured
+              ? <StatePill tone={state.keyPresent ? 'ok' : 'danger'}>{state.keyPresent ? 'Present' : 'Missing'}</StatePill>
               : <span style={{ color: 'var(--text-muted)' }}>Not configured</span>}
           </FactRow>
         </FactTable>

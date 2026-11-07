@@ -421,8 +421,9 @@ function Stop-TlsTerminator {
     $tlsState = (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue).Status
     if ($tlsState -ne 'Stopped') {
         Write-Warn "NocVault-Tls is still $tlsState after $([int]$tlsSw.Elapsed.TotalSeconds)s - this app's own service stop may be refused with 1051"
+    } else {
+        Write-OK "NocVault-Tls stopped"
     }
-    Write-OK "NocVault-Tls stopped"
 }
 function Start-TlsTerminator {
     if (-not (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue)) { return }
@@ -431,7 +432,13 @@ function Start-TlsTerminator {
     if (-not $script:StoppedTheTerminator) { return }
     $ErrorActionPreference = 'Continue'
     $null = & sc.exe start NocVault-Tls 2>&1
-    $script:StoppedTheTerminator = $false
+    # ⛔ THE FLAG IS *NOT* CLEARED HERE. It used to be — one line after the
+    # start was ISSUED, before anything confirmed it took. That silently
+    # defeated the `finally` below, whose first act is
+    # `if (-not $script:StoppedTheTerminator) { return }`: once a start had
+    # merely been ATTEMPTED the safety net became a no-op, leaving the case it
+    # exists for — start reached, start FAILED — uncovered. The flag now means
+    # "this run stopped the front door and has not got it back".
     # WAIT FOR Running, AND SAY SO LOUDLY IF IT NEVER COMES BACK. The old code
     # discarded sc.exe's exit code and slept 3 seconds, and NOTHING downstream
     # could notice the failure: this script's health check probes the API on
@@ -446,14 +453,18 @@ function Start-TlsTerminator {
         Start-Sleep -Milliseconds 500
     }
     if (-not $tlsUp) {
+        # Flag deliberately LEFT SET so the script-level `finally` retries.
         Write-Warn "NocVault-Tls did NOT come back - ALL FOUR consoles are unreachable on their public ports. Start it with: sc.exe start NocVault-Tls"
         return
     }
+    $script:StoppedTheTerminator = $false
     # Running is not the same as answering. Prove the PUBLIC port responds.
     $tlsProbe = $false
+    # OR-ed, not assigned, and set ONCE: a bare assignment REPLACES the
+    # process-wide protocol set for every later web call in the run.
+    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
     for ($i = 0; $i -lt 10; $i++) {
         try {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
             $null = Invoke-WebRequest -Uri "https://127.0.0.1:3000/api/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
             $tlsProbe = $true; break
         } catch {
@@ -464,9 +475,15 @@ function Start-TlsTerminator {
         }
         Start-Sleep -Seconds 2
     }
+    # ⛔ NO UNCONDITIONAL "[OK] started" AFTER THIS. NetVault kept its original
+    # success line below the new warnings, so a failing run printed
+    #   [!!] NocVault-Tls is Running but :3000 is not answering
+    #   [OK] NocVault-Tls started
+    # back to back — and a log grep for the OK line reported success for a
+    # front door with dead public ports, which is the exact false all-clear
+    # 1.62.0 was written to remove. The other three apps end at the warning.
     if ($tlsProbe) { Write-OK "NocVault-Tls is back and answering on :3000" }
     else { Write-Warn "NocVault-Tls is Running but :3000 is not answering - the consoles may be unreachable from outside" }
-    Write-OK "NocVault-Tls started"
 }
 
 # Read a single value from a KEY=VALUE file (e.g. C:\ProgramData\NocVault\secrets.env).
@@ -1540,6 +1557,19 @@ try { Stop-Transcript | Out-Null } catch {}
     # Start-TlsTerminator is idempotent - it returns immediately unless THIS run is the one
     # that stopped the service.
     try { Start-TlsTerminator } catch { Write-Warn "Could not restore NocVault-Tls: $($_.Exception.Message)" }
+    # ⛔ WRITE THE OUTCOME WHERE SOMEONE CAN READ IT. Every exit path calls
+    # Stop-Transcript BEFORE unwinding to this block, and the updater runs from
+    # a SYSTEM scheduled task with no output redirection — so everything the
+    # restore prints, including "ALL FOUR consoles are unreachable", goes to a
+    # console that does not exist. The safety net worked silently and failed
+    # silently, indistinguishably. This line is the difference.
+    try {
+        $tlsFinal = (Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue).Status
+        if ($null -eq $tlsFinal) { $tlsFinal = 'absent' }
+        Add-Content -LiteralPath (Join-Path (Split-Path $StatusPath -Parent) 'tls-restore.log') `
+            -Value "$(Get-Date -Format s) terminator=$tlsFinal stillOwedRestart=$($script:StoppedTheTerminator)" `
+            -ErrorAction SilentlyContinue
+    } catch {}
     # Item 6: release the concurrency lock on every path out of the outer try
     # above - success, failure-then-rollback (exit 1), or anything else.
     if ($lockAcquired) {

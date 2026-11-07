@@ -173,7 +173,27 @@ test('a fronted install reports the PUBLIC port, not the loopback port', () => {
   assert.match(p.headline, /127\.0\.0\.1:13000/)
 })
 
-test('BOTH panels actually pass the terminator frame they are given', () => {
+test('EVERY transportPresentation call site passes the terminator frame', () => {
+  // ⛔ ENUMERATED, NOT HARD-CODED. The first version of this test named the two
+  // panels that had just been fixed — so when a THIRD call site
+  // (TransportPanel, the HTTPS tab itself) turned out to be missing the frame,
+  // the test that existed to catch exactly that could not see it, and went
+  // green beside the bug. A guard test that lists the known-good cases proves
+  // nothing; it has to go and find the cases.
+  const dir = path.join(repo, 'components/settings')
+  const callers = fs.readdirSync(dir)
+    .filter((f) => f.endsWith('.tsx'))
+    .filter((f) => /transportPresentation\(/.test(fs.readFileSync(path.join(dir, f), 'utf8')))
+  assert.ok(callers.length >= 3, `expected at least 3 call sites, found ${callers.length}`)
+  for (const f of callers) {
+    const call = /transportPresentation\([\s\S]{0,400}?\n\s*\}\)/.exec(fs.readFileSync(path.join(dir, f), 'utf8'))
+    assert.ok(call, `${f}: could not read the call`)
+    assert.match(call[0], /fronted:/, `${f} must pass fronted`)
+    assert.match(call[0], /publicPort:/, `${f} must pass publicPort`)
+  }
+})
+
+test('the two panels wired in 1.62.0 still pass it', () => {
   // ⛔ THE REGRESSION THIS FILE EXISTS FOR. `app/api/system/tls/route.ts` and
   // `console-url/route.ts` computed `fronted`/`publicPort` in 1.60.1 and NO
   // panel read either one, so the helper's whole fronted branch was dead code
@@ -188,11 +208,27 @@ test('BOTH panels actually pass the terminator frame they are given', () => {
   }
 })
 
-test('the private key path is never in the transport payload', () => {
-  // GET is admin+, the panel never rendered it, and it is the PRIVATE key.
-  const src = read('app/api/system/tls-transport/route.ts')
-  assert.doesNotMatch(src, /^\s*keyPath: config\.keyPath,/m)
-  assert.match(src, /keyPresent: Boolean\(config\.keyPath\)/)
+test('the private key path is in NO tls payload, including the one the panel reads', () => {
+  // ⛔ CHECK THE ROUTE THAT IS ACTUALLY RENDERED. The first version asserted
+  // this only against tls-transport — the route whose payload nothing read the
+  // key path from — while `app/api/system/tls/route.ts` went on returning it
+  // and CertificatePanel went on displaying it. The release note said it was
+  // removed; the test agreed; the page still showed it.
+  for (const f of ['app/api/system/tls-transport/route.ts', 'app/api/system/tls/route.ts']) {
+    assert.doesNotMatch(read(f), /^\s*keyPath: config\.keyPath,/m, f)
+  }
+  assert.doesNotMatch(read('components/settings/CertificatePanel.tsx'), /keyPath: data\.keyPath/)
+
+  // ⛔ AND THE ROW MUST STILL TELL THE TRUTH. Removing the field was only half
+  // the fix: the "Private key file" row branched on `state.keyPath`, so with
+  // the field gone it reported "Not configured" for a key that was configured
+  // and present. A redaction that silently changes what the page CLAIMS is a
+  // new bug, not a fix — so pin the replacement seam in both directions.
+  const panel = read('components/settings/CertificatePanel.tsx')
+  const tlsRoute = read('app/api/system/tls/route.ts')
+  assert.doesNotMatch(panel, /state\.keyPath/, 'the panel must not read a key path at all')
+  assert.match(tlsRoute, /keyConfigured: Boolean\(config\.keyPath\)/, 'the route must send keyConfigured')
+  assert.match(panel, /state\.keyConfigured/, 'the panel must branch on keyConfigured, not on a path')
 })
 
 test('the restart route derives its dependents from a real dependency probe', () => {

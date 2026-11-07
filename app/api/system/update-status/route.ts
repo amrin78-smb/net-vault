@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.62.2': [
+    "Fixed: the HTTPS tab still reported the internal port as the address people connect to. The previous release fixed that on the Certificate and Console address tabs and missed this one - which is the tab used to judge whether a changeover worked.",
+    "Fixed: the Certificate tab's \u201cPrivate key file\u201d row said \u201cNot configured\u201d for a key that was configured and present. Removing the key's location from that page in the previous release also removed what the row was reading. It now reports whether a key is configured and whether the file is there, without disclosing where it is.",
+    "Hardening: an update no longer clears its record of having stopped the shared HTTPS front door until that service is confirmed running again, so the safety net that restores it on the way out can no longer be skipped by a start that was attempted and failed.",
+    "An update now writes the outcome of restoring the front door to a file, because everything it printed previously went to a console that does not exist when the update runs unattended.",
+    "Fixed: turning HTTPS off printed a recovery instruction that could not work - starting the service by hand, after its certificate settings had already been removed. It now prints the two steps that do work.",
+  ],
   '1.62.1': [
     "Hardening: turning HTTPS off no longer removes the front-door service until every console is proven to be answering again. Removing it first meant that if a console failed to come back, it was left unreachable with no way to put things back - the command could not even be re-run. It is now left stopped but installed, with the two commands to recover printed.",
     "Hardening: a failed update whose own rollback also failed left behind the last intact copy of the working build - and the next update attempt deleted it before snapshotting its own broken copy. The next attempt now stops and says where that copy is instead.",

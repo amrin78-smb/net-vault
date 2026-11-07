@@ -32,7 +32,7 @@ type TransportState = {
   httpsPort: number | null
   httpPort: number | null
   certPath: string | null
-  keyPath: string | null
+  keyPresent?: boolean
   publicHost: string | null
   terminator: 'running' | 'stopped' | 'absent' | 'unknown'
   terminatorDetail: string | null
@@ -42,6 +42,8 @@ type TransportState = {
   scriptPresent: boolean
   runInProgress: boolean
   runDied?: boolean
+  fronted?: boolean | null
+  publicPort?: number | null
   logPath: string | null
   logError: string | null
   lastRun: {
@@ -263,6 +265,7 @@ export default function TransportPanel() {
 
   const transport = transportPresentation(state.status, {
     httpsPort: state.httpsPort, httpPort: state.httpPort, error: state.error,
+    fronted: state.fronted ?? null, publicPort: state.publicPort ?? null,
   })
   const term = terminatorPresentation(state.terminator, state.terminatorDetail)
   const runReport = runPresentation(state.lastRun)
@@ -491,7 +494,6 @@ export default function TransportPanel() {
             </FactTable>
           )}
 
-          {/* moved out of this card — see the hoisted copy above */}
           <LogBlock lines={state.lastRun.highlights} label="Gate results and refusals" />
           <LogBlock lines={state.lastRun.lines} label="The engine's output (tail)" />
 

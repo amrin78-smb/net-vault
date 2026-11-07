@@ -542,15 +542,35 @@ if ($Disable) {
     # ⛔ THE POINT OF NO RETURN, AND IT IS GATED ON THE VERIFICATION ABOVE.
     if ($allBack) {
         if ($tls) {
-            $null = & $NssmExe remove 'NocVault-Tls' confirm 2>&1
-            $still = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
-            if ($still) { Write-Warn "nssm did not remove NocVault-Tls - it is stopped but still installed. Remove it with: nssm remove NocVault-Tls confirm" }
-            else { Write-OK "NocVault-Tls removed" }
+            $rm = (& $NssmExe remove 'NocVault-Tls' confirm 2>&1 | Out-String).Trim()
+            # ⛔ POLL, DO NOT SAMPLE. Windows keeps a deleted service
+            # enumerable until every open handle closes, so checking
+            # Get-Service immediately after the remove reports "still
+            # installed" on a perfectly successful removal.
+            $still = $null
+            for ($i = 0; $i -lt 20; $i++) {
+                $still = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
+                if (-not $still) { break }
+                Start-Sleep -Milliseconds 500
+            }
+            if ($still) {
+                Write-Warn "nssm did not remove NocVault-Tls - it is stopped but still installed. Remove it with: nssm remove NocVault-Tls confirm"
+                if ($rm) { Write-Info "  nssm said: $($rm -replace '\s+', ' ')" }
+            } else { Write-OK "NocVault-Tls removed" }
         }
     } elseif ($tls) {
+        # ⛔ DO NOT TELL THEM TO JUST START THE SERVICE. By this point the run
+        # has already removed TLS_CERT_PATH/TLS_KEY_PATH/TLS_PUBLIC_HOST from
+        # NetVault's env files (above) — which is exactly where the terminator
+        # reads its certificate from — and the consoles that DID come back are
+        # now holding the public ports it would need to bind. `sc.exe start
+        # NocVault-Tls` would fail or crash-loop. Leaving the service installed
+        # is still right (it keeps -Disable re-runnable), but the honest
+        # recovery is to re-run, and going back to HTTPS means a fresh cutover.
         Write-Warn "NocVault-Tls was left STOPPED BUT INSTALLED on purpose, because not every console came back."
-        Write-Info "  To go back to HTTPS as it was:  sc.exe start NocVault-Tls"
-        Write-Info "  To retry turning it off:        re-run this script with -Disable"
+        Write-Info "  Fix the console reported above, then re-run this script with -Disable to finish."
+        Write-Info "  To go back to HTTPS instead, re-run this script WITHOUT -Disable - a fresh cutover."
+        Write-Info "  Starting the service by hand will NOT work: its certificate settings have already been removed."
     }
 
     Write-Host ""
