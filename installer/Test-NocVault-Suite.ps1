@@ -289,12 +289,32 @@ foreach ($s in $services) {
 # PROCESS env = NSSM AppEnvironmentExtra UNION the root .env.local it loads via
 # dotenv (override:false), so SERVER_IP from EITHER source reaches the process.
 # Check both (NSSM env OR .env.local); only fail if neither has it.
+# ⛔ NSSM IS NOT ALWAYS THE COPY THIS INSTALLER DOWNLOADED. When nssm.exe is
+# already on the machine (on PATH, or in System32 - a common state on a server
+# that has run other NSSM-managed software), the installer USES that one and
+# never creates a bundled copy. Looking only in the bundled locations then left
+# $nssm $null, and because every service-environment read in this script is
+# guarded by `if ($nssm)`, the script could not read ANY service environment -
+# it just silently skipped them and fell through to defaults.
+# MEASURED on Windows staging 2026-11-09, where nssm lives in System32: a
+# correct, fully TLS-fronted fresh install reported NINE failures, including
+# "the suite is HALF cut over" and "every sign-in will bounce silently", on a
+# suite that was serving HTTPS perfectly. A test that fails on working software
+# is worse than no test - the same rule the Http helper below was written for.
 $nssm = $null
 foreach ($n in @("$InstallDir\NetVault\nssm\nssm-2.24\win64\nssm.exe",
                  "C:\Apps\NetVault\nssm\nssm-2.24\win64\nssm.exe",
-                 "$InstallDir\nssm\nssm-2.24\win64\nssm.exe")) {
+                 "$InstallDir\nssm\nssm-2.24\win64\nssm.exe",
+                 "$env:SystemRoot\System32\nssm.exe",
+                 "$env:SystemRoot\nssm.exe")) {
     if (Test-Path $n) { $nssm = $n; break }
 }
+if (-not $nssm) {
+    $nssmCmd = Get-Command nssm.exe -ErrorAction SilentlyContinue
+    if ($nssmCmd) { $nssm = $nssmCmd.Source }
+}
+if ($nssm) { Inf ("nssm: " + $nssm) }
+else { Wn "nssm.exe not found (bundled paths, System32, or PATH) - every service-environment check below is UNVERIFIED, not passed" }
 $lvApiEnv = ""
 if ($nssm) { $lvApiEnv = (& $nssm get LogVault-API AppEnvironmentExtra 2>$null | Out-String) }
 $lvEnvFile   = Join-Path $InstallDir "LogVault\app\.env.local"
@@ -431,7 +451,14 @@ Section "3c. Shared TLS Terminator (NocVault-Tls)"
 # WHICH configuration is installed and then checks that one is coherent. What it
 # must never do is pass a suite that is half-way between the two.
 $script:TlsFronted = $false
-$script:NvNssmPort = 3000
+# ⛔ $null means UNKNOWN, NOT 3000. This started life as `= 3000`, so a box
+# where the service environment could not be read (see the nssm note above)
+# looked exactly like a box where the console really is still on 3000 - and the
+# TLS section below turns that into a hard "the suite is HALF cut over" FAIL.
+# Same bug class as a PowerShell function returning @() and handing the caller
+# $null: a default that also means "no answer" cannot be told apart from a real
+# reading, so it must be a value no real reading can produce.
+$script:NvNssmPort = $null
 $NocTlsSvc = Get-Service -Name 'NocVault-Tls' -ErrorAction SilentlyContinue
 
 $Consoles = @(
@@ -457,7 +484,15 @@ if ($nssm) {
         if ($line.Trim() -match '^PORT\s*=\s*(\d+)$') { $script:NvNssmPort = [int]$Matches[1] }
     }
 }
-if ($NocTlsSvc -and $script:NvNssmPort -ne 3000) { $script:TlsFronted = $true }
+if ($NocTlsSvc -and $script:NvNssmPort -ne $null -and $script:NvNssmPort -ne 3000) { $script:TlsFronted = $true }
+# Could not read the port, but a terminator service exists and the loopback
+# console port answers? Then it IS fronted - judge the thing itself rather than
+# reporting a healthy suite as broken because one lookup was unavailable.
+if ($NocTlsSvc -and $script:NvNssmPort -eq $null) {
+    $lb = $null
+    try { $lb = (New-Object System.Net.Sockets.TcpClient); $lb.Connect('127.0.0.1', 13000); $script:TlsFronted = $true; $lb.Close() } catch { }
+    if ($script:TlsFronted) { Inf "NetVault service PORT unreadable, but 127.0.0.1:13000 is listening - treating the suite as TLS-fronted" }
+}
 
 # Every later section probes the CONSOLE directly, so its base URL depends on
 # where the console actually listens. Set here, before section 4 uses it.
@@ -491,7 +526,9 @@ function NextAuthUrls($files) {
 }
 
 if (-not $script:TlsFronted) {
-    if ($NocTlsSvc) {
+    if ($NocTlsSvc -and $script:NvNssmPort -eq $null) {
+        Wn "NocVault-Tls exists but NetVault's service PORT could not be read and 127.0.0.1:13000 is not listening - TLS state UNVERIFIED (not the same as half cut over)"
+    } elseif ($NocTlsSvc) {
         Bad ("NocVault-Tls exists but NetVault's service PORT is still " + $script:NvNssmPort + " - the suite is HALF cut over. The terminator cannot bind a port the console is holding; one of the two is not serving.")
     } else {
         Inf "No NocVault-Tls service - this is a plain-HTTP suite (supported: the installer leaves it that way when no certificate is configured)"
@@ -967,6 +1004,50 @@ if ($TestLogin) {
         $null = Invoke-WebRequest "$NVBase/api/auth/callback/credentials" -Method Post -Body $body -WebSession $sess -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 12 -ErrorAction SilentlyContinue
         $hasSession = $false
         foreach ($ck in $sess.Cookies.GetCookies("$NVBase")) { if ($ck.Name -like "*session-token*") { $hasSession = $true } }
+
+        # ⛔ ON A TLS SUITE THE SESSION COOKIE IS `Secure`, SO A PLAIN-HTTP
+        # LOOPBACK LOGIN CAN NEVER KEEP IT. $NVBase is http://127.0.0.1:13000 once
+        # the consoles move behind the terminator, and NEXTAUTH_URL is https:// -
+        # next-auth therefore marks the cookie Secure and the client drops it on an
+        # http:// origin. The credentials were CORRECT and the server issued the
+        # cookie; only the transport threw it away. Reported as "no session cookie",
+        # that reads as a wrong password and sends the operator to reset an account
+        # that works - the same "a test that fails on working software" trap this
+        # file already warns about twice.
+        # MEASURED on staging 2026-11-09: the identical credentials through
+        # https://127.0.0.1:3000 returned a full super_admin session and
+        # GET /api/settings answered 200.
+        # curl.exe (shipped with Windows 10 1803+ / Server 2019+) is used because
+        # Invoke-WebRequest on PS 5.1 cannot complete a request to a node https
+        # server presenting a self-signed certificate - see the Http helper.
+        if (-not $hasSession -and $script:TlsFronted) {
+            $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+            if ($curl) {
+                $tlsBase = "https://127.0.0.1:3000"
+                $jar  = Join-Path $env:TEMP ("nv-smoke-" + [guid]::NewGuid().ToString("N") + ".txt")
+                $bodyF = Join-Path $env:TEMP ("nv-smoke-" + [guid]::NewGuid().ToString("N") + ".dat")
+                try {
+                    $cj = (& $curl.Source -sk -c $jar "$tlsBase/api/auth/csrf" 2>$null | Out-String).Trim()
+                    $tk2 = ($cj | ConvertFrom-Json).csrfToken
+                    # The body goes in a FILE: a password on a command line is readable
+                    # from Win32_Process.CommandLine by anything on the box.
+                    ("csrfToken=" + $tk2 + "&email=" + [Uri]::EscapeDataString($adminEmail) + "&password=" + [Uri]::EscapeDataString($adminPw) + "&redirect=false&json=true") |
+                        Out-File -FilePath $bodyF -Encoding ascii -NoNewline
+                    $null = (& $curl.Source -sk -b $jar -c $jar -X POST "$tlsBase/api/auth/callback/credentials" -H "Content-Type: application/x-www-form-urlencoded" --data "@$bodyF" 2>$null | Out-String)
+                    $sj = (& $curl.Source -sk -b $jar "$tlsBase/api/auth/session" 2>$null | Out-String).Trim()
+                    if ($sj -match '"email"') {
+                        $hasSession = $true
+                        Inf "  (the loopback attempt could not keep the Secure cookie; retried through the HTTPS front door)"
+                    }
+                } catch {
+                } finally {
+                    Remove-Item $bodyF, $jar -Force -ErrorAction SilentlyContinue
+                }
+            } else {
+                Inf "  curl.exe not available - a TLS suite's Secure session cookie cannot be tested over the plain-HTTP loopback"
+            }
+        }
+
         if ($hasSession) {
             if ($usingShippedDefault) {
                 Wn ("Login smoke: session cookie issued, but using " + $adminPwFrom + " - the shipped default admin password is STILL LIVE on this box. Change it in Settings -> Users, or re-run the suite installer so a per-install password is generated.")
@@ -1527,10 +1608,20 @@ if ($sent -and $script:DbReady) {
         # psql errored) -> Wn. Only a row that EXISTS and is UNHASHED is a Bad.
         # The legitimate no-logs-yet install cannot reach here at all: this block
         # only runs once the synthetic packet has been confirmed in the table.
-        $hashed = Pg "logvault" "SELECT (entry_hash IS NOT NULL)::text FROM syslog_entries WHERE raw_message LIKE '%$token%' ORDER BY received_at DESC LIMIT 1;"
+        # ⛔ `::text` ON A BOOLEAN YIELDS 'true'/'false', NOT 't'/'f'. The t/f
+        # form is psql's DISPLAY format for a boolean COLUMN - casting to text
+        # produces the whole word, and this one line casts. So the comparison
+        # below could never match and this check reported "tamper evidence is
+        # OFF" on every install whose rows were correctly hash-chained, then
+        # told the operator to go and set a key that was already set.
+        # MEASURED on staging 2026-11-09: the query returns [true] for a row
+        # whose entry_hash is present. Every OTHER t/f comparison in this file
+        # reads a real boolean column and is correct - do not ""fix"" those.
+        # Asking for the word explicitly removes the dependency on either format.
+        $hashed = Pg "logvault" "SELECT CASE WHEN entry_hash IS NOT NULL THEN 'hashed' ELSE 'unhashed' END FROM syslog_entries WHERE raw_message LIKE '%$token%' ORDER BY received_at DESC LIMIT 1;"
         if ($script:PgExit -ne 0 -or $hashed -eq "") {
             Wn "  could not read the test row's entry_hash back - hash-chain state UNVERIFIED (no row to judge, which is not the same as an unhashed one)"
-        } elseif ($hashed -eq "t") {
+        } elseif ($hashed -eq "hashed") {
             Ok "  test row is HASH-CHAINED (entry_hash present) - LOG_INTEGRITY_KEY reached the collector"
         } else {
             Bad "LogVault tamper evidence is OFF: the row just ingested has entry_hash NULL - the collector is running without LOG_INTEGRITY_KEY, so NOTHING it writes is hash-chained and scripts/verify-integrity.js has nothing to verify. Set LOG_INTEGRITY_KEY in LogVault's root .env.local (and check it is not missing from the LogVault-Collector service environment), then restart the collector."

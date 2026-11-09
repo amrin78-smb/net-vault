@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.64.3': [
+    "Installer tooling: the post-install suite test reported nine failures on a correctly installed server, including \"the suite is half cut over\" and \"every sign-in will bounce silently\", on a suite that was serving HTTPS perfectly. It could not find the service manager on a machine where that tool was already installed system-wide rather than placed there by our installer, and it then treated \"could not read the setting\" as though it had read the setting and found the wrong value.",
+    "Installer tooling: the same test also reported that log tamper-evidence was switched off on every installation where it was correctly switched on, because of how it read a yes/no answer back from the database, and told the operator to go and set a key that was already set.",
+    "Installer tooling: the sign-in check now works on an HTTPS installation. It was signing in over an internal plain-HTTP address, where the browser-style security flag on the session cookie means the session can never be kept, and reported that as a failed sign-in.",
+  ],
   '1.64.2': [
     "Fixed: the suite dashboard intermittently reported LogVault and SpanVault as \"Unavailable\" and the Overall Status as \"Critical\" while both were running normally. The hub allowed each app three seconds to answer and treated anything else - a refused connection, a network error, or simply a slow reply - as the app being down. SpanVault was answering that check in under a hundredth of a second and was still shown as unavailable, because the hub had already given up on its own side.",
     "The dashboard now distinguishes an app that answered slowly from one it could not reach at all: a slow app shows as a warning, and a genuinely unreachable one still shows as unavailable. Each check is also retried once and given a longer allowance, so a single momentary blip no longer paints the whole suite red. A failed reading is refreshed sooner than a good one, instead of being held on screen for twenty seconds.",
