@@ -775,3 +775,26 @@ LogVault's stats probe had SUCCEEDED and only its health probe had failed. Zeros
 Do not re-chase: probe URLs were correct (`127.0.0.1:1300X` in both hub env files, absent
 from NSSM), all 11 services Running, nothing restarted since the previous deploy. It was
 not deploy fallout, and the satellite updaters ARE TLS-aware.
+
+## ⛔ Port conflicts were invisible to the installer until 1.64.4
+
+Measured on staging 2026-11-09: another product held UDP+TCP 1514, so LogVault's
+collector bound 2 of its 4 syslog listeners — and the installer still printed a full
+success banner that never mentioned 1514. Only `/api/health` and the suite tester showed
+it. On a customer box running any other syslog receiver, every device pointed at that port
+is discarded by the OS from the moment of install.
+
+`Install-NocVault-Suite.ps1` now checks before installing: a console/API port held by
+something else is FATAL (the service would be created and then fail to bind), a syslog
+port is a warning that is **repeated in the closing banner** — a warning printed 1,700
+lines earlier in a multi-minute install has not been communicated.
+
+**⛔ "Is this port ours?" cannot be answered by reading the command line.** The first
+version matched `$InstallDir` / app names against `Win32_Process.CommandLine`, and two of
+our own services failed it: NSSM sets an AppDirectory, so SpanVault-API's command line is
+the relative `"...node.exe" api\server.js` with neither the path nor the app name in it.
+Since a console-port conflict is fatal, that would have **refused every re-install**.
+Second attempt — `Win32_Service.ProcessId` — also failed: NSSM is the service process and
+the listener is its CHILD. The working answer is to walk the PID's parent chain up to a
+known service PID. Verified on a live install: 0 false positives across all 13 suite
+ports, while the genuine foreign holder of 1514 was still caught.

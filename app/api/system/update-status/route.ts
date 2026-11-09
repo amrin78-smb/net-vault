@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.64.4': [
+    "Installer: it now checks that the ports it needs are actually free before installing, and refuses to continue if another program holds a console or API port - previously it would create the service anyway, and that service would then start and fail to listen. A syslog port held by other software is reported as a warning and repeated at the very end of the install, instead of being discovered only by a later health check.",
+    "Installer: a re-install is not mistaken for a port conflict with itself. Ownership is established from the service manager and the process tree rather than by reading command lines, which do not name the product for every service.",
+    "Packaging: the distribution zip is now produced by a script that verifies the package before building it - every engine script present, the graphical launchers no older than the scripts they drive, and the bundled Node.js at or above the version the suite requires. It refuses to build an incomplete package rather than producing one that fails on the customer's server.",
+  ],
   '1.64.3': [
     "Installer tooling: the post-install suite test reported nine failures on a correctly installed server, including \"the suite is half cut over\" and \"every sign-in will bounce silently\", on a suite that was serving HTTPS perfectly. It could not find the service manager on a machine where that tool was already installed system-wide rather than placed there by our installer, and it then treated \"could not read the setting\" as though it had read the setting and found the wrong value.",
     "Installer tooling: the same test also reported that log tamper-evidence was switched off on every installation where it was correctly switched on, because of how it read a yes/no answer back from the database, and told the operator to go and set a key that was already set.",

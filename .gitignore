@@ -60,3 +60,11 @@ installer/*.exe
 # Ad-hoc diagnostic scratch scripts (read-only DB probes). Local only —
 # these were committed by accident by a `git add -A` in 1.34.0.
 _*.js
+
+# Offline installer dependency binaries (Node MSI, PostgreSQL, Git, VC++, NSSM).
+# ~470 MB of third-party installers fetched at package-build time by
+# installer/Build-InstallerPackage.ps1 - they are NOT ours and must never be in
+# the repo. GitHub rejects them outright (postgresql-16 alone is 340 MB, over the
+# 100 MB hard limit), which is how this was caught.
+installer/dependencies/
+dist/

@@ -638,6 +638,135 @@ if ($missing.Count -gt 0) {
 }
 Write-OK "All required files present"
 
+# ---------------------------------------------------------------
+# ⛔ PORT PRE-CHECK. NOTHING CHECKED THE PORTS BEFORE THIS EXISTED.
+# Measured on a staging box 2026-11-09: another product already held UDP+TCP
+# 1514, so LogVault's collector bound only 2 of its 4 syslog listeners - and
+# this installer still finished with a full success banner that never mentioned
+# 1514 once. The ONLY places it surfaced were /api/health and the suite tester.
+# On a customer box running any other syslog receiver, every device pointed at
+# that port is silently discarded by the OS from the moment of install.
+#
+# A console/API port is FATAL: the service cannot bind, so the install would
+# produce a service that exists and does not serve. A syslog port is DEGRADED,
+# not fatal - the other port still ingests - so it warns and is repeated in the
+# closing banner, where an operator will actually see it.
+#
+# A re-install must not flag ITSELF: ports held by a process running out of
+# $InstallDir (or by a NocVault service) are ours and are skipped, because this
+# runs before the "Stopping any running NocVault services" step.
+Write-Step "Checking required ports"
+$script:PortWarnings = @()
+
+# ⛔ OWNERSHIP IS DECIDED BY SERVICE PID, NOT BY READING THE COMMAND LINE.
+# The first version of this matched $InstallDir / 'SpanVault' / ... against
+# Win32_Process.CommandLine. That FAILED on our own services: NSSM sets an
+# AppDirectory, so SpanVault-API's command line is the RELATIVE
+#   "C:\Program Files\nodejs\node.exe" api\server.js
+# with neither the install path nor the app name anywhere in it. Measured on
+# staging: port 3009 was reported as a foreign conflict while SpanVault's own API
+# was holding it - which, since a console-port conflict is fatal, would have
+# refused every RE-INSTALL on every machine. The service control manager knows
+# exactly which PIDs are ours; ask it instead of guessing from text.
+$script:OwnPids = @{}
+foreach ($svcName in @('NetVault','NocVault-Tls',
+                       'LogVault-App','LogVault-API','LogVault-Collector',
+                       'DDIVault-App','DDIVault-API','DDIVault-Collector',
+                       'SpanVault-App','SpanVault-API','SpanVault-Collector')) {
+    try {
+        $wsvc = Get-WmiObject Win32_Service -Filter ("Name='" + $svcName + "'") -ErrorAction SilentlyContinue
+        if ($wsvc -and $wsvc.ProcessId -and $wsvc.ProcessId -ne 0) { $script:OwnPids[[int]$wsvc.ProcessId] = $svcName }
+    } catch { }
+}
+
+# Build a pid -> parent map ONCE, then a holder is ours if any ancestor is one
+# of our service processes. Bounded to 6 hops so a cycle or an orphan cannot spin.
+$script:PidParent = @{}
+try {
+    foreach ($wp in @(Get-WmiObject Win32_Process -ErrorAction SilentlyContinue)) {
+        $script:PidParent[[int]$wp.ProcessId] = [int]$wp.ParentProcessId
+    }
+} catch { }
+
+function Test-OwnProcessTree([int]$procId) {
+    $cur = $procId
+    for ($hop = 0; $hop -lt 6; $hop++) {
+        if ($script:OwnPids.ContainsKey($cur)) { return $true }
+        if (-not $script:PidParent.ContainsKey($cur)) { return $false }
+        $next = $script:PidParent[$cur]
+        if ($next -eq $cur -or $next -eq 0) { return $false }
+        $cur = $next
+    }
+    return $false
+}
+
+function Get-PortHolder([int]$portNo, [string]$proto) {
+    $pids = @()
+    try {
+        if ($proto -eq 'TCP') {
+            foreach ($c in @(Get-NetTCPConnection -LocalPort $portNo -State Listen -ErrorAction SilentlyContinue)) { $pids += $c.OwningProcess }
+        } else {
+            foreach ($c in @(Get-NetUDPEndpoint -LocalPort $portNo -ErrorAction SilentlyContinue)) { $pids += $c.OwningProcess }
+        }
+    } catch { return $null }
+    foreach ($procId in ($pids | Select-Object -Unique)) {
+        if (-not $procId -or $procId -eq 0) { continue }
+        # Ours (a re-install)? ⛔ WALK THE PARENT CHAIN - the service PID is NOT
+        # the PID holding the port. NSSM is the service process and the real
+        # node.exe is its CHILD, so Win32_Service.ProcessId never matches the
+        # listener. Measured on staging: SpanVault-API (relative command line
+        # `api\server.js`, child of nssm.exe) was still reported foreign on 3009
+        # even after switching to service PIDs.
+        if (Test-OwnProcessTree ([int]$procId)) { continue }
+        $name = ''; $cmd = ''
+        try { $name = (Get-Process -Id $procId -ErrorAction Stop).ProcessName } catch { $name = 'pid ' + $procId }
+        try { $cmd  = (Get-WmiObject Win32_Process -Filter ("ProcessId=" + $procId) -ErrorAction Stop).CommandLine } catch { $cmd = '' }
+        if (-not $cmd) { $cmd = '' }
+        # Belt and braces for a stray child our service manager no longer owns.
+        if ($cmd -like "*$InstallDir*" -or $cmd -like '*NocVault*') { continue }
+        $short = $cmd
+        if ($short.Length -gt 70) { $short = $short.Substring(0, 70) + '...' }
+        return ("{0} (pid {1}){2}" -f $name, $procId, $(if ($short) { " - $short" } else { '' }))
+    }
+    return $null
+}
+
+$consolePorts = @(
+    @{ P=3000;  What='NetVault / Hub console' },
+    @{ P=13000; What='NetVault console loopback (TLS)' }
+)
+if ($InstallLogVault)  { $consolePorts += @{ P=3004; What='LogVault console' }, @{ P=3005; What='LogVault API' },     @{ P=13004; What='LogVault console loopback (TLS)' } }
+if ($InstallDDIVault)  { $consolePorts += @{ P=3006; What='DDIVault console' }, @{ P=3007; What='DDIVault API' },     @{ P=3011; What='DDIVault agent ingest' }, @{ P=13006; What='DDIVault console loopback (TLS)' } }
+if ($InstallSpanVault) { $consolePorts += @{ P=3008; What='SpanVault console' }, @{ P=3009; What='SpanVault API' },   @{ P=3010; What='SpanVault agent WS' },    @{ P=13008; What='SpanVault console loopback (TLS)' } }
+
+$portConflicts = @()
+foreach ($cp in $consolePorts) {
+    $holder = Get-PortHolder $cp.P 'TCP'
+    if ($holder) { $portConflicts += ("TCP {0} ({1}) is already in use by {2}" -f $cp.P, $cp.What, $holder) }
+}
+if ($portConflicts.Count -gt 0) {
+    Write-Host "`n  PORT CONFLICT - these ports are held by something else:" -ForegroundColor Red
+    $portConflicts | ForEach-Object { Write-Host "    - $_" -ForegroundColor Red }
+    Write-Host "`n  A console or API port cannot be shared: the service would be created and" -ForegroundColor Red
+    Write-Host "  would then fail to bind, leaving a service that exists but does not serve." -ForegroundColor Red
+    Write-Host "  Stop the other software (or free the port) and run this installer again.`n" -ForegroundColor Red
+    exit 1
+}
+
+if ($InstallLogVault) {
+    foreach ($sp in @(514, 1514)) {
+        foreach ($proto in @('UDP', 'TCP')) {
+            $holder = Get-PortHolder $sp $proto
+            if ($holder) {
+                $msg = ("{0} {1} (syslog) is already in use by {2} - LogVault will NOT receive syslog on that port; devices sending to it are discarded by the OS" -f $proto, $sp, $holder)
+                Write-Warn $msg
+                $script:PortWarnings += $msg
+            }
+        }
+    }
+}
+if ($script:PortWarnings.Count -eq 0) { Write-OK "All required ports are free" }
+
 # ── Display config ────────────────────────────────────────────────
 Write-Host ""
 Write-Host "  Install directory  : $InstallDir" -ForegroundColor Gray
@@ -2241,6 +2370,20 @@ if ($Unattended -and -not $script:SecretsExisted) {
     Write-Host "  one makes every existing LogVault row read as tampered, for good." -ForegroundColor Gray
 }
 Write-Host ""
+# ⛔ REPEAT THE PORT WARNINGS HERE. A warning printed ~1,700 lines earlier, in
+# the middle of an install that scrolls for minutes, has not been communicated -
+# the staging run that exposed this gap ended on a clean success banner while two
+# of LogVault's four syslog listeners were dead. This is the last thing on screen.
+if ($script:PortWarnings -and $script:PortWarnings.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  !! SYSLOG PORT CONFLICT - INGESTION IS DEGRADED ON THIS MACHINE" -ForegroundColor Red
+    foreach ($w in $script:PortWarnings) { Write-Host ("     - " + $w) -ForegroundColor Yellow }
+    Write-Host "     Point your devices at the port that DID bind, or stop the other" -ForegroundColor Yellow
+    Write-Host "     software and restart LogVault-Collector. Check with:" -ForegroundColor Yellow
+    Write-Host "       curl http://127.0.0.1:3005/api/health   (listeners_down)" -ForegroundColor Yellow
+    Write-Host ""
+}
+
 Write-Host "  Post-install checklist:" -ForegroundColor White
 Write-Host "  [1] Change default admin password in Settings" -ForegroundColor Gray
 Write-Host "  [2] Update company branding in Settings > Branding" -ForegroundColor Gray
