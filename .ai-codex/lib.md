@@ -403,3 +403,19 @@ One shared answer to "is the TLS front door there, and running", used by four ro
 - ⛔ **`HTTPS was NOT enabled` NOW MAPS TO `refused`, NOT `reverted` (1.63.0).** That closing banner is printed whenever `$script:TlsCutoverApplied` is false — INCLUDING when the gates never passed and nothing was touched (`NocVault-TlsCutover.ps1`'s `if (-not $TlsGateOk)` branch) — and `Gates did NOT pass` only ever appears on the `-DryRun` branch. So a REAL enable with failing gates could not reach `refused` at all: every one of them rendered `reverted`'s copy, which promises the engine "put every console back the way it found it". `REVERTING the TLS cutover` (written only by `Undo-TlsCutover`) promotes `refused` → `reverted`, which is the only evidence consoles were actually moved.
 - `buildWrapperScript` now takes `runId` and emits `psArmGuard` + a per-line lock heartbeat.
 - `parseRunLog` scans banners from the END of the log (the documented rule; the old loop let pattern order outrank chronology) and disqualifies a `disabled` verdict on a non-zero exit.
+
+### `lib/suiteProbe.ts` (NEW, 1.64.2)
+- `probeStatus(url, fetchImpl?, timeoutMs?)` → `'Healthy' | 'Warning' | 'Unavailable'`, and
+  `probeJson(url, fetchImpl?, timeoutMs?)` → parsed body or `null`. Plus `PROBE_TIMEOUT_MS`,
+  `PROBE_ATTEMPTS`, `AppStatus`, `FetchLike`.
+- Extracted so `app/api/suite/health` and `app/api/suite/stats` cannot drift apart: both had
+  their own copy of a 3000 ms single-shot probe whose `catch` returned one value for every
+  kind of failure.
+- ⛔ **A TIMEOUT IS NOT A DEAD APP.** `probeStatus` reports a timeout as `Warning` and only a
+  real connection failure as `Unavailable` — the launcher escalates any `Unavailable` to
+  overall "Critical". Measured 2026-11-09: SpanVault's own request log showed the probe
+  arriving and being answered in 7-8 ms at the exact second the launcher drew it
+  "Unavailable". The discriminator is `controller.signal.aborted`, **not** `err.name`, which
+  is not consistent across runtimes.
+- A non-2xx is an ANSWER and is never retried; only the failure to get one is.
+- `timeoutMs` exists for the tests (`tests/suiteProbe.test.ts`) — production callers omit it.

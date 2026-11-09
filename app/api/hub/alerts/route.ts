@@ -38,13 +38,25 @@ export async function GET() {
           WHERE a.status NOT IN ('resolved', 'suppressed') AND d.ip_address IS NOT NULL
           GROUP BY 1`,
       ),
+      // ⛔ THE CUTOFF IS A PARAMETER, NEVER `now() - INTERVAL` INLINE.
+      // logvault.syslog_entries is partitioned daily (~99 partitions live).
+      // `now()` is STABLE, not constant, so an inline bound cannot be pruned at
+      // PLAN time - the planner opens every partition and leaves the executor to
+      // discard them. Measured on production 2026-11-09: **1611-1963 ms of
+      // planning** for a query that executes in 0.3 ms, and a warm run was no
+      // faster than a cold one because the cost is planner CPU, not I/O. This
+      // runs on the launcher's page load, concurrently with the suite health
+      // probes in app/api/suite/health - which is how it helped push those
+      // probes past their deadline and paint healthy apps as "Unavailable".
+      // With the bound passed in, planning drops to ~2.4 ms.
       queryDb<{ ip: string; n: string }>(
         'logvault',
         `SELECT host(source_ip) AS ip, count(*) AS n
            FROM syslog_entries
           WHERE category = 'security' AND source_ip IS NOT NULL
-            AND received_at > now() - INTERVAL '24 hours'
+            AND received_at > $1
           GROUP BY 1`,
+        [new Date(Date.now() - 24 * 60 * 60 * 1000)],
       ),
     ])
     if (eol && eol.length) {

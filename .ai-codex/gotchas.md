@@ -742,3 +742,36 @@ it was. `NocVault-TlsCutover.ps1`'s `Undo-TlsCutover` already had this ordering;
   `frontend/`. `npm ci` deletes `node_modules` first, which is exactly why the updaters must NOT
   adopt it: they rely on an incremental install plus a preserved `.next/cache` (see CLAUDE.md's
   performance notes). Don't "unify" these two.
+
+## ⛔ "Unavailable" on the launcher is a verdict about the HUB, not about the app
+
+Measured 2026-11-09, from a report that the hub "cannot check health for logvault and
+spanvault". **Both apps were healthy throughout.** Two independent defects combined:
+
+**1. The probe could not tell slow from dead.** `app/api/suite/{health,stats}` each gave a
+sibling ONE `fetch` with a 3000 ms `AbortController` and a `catch` that returned a single
+value for every outcome. A refused connection, a TLS failure and a slow-but-correct answer
+were indistinguishable, and `app/(auth)/launcher/page.tsx` maps any `Unavailable` to an
+overall **Critical**. Now in `lib/suiteProbe.ts`: longer budget, one retry, and a timeout
+reports `Warning` while only a genuine connection failure reports `Unavailable`.
+
+**2. `now() - INTERVAL` on a partitioned table costs ~2 s of PLANNING per call.** `now()`
+is STABLE, not constant, so the planner cannot prune at plan time: it opens every partition
+and lets the executor discard them. On `logvault.syslog_entries` (~99 daily partitions):
+`received_at > now() - INTERVAL '24 hours'` planned in **1611-1963 ms** and executed in
+0.3 ms; the same instant as a parameter planned in **2.4 ms**. Warm was no faster than cold
+— it is planner CPU, not I/O, so it never caches away. `app/api/hub/alerts/route.ts` ran
+that shape against logvault on every launcher load, concurrently with the probes above.
+
+**⛔ How it was proven, because this is the transferable part.** SpanVault logs every
+request to `logs/api.log`. At the exact timestamp of the user's screenshot it shows
+`GET /api/stats` and `GET /api/health` arriving — and its `/api/health` is `SELECT 1`, 7-8 ms.
+The app answered; the hub threw the answer away. **A request log on the callee is the
+cheapest way to split "the app is down" from "the caller gave up", and it inverted the
+whole diagnosis in one line.** The second tell was in the screenshot itself: LogVault's
+tiles read `0 / 0 / 0` while SpanVault's read `—`, and `num(null)` renders `—` — so
+LogVault's stats probe had SUCCEEDED and only its health probe had failed. Zeros are data.
+
+Do not re-chase: probe URLs were correct (`127.0.0.1:1300X` in both hub env files, absent
+from NSSM), all 11 services Running, nothing restarted since the previous deploy. It was
+not deploy fallout, and the satellite updaters ARE TLS-aware.
