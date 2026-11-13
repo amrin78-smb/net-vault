@@ -21,11 +21,11 @@ The three satellites each grew their own, independently:
 | Password at rest | plaintext | **AES-256-GCM** (`credStore.js`) | plaintext |
 | `secure` flag | ✗ derived (`port === 465`) | ✓ explicit column | ✗ derived |
 | `from_name` | ✗ | ✓ | ✗ |
-| Enabled toggle | `smtp_enabled` | `enabled` column | `email_alerts_enabled` (dead — §2.4) |
-| Recipients | `email_notify_recipients` + per-rule `notify_email` | `alert_recipients` table (site + severity filters) | `alert_email_to` (dead — §2.4) |
+| Enabled toggle | `smtp_enabled` | `enabled` column | `email_alerts_enabled` |
+| Recipients | `email_notify_recipients` + per-rule `notify_email` | `alert_recipients` table (site + severity filters) | `notification_routes` + `alert_email_to` fallback |
 | Config cache | 5 min | 5 min | **none** — fresh query per send |
 | Test button | `POST /api/settings/test-email` | `POST /api/smtp/test` | **none** |
-| Consumer | `collector/emailer.js` | `api/emailer.js` → `alertDispatcher` + 2 schedulers | `api/reportScheduler.js` only |
+| Consumer | `collector/emailer.js` | `api/emailer.js` → `alertDispatcher` + 2 schedulers | `collector/collector.js` (alerts + escalation) **and** `api/reportScheduler.js` |
 | nodemailer | `^8.0.10` | `^8.0.10` | **`^6.9.13`** |
 | TLS verification | default (verifies) | **`rejectUnauthorized: false`** | default (verifies) |
 
@@ -97,17 +97,49 @@ Ground truth from `installer/Install-NocVault-Suite.ps1`'s NSSM
 → **Cross-DB read.** The relay buys little (§2.2) and costs a change to the most
 fragile script in the suite.
 
-### 2.4 ⛔ SpanVault's alert emailing does not exist
+### 2.4 ⛔ CORRECTED 2026-11-13 — SpanVault's alert emailing DOES exist
 
-`email_alerts_enabled` and `alert_email_to` are written by the Settings page and
-read by **nothing** in `api/` or `collector/`. The only mail SpanVault ever sends
-is a scheduled report. `escalation_steps` has full CRUD routes and a Settings UI
-with no sender either.
+**This section previously claimed SpanVault had no alert emailing. That was wrong, and the
+error nearly deleted a working feature.**
 
-An operator can switch on "Email Alerts", set recipients, configure escalation
-steps — and no alert email will ever arrive, with no error anywhere. Centralizing
-the config does not fix this; it would relocate a dead setting and make it look
-more official.
+SpanVault sends alert email from `collector/collector.js`: `sendAlertEmail()` (line ~1285),
+routed by `recipientsFor()` through `notification_routes` with `alert_email_to` as the global
+fallback, throttled by `notifyCooldownOk()`, with all-clear/recovery mail in
+`notifyRecovery()`. `email_alerts_enabled` is read at line ~1286 and `alert_email_to` at
+~1242/1288. Escalation is real too: `escalationTick()` runs every 60 s against
+`escalation_steps`, resolving the current on-call via `currentOnCall()` and claiming each step
+through `alert_escalations` so it fires once per alert. All of it shipped in `8192ef8`
+(1.15.0) and is still present.
+
+**So SpanVault has TWO mail senders, not one:** `collector/collector.js` (alerts, recovery,
+escalation) and `api/reportScheduler.js` (scheduled reports). They read SMTP settings through
+two different paths — the collector's own `setting()` cache, and `getSmtpSettings()` in
+`api/server.js`. Phase 5 must update both.
+
+**Why the audit got it wrong, and how to not repeat it.** `collector/collector.js` contains a
+single NUL byte at line 1089, inside `ruleSubjectKey()`:
+
+```js
+return `${rule.metric}\x00${rule.sensor_key || ''}`;
+```
+
+It is deliberate — a composite-key separator that cannot occur in a metric name — and was added
+in `4b87514` (1.111.0). But **GNU grep treats a file containing a NUL as binary and prints
+nothing**, so every `grep` of this file silently returned no matches. A bisect appeared to show
+`escalationTick` vanishing at `4b87514`; it had not vanished, grep had simply gone quiet from
+that commit onward.
+
+⛔ **When auditing this suite, use `grep -a`.** A plain `grep` that returns nothing from
+`spanvault/collector/collector.js` is not evidence of absence. `file --mime` reports
+`charset=binary` for it, which is the tell.
+
+⛔ **The release notes were right and the grep was wrong.** `api/server.js`'s notes describe
+escalation email (lines ~824, ~1347) and this plan dismissed them, citing SpanVault's own
+CLAUDE.md warning that its notes have overclaimed before. That warning is real, but "the notes
+have lied once" is not evidence they are lying now. Two sources disagreed and the wrong one was
+believed; the cheap tiebreak — open the file and read it — was never run.
+
+**Consequence for Phase 3 (§6):** cancelled. There are no dead controls to remove.
 
 ### 2.5 Other defects found during the audit
 
@@ -224,30 +256,40 @@ stays as it is, because it guards *writes*.
 
 ---
 
-## 6. Phase 3 — Remove SpanVault's dead notification controls
+## 6. Phase 3 — CANCELLED (2026-11-13)
 
-**Decision 2026-11-13: remove now, build later.**
+This phase was going to remove SpanVault's Email Alerts toggle, its `alert_email_to`
+recipients field and its escalation UI, on the finding that nothing consumed them.
 
-Strip the Email Alerts toggle, the `alert_email_to` recipients field and the
-escalation-steps UI so nothing claims to work that does not. SpanVault keeps
-sending scheduled reports exactly as it does today. The alert-email feature is
-tracked separately rather than smuggled into this project.
+**That finding was wrong — see §2.4.** All of it is live: the collector sends routed,
+throttled alert and recovery email, and `escalationTick()` fires escalation steps every
+60 s. Removing those controls would have deleted the UI for a working feature.
 
----
+Nothing to do here. SpanVault's work is folded into Phase 2 instead, where it is now the
+LARGEST of the three satellites rather than the smallest: two sender processes
+(`collector/collector.js` and `api/reportScheduler.js`) reading SMTP through two different
+paths, both of which have to learn the hub config.
 
-## 7. Phase 4 — one nodemailer (separate maintenance window)
+## 7. Phase 4 — nodemailer 9 for the SATELLITES ONLY (corrected 2026-11-13)
 
-**Decision 2026-11-13: not folded into this project.**
+**Decision 2026-11-13: not folded into this project.** Still true. But the target changed.
 
-SpanVault 6.9.13 → 9, LogVault 8.0.10 → 9, DDIVault 8.0.10 → 9; NetVault lands on
-9 from the start in Phase 1. Clears the deferred `GHSA-p6gq-j5cr-w38f` advisory
-tracked in all three satellites' CLAUDE.md in **one** window instead of three, and
-re-tests all five send paths together.
+⛔ **"One nodemailer across the suite" is NOT achievable.** `next-auth@4.24.x` declares
+`peerOptional nodemailer@"^7.0.7"`, and NetVault is a single package.json holding both, so the
+hub is pinned to 7.x. This was discovered the expensive way: 1.65.0 shipped nodemailer 9.1.1,
+the production updater failed at `npm install` with ERESOLVE and auto-rolled back. Fixed in
+1.65.1 by pinning `^7.0.13`, which sits inside the declared range and needs no resolver luck.
 
-Kept separate so a breaking major does not land in the same release as the new
-plumbing — if mail breaks, there should only be one candidate cause.
+The satellites are unaffected - `next-auth` lives in their `frontend/` package.json while
+nodemailer lives in the ROOT one. So Phase 4 is: **logvault 8.0.10 -> 9, ddivault 8.0.10 -> 9,
+spanvault 6.9.13 -> 9**, and NetVault stays on 7 until next-auth widens its range. Re-test all
+mail paths in one window; note there are FIVE senders, not four (see the §2.4 correction:
+spanvault has two).
 
----
+⛔ **A green local build does not predict the deploy.** The dev box is node 24 / npm 11; the
+server is node 22 / npm 10, and npm 11 silently overrides peer conflicts npm 10 refuses. Check
+declared peer ranges directly before adding or bumping any dependency - see
+`.ai-codex/gotchas.md`.
 
 ## 8. Phase 5 — drive-by fixes from this audit
 

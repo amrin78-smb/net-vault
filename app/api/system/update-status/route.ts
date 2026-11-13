@@ -75,7 +75,7 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
-  '1.65.0': [
+  '1.65.1': [
     "Settings now has a Notifications page where the mail server is configured once for the whole suite. Until now each application kept its own copy of the same settings, so adding a mail server meant entering the same host, port, username and password separately in LogVault, DDIVault and SpanVault, and changing a password meant remembering to change it in all three.",
     "Each application still decides who receives its own alerts, which alerts are worth sending, and what name they arrive from - only the connection to the mail server is shared. An application that already has its own mail settings keeps using them until the suite-wide ones are switched on, so nothing changes on an existing installation until you choose to.",
     "The mail password is encrypted before it is stored, and is never sent back to the browser or shown to the diagnostic database accounts - the page reports only whether a password is set.",

@@ -798,3 +798,35 @@ Second attempt — `Win32_Service.ProcessId` — also failed: NSSM is the servic
 the listener is its CHILD. The working answer is to walk the PID's parent chain up to a
 known service PID. Verified on a live install: 0 false positives across all 13 suite
 ports, while the genuine foreign holder of 1514 was still caught.
+
+## ⛔ nodemailer is PINNED TO 7.x BY next-auth — and a local install will not tell you (1.65.1)
+
+`next-auth@4.24.x` declares `peerOptional nodemailer@"^7.0.7"` (true of 4.24.12 through
+4.24.15; 4.24.11 wanted `^6.6.5`, and even next-auth 5 beta allows only `^7 || ^8`). NetVault
+is a SINGLE package.json holding both, so **nodemailer 8 or 9 here is an unresolvable peer
+conflict**. 1.65.0 shipped `nodemailer@^9.1.1`, and the production updater died at
+`npm install` with `ERESOLVE ... Conflicting peer dependency: nodemailer@7.0.13`, then
+auto-rolled back.
+
+⛔ **IT BUILT AND TESTED CLEAN LOCALLY FIRST.** The dev box runs **node 24 / npm 11**; the
+server runs **node 22 / npm 10**, and npm 11 is more permissive — it warns and overrides a peer
+conflict that npm 10 refuses outright. A green local `npm install`, `npm test` and
+`npm run build` therefore prove NOTHING about whether the deploy will resolve.
+
+**Before adding or bumping ANY dependency here:**
+1. Check the declared peer ranges of what is already installed - `npm view <pkg> peerDependencies`
+   on the packages that might care. A version inside every declared range needs no resolver
+   luck and is immune to the npm-major difference above.
+2. Do not reach for `--force` or `--legacy-peer-deps` to get past it. The installer runs a
+   plain install on a customer's machine; a flag the dev box needed is a flag that machine
+   will not have.
+
+**The satellites are NOT subject to this.** `next-auth` lives in their `frontend/`
+package.json, while nodemailer lives in the ROOT one - so logvault/ddivault (8.0.10) and
+spanvault (6.9.13) have no such constraint and can move to 9 independently. "One nodemailer
+version across the suite" is therefore NOT achievable while NetVault is on next-auth 4.x.
+
+**The GHSA this leaves open is not reachable here.** `GHSA-p6gq-j5cr-w38f` is the message-level
+`raw` option bypassing `disableFileAccess`/`disableUrlAccess`. `lib/mailer.ts` never uses `raw`
+and says so in a comment - the same reasoning all three satellites' CLAUDE.md already record for
+their own deferred upgrades.
