@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.65.4': [
+    "The launcher now says what NetVault is besides an application. Its tile carries a small HUB label and a second line explaining that the same application holds the suite's users, sign-on, licence and mail settings - until now that role was only discoverable by opening NetVault and looking through Settings.",
+    "A Suite settings link sits under that tile and goes straight to the settings pages, so changing something that applies to the whole suite - the mail server, for instance - no longer means opening the asset management application first and finding it from there.",
+    "The four application tiles are still the same size and shape. The applications are licensed separately and nothing here suggests otherwise; the hub role is labelled, not promoted. A user who has not been granted an application still sees that tile exactly as before.",
+  ],
   '1.65.3': [
     "Security: the email library the hub sends its test message through has been updated to its current major version, closing a published high-severity advisory plus a batch of message-parsing flaws present in every earlier version. The same update was applied to all three other applications in the suite, so every one of them now sends through the same current version.",
   ],

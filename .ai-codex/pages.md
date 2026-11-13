@@ -9,7 +9,7 @@ server /  — Home — redirects to /launcher (suite entry point)
 
 ## Pages — (auth) route group (no sidebar chrome)
 client /login — LoginPage — suite login screen (NextAuth credentials sign-in)
-client /launcher — LauncherPage — NocVault Hub: app tiles, suite health, cross-app search, Asset 360 drawer
+client /launcher — LauncherPage — NocVault Hub: app tiles, suite health, cross-app search, Asset 360 drawer. The NetVault tile alone carries hub chrome (HUB pill beside its logo, a second description line, and a subordinate "Suite settings →" link to /settings) from the optional `hub` field on its AppCard; it rides the same licensed/access gate as the tile's CTA. Tiles stay four equal sizes — the hub role is labelled, not enlarged.
 
 ## Pages — (app) route group / Devices
 client /devices — DevicesPage — device inventory: list, filter, import/export, bulk actions, duplicates

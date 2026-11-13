@@ -434,6 +434,10 @@ function LauncherInner() {
     color: string
     logo: string
     metrics: { icon: string; value: string; label: string }[]
+    // NetVault is also the suite hub (identity, SSO, licence, mail transport). The
+    // hub role is LABELLED here, never sized up — the four tiles stay equal because
+    // the apps are licensed separately. Only the netvault card sets this.
+    hub?: { badge: string; note: string; settingsHref: string; settingsLabel: string }
   }
 
   // LENIENT module entitlement: a suite app is treated as licensed UNLESS there
@@ -464,6 +468,12 @@ function LauncherInner() {
         { icon: 'site', value: statsLoading ? '' : num(netStats?.sites_total), label: 'Sites' },
         { icon: 'warning', value: statsLoading ? '' : num(netStats?.eol_total), label: 'EOL / EOS Assets' },
       ],
+      hub: {
+        badge: 'HUB',
+        note: 'Also the suite hub: users, sign-on, licence and mail settings.',
+        settingsHref: '/settings',
+        settingsLabel: 'Suite settings',
+      },
     },
     {
       name: 'LogVault', slug: 'logvault', subtitle: 'Syslog & Log Analysis',
@@ -652,16 +662,29 @@ function LauncherInner() {
             const noAccess = isLic && !access
             const netvaultEmpty = card.name === 'NetVault' && !statsLoading && netStats != null && netStats.devices_total === 0 && netStats.sites_total === 0 && netStats.eol_total === 0
             return (
-              <div key={card.name} style={{ background: NAVY, borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: '18px', display: 'flex', flexDirection: 'column', color: 'white', position: 'relative' }}>
+              <div key={card.name} style={{ background: NAVY, borderRadius: 'var(--radius)', boxShadow: CARD_SHADOW, padding: '18px', display: 'flex', flexDirection: 'column', color: 'white', position: 'relative', minWidth: 0 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', flex: 1, opacity: licensed ? 1 : 0.5, filter: licensed ? 'none' : 'grayscale(1)', transition: 'opacity 0.2s, filter 0.2s' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                   <img src={card.logo} alt={card.name} style={{ height: '30px', width: 'auto', objectFit: 'contain' }} />
+                  {/* Role label, not a size change — same pill language as the "NEW" badge
+                      on the Suite Intelligence heading below. White on --primary is the
+                      badge's own foreground (the tile is always the navy treatment). */}
+                  {card.hub && (
+                    <span title={`${card.name} is also the NocVault suite hub`} style={{ background: primary, color: '#fff', fontSize: 'var(--text-xs)', fontWeight: 700, padding: '2px 6px', borderRadius: 'var(--radius-sm)', letterSpacing: '0.5px', lineHeight: 1.3, flexShrink: 0 }}>{card.hub.badge}</span>
+                  )}
+                  </div>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '10px', fontWeight: 600, color: HEALTH_COLORS[st], background: 'rgba(255,255,255,0.08)', padding: '3px 8px', borderRadius: 'var(--radius-pill)' }}>
                     <span style={{ width: '6px', height: '6px', borderRadius: '50%' /* intentional: status dot */, background: HEALTH_COLORS[st] }} /> {st}
                   </span>
                 </div>
                 <div style={{ fontSize: '12px', fontWeight: 600, color: card.color, marginBottom: '4px' }}>{card.subtitle}</div>
-                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.45, marginBottom: '14px', minHeight: '34px' }}>{card.description}</div>
+                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.45, marginBottom: '14px', minHeight: '34px' }}>
+                  {card.description}
+                  {card.hub && (
+                    <span style={{ display: 'block', marginTop: '4px', fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.45)' }}>{card.hub.note}</span>
+                  )}
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', marginBottom: '16px', flex: 1, filter: licensed ? 'none' : 'blur(2px)' }}>
                   {netvaultEmpty ? (
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: '6px', flex: 1, padding: '8px 0' }}>
@@ -684,10 +707,29 @@ function LauncherInner() {
                 </div>
                 </div>
                 {licensed ? (
+                  <>
                   <a href={card.href} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: card.color, color: 'white', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: 'var(--radius)', textDecoration: 'none' }}>
                     Open {card.name}
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
                   </a>
+                  {/* Secondary route for the hub role: configure the suite without
+                      first opening the asset-management app.
+                      ⛔ INSIDE the card, not under it. Sitting it outside left the
+                      NetVault card ~24px shorter than its three siblings, which is
+                      exactly the "one tile looks different" effect the HUB badge was
+                      chosen to avoid. The colours are the card's OWN on-navy white
+                      ramp - the same rgba whites the description and the
+                      not-licensed note already use - because --text-muted is a
+                      light-background token and is near-unreadable on this navy. */}
+                  {card.hub && (
+                    <a href={card.hub.settingsHref} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginTop: '9px', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'rgba(255,255,255,0.55)', textDecoration: 'none' }}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.9)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.55)')}>
+                      {card.hub.settingsLabel}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                    </a>
+                  )}
+                  </>
                 ) : (
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', background: 'rgba(255,255,255,0.08)', color: 'rgba(255,255,255,0.6)', fontSize: '13px', fontWeight: 600, padding: '10px', borderRadius: 'var(--radius)', border: '1px solid rgba(255,255,255,0.12)', cursor: 'not-allowed' }}>
