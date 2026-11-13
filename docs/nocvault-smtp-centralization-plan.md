@@ -242,10 +242,19 @@ stays as it is, because it guards *writes*.
 
 ### Per app
 
-- **LogVault** — one module required by both the `api/` and `collector/`
-  processes. Needs `NEXTAUTH_SECRET` added to **LogVault-Collector** and
-  **LogVault-API**, mirrored in `Install-NocVault-Suite.ps1` **and**
-  `logvault/installer/Update-LogVault.ps1` (installer-parity rule).
+- **LogVault** — module lives in `collector/`, required by both processes (the
+  repo's existing convention: `api/server.js` already requires
+  `collector/emailer.js` and `collector/safeRegex.js`).
+  ⛔ **CORRECTED 2026-11-13: NO env var and NO installer change is needed.**
+  This plan originally said `NEXTAUTH_SECRET` had to be added to
+  LogVault-Collector and LogVault-API, which was read off the NSSM
+  `AppEnvironmentExtra` blocks in §2.3 — and those genuinely do not carry it.
+  But `Install-NocVault-Suite.ps1:1685` writes the **root `.env.local`** with
+  both `NEXTAUTH_SECRET` and `NETVAULT_DB_*`, and `collector/collector.js:19`
+  and `api/server.js:30` both `dotenv.config()` that file by explicit path.
+  Reading only the NSSM block sees half the environment. The one residual is an
+  install whose `.env.local` predates that line: it hits the soft fallback and
+  keeps its local SMTP, which is the designed behaviour, not a break.
 - **DDIVault** — **zero env changes**; already holds both halves.
 - **SpanVault** — gains the 5-minute cache it never had (currently a fresh query
   per send) **and a real `secure` flag**. Today TLS is derived purely from

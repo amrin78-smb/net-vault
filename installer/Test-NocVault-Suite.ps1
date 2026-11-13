@@ -969,21 +969,21 @@ if ($csrf.Code -eq 200 -and $csrf.Content) {
 } else { Bad ("NextAuth csrf FAILED (code=" + $csrf.Code + ")") }
 
 if ($TestLogin) {
-    # â THE SEEDED ADMIN PASSWORD IS PER-INSTALL NOW, SO IT CANNOT BE A LITERAL
+    # ⛔ THE SEEDED ADMIN PASSWORD IS PER-INSTALL NOW, SO IT CANNOT BE A LITERAL
     # HERE. The suite installer generates it and persists it as NV_ADMIN_PASSWORD in
     # secrets.env; it used to seed the same shipped default on every install, and this
     # block posted that default as a constant. Left as a constant, -TestLogin would
     # fail on every freshly installed suite and the failure would look like a broken
     # auth stack rather than a tester that no longer knows the password.
     #
-    # â THE FALLBACK IS THE SHIPPED DEFAULT, AND REACHING IT IS ITSELF A FINDING.
+    # ⛔ THE FALLBACK IS THE SHIPPED DEFAULT, AND REACHING IT IS ITSELF A FINDING.
     # A box installed before per-install passwords existed still has the shipped
     # default live, which is exactly the weakness that change closed - so say so
     # rather than quietly logging in. It stays a Wn, not a Bad: the password may also
     # have been changed deliberately by the customer, and this script cannot tell
     # those two apart from the outside.
     #
-    # â NEVER PRINTED. The whole point of moving it into secrets.env is that it
+    # ⛔ NEVER PRINTED. The whole point of moving it into secrets.env is that it
     # stops appearing in console output and logs; this block reports the SOURCE it
     # resolved the password from, never the value.
     $adminEmail  = "admin@yourcompany.com"
@@ -1367,7 +1367,7 @@ else {
     $mfaPolicy = Pg "netvault" "SELECT value FROM app_settings WHERE key='mfa_required_roles';"
     if ($script:PgExit -eq 0 -and $mfaPolicy -eq "[]") { Ok "mfa_required_roles seeded empty (opt-in)" } else { Bad ("mfa_required_roles missing or not empty on a fresh install (got '" + $mfaPolicy + "')") }
     # mfa_secret is a bearer credential. users_public is a column allowlist, so a
-    # new column is hidden by default — verify that actually held rather than
+    # new column is hidden by default - verify that actually held rather than
     # assuming it.
     $mfaLeak = Pg "netvault" "SELECT count(*) FROM information_schema.columns WHERE table_name='users_public' AND column_name LIKE 'mfa%';"
     if ($script:PgExit -eq 0 -and $mfaLeak -eq "0") { Ok "users_public exposes no MFA columns (secret not readable by diagnostics)" } else { Bad ("users_public LEAKS MFA columns (got '" + $mfaLeak + "')") }
@@ -1402,9 +1402,9 @@ else {
     $smtpLeak = Pg "netvault" "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='smtp_config_public' AND column_name='password';"
     if ($script:PgExit -eq 0 -and $smtpLeak -eq "0") { Ok "smtp_config_public exposes no password column (SMTP secret not readable by diagnostics)" }
     else { Bad ("smtp_config_public LEAKS the password column (got '" + $smtpLeak + "')") }
-    # agent_registry — NocVault Agents Phase 2 hub control plane (netvault 1.24.0).
+    # agent_registry - NocVault Agents Phase 2 hub control plane (netvault 1.24.0).
     # ROLE-SCOPED: the netvault app role must be able to SELECT each of the 4 tables.
-    # agent_commands (Phase 4a poll-carried command channel) is included below —
+    # agent_commands (Phase 4a poll-carried command channel) is included below -
     # it must exist (fresh installs) AND be role-SELECTable for the fleet page.
     $agOk = $true; $agBad = @()
     foreach ($t in @('agents','agent_enrollment_tokens','agent_modules','agent_health','agent_commands')) {
@@ -1462,7 +1462,7 @@ else {
     if ($ins -eq "t") { Ok "logvault_user CAN INSERT syslog_entries" } else { Bad ("logvault_user cannot INSERT (got '" + $ins + "')") }
     if ($upd -eq "f" -and $del -eq "f") { Ok "logvault_user CANNOT UPDATE/DELETE syslog_entries (tamper model intact)" }
     else { Bad ("Tamper model BROKEN: UPDATE=" + $upd + " DELETE=" + $del + " (expected f/f)") }
-    # ROLE-SCOPED: reporting engine tables (2.20.0) — mirrors the DDIVault check above.
+    # ROLE-SCOPED: reporting engine tables (2.20.0) - mirrors the DDIVault check above.
     $lvOk = $true; $lvBad = @()
     foreach ($t in @('saved_reports','report_run_history')) {
         $p = Pg "logvault" "SELECT has_table_privilege('logvault_user','$t','SELECT');"
