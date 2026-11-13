@@ -8,7 +8,7 @@ import { ABSENT, PRESENT, recordSystemChanges } from '@/lib/systemAudit.ts'
 
 export const dynamic = 'force-dynamic'
 
-// Settings → Notifications. The SUITE-WIDE SMTP transport, owned by the hub.
+// Settings → Mail server. The SUITE-WIDE SMTP transport, owned by the hub.
 // See docs/nocvault-smtp-centralization-plan.md §3-§4.
 //
 // ⛔ THIS IS A ROUTE, NOT A SETTINGS KEY, AND THAT IS THE WHOLE POINT.

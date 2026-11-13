@@ -736,11 +736,11 @@ function NotificationsPanel() {
     }
   }
 
-  if (loading) return <PanelCard title="Notifications"><PanelLoading /></PanelCard>
+  if (loading) return <PanelCard title="Mail server"><PanelLoading /></PanelCard>
 
   if (loadError) {
     return (
-      <PanelCard title="Notifications">
+      <PanelCard title="Mail server">
         <Callout tone="danger" title="The SMTP settings could not be read">
           <div>{loadError}</div>
           <div style={{ marginTop: 10 }}>
@@ -1549,7 +1549,17 @@ function SettingsInner() {
                         : tab === 'console' ? 'Console address'
                         : tab === 'certificate' ? 'Certificate'
                         : tab === 'https' ? 'HTTPS'
-                        : tab === 'notifications' ? 'Notifications'
+                        // ⛔ LABEL ONLY. The key stays `notifications` because all three
+                        // satellites deep-link to ?tab=notifications; renaming it breaks
+                        // every one of those links silently.
+                        // "Mail server" rather than "Notifications" because that is what
+                        // this page IS: the transport, and nothing else. It holds no
+                        // recipients, no filters and no rules - those live in each app. An
+                        // admin sent here by the word "Notifications" goes looking for who
+                        // gets told what and does not find it. It also reads correctly
+                        // beside its neighbours: Console address, Certificate, HTTPS, Mail
+                        // server are all facts about this installation.
+                        : tab === 'notifications' ? 'Mail server'
                         : tab === 'sso' ? 'Single sign-on'
                         : tab === 'users' ? 'Users & access'
                         : tab === 'sites' ? 'Organisation & sites'

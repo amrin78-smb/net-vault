@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.65.6': [
+    "Settings - Notifications is now called Mail server. The page configures the suite's outbound mail server and nothing else: recipients, alert filters and alert rules all live in the application that sends them. The old name sent administrators here looking for settings that were never on this page. Links from the other applications were updated to match.",
+  ],
   '1.65.5': [
     "Fixed: an expired licence blocked user management for the entire suite. NetVault is where every application's sign-ins live, so a lapsed licence stopped you adding an administrator to get things working again - and stopped you deleting an account that should no longer have access. A commercial lapse should never prevent revoking access, and it no longer does.",
     "This was never enforcing anything the licence sells. A licence covers which applications are enabled and how many devices may be managed; it has never limited how many people may sign in, so blocking user management restricted something nobody paid for.",

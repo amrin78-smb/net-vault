@@ -9,7 +9,7 @@ import { checkRateLimit, getClientIp } from '@/lib/rateLimit.ts'
 
 export const dynamic = 'force-dynamic'
 
-// Settings → Notifications → "Send test message".
+// Settings → Mail server → "Send test message".
 //
 // ⛔ THIS ENDPOINT IS A PORT SCANNER WEARING A SETTINGS BUTTON, AND THAT IS WHY
 // IT IS THROTTLED. Strip the wording away and it is "connect from the NetVault
