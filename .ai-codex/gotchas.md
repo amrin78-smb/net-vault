@@ -830,3 +830,26 @@ version across the suite" is therefore NOT achievable while NetVault is on next-
 `raw` option bypassing `disableFileAccess`/`disableUrlAccess`. `lib/mailer.ts` never uses `raw`
 and says so in a comment - the same reasoning all three satellites' CLAUDE.md already record for
 their own deferred upgrades.
+
+## ⛔ Settings → About showed `v1.0.0` on every install (fixed 1.65.2)
+
+`{ label: 'Version', value: \`v${updateStatus?.current_version || '1.0.0'}\` }` — but `updateStatus`
+is populated ONLY by the Updates tab's own effect (`if (activeTab === 'updates' && !updateStatus …)`).
+On the About tab it is always `null`, so the panel whose entire job is telling an operator what they
+are running printed the fallback literal as though it were the answer. A production server on 1.65.1
+reported itself as **v1.0.0**. Reported from a screenshot 2026-11-13; wrong since the tab was
+standardised in `2a75cd8`.
+
+Same class as LogVault's version-display bug (its `page.tsx` imported `frontend/package.json`, a file
+nothing in the release process bumps) — which was mistaken for a caching bug and chased for DAYS
+across two releases before anyone checked where the number came from.
+
+**The rules this leaves:**
+- A version, build or environment string must come from the thing it describes — `/api/health` reads
+  the real `package.json` server-side — never from a literal and never from state another tab owns.
+- ⛔ **Never default a factual field to a plausible-looking literal.** `|| '1.0.0'` is indistinguishable
+  from a real answer; `|| '—'` is not. A fallback that can be mistaken for data is worse than a gap.
+- The same panel hardcoded `Node.js 20`, which the installer actively REFUSES to run on
+  (`$NodeRequired = 22.18.0`). It now reports `process.version` via `/api/server-stats` — the
+  admin-gated route, deliberately NOT `/api/health`, because an exact Node build number on a public
+  endpoint is a free CVE-matching gift.

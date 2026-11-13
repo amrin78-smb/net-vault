@@ -75,6 +75,10 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.65.2': [
+    "Fixed: Settings > About reported the version as v1.0.0 on every installation, no matter which version was actually running. The panel read a value that only the Updates tab fetches, so on About it was always empty and fell back to a placeholder that looked like a real answer. It now reads the running version directly, and shows a dash rather than a number if it cannot.",
+    "Fixed: the same panel claimed the runtime was Node.js 20 - a version this suite's own installer refuses to install on. It now reports the Node.js and Next.js versions actually running on the server.",
+  ],
   '1.65.1': [
     "Settings now has a Notifications page where the mail server is configured once for the whole suite. Until now each application kept its own copy of the same settings, so adding a mail server meant entering the same host, port, username and password separately in LogVault, DDIVault and SpanVault, and changing a password meant remembering to change it in all three.",
     "Each application still decides who receives its own alerts, which alerts are worth sending, and what name they arrive from - only the connection to the mail server is shared. An application that already has its own mail settings keeps using them until the suite-wide ones are switched on, so nothing changes on an existing installation until you choose to.",

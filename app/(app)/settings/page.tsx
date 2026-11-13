@@ -1163,6 +1163,25 @@ function SettingsInner() {
   const [copiedServerId, setCopiedServerId] = useState(false)
 
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+  // ⛔ ABOUT MUST NOT READ ITS VERSION OFF `updateStatus`. That state is only
+  // populated by the Updates tab's own effect (`activeTab === 'updates'`), so on
+  // About it is ALWAYS null and the `|| '1.0.0'` fallback rendered as the real
+  // answer - a running 1.65.1 reported itself as v1.0.0 to anyone who opened the
+  // panel whose entire job is saying what you are running. Reported from a
+  // screenshot 2026-11-13; it had been wrong since the tab was standardised.
+  // /api/health is the authoritative version (it reads package.json server-side)
+  // and is cheap; /api/system/update-status does a git fetch and is not.
+  const [aboutInfo, setAboutInfo] = useState<{ version: string | null; node: string | null; next: string | null }>(
+    { version: null, node: null, next: null },
+  )
+  // Prefer the live /api/health value; fall back to updateStatus only if the
+  // Updates tab happened to populate it first. Never to a literal.
+  const aboutVersion = aboutInfo.version || updateStatus?.current_version || null
+  // `process.version` already carries the leading "v" (e.g. "v22.21.0").
+  const aboutRuntime = [
+    aboutInfo.node ? `Node.js ${aboutInfo.node.replace(/^v/, '')}` : null,
+    aboutInfo.next ? `Next.js ${aboutInfo.next}` : null,
+  ].filter(Boolean).join(' · ') || '—'
   const [checkingUpdate, setCheckingUpdate] = useState(false)
   const [checkUpdateErr, setCheckUpdateErr] = useState<string | null>(null)
   const [confirmingUpdate, setConfirmingUpdate] = useState(false)
@@ -1258,6 +1277,18 @@ function SettingsInner() {
   useEffect(() => {
     if (activeTab === 'updates' && !updateStatus && !checkingUpdate) {
       void checkForUpdates()
+    }
+    if (activeTab === 'about' && aboutInfo.version === null) {
+      void (async () => {
+        try {
+          const h = await fetch('/api/health', { cache: 'no-store' }).then(r => r.json())
+          setAboutInfo(a => ({ ...a, version: h?.version ?? null }))
+        } catch { /* leave null - the row renders an em dash, never a made-up number */ }
+        try {
+          const st = await fetch('/api/server-stats', { cache: 'no-store' }).then(r => r.json())
+          if (st?.runtime) setAboutInfo(a => ({ ...a, node: st.runtime.node ?? null, next: st.runtime.next ?? null }))
+        } catch { /* admin-gated; a non-admin simply sees no runtime row detail */ }
+      })()
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab])
@@ -2313,10 +2344,10 @@ function SettingsInner() {
                 {[
                   { label: 'Product', value: 'NetVault — IT Asset Management' },
                   { label: 'Family', value: 'NocVault Network Intelligence Suite' },
-                  { label: 'Version', value: `v${updateStatus?.current_version || '1.0.0'}` },
+                  { label: 'Version', value: aboutVersion ? `v${aboutVersion}` : '—' },
                   { label: 'App Port', value: '3000' },
                   { label: 'Database', value: 'PostgreSQL 16' },
-                  { label: 'Runtime', value: 'Node.js 20 · Next.js 16' },
+                  { label: 'Runtime', value: aboutRuntime },
                 ].map(row => (
                   <tr key={row.label} style={{ borderBottom: '1px solid var(--border-light)' }}>
                     <td style={{ padding: '8px 0', color: 'var(--text-muted)', width: '180px', verticalAlign: 'top' }}>{row.label}</td>
@@ -2327,7 +2358,7 @@ function SettingsInner() {
             </table>
           </div>
           <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)', padding: '20px', marginBottom: '20px' }}>
-            <div style={{ fontSize: 'var(--text-md)', fontWeight: '700', color: 'var(--text-primary)' }}>NetVault v{updateStatus?.current_version || '1.0.0'}</div>
+            <div style={{ fontSize: 'var(--text-md)', fontWeight: '700', color: 'var(--text-primary)' }}>NetVault{aboutVersion ? ` v${aboutVersion}` : ''}</div>
             <div style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', marginTop: '4px' }}>Part of the NocVault Network Intelligence Suite</div>
             <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: '8px' }}>© 2026 NocVault</div>
           </div>

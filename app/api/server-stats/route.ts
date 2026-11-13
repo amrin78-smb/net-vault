@@ -138,6 +138,18 @@ async function diskForecastDays(usedBytes: number, freeBytes: number): Promise<n
   }
 }
 
+// Next's own version, read from the installed package rather than our
+// dependency RANGE in package.json ("16.2.9" vs "^16.2.9" - the range is what
+// we asked for, this is what is actually running). Returns null rather than
+// throwing if the lookup ever fails; an About row is not worth a 500.
+function nextVersion(): string | null {
+  try {
+    return (require('next/package.json') as { version?: string }).version ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function GET() {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -167,6 +179,18 @@ export async function GET() {
     const disk_forecast_days = disk ? await diskForecastDays(disk.used, disk.free) : null
 
     return NextResponse.json({
+      // ⛔ The runtime is REPORTED, never asserted. Settings -> About used to
+      // print a hardcoded "Node.js 20", which was not merely stale but a
+      // version the suite installer actively REFUSES to install on
+      // ($NodeRequired = 22.18.0 in Install-NocVault-Suite.ps1, because
+      // --experimental-strip-types is only unflagged from 22.18). A fixed
+      // string in a panel whose whole job is telling an operator what they are
+      // running is worse than no string at all.
+      // It rides on THIS route, not /api/health, deliberately: health is public
+      // and an exact Node build number is a free gift to anyone matching CVEs
+      // against the host. This route is already admin-gated and already
+      // described as operator detail.
+      runtime: { node: process.version, next: nextVersion() },
       host: resolveHost(),
       disk: disk ?? { total: 0, used: 0, free: 0, percent: 0, path: 'C:' },
       memory,
