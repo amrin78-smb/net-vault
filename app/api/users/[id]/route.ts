@@ -3,15 +3,39 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import bcrypt from 'bcryptjs'
-import { checkWriteAllowed } from '@/app/api/license/route'
 import { ALL_APPS } from '@/lib/appAccess'
 import { findUserByEmail } from '@/lib/directoryStore'
 import { decideLocalAccountEmail, decideDirectoryAccountEdit } from '@/lib/localAccountPolicy'
 
+// ⛔ NO `checkWriteAllowed` IN THIS FILE, DELIBERATELY. REMOVED 1.65.5 — DO NOT
+// ADD IT BACK.
+//
+// The licence gate exists to stop an unlicensed install producing product
+// VALUE: devices, sites, circuits, imports, agent enrolment. Those routes all
+// call it and should. User management is not that, for three reasons:
+//
+//  1. IT ENFORCES NO LICENCE TERM. `LicensePayload` carries `modules` and
+//     `maxDevices` and nothing else — there is no seat or user limit anywhere
+//     in this codebase. Gating users restricted something the licence never
+//     sold, so the block bought nothing.
+//  2. NETVAULT IS THE HUB. `users` is suite-wide identity: LogVault, DDIVault
+//     and SpanVault all authenticate against this table. A NetVault licence
+//     lapsing took user management away from the whole suite, which the
+//     expiry banner never said and nobody would predict.
+//  3. ⛔ IT BLOCKED THE TWO RECOVERY PATHS THAT MUST NEVER BE BLOCKED —
+//     adding an administrator to get the installation working again, and
+//     DELETING A COMPROMISED ACCOUNT. A lapsed licence must never be the
+//     reason someone keeps access they should have lost. That is a commercial
+//     dispute turning into a security incident.
+//
+// The rest of hub administration — settings, Entra/SSO, the certificate, the
+// transport, the suite mail server — is ungated for the same reason and always
+// was; `users` was the lone outlier. `tests/systemSeams.test.ts` asserts this
+// split in BOTH directions, so adding the gate here fails the suite.
+
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock
   const sessionUser = session.user as { role: string }
   if (sessionUser.role !== 'admin' && sessionUser.role !== 'super_admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   const { id } = await params
@@ -95,7 +119,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock
   const user = session.user as { role: string }
   if (user.role !== 'super_admin') return NextResponse.json({ error: 'Only super admins can delete users' }, { status: 403 })
   const { id } = await params

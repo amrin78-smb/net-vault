@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.65.5': [
+    "Fixed: an expired licence blocked user management for the entire suite. NetVault is where every application's sign-ins live, so a lapsed licence stopped you adding an administrator to get things working again - and stopped you deleting an account that should no longer have access. A commercial lapse should never prevent revoking access, and it no longer does.",
+    "This was never enforcing anything the licence sells. A licence covers which applications are enabled and how many devices may be managed; it has never limited how many people may sign in, so blocking user management restricted something nobody paid for.",
+    "The licence still applies where it should: devices, sites, circuits and imports remain read-only once a licence has fully lapsed. Settings, sign-on, the certificate, the HTTPS switch and the suite mail server stay available throughout, so an installation can always be repaired.",
+  ],
   '1.65.4': [
     "The launcher now says what NetVault is besides an application. Its tile carries a small HUB label and a second line explaining that the same application holds the suite's users, sign-on, licence and mail settings - until now that role was only discoverable by opening NetVault and looking through Settings.",
     "A Suite settings link sits under that tile and goes straight to the settings pages, so changing something that applies to the whole suite - the mail server, for instance - no longer means opening the asset management application first and finding it from there.",

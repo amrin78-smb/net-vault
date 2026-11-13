@@ -888,3 +888,34 @@ So `package.json` now carries:
   and 542 tests pass (nodemailer 10 is a dual ESM/CJS TypeScript build — confirmed it still
   imports under Node's type stripping in `node --test`).
 - 10.0.0's only breaking change is **Node.js >= 20**. The installer floor is already 22.18.0.
+
+## ⛔ The licence gate goes on PRODUCT VALUE, never on administration (1.65.5)
+
+`checkWriteAllowed()` 403s once a licence is fully expired (past the 30-day grace). It belongs
+on routes that produce the thing the licence sells and nowhere else.
+
+**`app/api/users` was gated and should never have been.** Three reasons, in increasing order of
+seriousness:
+
+1. **It enforced no licence term.** `LicensePayload` is `{ customer, serverId, expiry, modules,
+   maxDevices, issuedAt }` — there is no seat or user limit anywhere in this codebase. The block
+   restricted something the licence never sold.
+2. **NetVault is the hub.** `users` is suite-wide identity — LogVault, DDIVault and SpanVault all
+   authenticate against this table. A NetVault licence lapsing took user management away from the
+   whole suite, which the expiry banner ("NetVault dropping into read-only") never said.
+3. ⛔ **It blocked the two recovery paths that must never be blocked** — adding an administrator to
+   repair the installation, and DELETING A COMPROMISED ACCOUNT. A lapsed licence must never be the
+   reason someone keeps access they should have lost: that turns a commercial dispute into a
+   security incident.
+
+**The policy is now a test, asserted in BOTH directions** (`tests/systemSeams.test.ts`). A test
+that only checked "product routes are gated" would have passed happily while `users` was gated
+too; one that only checked "users is ungated" would not notice someone ungating `devices`. A
+second test walks `app/api/**` and fails on any NEW caller that has not been deliberately
+classified, so the gate cannot be inherited by accident.
+
+⛔ **Do not build these lists from `grep -l checkWriteAllowed`.** Writing them that way put two
+wrong entries in on the first attempt: `sites/route.ts` is GET-only (nothing to gate) and
+`agents/enroll` matched a COMMENT explaining its own deliberate exemption — token-gated
+infrastructure provisioning is not licensed data entry. The test strips comments before matching
+for exactly this reason.

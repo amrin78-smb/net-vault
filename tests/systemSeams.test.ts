@@ -831,3 +831,82 @@ test('parseRestartLog\'s own doc sits above parseRestartLog', () => {
   const between = src.slice(closeAt + 2, fn)
   assert.equal(between.trim(), '', `nothing may sit between the doc and parseRestartLog, found: ${between.trim().slice(0, 120)}`)
 })
+
+// ── The licence gate: what it may and may not take away ─────────────────────
+//
+// ⛔ THIS ASSERTS THE SPLIT IN BOTH DIRECTIONS, AND THAT IS THE POINT. A test
+// that only checked "the product routes are gated" would have passed happily
+// while `users` was gated too — which is the bug this encodes. A test that only
+// checked "users is not gated" would not notice someone quietly ungating
+// `devices`.
+//
+// The rule: the licence sells `modules` and `maxDevices` (see LicensePayload —
+// there is no seat or user limit anywhere), so the gate belongs on routes that
+// PRODUCE PRODUCT VALUE and nowhere else. Administering and recovering the
+// installation must survive expiry, because NetVault is the suite hub: its
+// `users` table is the identity every satellite authenticates against, and
+// blocking DELETE there means a lapsed licence stops you revoking a
+// compromised account. A commercial dispute must not become a security
+// incident.
+test('⛔ the licence gate is on product data, and NOWHERE in hub administration', () => {
+  const GATED = [
+    'app/api/devices/route.ts',
+    'app/api/devices/[id]/route.ts',
+    'app/api/devices/bulk/route.ts',
+    'app/api/sites/[id]/route.ts',
+    'app/api/sites/manage/route.ts',
+    'app/api/sites/import/route.ts',
+    'app/api/circuits/route.ts',
+    'app/api/circuits/[id]/route.ts',
+    'app/api/import/route.ts',
+  ]
+  const UNGATED = [
+    'app/api/users/route.ts',          // identity — see the note in that file
+    'app/api/users/[id]/route.ts',     // incl. DELETE: revocation must never be blocked
+    'app/api/settings/route.ts',
+    'app/api/system/entra/route.ts',
+    'app/api/system/tls/route.ts',
+    'app/api/system/tls-transport/route.ts',
+    'app/api/system/console-url/route.ts',
+    'app/api/suite/smtp/route.ts',
+    'app/api/suite/smtp/test/route.ts',
+    // ⛔ Token-gated infrastructure provisioning, not licensed data entry — the
+    // route says so itself and has since it shipped. An agent enrolling is not
+    // a user typing in a device, and a 403 here would strand a fleet rollout on
+    // a licence question the agent cannot answer.
+    'app/api/agents/enroll/route.ts',
+  ]
+  for (const f of GATED) {
+    assert.match(code(f), /checkWriteAllowed/,
+      `${f} produces product value and MUST stay behind the licence gate`)
+  }
+  for (const f of UNGATED) {
+    assert.doesNotMatch(code(f), /checkWriteAllowed/,
+      `${f} is administration/recovery and must survive licence expiry — see the note in app/api/users/route.ts`)
+  }
+})
+
+// ⛔ The list above is hand-maintained, so this catches a route that adds the
+// gate without anyone updating it. Any NEW caller of checkWriteAllowed has to
+// be classified deliberately rather than inherited by accident.
+test('⛔ no route gates on the licence without being classified above', () => {
+  const known = new Set([
+    'app/api/license/route.ts', // defines it
+    'app/api/devices/route.ts', 'app/api/devices/[id]/route.ts', 'app/api/devices/bulk/route.ts',
+    'app/api/sites/[id]/route.ts', 'app/api/sites/manage/route.ts',
+    'app/api/sites/import/route.ts', 'app/api/circuits/route.ts', 'app/api/circuits/[id]/route.ts',
+    'app/api/import/route.ts',
+  ])
+  const found: string[] = []
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(path.join(repo, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`
+      if (e.isDirectory()) walk(rel)
+      else if (e.name === 'route.ts' && /checkWriteAllowed/.test(code(rel))) found.push(rel)
+    }
+  }
+  walk('app/api')
+  const surprises = found.filter((f) => !known.has(f))
+  assert.deepEqual(surprises, [],
+    `these routes gate on the licence but are not classified in the test above — decide whether each produces product value (gate it, add it to the list) or is administration/recovery (remove the gate): ${surprises.join(', ')}`)
+})
