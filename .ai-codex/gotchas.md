@@ -853,3 +853,38 @@ across two releases before anyone checked where the number came from.
   (`$NodeRequired = 22.18.0`). It now reports `process.version` via `/api/server-stats` — the
   admin-gated route, deliberately NOT `/api/health`, because an exact Node build number on a public
   endpoint is a free CVE-matching gift.
+
+## ⛔ nodemailer here is 10.x via an `overrides` entry, NOT by next-auth's leave (1.65.3)
+
+`next-auth@4.24.x` declares `peerOptional nodemailer@"^7.0.7"` and NetVault is a single
+package.json holding both, so a plain bump to 8/9/10 is an unresolvable peer conflict — that is
+what killed the 1.65.0 deploy at `npm install` with ERESOLVE. 1.65.1 settled on `^7.0.13`, inside
+next-auth's range.
+
+**That turned out not to be good enough.** `npm audit` flags every nodemailer `<=10.1.3`, with
+`fixAvailable: 10.5.0`. On 7.x the hub carried SMTP command injection via `envelope.size`, CRLF
+injection in the transport name (EHLO/HELO), CRLF in `List-*` headers, the jsonTransport
+file/URL-access bypass AND the `raw` advisory the bump was meant to close. Stopping at 9.x would
+have left a dozen of them.
+
+So `package.json` now carries:
+
+```json
+"dependencies": { "nodemailer": "^10.5.0" },
+"overrides":    { "nodemailer": "$nodemailer" }
+```
+
+- `$nodemailer` means "whatever this package's own dependency range says", so the override cannot
+  drift away from the dependency.
+- ⛔ **An override, NOT `--legacy-peer-deps`.** It lives in package.json, travels with the repo and
+  is honoured by the plain `npm install`/`npm ci` that runs on a customer's server. A CLI flag is
+  not: the installer will not pass it, which is precisely how a locally-green bump becomes a failed
+  deploy.
+- It is semantically safe because **NetVault does not use next-auth's Email provider at all** —
+  verified, no `EmailProvider` import anywhere — so the peer it declares is for a code path that
+  never executes here. Re-check that before assuming the override stays safe.
+- Verified before shipping: clean-tree `npx npm@10 ci --dry-run` → **0 ERESOLVE, 0 peer warnings**,
+  `npm ls nodemailer` shows next-auth deduped onto 10.5.0, `npm audit` reports nodemailer CLEAR,
+  and 542 tests pass (nodemailer 10 is a dual ESM/CJS TypeScript build — confirmed it still
+  imports under Node's type stripping in `node --test`).
+- 10.0.0's only breaking change is **Node.js >= 20**. The installer floor is already 22.18.0.

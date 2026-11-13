@@ -1402,6 +1402,17 @@ else {
     $smtpLeak = Pg "netvault" "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='smtp_config_public' AND column_name='password';"
     if ($script:PgExit -eq 0 -and $smtpLeak -eq "0") { Ok "smtp_config_public exposes no password column (SMTP secret not readable by diagnostics)" }
     else { Bad ("smtp_config_public LEAKS the password column (got '" + $smtpLeak + "')") }
+    # ddivault.smtp_config.allow_self_signed - the column that decides whether a
+    # LOCAL SMTP config verifies the mail server's certificate. DDIVault used to
+    # pass tls.rejectUnauthorized=false unconditionally, accepting any
+    # certificate forever with nothing in the UI saying so; 1.35.0 made it an
+    # explicit column defaulting to FALSE. A default that silently flipped back
+    # to permissive would restore the old behaviour with no visible symptom,
+    # which is exactly the class of regression a post-install test exists for.
+    $ddTls = Pg "ddivault" "SELECT column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='smtp_config' AND column_name='allow_self_signed';"
+    if ($script:PgExit -eq 0 -and $ddTls -eq "false") { Ok "ddivault.smtp_config.allow_self_signed defaults to FALSE (SMTP certificates verified by default)" }
+    elseif ($script:PgExit -ne 0 -or $ddTls -eq "") { Bad "ddivault.smtp_config.allow_self_signed column MISSING - schema.sql did not apply its TLS block" }
+    else { Bad ("ddivault.smtp_config.allow_self_signed default is '" + $ddTls + "', expected 'false' - new SMTP configs would skip certificate verification") }
     # agent_registry - NocVault Agents Phase 2 hub control plane (netvault 1.24.0).
     # ROLE-SCOPED: the netvault app role must be able to SELECT each of the 4 tables.
     # agent_commands (Phase 4a poll-carried command channel) is included below -

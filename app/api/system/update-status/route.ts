@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.65.3': [
+    "Security: the email library the hub sends its test message through has been updated to its current major version, closing a published high-severity advisory plus a batch of message-parsing flaws present in every earlier version. The same update was applied to all three other applications in the suite, so every one of them now sends through the same current version.",
+  ],
   '1.65.2': [
     "Fixed: Settings > About reported the version as v1.0.0 on every installation, no matter which version was actually running. The panel read a value that only the Updates tab fetches, so on About it was always empty and fell back to a placeholder that looked like a real answer. It now reads the running version directly, and shows a dash rather than a number if it cannot.",
     "Fixed: the same panel claimed the runtime was Node.js 20 - a version this suite's own installer refuses to install on. It now reports the Node.js and Next.js versions actually running on the server.",
