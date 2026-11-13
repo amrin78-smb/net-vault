@@ -682,7 +682,7 @@ function LauncherInner() {
                 <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.6)', lineHeight: 1.45, marginBottom: '14px', minHeight: '34px' }}>
                   {card.description}
                   {card.hub && (
-                    <span style={{ display: 'block', marginTop: '4px', fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.45)' }}>{card.hub.note}</span>
+                    <span style={{ display: 'block', marginTop: '4px', fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.6)' }}>{card.hub.note}</span>
                   )}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '9px', marginBottom: '16px', flex: 1, filter: licensed ? 'none' : 'blur(2px)' }}>

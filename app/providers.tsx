@@ -87,7 +87,7 @@ export default function Providers({ children }: { children: ReactNode }) {
               <>
                 <button className="btn" onClick={() => handleConfirm(false)}>Cancel</button>
                 <button
-                  className={confirmState?.options.danger ? 'btn btn-destructive' : 'btn btn-navy'}
+                  className={confirmState?.options.danger ? 'btn btn-destructive readonly-allowed' : 'btn btn-navy'}
                   onClick={() => handleConfirm(true)}
                 >
                   {confirmState?.options.confirmLabel || 'Confirm'}

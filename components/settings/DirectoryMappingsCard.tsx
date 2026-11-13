@@ -279,7 +279,7 @@ export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolea
                     {confirmingId === m.id ? (
                       <>
                         <button
-                          className="btn-danger"
+                          className="btn-danger readonly-allowed"
                           style={{ padding: '4px 12px', marginRight: 6 }}
                           disabled={saving}
                           onClick={() => void remove(m.id)}
@@ -401,7 +401,7 @@ export function DirectoryMappingsCard({ ssoConfigured }: { ssoConfigured: boolea
       )}
 
       <button
-        className="btn-primary"
+        className="btn-primary readonly-allowed"
         style={{ padding: '10px 20px' }}
         disabled={!canAdd}
         onClick={() => void add()}

@@ -985,7 +985,7 @@ function NotificationsPanel() {
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <button
             type="button"
-            className="btn-primary"
+            className="btn-primary readonly-allowed"
             onClick={() => void save()}
             disabled={!canSave}
             style={{ padding: '10px 24px' }}
@@ -1587,7 +1587,7 @@ function SettingsInner() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <p style={{ fontSize: 'var(--text-base)', color: 'var(--text-secondary)', margin: 0 }}>Manage who can access this system</p>
-            <button className="btn-primary" onClick={openAddUser}>+ Add user</button>
+            <button className="btn-primary readonly-allowed" onClick={openAddUser}>+ Add user</button>
           </div>
           {/* The add/edit form is a focused drawer rather than a panel that
               pushes the user table down the page. It is the shared Dialog,
@@ -1604,7 +1604,7 @@ function SettingsInner() {
             footer={
               <>
                 <button className="btn btn-secondary" onClick={() => setShowUserForm(false)} disabled={savingUser}>Cancel</button>
-                <button className="btn btn-primary" onClick={saveUser} disabled={savingUser}>
+                <button className="btn btn-primary readonly-allowed" onClick={saveUser} disabled={savingUser}>
                   {savingUser ? 'Saving\u2026' : editUser ? 'Save changes' : 'Create user'}
                 </button>
               </>
@@ -1828,7 +1828,7 @@ function SettingsInner() {
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
                         {(isSuperAdmin || u.role !== 'super_admin') && <button style={{ padding: '4px 10px', fontSize: 'var(--text-sm)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-card)', color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => openEditUser(u)}>Edit</button>}
-                        {isSuperAdmin && <button className="btn-danger" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => deleteUser(u.id, u.name)}>Delete</button>}
+                        {isSuperAdmin && <button className="btn-danger readonly-allowed" style={{ padding: '4px 10px', fontSize: 'var(--text-sm)' }} onClick={() => deleteUser(u.id, u.name)}>Delete</button>}
                       </div>
                     </td>
                   </tr>
@@ -1871,7 +1871,7 @@ function SettingsInner() {
               </p>
             </div>
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-              <button className="btn-primary" onClick={saveSecuritySettings} disabled={savingSecuritySettings} style={{ padding: '10px 24px' }}>
+              <button className="btn-primary readonly-allowed" onClick={saveSecuritySettings} disabled={savingSecuritySettings} style={{ padding: '10px 24px' }}>
                 {savingSecuritySettings ? 'Saving...' : 'Save settings'}
               </button>
               {securitySettingsSaved && <span style={{ fontSize: 'var(--text-base)', color: 'var(--tint-success-fg)', background: 'var(--tint-success)', padding: '6px 12px', borderRadius: 'var(--radius-sm)' }}>Saved!</span>}

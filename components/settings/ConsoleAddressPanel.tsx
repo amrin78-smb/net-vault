@@ -329,7 +329,7 @@ export default function ConsoleAddressPanel({ canRestart = true }: { canRestart?
               title="This address does not point at this server. Confirm before saving."
               actions={
                 <>
-                  <button className="btn-primary" disabled={saving} onClick={() => { void save(true) }}>
+                  <button className="btn-primary readonly-allowed" disabled={saving} onClick={() => { void save(true) }}>
                     {saving ? 'Saving…' : 'I understand — save this address anyway'}
                   </button>
                   <button className="btn-secondary" disabled={saving} onClick={() => setConfirmation(null)}>
@@ -387,7 +387,7 @@ export default function ConsoleAddressPanel({ canRestart = true }: { canRestart?
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: 16 }}>
           <button
-            className="btn-primary"
+            className="btn-primary readonly-allowed"
             style={{ padding: '10px 24px' }}
             disabled={saving || url.trim() === ''}
             onClick={() => { void save(false) }}

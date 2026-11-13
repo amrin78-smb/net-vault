@@ -410,7 +410,7 @@ export default function CertificatePanel({ canInstall = true }: { canInstall?: b
               key={m}
               type="button"
               onClick={() => { setMode(m); touched() }}
-              className={mode === m ? 'btn-primary' : 'btn-secondary'}
+              className={mode === m ? 'btn-primary readonly-allowed' : 'btn-secondary'}
               style={{ padding: '8px 16px' }}
             >{label}</button>
           ))}
@@ -513,7 +513,7 @@ export default function CertificatePanel({ canInstall = true }: { canInstall?: b
                       the confirmation of a super_admin-only write must not be the
                       one control in the panel that forgets, and a disabled-only-
                       on-busy button here contradicts the read-only notice below. */}
-                  <button className="btn-primary" disabled={busy || !canInstall} onClick={() => { void install(true) }}>
+                  <button className="btn-primary readonly-allowed" disabled={busy || !canInstall} onClick={() => { void install(true) }}>
                     {busy ? 'Installing…' : 'Replace the installed certificate'}
                   </button>
                   <button className="btn-secondary" disabled={busy} onClick={() => setPrompt(null)}>
@@ -598,7 +598,7 @@ export default function CertificatePanel({ canInstall = true }: { canInstall?: b
         )}
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: 18 }}>
           <button
-            className="btn-primary"
+            className="btn-primary readonly-allowed"
             style={{ padding: '10px 24px' }}
             disabled={busy || !hasInput || !canInstall}
             onClick={() => { void install(false) }}

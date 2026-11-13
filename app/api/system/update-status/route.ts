@@ -75,6 +75,11 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.65.7': [
+    "Correction to 1.65.5. That release said an expired licence no longer stops you adding an administrator or deleting an account that should no longer have access. The server was changed, but the buttons were not: every Save and Delete in Settings is greyed out and unclickable while a licence is expired, and only the Activate Licence button was exempt. The claim was wrong as shipped, and this release makes it true.",
+    "User management, the certificate, HTTPS, the console address, sign-on, the suite mail server and your own 2FA now stay usable while a licence is expired, so an installation can always be repaired and access can always be revoked. Adding and editing sites, devices and circuits stays read-only, which is what the licence actually covers.",
+    "Also corrected: the grace period is seven days from the end of a trial, not thirty, and a purchased licence that lapses gets no grace at all - the applications become read-only the same day. Our own notes said otherwise. Renewing before the expiry date is the only way to avoid an interruption.",
+  ],
   '1.65.6': [
     "Settings - Notifications is now called Mail server. The page configures the suite's outbound mail server and nothing else: recipients, alert filters and alert rules all live in the application that sends them. The old name sent administrators here looking for settings that were never on this page. Links from the other applications were updated to match.",
   ],

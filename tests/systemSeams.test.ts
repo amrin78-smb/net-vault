@@ -876,9 +876,15 @@ test('⛔ the licence gate is on product data, and NOWHERE in hub administration
     // a licence question the agent cannot answer.
     'app/api/agents/enroll/route.ts',
   ]
+  // ⛔ MATCH THE CALL, NOT THE IMPORT. `/checkWriteAllowed/` alone is satisfied by
+  // the import line, so deleting the actual
+  //   `const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock`
+  // left this assertion green — proved by mutation during the 2026-11-14 sweep.
+  // `tsconfig.json` sets no `noUnusedLocals` and eslint reports an orphaned import
+  // only as a warning in files that already carry errors, so nothing else caught it.
   for (const f of GATED) {
-    assert.match(code(f), /checkWriteAllowed/,
-      `${f} produces product value and MUST stay behind the licence gate`)
+    assert.match(code(f), /await\s+checkWriteAllowed\s*\(/,
+      `${f} produces product value and MUST stay behind the licence gate — and the GATE ITSELF must be called, not merely imported`)
   }
   for (const f of UNGATED) {
     assert.doesNotMatch(code(f), /checkWriteAllowed/,
@@ -909,4 +915,67 @@ test('⛔ no route gates on the licence without being classified above', () => {
   const surprises = found.filter((f) => !known.has(f))
   assert.deepEqual(surprises, [],
     `these routes gate on the licence but are not classified in the test above — decide whether each produces product value (gate it, add it to the list) or is administration/recovery (remove the gate): ${surprises.join(', ')}`)
+})
+
+// ── The licence gate has TWO sides, and only one of them was ever tested ─────
+//
+// ⛔ 1.65.5 removed `checkWriteAllowed()` from the user-management API so a lapsed
+// licence could not stop an administrator being added or a COMPROMISED ACCOUNT
+// being deleted — and changed nothing in the UI, where `globals.css`'s
+// `body[data-readonly="true"]` rule puts `pointer-events: none` on every
+// `.btn-primary` / `.btn-danger` / `.btn-destructive` / `button[type=submit]`
+// that is not exempt. The Delete button stayed dead and the release note saying
+// otherwise shipped false. The API test above passed throughout, because it only
+// ever looked at one side.
+//
+// That is the SECOND time this exact two-sided gate was half-fixed: the
+// `.license-action` comment in globals.css records the first, when the Activate
+// License button itself was frozen. Hence this test.
+test('⛔ the read-only CSS rule exempts BOTH licence-restore and administration', () => {
+  const css = read('app/globals.css')
+  for (const sel of ['.btn-primary', 'button\\[type="submit"\\]', '.btn-danger', '.btn-destructive']) {
+    const re = new RegExp(`body\\[data-readonly="true"\\] ${sel}:not\\(\\.license-action\\):not\\(\\.readonly-allowed\\)`)
+    assert.match(css, re, `the read-only rule for ${sel} must exempt BOTH .license-action and .readonly-allowed`)
+  }
+})
+
+test('⛔ every administration/recovery control survives read-only mode', () => {
+  // These are the controls the 1.65.5 note promised "stay available throughout":
+  // user management (add / save / DELETE), and repairing the installation.
+  const settings = read('app/(app)/settings/page.tsx')
+  for (const [what, needle] of [
+    ['+ Add user',        /className="btn-primary readonly-allowed" onClick=\{openAddUser\}/],
+    ['Save user',         /className="btn btn-primary readonly-allowed" onClick=\{saveUser\}/],
+    ['Delete user',       /className="btn-danger readonly-allowed"[^>]*onClick=\{\(\) => deleteUser\(/],
+    ['Save security',     /className="btn-primary readonly-allowed" onClick=\{saveSecuritySettings\}/],
+  ] as const) {
+    assert.match(settings, needle, `${what} must carry .readonly-allowed — an expired licence must not block it`)
+  }
+  // The confirm dialog gates EVERY destructive admin action; without it the
+  // Delete button above opens a modal whose own button is dead.
+  assert.match(read('app/providers.tsx'), /btn btn-destructive readonly-allowed/,
+    'the destructive confirm button must carry .readonly-allowed, or every admin delete still dead-ends')
+  // Repairing the install: console address, certificate, transport, restart,
+  // directory mappings, SSO. Each panel's write buttons must all be exempt.
+  for (const f of ['ConsoleAddressPanel', 'CertificatePanel', 'TransportPanel',
+                   'RestartControl', 'DirectoryMappingsCard', 'SingleSignOnPanel']) {
+    const src = read(`components/settings/${f}.tsx`)
+    assert.doesNotMatch(src, /className="btn-(primary|danger)"/,
+      `${f}.tsx has a write control with no .readonly-allowed — it freezes on an expired licence`)
+  }
+})
+
+test('⛔ product-data controls STAY frozen on an expired licence', () => {
+  // The counterpart assertion. Sites are licensed product data: the licence sells
+  // `maxDevices` and `modules`, and site/device/circuit entry is exactly what it
+  // may take away. If these ever gain .readonly-allowed the gate means nothing.
+  const settings = read('app/(app)/settings/page.tsx')
+  for (const [what, needle] of [
+    ['Add site',    /className="btn-primary" onClick=\{\(\) => \{ setEditSite\(null\)/],
+    ['Save site',   /className="btn-primary" onClick=\{addSite\}/],
+    ['Edit site',   /className="btn-primary" onClick=\{saveEditSite\}/],
+    ['Delete site', /className="btn-danger"[^>]*onClick=\{\(\) => deleteSite\(/],
+  ] as const) {
+    assert.match(settings, needle, `${what} must NOT carry .readonly-allowed — it enters licensed product data`)
+  }
 })

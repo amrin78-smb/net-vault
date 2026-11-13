@@ -891,8 +891,20 @@ So `package.json` now carries:
 
 ## ⛔ The licence gate goes on PRODUCT VALUE, never on administration (1.65.5)
 
-`checkWriteAllowed()` 403s once a licence is fully expired (past the 30-day grace). It belongs
-on routes that produce the thing the licence sells and nowhere else.
+⛔ **CORRECTED 2026-11-14 — THERE IS NO 30-DAY GRACE, AND A PAID LICENCE GETS NONE AT ALL.**
+`lib/license.ts` sets `TRIAL_DAYS = 30` and `GRACE_DAYS = **7**`, and grace is computed from
+INSTALL AGE, not from licence expiry. A purchased licence that lapses is rejected by
+`validateLicenseKey`, control falls through to the trial arithmetic, and any install older than
+~37 days is `expired` IMMEDIATELY — measured: a licence that lapsed yesterday on a 900-day-old
+install returns `{ status: 'expired', daysRemaining: -870 }`. So a real customer gets **zero**
+warning window. The satellites make it worse: all three test `daysRemaining > -30` for grace, so
+-870 sends every one of them straight to `disabled` (blanket 402 outside `/api/health`). Their
+documented 30-day grace is dead code for any paid licence — it only ever fires for a trial
+install between days 31 and 60. An earlier version of this entry said "past the 30-day grace",
+which was wrong in both the number and the mechanism.
+
+`checkWriteAllowed()` 403s once a licence is `expired`. It belongs on routes that produce the
+thing the licence sells and nowhere else.
 
 **`app/api/users` was gated and should never have been.** Three reasons, in increasing order of
 seriousness:
@@ -919,3 +931,31 @@ wrong entries in on the first attempt: `sites/route.ts` is GET-only (nothing to 
 `agents/enroll` matched a COMMENT explaining its own deliberate exemption — token-gated
 infrastructure provisioning is not licensed data entry. The test strips comments before matching
 for exactly this reason.
+
+
+## ⛔ THE LICENCE GATE HAS TWO SIDES AND 1.65.5 FIXED ONLY ONE (corrected 1.65.7)
+
+1.65.5 removed `checkWriteAllowed()` from the user-management API so a lapsed licence could not
+block adding an administrator or **deleting a compromised account**, and shipped a release note
+saying exactly that. The note was **false as shipped.**
+
+`app/(app)/layout.tsx` sets `body[data-readonly="true"]` when the licence is expired, and
+`app/globals.css` puts `opacity:.4; pointer-events:none` on every `.btn-primary`,
+`button[type="submit"]`, `.btn-danger` and `.btn-destructive` that is not exempt. Exactly ONE
+button in the repo carried the exemption: "Activate License". So the Delete button the release
+note promised was unblocked stayed literally unclickable, as did every Save in Settings —
+including the Mail server panel the same day's work added.
+
+⛔ **The CSS block records the IDENTICAL bug from the previous occurrence**, when the Activate
+License button itself was frozen: *"The API side was always correct … so only the UI was locked."*
+Second time, same gate, opposite half. If you change licence enforcement, change BOTH sides in the
+same commit and say which you changed.
+
+Fixed by a second exemption, `.readonly-allowed`, with an honest meaning — `.license-action`
+restores the LICENCE, `.readonly-allowed` administers or REPAIRS the INSTALLATION, product-data
+entry carries neither. `tests/systemSeams.test.ts` now asserts all three in both directions,
+including that site controls stay frozen.
+
+⛔ The CSS rule is **cosmetic; the API is the boundary.** Every product-data write still calls
+`checkWriteAllowed()`. An exemption here can at worst turn a dead button into an honest error — do
+not reason about it as a permission.

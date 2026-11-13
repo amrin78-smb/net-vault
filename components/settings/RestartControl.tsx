@@ -399,7 +399,7 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
           title={service === 'NocVault-Tls' ? 'Reload the TLS front door?' : 'Restart the console now?'}
           actions={
             <>
-              <button type="button" className="btn-primary" onClick={() => void start()} style={{ padding: '8px 18px' }}>
+              <button type="button" className="btn-primary readonly-allowed" onClick={() => void start()} style={{ padding: '8px 18px' }}>
                 Yes, restart {service}
               </button>
               <button type="button" className="btn-secondary" onClick={() => setConfirming(false)} style={{ padding: '8px 18px' }}>
@@ -420,7 +420,7 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
           <div>{target?.why || 'This change takes effect when the service restarts.'}</div>
           {service && (
             <div style={{ marginTop: 10 }}>
-              <button type="button" className="btn-primary" onClick={() => setConfirming(true)} disabled={Boolean(state?.inProgress)} style={{ padding: '8px 18px' }}>
+              <button type="button" className="btn-primary readonly-allowed" onClick={() => setConfirming(true)} disabled={Boolean(state?.inProgress)} style={{ padding: '8px 18px' }}>
                 {state?.inProgress ? 'A restart is already running…' : <>Restart <Mono>{service}</Mono> now</>}
               </button>
             </div>

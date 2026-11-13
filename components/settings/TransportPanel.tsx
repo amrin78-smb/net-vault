@@ -368,7 +368,7 @@ export default function TransportPanel() {
                 title={confirming === 'enable' ? 'Turn HTTPS on for all four consoles?' : 'Turn HTTPS off for all four consoles?'}
                 actions={
                   <>
-                    <button type="button" className="btn-primary" onClick={() => void run(confirming)} disabled={busy} style={{ padding: '8px 18px' }}>
+                    <button type="button" className="btn-primary readonly-allowed" onClick={() => void run(confirming)} disabled={busy} style={{ padding: '8px 18px' }}>
                       {busy ? 'Starting…' : `Yes, ${ACTION_LABEL[confirming].toLowerCase()}`}
                     </button>
                     <button type="button" className="btn-secondary" onClick={() => setConfirming(null)} disabled={busy} style={{ padding: '8px 18px' }}>
@@ -427,7 +427,7 @@ export default function TransportPanel() {
                 {busy ? 'Working…' : 'Preview — change nothing'}
               </button>
               {state.canEnable && (
-                <button type="button" className="btn-primary" onClick={() => setConfirming('enable')} disabled={busy || state.runInProgress} style={{ padding: '10px 20px' }}>
+                <button type="button" className="btn-primary readonly-allowed" onClick={() => setConfirming('enable')} disabled={busy || state.runInProgress} style={{ padding: '10px 20px' }}>
                   Turn HTTPS on
                 </button>
               )}

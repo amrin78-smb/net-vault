@@ -657,11 +657,33 @@ table thead tr th {
    request is in flight). The API side was always correct: POST /api/license
    deliberately does not call `checkWriteAllowed()`, so only the UI was locked.
 
-   Rule for anything added here: a control that is part of RESTORING the licence
-   must carry `.license-action`. Nothing else should. */
-body[data-readonly="true"] .btn-primary:not(.license-action),
-body[data-readonly="true"] button[type="submit"]:not(.license-action),
-body[data-readonly="true"] .btn-danger:not(.license-action),
+   ⛔ SECOND EXEMPTION, ADDED 1.65.7 — `.readonly-allowed`, FOR ADMINISTRATION
+   AND RECOVERY. 1.65.5 removed the licence gate from the user-management API so
+   that a lapsed licence could not stop an administrator being added or a
+   COMPROMISED ACCOUNT being deleted. It changed nothing here, so the Delete
+   button stayed `pointer-events: none` and the release note claiming otherwise
+   was false as shipped. The server half of a two-sided gate was fixed — the
+   identical mistake this very comment records from the last time.
+   `.license-action` still means exactly what it says (restores the licence).
+   `.readonly-allowed` means "administering or REPAIRING this installation",
+   which is now the policy in `app/api/users/route.ts`: the licence sells
+   `modules` and `maxDevices`, so it may take away product data entry and must
+   not take away the ability to fix the install or revoke access.
+
+   ⛔ THIS RULE IS COSMETIC; THE API IS THE BOUNDARY. Every product-data write
+   still calls `checkWriteAllowed()` and 403s when expired
+   (`tests/systemSeams.test.ts` asserts which routes do and do not). So an
+   exemption here can at worst turn a dead button into an honest error — it
+   cannot grant anything the API refuses. Do NOT reason about it as a
+   permission.
+
+   Rule for anything added here: a control that RESTORES THE LICENCE carries
+   `.license-action`; one that ADMINISTERS OR REPAIRS THE INSTALLATION carries
+   `.readonly-allowed`; one that ENTERS PRODUCT DATA (devices, sites, circuits,
+   imports) carries neither and stays frozen. */
+body[data-readonly="true"] .btn-primary:not(.license-action):not(.readonly-allowed),
+body[data-readonly="true"] button[type="submit"]:not(.license-action):not(.readonly-allowed),
+body[data-readonly="true"] .btn-danger:not(.license-action):not(.readonly-allowed),
 /* .btn-destructive was added in the UI pass to give destructive
    confirmations their own style, replacing .btn-primary in the confirm
    dialog's danger branch. It MUST be listed here too: without it, adding
@@ -669,7 +691,7 @@ body[data-readonly="true"] .btn-danger:not(.license-action),
    read-only mode - a delete stayed clickable on an expired licence
    precisely because it had been given a clearer style. Any new button
    class that performs a WRITE belongs in this list. */
-body[data-readonly="true"] .btn-destructive:not(.license-action) {
+body[data-readonly="true"] .btn-destructive:not(.license-action):not(.readonly-allowed) {
   opacity: 0.4;
   pointer-events: none;
   cursor: not-allowed;

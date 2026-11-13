@@ -497,7 +497,7 @@ export default function SingleSignOnPanel() {
         )}
 
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: 18, flexWrap: 'wrap' }}>
-          <button className="btn-primary" style={{ padding: '10px 24px' }} disabled={saving} onClick={save}>
+          <button className="btn-primary readonly-allowed" style={{ padding: '10px 24px' }} disabled={saving} onClick={save}>
             {saving ? 'Saving…' : 'Save single sign-on'}
           </button>
           <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
@@ -525,7 +525,7 @@ export default function SingleSignOnPanel() {
             title="Clear the tenant, the application id and the stored secret?"
             actions={
               <>
-                <button className="btn-danger" style={{ padding: '8px 16px' }} disabled={saving} onClick={turnOff}>
+                <button className="btn-danger readonly-allowed" style={{ padding: '8px 16px' }} disabled={saving} onClick={turnOff}>
                   {saving ? 'Clearing…' : 'Yes, clear all three'}
                 </button>
                 <button className="btn-secondary" style={{ padding: '8px 16px' }} disabled={saving} onClick={() => setConfirmingOff(false)}>
