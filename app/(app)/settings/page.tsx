@@ -2,7 +2,7 @@
 import { useToast, useConfirm } from '@/app/providers'
 import { Dialog, Icon, PageHead } from '@/components/system'
 import { RoleBadge } from '@/components/Badges'
-import { Suspense, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { STAGE_LABELS } from '@/app/components/UpdateFailureBanner'
@@ -20,6 +20,10 @@ import ConsoleAddressPanel from '@/components/settings/ConsoleAddressPanel'
 import CertificatePanel from '@/components/settings/CertificatePanel'
 import TransportPanel from '@/components/settings/TransportPanel'
 import SingleSignOnPanel from '@/components/settings/SingleSignOnPanel'
+// The Notifications panel below is declared in THIS file, so it borrows the
+// same card/callout chrome those panels use rather than inventing a second
+// look for the same kind of surface.
+import { Callout, PanelCard, PanelLoading, StatePill } from '@/components/settings/panelChrome'
 
 /**
  * Shell for the Add/Edit site dialogs.
@@ -430,12 +434,622 @@ const CURRENCIES = ['THB', 'USD', 'EUR', 'GBP', 'NOK', 'PLN', 'SGD', 'VND', 'GHS
  * to two of the three is reachable by URL but has no button, or has a button
  * that the deep-link guard then refuses. `console` and `certificate` are
  * admin+; `sso` is super_admin ONLY — see the filters on the nav below, which
- * are the same shape as the existing license/updates ones.
+ * are the same shape as the existing license/updates ones. `notifications` is
+ * super_admin ONLY for the same reason `sso` is: it holds a credential the
+ * whole suite sends mail with.
  */
 type SettingsTab =
-  'general' | 'console' | 'certificate' | 'https' | 'sso' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about'
+  'general' | 'console' | 'certificate' | 'https' | 'notifications' | 'sso' | 'users' | 'sites' | 'security' | 'license' | 'updates' | 'about'
 const ADMIN_TABS: SettingsTab[] =
-  ['general', 'console', 'certificate', 'https', 'sso', 'users', 'sites', 'security', 'license', 'updates', 'about']
+  ['general', 'console', 'certificate', 'https', 'notifications', 'sso', 'users', 'sites', 'security', 'license', 'updates', 'about']
+
+// ══════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS — the one SMTP transport the whole suite sends through
+// ══════════════════════════════════════════════════════════════════════════
+//
+// NetVault is the hub, so it owns the TRANSPORT (host, port, TLS, credential)
+// and each satellite keeps its own From identity, recipients and alert
+// filters. That split is the whole design, and the copy below has to say it
+// plainly or an administrator will reasonably expect filling this one form to
+// move LogVault's recipient list here too. See
+// docs/nocvault-smtp-centralization-plan.md §3.
+//
+// ⛔ EVERY COMPONENT HERE IS AT MODULE TOP LEVEL. A component declared inside
+// another is a new component type on every render, so React remounts the tree
+// and the box being typed into loses focus on every keystroke. This panel is
+// almost entirely text inputs — there is nowhere for that bug to hide.
+//
+// ⛔ NO HARDCODED HEX AND NO LITERAL FONT SIZES. Tokens only, or none of this
+// flips in dark mode (CLAUDE.md, "Typography & design tokens").
+
+/** The shape `GET /api/suite/smtp` returns under `data`. The password is never among it. */
+type SuiteSmtp = {
+  host: string
+  port: number
+  secure: boolean
+  username: string
+  from_email: string
+  from_name: string
+  enabled: boolean
+  allow_self_signed: boolean
+  updated_at: string | null
+  /** Whether a password is STORED. The value itself never leaves the server. */
+  password_set: boolean
+  /** False when the server has no NEXTAUTH_SECRET, so it cannot encrypt one. */
+  secret_configured: boolean
+}
+
+/**
+ * ⛔ THE PLACEHOLDER THE SUITE ALREADY AGREED ON. DDIVault's form has written
+ * this exact string back for an unchanged password since its SMTP card
+ * shipped; the route treats it, an empty string and an absent field alike as
+ * "keep what is stored". It exists so correcting a typo in the username can
+ * never destroy a working credential.
+ */
+const SMTP_MASK = '********'
+
+const SMTP_EMPTY = {
+  host: '',
+  port: '587',
+  secure: false,
+  username: '',
+  from_email: '',
+  from_name: '',
+  enabled: false,
+  // ⛔ OFF. Never pre-checked, on any path — see the checkbox's own note.
+  allow_self_signed: false,
+}
+
+/** A labelled field. `htmlFor`/`id` are real here, so the label is clickable and announced. */
+function SmtpField({ id, label, hint, children }: {
+  id: string
+  label: React.ReactNode
+  hint?: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        style={{ display: 'block', fontSize: 'var(--text-base)', fontWeight: 500, color: 'var(--text-secondary)', marginBottom: '5px' }}
+      >
+        {label}
+      </label>
+      {hint && (
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '6px', lineHeight: 1.6 }}>
+          {hint}
+        </div>
+      )}
+      {children}
+    </div>
+  )
+}
+
+/** A checkbox with the sentence that explains what ticking it actually does. */
+function SmtpCheckbox({ id, checked, disabled, onChange, label, note }: {
+  id: string
+  checked: boolean
+  disabled: boolean
+  onChange: (next: boolean) => void
+  label: React.ReactNode
+  note?: React.ReactNode
+}) {
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-base)',
+          fontWeight: 500, color: 'var(--text-primary)', cursor: disabled ? 'default' : 'pointer',
+        }}
+      >
+        <input
+          id={id}
+          type="checkbox"
+          checked={checked}
+          disabled={disabled}
+          onChange={e => onChange(e.target.checked)}
+          style={{ accentColor: 'var(--primary)', width: 15, height: 15, flexShrink: 0, cursor: disabled ? 'default' : 'pointer' }}
+        />
+        {label}
+      </label>
+      {note && (
+        <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '6px 0 0 23px', lineHeight: 1.6 }}>
+          {note}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NotificationsPanel() {
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const [form, setForm] = useState({ ...SMTP_EMPTY })
+  const [password, setPassword] = useState('')
+  const [passwordSet, setPasswordSet] = useState(false)
+  const [passwordTouched, setPasswordTouched] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+
+  // ⛔ TRUE UNTIL THE SERVER SAYS OTHERWISE. Only an explicit `false` means the
+  // secret is missing; treating "did not say" as "missing" would bolt the form
+  // shut on an installation that is perfectly healthy.
+  const [secretConfigured, setSecretConfigured] = useState(true)
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
+
+  const [saving, setSaving] = useState(false)
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const [testTo, setTestTo] = useState('')
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
+
+  function set<K extends keyof typeof SMTP_EMPTY>(key: K, value: (typeof SMTP_EMPTY)[K]) {
+    setForm(prev => ({ ...prev, [key]: value }))
+    // The previous verdict described the values that were saved, not the ones
+    // now on screen — leaving it up would claim a save that no longer matches.
+    setSaveResult(null)
+  }
+
+  /** `quiet` re-reads without blanking the panel, so a save verdict stays readable. */
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setLoading(true)
+    setLoadError(null)
+    try {
+      const res = await fetch('/api/suite/smtp')
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error || `The SMTP settings could not be read (HTTP ${res.status}).`)
+      const d: Partial<SuiteSmtp> | null = body?.data ?? null
+      setSecretConfigured((d?.secret_configured ?? body?.secret_configured) !== false)
+      if (d) {
+        setForm({
+          host: d.host || '',
+          port: d.port != null ? String(d.port) : '587',
+          secure: d.secure === true,
+          username: d.username || '',
+          from_email: d.from_email || '',
+          from_name: d.from_name || '',
+          enabled: d.enabled === true,
+          allow_self_signed: d.allow_self_signed === true,
+        })
+        setPasswordSet(d.password_set === true)
+        setPassword(d.password_set === true ? SMTP_MASK : '')
+        setUpdatedAt(d.updated_at || null)
+      } else {
+        setForm({ ...SMTP_EMPTY })
+        setPasswordSet(false)
+        setPassword('')
+        setUpdatedAt(null)
+      }
+      setPasswordTouched(false)
+      setShowPassword(false)
+    } catch (e: unknown) {
+      setLoadError(e instanceof Error ? e.message : String(e))
+    } finally {
+      if (!quiet) setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { void load() }, [load])
+
+  async function save() {
+    if (!form.host.trim()) {
+      setSaveResult({ ok: false, text: 'Enter the SMTP host before saving. Nothing was sent.' })
+      return
+    }
+    const port = Number(form.port)
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      setSaveResult({ ok: false, text: 'Enter a port between 1 and 65535. Nothing was sent.' })
+      return
+    }
+    setSaving(true)
+    setSaveResult(null)
+    try {
+      const body: Record<string, unknown> = {
+        host: form.host.trim(),
+        port,
+        secure: form.secure,
+        username: form.username.trim(),
+        from_email: form.from_email.trim(),
+        from_name: form.from_name.trim(),
+        enabled: form.enabled,
+        allow_self_signed: form.allow_self_signed,
+      }
+      // ⛔ `password` IS OMITTED unless a new one was really typed. Focusing the
+      // box marks it touched and empties it, so an admin who clicks into it and
+      // straight back out still sends nothing — absent means keep the stored one.
+      if (passwordTouched && password !== '' && password !== SMTP_MASK) body.password = password
+
+      const res = await fetch('/api/suite/smtp', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data?.success !== true) {
+        setSaveResult({
+          ok: false,
+          text: data?.error || `The SMTP settings were not saved (HTTP ${res.status}). What is stored on the server is unchanged.`,
+        })
+        return
+      }
+      setSaveResult({
+        ok: true,
+        text: form.enabled
+          ? 'Saved. Every app in the suite will pick these settings up within a few minutes and send through this server from then on.'
+          : 'Saved, and suite-wide SMTP is still switched off. Each app keeps using its own mail settings until you enable it here.',
+      })
+      // Re-read so the stored-password state and the saved timestamp come from
+      // the server rather than from what this page assumed it just wrote.
+      await load(true)
+    } catch (e: unknown) {
+      setSaveResult({ ok: false, text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function sendTest() {
+    const to = testTo.trim()
+    if (!to) {
+      setTestResult({ ok: false, text: 'Enter an address to send the test to.' })
+      return
+    }
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/suite/smtp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to }),
+      })
+      // ⛔ READ 429 BEFORE THE BODY. The rate limiter may answer with no JSON at
+      // all, and "Unexpected end of JSON input" would read as a mail failure.
+      if (res.status === 429) {
+        const retry = res.headers.get('Retry-After')
+        setTestResult({
+          ok: false,
+          text: retry
+            ? `Too many test attempts, try again shortly — about ${retry} seconds. Nothing is wrong with the settings; the limit is on this button.`
+            : 'Too many test attempts, try again shortly. Nothing is wrong with the settings; the limit is on this button.',
+        })
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setTestResult({ ok: false, text: data?.error || `The test could not be run (HTTP ${res.status}).` })
+        return
+      }
+      if (data?.ok === true) {
+        setTestResult({
+          ok: true,
+          text: `The mail server accepted a message for ${to}. Delivery is now up to that server — if nothing arrives, look in the recipient's junk folder and in the mail server's own logs.`,
+        })
+      } else {
+        setTestResult({ ok: false, text: data?.error || 'The mail server refused the message and gave no reason.' })
+      }
+    } catch (e: unknown) {
+      setTestResult({ ok: false, text: e instanceof Error ? e.message : String(e) })
+    } finally {
+      setTesting(false)
+    }
+  }
+
+  if (loading) return <PanelCard title="Notifications"><PanelLoading /></PanelCard>
+
+  if (loadError) {
+    return (
+      <PanelCard title="Notifications">
+        <Callout tone="danger" title="The SMTP settings could not be read">
+          <div>{loadError}</div>
+          <div style={{ marginTop: 10 }}>
+            <button type="button" className="btn-secondary" onClick={() => void load()} style={{ padding: '8px 16px' }}>Try again</button>
+          </div>
+        </Callout>
+      </PanelCard>
+    )
+  }
+
+  const busy = saving || testing
+  // ⛔ WITHOUT THE SECRET THE PASSWORD CANNOT BE ENCRYPTED, so saving is
+  // refused here rather than storing a credential the server cannot protect.
+  const canSave = secretConfigured && !busy
+  const savedAt = updatedAt ? new Date(updatedAt) : null
+  const savedAtText = savedAt && !Number.isNaN(savedAt.getTime()) ? savedAt.toLocaleString() : null
+
+  return (
+    <div>
+      <PanelCard
+        title="Suite-wide SMTP"
+        description={
+          <>
+            This is the mail server every app in the NocVault suite sends through. Set it up once
+            here and LogVault, DDIVault and SpanVault all use it, so there is one host, one
+            credential and one place to change them when the mail server moves. Each app still
+            decides its own recipients, its own alert filters and its own sender name, so a
+            message from LogVault still arrives looking like it came from LogVault. An app that
+            already has SMTP settings of its own keeps using them until this one is enabled.
+          </>
+        }
+      >
+        {!secretConfigured && (
+          <div
+            role="alert"
+            style={{
+              background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)',
+              border: '1px solid var(--tint-warn-fg)', borderRadius: 'var(--radius-sm)',
+              padding: '12px 14px', marginBottom: '14px', fontSize: 'var(--text-base)', lineHeight: 1.6,
+            }}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>This server cannot store an SMTP password</div>
+            <div>
+              This installation has no <code style={{ fontFamily: 'var(--font-mono)', fontSize: 'var(--text-sm)' }}>NEXTAUTH_SECRET</code>,
+              and that value is what the SMTP password is encrypted with. Saving is switched off
+              until it is set, rather than writing a mail credential the server cannot protect.
+              Set it in the environment of the NetVault service, restart NetVault, then come back
+              to this page.
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          {form.enabled
+            ? <StatePill tone="ok">On — the suite sends through this server</StatePill>
+            : <StatePill tone="neutral">Off — each app uses its own mail settings</StatePill>}
+          {savedAtText && (
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>Last saved {savedAtText}</span>
+          )}
+        </div>
+
+        <SmtpCheckbox
+          id="smtp-enabled"
+          checked={form.enabled}
+          disabled={saving}
+          onChange={v => set('enabled', v)}
+          label="Enable suite-wide SMTP"
+          note="While this is off nothing changes anywhere — the settings below are stored and simply not used, and every app carries on with whatever mail server it was configured with."
+        />
+      </PanelCard>
+
+      <PanelCard
+        title="Mail server"
+        description="Where mail is handed over, and the account it is handed over as."
+      >
+        <div style={{ display: 'grid', gap: 18, maxWidth: 560 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+              <SmtpField id="smtp-host" label="SMTP host">
+                <input
+                  id="smtp-host"
+                  className="input"
+                  spellCheck={false}
+                  autoComplete="off"
+                  value={form.host}
+                  placeholder="smtp.office365.com"
+                  disabled={saving}
+                  onChange={e => set('host', e.target.value)}
+                />
+              </SmtpField>
+            </div>
+            <div style={{ flex: '0 0 auto' }}>
+              <SmtpField id="smtp-port" label="Port">
+                <input
+                  id="smtp-port"
+                  className="input input-sm"
+                  type="number"
+                  min={1}
+                  max={65535}
+                  inputMode="numeric"
+                  value={form.port}
+                  placeholder="587"
+                  disabled={saving}
+                  onChange={e => set('port', e.target.value)}
+                />
+              </SmtpField>
+            </div>
+          </div>
+
+          {/* ⛔ THE HONEST VERSION OF THIS CHECKBOX. "Use TLS" reads as "be
+              secure", so it gets ticked on port 587 — where it makes the
+              connection fail outright, because 587 is not an implicit-TLS port.
+              Naming the two cases is what stops that. */}
+          <SmtpCheckbox
+            id="smtp-secure"
+            checked={form.secure}
+            disabled={saving}
+            onChange={v => set('secure', v)}
+            label="Use implicit TLS (SMTPS)"
+            note="Tick this only for port 465, where the connection is encrypted from the first byte. Ports 587 and 25 start in the clear and upgrade with STARTTLS, which happens automatically — leave this off for them or the connection will fail. Turning it off does not mean the session is unencrypted."
+          />
+
+          <SmtpField
+            id="smtp-username"
+            label="Username"
+            hint="Leave both this and the password blank for a relay that accepts mail from this server without authenticating."
+          >
+            <input
+              id="smtp-username"
+              className="input"
+              spellCheck={false}
+              autoComplete="off"
+              value={form.username}
+              placeholder="alerts@company.com"
+              disabled={saving}
+              onChange={e => set('username', e.target.value)}
+            />
+          </SmtpField>
+
+          <SmtpField
+            id="smtp-password"
+            label={
+              <>
+                Password
+                {passwordSet && !passwordTouched && <> <StatePill tone="ok" title="Stored on the server. It is never sent back to this page.">Stored</StatePill></>}
+              </>
+            }
+            hint={
+              passwordSet
+                ? <><strong style={{ color: 'var(--text-secondary)' }}>Leave this unchanged to keep the current password.</strong> It is never sent back to this page, so what you see is a placeholder, not the real value. Type here only to replace it.</>
+                : 'Stored encrypted. It is never shown again once saved.'
+            }
+          >
+            <div style={{ position: 'relative' }}>
+              <input
+                id="smtp-password"
+                className="input"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                spellCheck={false}
+                value={password}
+                placeholder={passwordSet ? SMTP_MASK : 'Enter the mailbox password'}
+                disabled={saving}
+                style={{ paddingRight: 58 }}
+                onFocus={() => {
+                  // Clear the mask on first focus so a new password is typed
+                  // into an empty box rather than appended to eight asterisks.
+                  if (passwordSet && !passwordTouched) { setPasswordTouched(true); setPassword('') }
+                }}
+                onChange={e => { setPasswordTouched(true); setPassword(e.target.value); setSaveResult(null) }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(p => !p)}
+                aria-label={showPassword ? 'Hide the password' : 'Show the password'}
+                style={{
+                  position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                  fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--primary)',
+                }}
+              >
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            {passwordTouched && password !== '' && passwordSet && (
+              <div style={{ fontSize: 'var(--text-sm)', color: 'var(--tint-warn-fg)', marginTop: 6 }}>
+                Saving now replaces the stored password.
+              </div>
+            )}
+          </SmtpField>
+
+          {/* ⛔ OFF BY DEFAULT, AND NEVER PRE-CHECKED. DDIVault did this
+              invisibly and always; making it a deliberate, labelled choice is
+              the point of moving it here. */}
+          <SmtpCheckbox
+            id="smtp-allow-self-signed"
+            checked={form.allow_self_signed}
+            disabled={saving}
+            onChange={v => set('allow_self_signed', v)}
+            label="Allow self-signed certificate"
+            note="This switches off certificate verification for the connection to the mail server, so a wrong or impersonated server is accepted without complaint. Leave it off unless your mail server presents a certificate from an internal CA this machine does not trust."
+          />
+        </div>
+      </PanelCard>
+
+      <PanelCard
+        title="Default sender identity"
+        description="Who mail from the hub appears to come from. Each app in the suite keeps its own From name and address, so its alerts still read as coming from that app — these two are the fallback for an app that has not set one, and what NetVault itself sends as."
+      >
+        <div style={{ display: 'grid', gap: 18, maxWidth: 560 }}>
+          <SmtpField id="smtp-from-email" label="From address">
+            <input
+              id="smtp-from-email"
+              className="input"
+              type="email"
+              spellCheck={false}
+              autoComplete="off"
+              value={form.from_email}
+              placeholder="nocvault@company.com"
+              disabled={saving}
+              onChange={e => set('from_email', e.target.value)}
+            />
+          </SmtpField>
+          <SmtpField
+            id="smtp-from-name"
+            label="From name"
+            hint="The display name beside the address in a recipient's inbox."
+          >
+            <input
+              id="smtp-from-name"
+              className="input"
+              spellCheck={false}
+              autoComplete="off"
+              value={form.from_name}
+              placeholder="NocVault"
+              disabled={saving}
+              onChange={e => set('from_name', e.target.value)}
+            />
+          </SmtpField>
+        </div>
+
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-light)', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={() => void save()}
+            disabled={!canSave}
+            style={{ padding: '10px 24px' }}
+          >
+            {saving ? 'Saving…' : 'Save SMTP settings'}
+          </button>
+          {!secretConfigured && (
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+              Saving is unavailable until the server can encrypt the password.
+            </span>
+          )}
+        </div>
+
+        {saveResult && (
+          <div style={{ marginTop: 14 }}>
+            <Callout tone={saveResult.ok ? 'ok' : 'danger'} title={saveResult.ok ? 'Saved' : 'Not saved'}>
+              {saveResult.text}
+            </Callout>
+          </div>
+        )}
+      </PanelCard>
+
+      <PanelCard
+        title="Send a test email"
+        description="The test uses the settings as they are SAVED on the server, not as they are typed above. Save first, then send, or you will be testing the previous configuration and reading the result as though it described the new one."
+      >
+        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap', maxWidth: 560 }}>
+          <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+            <SmtpField id="smtp-test-to" label="Send to">
+              <input
+                id="smtp-test-to"
+                className="input"
+                type="email"
+                spellCheck={false}
+                autoComplete="off"
+                value={testTo}
+                placeholder="you@company.com"
+                disabled={busy}
+                onChange={e => { setTestTo(e.target.value); setTestResult(null) }}
+              />
+            </SmtpField>
+          </div>
+          <button
+            type="button"
+            className="btn-secondary"
+            onClick={() => void sendTest()}
+            disabled={busy}
+            style={{ padding: '10px 20px' }}
+          >
+            {testing ? 'Sending…' : 'Send test email'}
+          </button>
+        </div>
+
+        {testResult && (
+          <div style={{ marginTop: 14 }}>
+            <Callout tone={testResult.ok ? 'ok' : 'danger'} title={testResult.ok ? 'The mail server accepted it' : 'The test did not send'}>
+              {testResult.text}
+            </Callout>
+          </div>
+        )}
+      </PanelCard>
+    </div>
+  )
+}
 
 function SettingsInner() {
   const { showToast } = useToast()
@@ -500,7 +1114,9 @@ function SettingsInner() {
       // it belongs in both too. `https` was the third, and this line is where
       // it was nearly missed: the nav filter alone would have left
       // /settings?tab=https open to an `admin` who can never see the button.
-      ? ADMIN_TABS.filter(x => (x !== 'sso' && x !== 'license' && x !== 'https') || isSuperAdmin)
+      // `notifications` is the fourth and is gated in both places from the
+      // start — it edits the SMTP credential the whole suite sends through.
+      ? ADMIN_TABS.filter(x => (x !== 'sso' && x !== 'license' && x !== 'https' && x !== 'notifications') || isSuperAdmin)
       : ['security']
     if (allowed.includes(t)) {
       setActiveTab(t as SettingsTab)
@@ -857,7 +1473,11 @@ function SettingsInner() {
             // this installation's address and transport. Single sign-on sits
             // under Access beside Users, because it decides WHO may sign in —
             // and it is the one entry here gated on super_admin alone.
-            ['System',   ['general', 'console', 'certificate', 'https', 'sites', 'updates', 'about']],
+            // Notifications is System, not Access: it is the suite's outbound
+            // mail transport — a fact about this installation, like the console
+            // address and the certificate are. It decides nothing about who may
+            // sign in.
+            ['System',   ['general', 'console', 'certificate', 'https', 'notifications', 'sites', 'updates', 'about']],
             ['Access',   ['users', 'sso']],
             ['Billing',  ['license']],
             ['Personal', ['security']],
@@ -877,6 +1497,10 @@ function SettingsInner() {
               // briefly offline. Reading the transport is admin+ (the GET), but
               // switching it is not.
               .filter(tab => tab !== 'https' || isSuperAdmin)
+              // ⛔ super_admin TOO. This form holds one password that every app
+              // in the suite sends mail with; an `admin` who could edit it
+              // could repoint the suite's mail at a server they control.
+              .filter(tab => tab !== 'notifications' || isSuperAdmin)
             if (visible.length === 0) return null
             return (
               <div key={group} className="settings-nav-group">
@@ -894,6 +1518,7 @@ function SettingsInner() {
                         : tab === 'console' ? 'Console address'
                         : tab === 'certificate' ? 'Certificate'
                         : tab === 'https' ? 'HTTPS'
+                        : tab === 'notifications' ? 'Notifications'
                         : tab === 'sso' ? 'Single sign-on'
                         : tab === 'users' ? 'Users & access'
                         : tab === 'sites' ? 'Organisation & sites'
@@ -1228,6 +1853,12 @@ function SettingsInner() {
           makes /settings?tab=https mean nothing for an `admin`. Turning the
           transport on or off restarts all four consoles. */}
       {activeTab === 'https' && isSuperAdmin && <TransportPanel />}
+
+      {/* NOTIFICATIONS TAB — ⛔ super_admin ONLY, checked on the CONTENT as
+          well as on the nav button and in the ?tab= allow-list above. The
+          nav filter alone is cosmetic; this is what makes
+          /settings?tab=notifications mean nothing for an `admin`. */}
+      {activeTab === 'notifications' && isSuperAdmin && <NotificationsPanel />}
 
       {/* SINGLE SIGN-ON TAB — ⛔ super_admin ONLY, and the role check is on the
           CONTENT, not only on the nav button: the nav filter hides the button

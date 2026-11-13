@@ -275,6 +275,35 @@ INSERT INTO app_settings (key, value) VALUES ('install_date',   NOW()::date::tex
 INSERT INTO app_settings (key, value) VALUES ('license_key',    '')                                  ON CONFLICT (key) DO NOTHING;
 INSERT INTO app_settings (key, value) VALUES ('license_status', 'trial')                             ON CONFLICT (key) DO NOTHING;
 
+-- ── Suite SMTP transport (hub-owned) ─────────────────────────────
+-- Single-row SMTP config for the whole NocVault suite: the hub owns the
+-- transport (host/port/secure/username/password) and each satellite keeps its
+-- own From identity — see docs/nocvault-smtp-centralization-plan.md.
+--
+-- ⛔ DELIBERATELY A DEDICATED TABLE, NOT app_settings KEYS. GET /api/settings
+-- takes NO session (the launcher and components/IdleTimeout.tsx fetch it
+-- unauthenticated for branding) and redacts exactly one key, `license_key`.
+-- Every other app_settings key is served to anonymous callers, so an
+-- `smtp_pass` key there would publish the SMTP password on the login surface.
+-- Note the asymmetry that makes this easy to get wrong: app_settings_public
+-- below is a 5-key branding allowlist, so the readonly diagnostic roles would
+-- have been safe — the leak would be in the HTTP route, not the grant.
+-- Readonly-role protection for this table lives with the other privilege
+-- blocks further down, AFTER the blanket GRANT SELECT ON ALL TABLES.
+CREATE TABLE IF NOT EXISTS smtp_config (
+    id                SERIAL PRIMARY KEY,
+    host              TEXT NOT NULL,
+    port              INT NOT NULL DEFAULT 587,
+    secure            BOOLEAN DEFAULT FALSE,
+    username          TEXT,
+    password          TEXT,                     -- AES-256-GCM encrypted via lib/credStore.ts
+    from_email        TEXT NOT NULL,
+    from_name         TEXT DEFAULT 'NocVault',
+    enabled           BOOLEAN DEFAULT FALSE,
+    allow_self_signed BOOLEAN DEFAULT FALSE,
+    updated_at        TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- ── Agent registry (NocVault Agents Phase 2 — hub control plane) ──
 -- The hub owns the canonical fleet registry; the data plane never touches
 -- these tables. `agents` MUST be created before the tables that reference it.
@@ -874,6 +903,57 @@ BEGIN
   END IF;
 EXCEPTION WHEN OTHERS THEN
   RAISE WARNING 'SECURITY: app_settings_public REVOKE/GRANT for nocvault_readonly/claude_readonly FAILED (%). app_settings.value (incl. license_key) may still be exposed to those roles — investigate and re-run this schema file immediately.', SQLERRM;
+END
+$$;
+
+-- ── smtp_config: filtered view excluding the encrypted password ─────────────
+-- The hub owns the suite's SMTP transport (docs/nocvault-smtp-centralization-
+-- plan.md). smtp_config.password is AES-256-GCM encrypted via lib/credStore.ts,
+-- but the rest of the row (host/port/secure/username/from_email/from_name/
+-- enabled/allow_self_signed/updated_at) is genuinely useful for diagnostics —
+-- confirming SMTP is configured and enabled and which host/port it points at,
+-- without ever reading the secret. `username` is kept: it is the SMTP auth
+-- username (typically an email address), not itself a secret — the same
+-- reasoning DDIVault's smtp_config_public uses.
+--
+-- ⛔ WHY THIS LIVES HERE AND NOT BESIDE THE TABLE: the blanket
+-- `GRANT SELECT ON ALL TABLES IN SCHEMA public` earlier in the Permissions
+-- section covers smtp_config, and the LAST statement touching a privilege
+-- wins. A blanket grant running after this block would silently re-expose the
+-- password column with no error. This block must stay after it.
+--
+-- ⛔ THE COLUMN ORDER OF THIS VIEW IS APPEND-ONLY FOR EVER. CREATE OR REPLACE
+-- VIEW may only ADD columns at the END of the list; inserting one in the
+-- middle is read as RENAMING the column that was in that position:
+--   ERROR: cannot change name of view column "..." to "..."
+-- That exact failure hit production on 2026-11-05 with users_public (see the
+-- long comment above it in this file) — the apply aborted under ON_ERROR_STOP
+-- and every statement after it was skipped for that run. A future column goes
+-- at the END of this SELECT, never in the middle.
+CREATE OR REPLACE VIEW smtp_config_public AS
+SELECT id, host, port, secure, username, from_email, from_name, enabled, allow_self_signed, updated_at
+FROM smtp_config;
+
+-- smtp_config: its OWN DO block, independent of the users / app_settings /
+-- user_mfa_backup_codes / directory_signin_refusals blocks above — it must
+-- NOT be merged into any of them. This is required, not stylistic: a single
+-- failing statement inside a SHARED block aborts that block atomically, which
+-- in the 2026-07-23 incident recorded above silently skipped BOTH tables'
+-- REVOKE/GRANT and left them fully exposed to the readonly roles with no
+-- error. Independent blocks mean one failure cannot cascade into another
+-- table's protection.
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'nocvault_readonly') THEN
+    REVOKE SELECT ON smtp_config FROM nocvault_readonly;
+    GRANT SELECT ON smtp_config_public TO nocvault_readonly;
+  END IF;
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'claude_readonly') THEN
+    REVOKE SELECT ON smtp_config FROM claude_readonly;
+    GRANT SELECT ON smtp_config_public TO claude_readonly;
+  END IF;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'SECURITY: smtp_config_public REVOKE/GRANT for nocvault_readonly/claude_readonly FAILED (%). smtp_config.password (the AES-256-GCM encrypted SMTP password) may still be exposed to those roles — investigate and re-run this schema file immediately.', SQLERRM;
 END
 $$;
 

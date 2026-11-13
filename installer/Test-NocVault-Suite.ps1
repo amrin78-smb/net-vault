@@ -1373,6 +1373,35 @@ else {
     if ($script:PgExit -eq 0 -and $mfaLeak -eq "0") { Ok "users_public exposes no MFA columns (secret not readable by diagnostics)" } else { Bad ("users_public LEAKS MFA columns (got '" + $mfaLeak + "')") }
     $aset = Pg "netvault" "SELECT count(*) FROM app_settings;"
     if ($script:PgExit -eq 0) { Ok ("app_settings present (" + $aset + " keys)") } else { Bad "app_settings unreadable" }
+
+    # Suite-wide SMTP, owned by the hub: one SMTP server configured once for all
+    # four apps instead of separately in each. Two objects back it - the
+    # smtp_config base table (whose password column holds an AES-256-GCM
+    # ciphertext) and the smtp_config_public view, which is every column EXCEPT
+    # that one and is what the readonly diagnostic roles are allowed to read.
+    #
+    # EXISTENCE IS ASSERTED HERE, SEPARATELY FROM THE GRANTS BELOW, ON PURPOSE.
+    # The REVOKE/GRANT block for these sits after a CREATE OR REPLACE VIEW in
+    # schema.sql, and on 2026-11-05 exactly that shape (a column-order error in
+    # users_public) aborted a whole schema apply under ON_ERROR_STOP and
+    # silently skipped every privilege block after it. A fresh install where the
+    # SMTP block never ran has to FAIL the tester rather than pass quietly, and
+    # the grant checks below cannot deliver that on their own:
+    # has_table_privilege on a table that does not exist just ERRORS, which is
+    # indistinguishable from "locked down" unless something checks first.
+    $smtpTbl = Pg "netvault" "SELECT to_regclass('public.smtp_config') IS NOT NULL;"
+    if ($smtpTbl -eq "t") { Ok "netvault.smtp_config table exists (suite-wide SMTP, hub-owned)" }
+    else { Bad ("netvault.smtp_config table MISSING (got '" + $smtpTbl + "') - schema.sql never applied its SMTP block, so suite-wide SMTP cannot be configured") }
+    $smtpVw = Pg "netvault" "SELECT to_regclass('public.smtp_config_public') IS NOT NULL;"
+    if ($smtpVw -eq "t") { Ok "netvault.smtp_config_public view exists (password-free projection)" }
+    else { Bad ("netvault.smtp_config_public view MISSING (got '" + $smtpVw + "') - the readonly diagnostic roles have no safe way to read SMTP config") }
+    # The view is the ONLY thing between a diagnostic role and the encrypted SMTP
+    # password, so assert it really drops that column instead of assuming the
+    # projection was written correctly (same reasoning as the users_public MFA
+    # check above - a column allowlist still has to be verified).
+    $smtpLeak = Pg "netvault" "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='smtp_config_public' AND column_name='password';"
+    if ($script:PgExit -eq 0 -and $smtpLeak -eq "0") { Ok "smtp_config_public exposes no password column (SMTP secret not readable by diagnostics)" }
+    else { Bad ("smtp_config_public LEAKS the password column (got '" + $smtpLeak + "')") }
     # agent_registry — NocVault Agents Phase 2 hub control plane (netvault 1.24.0).
     # ROLE-SCOPED: the netvault app role must be able to SELECT each of the 4 tables.
     # agent_commands (Phase 4a poll-carried command channel) is included below —
@@ -1548,16 +1577,29 @@ else {
         @{ Db="ddivault";  Tbl="app_settings" },
         @{ Db="spanvault"; Tbl="app_settings" },
         @{ Db="netvault";  Tbl="users" },
-        @{ Db="netvault";  Tbl="app_settings" }
+        @{ Db="netvault";  Tbl="app_settings" },
+        # Suite-wide SMTP on the hub. Same shape as DDIVault's: the password
+        # column is an AES-256-GCM ciphertext, so the base table is revoked and
+        # the roles read smtp_config_public instead. Existence of both objects is
+        # asserted earlier in this section - a missing table would otherwise show
+        # up here only as a psql error.
+        @{ Db="netvault";  Tbl="smtp_config" }
     )
     $vwOk = $true; $vwBad = @()
     foreach ($v in $secView) {
         $base = Pg $v.Db "SELECT has_table_privilege('nocvault_readonly','$($v.Tbl)','SELECT');"
+        $baseExit = $script:PgExit
         $pub  = Pg $v.Db "SELECT has_table_privilege('nocvault_readonly','$($v.Tbl)_public','SELECT');"
-        if ($base -ne "f") { $vwOk = $false; $vwBad += ($v.Db + "." + $v.Tbl + " base READABLE") }
-        if ($pub  -ne "t") { $vwOk = $false; $vwBad += ($v.Db + "." + $v.Tbl + "_public NOT readable/missing") }
+        $pubExit = $script:PgExit
+        # A privilege check on an object that does not exist ERRORS - it does not
+        # answer 'f'. Report that as MISSING rather than letting it masquerade as
+        # a readable base table (or as a missing grant on the view).
+        if ($baseExit -ne 0 -or $base -eq "") { $vwOk = $false; $vwBad += ($v.Db + "." + $v.Tbl + " base table MISSING (privilege check errored)") }
+        elseif ($base -ne "f") { $vwOk = $false; $vwBad += ($v.Db + "." + $v.Tbl + " base READABLE") }
+        if ($pubExit -ne 0 -or $pub -eq "") { $vwOk = $false; $vwBad += ($v.Db + "." + $v.Tbl + "_public view MISSING (privilege check errored)") }
+        elseif ($pub -ne "t") { $vwOk = $false; $vwBad += ($v.Db + "." + $v.Tbl + "_public NOT readable") }
     }
-    if ($vwOk) { Ok "nocvault_readonly reads the filtered *_public views (app_settings/api_keys/smtp_config/users) but NOT the secret base tables" }
+    if ($vwOk) { Ok "nocvault_readonly reads the filtered *_public views (app_settings, api_keys, users, and smtp_config in BOTH ddivault and netvault) but NOT the secret base tables behind them" }
     else { Bad ("SECURITY REGRESSION or missing view: " + ($vwBad -join ', ')) }
 }
 

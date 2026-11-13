@@ -153,3 +153,32 @@ internal group structure inside a product with no use for it (and we never recei
 credential, but it holds the email address of every refused person plus their group memberships, and
 this file's rule is that a new table holding named people is never covered by the blanket grant's
 precedent. No `_public` view: the only reader is the Settings panel, through `netvault`.
+
+## `smtp_config` — hub-owned suite SMTP transport (1.65.0)
+`smtp_config (id, host, port, secure, username, password, from_email, from_name, enabled,
+allow_self_signed, updated_at)` — a single row. NetVault had **no SMTP of any kind** before this;
+LogVault, DDIVault and SpanVault each carried their own, in three different storage shapes. The hub
+now owns the TRANSPORT and each satellite keeps its own From identity. See
+`docs/nocvault-smtp-centralization-plan.md`.
+
+⛔ **DELIBERATELY A TABLE, NOT `app_settings` KEYS — and the reason is in the ROUTE, not the grant.**
+`app/api/settings/route.ts`'s GET takes **no session** (the launcher and `components/IdleTimeout.tsx`
+fetch it unauthenticated for branding) and redacts exactly one key, `license_key`. Any other key is
+served to anonymous callers, so an `smtp_pass` key there would publish the SMTP password on the login
+surface. Note the asymmetry that makes this easy to get wrong: `app_settings_public` is a 5-key
+branding allowlist, so the diagnostic roles would have been fine — checking only the view would have
+cleared a design that leaks to the whole internet.
+
+`password` is AES-256-GCM, encrypted by `lib/credStore.ts`, whose on-disk format is **byte-compatible
+with `ddivault/collector/credStore.js`** so a satellite can decrypt what the hub wrote. That
+compatibility is pinned by a fixed vector in `tests/credStore.test.ts` — see `lib.md`.
+
+**Privilege note:** `smtp_config_public` exposes every column except `password`; both diagnostic roles
+are REVOKEd off the base table and GRANTed the view, in **its own `DO $$` block**, placed AFTER the
+blanket `GRANT SELECT ON ALL TABLES` (last grant wins). Column order of the view is **append-only for
+ever** — `CREATE OR REPLACE VIEW` reads a mid-list insert as a RENAME, which is what aborted the whole
+apply under `ON_ERROR_STOP` on 2026-11-05 with `users_public`. Asserted in `Test-NocVault-Suite.ps1`.
+
+`allow_self_signed` has no DDIVault counterpart: it turns DDIVault's invisible, unconditional
+`tls: { rejectUnauthorized: false }` into an explicit, off-by-default choice. It ships in this table
+from the start so Phase 5's DDIVault fix needs no migration.

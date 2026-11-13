@@ -419,3 +419,38 @@ One shared answer to "is the TLS front door there, and running", used by four ro
   is not consistent across runtimes.
 - A non-2xx is an ANSWER and is never retried; only the failure to get one is.
 - `timeoutMs` exists for the tests (`tests/suiteProbe.test.ts`) — production callers omit it.
+
+### `lib/credStore.ts` + `lib/mailer.ts` (NEW, 1.65.0 — hub-owned suite SMTP)
+
+**`lib/credStore.ts`** — `credSecretConfigured()`, `encryptCred()`, `decryptCred()`,
+`isEncryptedCred()`. AES-256-GCM, key = `sha256(NEXTAUTH_SECRET)`, stored as
+`ivHex:authTagHex:ciphertextHex`.
+- ⛔ **THE FORMAT IS A CROSS-APP CONTRACT, not an implementation detail.** It is byte-compatible
+  with `ddivault/collector/credStore.js` so a satellite can decrypt what the hub wrote. Pinned by a
+  FIXED VECTOR in `tests/credStore.test.ts` produced by running DDIVault's own module. If that test
+  fails, the satellites can no longer read the hub's SMTP password — restore compatibility, never
+  regenerate the vector.
+- ⛔ **It deliberately does NOT throw at module load when the secret is missing, unlike DDIVault's
+  copy.** DDIVault's backs a service that may legitimately refuse to start; this one is imported by
+  Next.js route handlers, where an import-time throw takes down unrelated pages. The failure lives on
+  the WRITE path: `encryptCred` throws, `decryptCred` returns `''` and never does.
+- Note `lib/mfa.ts` is a *different* AES-256-GCM helper with a `v1:base64` format. That one is
+  NetVault-internal and must not be unified with this one — only this format crosses app boundaries.
+
+**`lib/mailer.ts`** — `SmtpConfig`, `transportOptions()`, `fromHeader()`, `mailErrorSummary()`,
+`sendMail()`, `renderTestEmailHtml()`. NetVault's first and only mail module.
+- ⛔ `mailErrorSummary` is the disclosure boundary. nodemailer's `err.message` routinely embeds the
+  SMTP host, port, configured username and the server's verbatim auth rejection — returning it turns
+  an admin test button into an internal port scanner (recorded bugs in BOTH LogVault and SpanVault).
+  Only a `code`/`responseCode`-derived string leaves the process, and even that is filtered through
+  `[^A-Za-z0-9_-]` and clamped to 16 chars so a host-shaped value planted in `.code` cannot reassemble.
+- ⛔ `secure` is the CONFIGURED field, never derived from `port === 465`. LogVault and SpanVault both
+  derive it, which leaves a relay on 25/2525 with STARTTLS no correct setting.
+- ⛔ TLS verification is ON unless `allowSelfSigned === true` — a strict identity check, so `'true'`,
+  `1` or `'yes'` from a JSON body or DB column cannot disable it. `transportOptions` OMITS the `tls`
+  key entirely rather than passing `rejectUnauthorized: true`, so a future nodemailer default is not
+  silently overridden. Contrast DDIVault, which disables verification unconditionally and invisibly.
+- ⛔ Never use nodemailer's message-level `raw` option (GHSA-p6gq-j5cr-w38f) — it bypasses
+  `disableFileAccess`/`disableUrlAccess`.
+- `sendMail` takes a FULLY RESOLVED `SmtpConfig`: no DB read, no decryption, no hub-vs-local
+  precedence. The caller supplies those.

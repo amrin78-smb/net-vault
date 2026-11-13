@@ -171,3 +171,31 @@ product could save a change it could not apply.
   the closing banner "HTTPS was NOT enabled" mapped straight to `reverted`, so EVERY real enable
   with a failing gate rendered a paragraph asserting a four-console cutover and rollback that had
   not happened — and `refused` was unreachable outside Preview.
+
+### `NotificationsPanel` — Settings → Notifications (super_admin, 1.65.0)
+⛔ **Defined INSIDE `app/(app)/settings/page.tsx`, not under `components/settings/`** — unlike
+`TransportPanel`/`SingleSignOnPanel`. It borrows that directory's chrome (`Callout`, `PanelCard`,
+`PanelLoading`, `StatePill` from `@/components/settings/panelChrome`) but lives in the page file.
+Helpers `SmtpField` / `SmtpCheckbox` sit beside it at MODULE level — never nested inside the panel,
+per the suite-wide rule (a component defined in another component's body remounts on every keystroke
+and loses input focus).
+
+The one form that configures the SMTP transport for all four consoles. The hub owns
+host/port/secure/username/password; each satellite keeps its own recipients, alert filters and From
+identity — the panel copy says so, because an admin who thinks this replaces everything will go
+looking for the per-app settings and not find them.
+
+Behaviours worth keeping:
+- **The password is never fetched.** `password_set` drives a masked placeholder plus a "Stored" pill;
+  the field is sent on PUT only when actually touched AND non-empty AND not the mask, so clicking in
+  and out changes nothing.
+- **`secret_configured === false`** raises a `--tint-warn` banner and DISABLES saving — the server has
+  no `NEXTAUTH_SECRET`, so a password could not be encrypted. Note a `{ data: null }` response carries
+  no such field, and "unknown" deliberately does NOT lock the form.
+- **429 is read before `res.json()`** — a rate limiter may answer with no body — and the message says
+  the limit is on the button, not on the settings.
+- **"Allow self-signed certificate" is never pre-checked** (`=== true` on load) and carries its own
+  warning. It disables certificate verification; the point of surfacing it is that DDIVault does the
+  same thing invisibly and unconditionally.
+- The implicit-TLS hint names 465 vs 587/25-STARTTLS explicitly and says that leaving it off does not
+  mean unencrypted — admins get this wrong constantly.

@@ -152,6 +152,9 @@ GET /api/sso/spanvault [auth: getServerSession] [db] — mint SSO JWT, redirect 
 ## suite
 GET /api/suite/health [public] [external] — aggregate sibling apps' /api/health (cached 20s)
 GET /api/suite/stats [public] [external] — aggregate sibling apps' /api/stats (cached 20s)
+GET /api/suite/smtp [super_admin] — the hub-owned SMTP transport for the whole suite. ⛔ NEVER returns the password in ANY form (not the ciphertext, not a mask) — `password_set` is a boolean instead. Also returns `secret_configured` so the UI can say NEXTAUTH_SECRET is missing rather than failing mysteriously on save.
+PUT /api/suite/smtp [super_admin] — upsert the single row. A `password` that is absent/empty/`'********'` KEEPS the stored ciphertext; only a genuinely new value is re-encrypted. 503 (saving nothing) if encryptCred throws — never a plaintext fallback. MERGES: an omitted field keeps its stored value. Audited via recordSystemChanges(prefix 'smtp'); ⛔ the password is recorded as `(set)`/`(not set)`/`(set — replaced)` BY THIS ROUTE, because lib/systemAudit.ts's VALUE_NEVER_RECORDED is keyed on the setting name and lists only the three Entra keys — an `smtp:` value would be written to audit_log verbatim.
+POST /api/suite/smtp/test [super_admin] — send a test message using the SAVED config (save, then test). Works while `enabled` is false, so an admin can verify before switching it on. ⛔ RATE-LIMITED 5/10min per IP: "connect to an arbitrary host:port and report what happened" is a port scanner even behind super_admin. A failed send is 200 + `{ok:false}` — the request was valid; the relay's refusal is the answer. The error is sanitized by mailErrorSummary before it leaves.
 
 ## system
 GET /api/system/enrich-eol/latest [auth] [db] — most recent completed EOL enrichment job summary
