@@ -2,9 +2,22 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { requireEol } from '@/lib/entitlements'
+import { checkWriteAllowed } from '@/app/api/license/route'
 import { query } from '@/lib/db'
 import pool from '@/lib/db'
 import { ensureEolSchema } from '@/lib/eolEnrich'
+
+// ⛔ THE LICENCE GATE BELONGS HERE. These routes write `devices.lifecycle_status`
+// — product data, the class that stays frozen when the licence is expired or
+// unlicensed. Every other writer of that column (`/api/devices`,
+// `/api/devices/[id]`, `/api/devices/bulk`) calls `checkWriteAllowed()`; these
+// two did not, so accepting an EOL recommendation was a working way to change a
+// device's lifecycle status on an unlicensed install while editing the same
+// field on the device page was refused.
+//
+// Contrast with `/api/users` and `/api/agents/enroll`, which deliberately do NOT
+// gate: administering the install and recovering access must never depend on the
+// licence. Changing inventory is not that.
 
 async function requireSuperAdmin() {
   const session = await getServerSession(authOptions)
@@ -34,6 +47,7 @@ export async function POST(req: NextRequest) {
   if (guard.error) return guard.error
   const gate = await requireEol()
   if (gate) return gate
+  const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock
 
   try {
     await ensureEolSchema()

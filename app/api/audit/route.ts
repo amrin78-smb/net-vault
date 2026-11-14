@@ -4,6 +4,9 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db'
 import { resolvePaging } from '@/lib/pagination'
 
+/** What an admin sees in place of a super_admin-only audited value. */
+const REDACTED = '(hidden — super admin only)'
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -68,8 +71,36 @@ export async function GET(req: NextRequest) {
     query(`SELECT DISTINCT u.id, u.name FROM audit_log a LEFT JOIN users u ON u.id = a.changed_by WHERE u.id IS NOT NULL ORDER BY u.name`),
   ])
 
+  // ⛔ THE SUITE MAIL SERVER'S DETAILS ARE super_admin-ONLY, AND THE AUDIT LOG
+  // IS A READ PATH FOR THEM.
+  //
+  // `PUT /api/suite/smtp` writes a `smtp:<field>` row per changed field, and it
+  // is careful: the password is recorded as a presence sentinel, never a value.
+  // But `host`, `username` and `from_email` ARE written verbatim, by design —
+  // "somebody pointed the suite at a different relay" is exactly the event an
+  // auditor needs. The gate on that route is super_admin; the gate on THIS one
+  // is admin. So an admin who could not open the Mail server panel could read
+  // the whole configuration out of the audit log one field at a time, and watch
+  // every future change to it.
+  //
+  // The EVENT stays visible to an admin — that is what an audit log is for, and
+  // hiding "the mail server was changed" from an administrator would be its own
+  // kind of dishonesty. Only the two VALUES are withheld, and they are replaced
+  // with a marker that says so rather than being blanked, so the page shows
+  // "changed" and not "changed to nothing".
+  const isSuperAdmin = user.role === 'super_admin'
+  const logs = isSuperAdmin ? res.rows : res.rows.map((r: Record<string, unknown>) => {
+    const field = typeof r.field_name === 'string' ? r.field_name : ''
+    if (!field.startsWith('smtp:')) return r
+    // The password row is already a sentinel from the writer, not a value, so
+    // it is left exactly as it is — redacting a redaction reads as a second,
+    // different fact.
+    if (field === 'smtp:password') return r
+    return { ...r, old_value: r.old_value == null ? null : REDACTED, new_value: r.new_value == null ? null : REDACTED }
+  })
+
   return NextResponse.json({
-    logs: res.rows,
+    logs,
     total: parseInt(count.rows[0].count),
     users: users.rows,
   })

@@ -5,7 +5,7 @@ import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { query } from '@/lib/db.ts'
 import { credSecretConfigured, decryptCred } from '@/lib/credStore.ts'
 import { mailErrorSummary, renderTestEmailHtml, sendMail, type SmtpConfig } from '@/lib/mailer.ts'
-import { checkRateLimit, getClientIp } from '@/lib/rateLimit.ts'
+import { checkRateLimit } from '@/lib/rateLimit.ts'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,8 +88,22 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const ip = getClientIp(req)
-  const rl = checkRateLimit(`suite-smtp-test:${ip}`, TEST_RATE_LIMIT)
+  // ⛔ KEYED ON THE ACTOR, NOT THE CLIENT IP. `getClientIp` reads
+  // `x-forwarded-for` first and this app is reachable directly on the LAN, so
+  // the one thing the caller fully controls was the one thing the bucket was
+  // keyed on: a new header value per request meant a fresh bucket per request
+  // and no limit at all. The session id cannot be spoofed — it comes out of the
+  // signed cookie the gate above has already verified — and it is also the
+  // honest unit here, because this throttle exists to stop ONE super admin
+  // turning the relay into a mail cannon, not to stop a host.
+  //
+  // ⛔ AND THE IP IS NOT IN THE KEY AT ALL, not even as a second term. Anything
+  // the caller controls that appears in the key is an escape from the bucket,
+  // because varying it varies the key — "the actor id is still in there" buys
+  // nothing. A session with no id falls back to one shared bucket, which throttles
+  // more than intended rather than less.
+  const actor = String((session as { user?: { id?: unknown } }).user?.id ?? 'unknown')
+  const rl = checkRateLimit(`suite-smtp-test:${actor}`, TEST_RATE_LIMIT)
   if (rl.limited) {
     return NextResponse.json(
       { ok: false, error: 'Too many test messages — try again in a few minutes.' },

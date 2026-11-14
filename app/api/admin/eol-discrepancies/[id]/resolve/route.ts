@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { requireEol } from '@/lib/entitlements'
+import { checkWriteAllowed } from '@/app/api/license/route'
 import { query } from '@/lib/db'
 import pool from '@/lib/db'
 import { ensureEolSchema } from '@/lib/eolEnrich'
@@ -33,6 +34,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (guard.error) return guard.error
   const gate = await requireEol()
   if (gate) return gate
+  // Writes `devices.support_end_date` / `os_eol_date` — product data, which stays
+  // frozen on an unlicensed install. Found by the class-level walk in
+  // tests/systemSeams.test.ts, not by the hand-maintained list beside it.
+  const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock
 
   try {
     await ensureEolSchema()

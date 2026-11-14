@@ -959,3 +959,76 @@ including that site controls stay frozen.
 ⛔ The CSS rule is **cosmetic; the API is the boundary.** Every product-data write still calls
 `checkWriteAllowed()`. An exemption here can at worst turn a dead button into an honest error — do
 not reason about it as a permission.
+
+---
+
+## ⛔ A hand-maintained guard list cannot find the route that never imported the guard
+
+`tests/systemSeams.test.ts` had two assertions about `checkWriteAllowed()`: a GATED/UNGATED list,
+and a walk that catches a route gating without being classified. Both are blind to the same thing
+— a route that writes product data and simply **never mentions the gate**. That is how three
+shipped ungated: `admin/eol-recommendations/bulk`, `.../[id]/resolve` and
+`admin/eol-discrepancies/[id]/resolve`. The first two were found by a sweep; the third was found
+by the test added to close the class, on its first run, *after* the sweep had finished.
+
+The test now works the other way round: it matches the **SQL shape**
+(`UPDATE|INSERT INTO|DELETE FROM devices|sites|circuits`) across every `app/api/**/route.{ts,tsx,js}`
+and requires each hit to gate or be in an `EXEMPT` set with a written reason. A SQL statement in a
+route file cannot be refactored out of sight the way an import can. Mutation-verified: removing the
+gate from `devices/bulk` fails it.
+
+⛔ Two narrower traps it also fixed. The walk keyed on the literal filename `'route.ts'`, so
+`route.tsx` and `route.js` — both valid Next.js handlers — were invisible to it. And `lib/`
+writes are **not** seen by a route-level walk at all: the one real case,
+`lib/eolEnrich.ts`, is deliberately ungated (it runs from a scheduled task, has no caller to
+hand a 403 to, and only copies vendor dates onto existing inventory) and that reasoning is
+written at the top of that file. If background enrichment ever must be gated, gate
+`/api/system/enrich-eol`, not the lib — a lib that silently no-ops is the worse failure.
+
+## ⛔ A super_admin-only setting has more than one read path — the audit log is one
+
+`PUT /api/suite/smtp` is super_admin, and correctly records the mail password as a presence
+sentinel rather than a value. But it records `host`, `username` and `from_email` **verbatim**, by
+design — "somebody repointed the suite at a different relay" is the event an auditor needs. And
+`GET /api/audit` gates at **admin**. So an admin who could not open the Mail server panel could
+read the whole configuration out of the audit log one field at a time, and watch every future
+change to it. `/api/audit` now replaces `old_value`/`new_value` on `smtp:*` rows with
+`(hidden — super admin only)` for a non-super_admin; the event stays visible, because hiding "the
+mail server was changed" from an administrator is its own kind of dishonesty.
+
+Checked for the class, not the instance: the other three `audit_log` readers are safe, and for a
+reason worth knowing — `recordSystemChanges` writes `device_id = NULL`, and
+`audit/device/[id]` filters `WHERE a.device_id = $1`, so system rows can never match it. The
+launcher's recent-activity feed selects `field_name` only, no values.
+
+## ⛔ `||` erases the difference between "not supplied" and "deliberately blank"
+
+`PUT /api/suite/smtp` merges: `str()` returns `null` for "the body did not say" and `''` for "the
+admin cleared the field". `const fromName = str(body.from_name) ?? (existing?.from_name || 'NocVault')`
+got the first half right and threw it away in the second: clearing the From name saved `''`
+correctly, and then the **next** save of any other field read that `''` as falsy and put
+`'NocVault'` back. The only way to keep a blank From name was to never touch the form again. A
+default belongs on the row that does not exist yet, not as a floor under one that does — so the
+stored value needs `??` too.
+
+## ⛔ A rate-limit bucket keyed on anything the caller controls is not a rate limit
+
+`lib/rateLimit.ts`'s `getClientIp()` reads `x-forwarded-for` first, and NetVault is reachable
+directly. So `checkRateLimit(\`suite-smtp-test:${ip}\`, ...)` handed out a fresh bucket per
+request for the cost of one header. Keyed on the session user id now — it comes out of the signed
+cookie the gate already verified, and it is the honest unit anyway (the throttle exists to stop
+one super admin becoming a mail cannon, not to stop a host).
+
+⛔ And the IP is **not** in the key as a second term either. Anything caller-controlled in the key
+is an escape from the bucket, because varying it varies the key; "the actor id is still in there"
+buys nothing.
+
+⛔ **The two remaining `getClientIp` buckets are UNAUTHENTICATED and therefore still bypassable**
+— `app/api/auth/mfa/precheck` and `app/api/agents/enroll`. They have no actor to key on. The
+precheck one accepts a password guess, and `authorize()` in `app/api/auth/[...nextauth]/route.ts`
+has **no rate limit and no per-account password lockout at all**, so NetVault currently has no
+effective password brute-force protection. (The MFA *code* path is fine — `lib/mfaGate.ts` keeps a
+per-user `mfa_locked_until` in the database, which cannot be spoofed.) Not fixed here because the
+fix is a real design decision, not a key change: either gate forwarded-header trust behind the
+`TRUST_PROXY_HEADERS` allowlist already KIV'd in CLAUDE.md, or add a per-account lockout — and a
+naive fallback to one shared bucket turns the limiter into a lockout lever anybody can pull.

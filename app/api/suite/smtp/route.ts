@@ -215,7 +215,14 @@ export async function PUT(req: NextRequest) {
   const host = str(body.host) ?? (existing?.host || '')
   const username = str(body.username) ?? (existing?.username || '')
   const fromEmail = str(body.from_email) ?? (existing?.from_email || '')
-  const fromName = str(body.from_name) ?? (existing?.from_name || 'NocVault')
+  // ⛔ `??` ON THE STORED VALUE TOO, NOT `||`. `str()` returns null for "the
+  // body did not say" and '' for "the admin cleared the field", and those must
+  // stay different all the way down. With `||` here, clearing the From name
+  // saved '' correctly — and then the NEXT save of any other field read that ''
+  // as falsy and silently put 'NocVault' back, so the only way to keep a blank
+  // From name was to never touch the form again. 'NocVault' is the default for
+  // a row that does not exist yet, not a floor under one that does.
+  const fromName = str(body.from_name) ?? (existing ? (existing.from_name ?? '') : 'NocVault')
   const secure = toBool(body.secure, Boolean(existing?.secure))
   const enabled = toBool(body.enabled, Boolean(existing?.enabled))
   const allowSelfSigned = toBool(body.allow_self_signed, Boolean(existing?.allow_self_signed))

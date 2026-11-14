@@ -437,6 +437,17 @@ function LauncherInner() {
     // NetVault is also the suite hub (identity, SSO, licence, mail transport). The
     // hub role is LABELLED here, never sized up — the four tiles stay equal because
     // the apps are licensed separately. Only the netvault card sets this.
+    //
+    // ⛔ THE HUB TREATMENT HAS NO UNLICENSED BRANCH, AND DOES NOT NEED ONE — but
+    // only because of an invariant two functions below: `isLicensed('netvault')`
+    // returns true unconditionally and `canAccess('netvault')` does too, so the
+    // one card that sets `hub` can never reach the not-licensed render path. The
+    // badge and the note sit inside the dimmed/greyscaled wrapper anyway; the
+    // "Suite settings" link does not, and it is the one that would be wrong to
+    // show beside a "Not licensed" button. If `hub` is ever set on a second card,
+    // or either of those two functions stops being unconditional, that link needs
+    // gating in the same change. Checked, not assumed: a sweep flagged this as a
+    // live leak and it is not one today.
     hub?: { badge: string; note: string; settingsHref: string; settingsLabel: string }
   }
 
@@ -721,14 +732,28 @@ function LauncherInner() {
                       ramp - the same rgba whites the description and the
                       not-licensed note already use - because --text-muted is a
                       light-background token and is near-unreadable on this navy. */}
-                  {card.hub && (
-                    <a href={card.hub.settingsHref} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginTop: '9px', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'rgba(255,255,255,0.55)', textDecoration: 'none' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.9)')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.55)')}>
-                      {card.hub.settingsLabel}
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-                    </a>
-                  )}
+                  {/* ⛔ THE SLOT IS RENDERED ON ALL FOUR CARDS, hidden where there
+                      is no hub role. Moving the link inside the card equalised the
+                      card HEIGHTS (grid stretch did the rest); it did not equalise
+                      where the "Open ..." buttons land, because the metrics block
+                      above takes `flex: 1` and absorbs the slack — so NetVault's
+                      CTA sat ~26px higher than its three siblings' and the row of
+                      primary buttons read as misaligned.
+                      `visibility: hidden` rather than a spacer of some measured
+                      height: it keeps the two cases the SAME markup, so changing
+                      this link's font size or padding moves all four cards together
+                      instead of silently reopening the gap. It is also removed from
+                      the accessibility tree and not focusable, which an opacity-0
+                      link would not be. */}
+                  <a
+                    href={card.hub ? card.hub.settingsHref : undefined}
+                    aria-hidden={card.hub ? undefined : true}
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '5px', marginTop: '9px', fontSize: 'var(--text-sm)', fontWeight: 500, color: 'rgba(255,255,255,0.55)', textDecoration: 'none', visibility: card.hub ? 'visible' : 'hidden' }}
+                    onMouseEnter={e => { if (card.hub) e.currentTarget.style.color = 'rgba(255,255,255,0.9)' }}
+                    onMouseLeave={e => { if (card.hub) e.currentTarget.style.color = 'rgba(255,255,255,0.55)' }}>
+                    {card.hub ? card.hub.settingsLabel : 'placeholder'}
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
+                  </a>
                   </>
                 ) : (
                   <div>

@@ -12,6 +12,33 @@
  * pg_trgm is OPTIONAL: if `CREATE EXTENSION IF NOT EXISTS pg_trgm` fails (e.g.
  * the app DB role lacks superuser/CREATE EXTENSION), fuzzy tiers degrade away —
  * exact + alias matching still work, and `fuzzyAvailable` reports false.
+ *
+ * ── ⛔ NO `checkWriteAllowed()` HERE, AND THAT IS DELIBERATE ────────────────
+ * The matching engine writes `devices.support_end_date`, `os_eol_date`,
+ * `eol_source`, `eol_confidence` and `eol_enriched_at`. Those are columns on
+ * `devices`, so a reasonable reading of the licence policy — product-data writes
+ * stay frozen when the licence is expired — says this should be gated, and
+ * `tests/systemSeams.test.ts` gates every ROUTE that writes these tables. Three
+ * such routes were found ungated and fixed in 1.65.8; this is not a fourth one
+ * that was missed.
+ *
+ * The difference is that this is not a request. It runs from the
+ * `NetVault-EnrichEol` scheduled task, and `checkWriteAllowed()` returns an HTTP
+ * response — there is no caller here to hand a 403 to. More to the point, it
+ * does not accept anything from anyone: it copies vendor end-of-life dates the
+ * customer already owns, from the bundled seed catalogue, onto devices that are
+ * already in the database. Freezing it would not withhold any product value a
+ * lapsed licence should withhold; it would just make the dates on existing
+ * inventory quietly rot, with nothing refused and nobody told. That is the
+ * failure mode the licence gate is least suited to.
+ *
+ * What a lapsed licence DOES stop is every way a human acts on this: the two
+ * `/api/admin/eol-recommendations/*` routes and
+ * `/api/admin/eol-discrepancies/[id]/resolve` all gate, so a recommendation
+ * cannot be accepted and a discrepancy cannot be applied. The engine proposes;
+ * only a licensed install can dispose. If this is ever revisited, the seam to
+ * gate is the `/api/system/enrich-eol` route that triggers the run, not this
+ * module — a lib that silently no-ops is the worse of the two.
  */
 
 import { query } from '@/lib/db'

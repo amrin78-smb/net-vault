@@ -2,10 +2,10 @@
 
 ## admin
 GET /api/admin/eol-coverage [auth] [db] — EOL inventory/seed coverage aggregates (super_admin)
-POST /api/admin/eol-discrepancies/[id]/resolve [auth] [db] — resolve manual-vs-seed EOL date conflict
+POST /api/admin/eol-discrepancies/[id]/resolve [auth] [db] [licence-gated] — resolve manual-vs-seed EOL date conflict. super_admin + requireEol + checkWriteAllowed (writes devices.support_end_date/os_eol_date = product data).
 GET /api/admin/eol-discrepancies [auth] [db] — list pending EOL date discrepancies (super_admin)
-POST /api/admin/eol-recommendations/[id]/resolve [auth] [db] — accept/ignore one status recommendation
-POST /api/admin/eol-recommendations/bulk [auth] [db] — bulk accept/ignore status recommendations
+POST /api/admin/eol-recommendations/[id]/resolve [auth] [db] [licence-gated] — accept/ignore one status recommendation. checkWriteAllowed since 1.65.8 (writes devices.lifecycle_status).
+POST /api/admin/eol-recommendations/bulk [auth] [db] [licence-gated] — bulk accept/ignore status recommendations. checkWriteAllowed since 1.65.8 (writes devices.lifecycle_status).
 GET /api/admin/eol-recommendations [auth] [db] — list pending EOL status recommendations (super_admin)
 PUT /api/admin/eol-seed/[id] [auth] [db] — edit a seed catalog entry
 DELETE /api/admin/eol-seed/[id] [auth] [db] — delete a seed catalog entry
@@ -36,7 +36,7 @@ POST /api/agents/[id]/revoke [auth] [db] — set revoked_at, status='revoked' (s
 
 ## audit
 GET /api/audit/device/[id] [auth] [db] — device audit log, site-scoped
-GET /api/audit [auth] [db] — recent-activity feed (?limit=) or full paginated audit log (admin).
+GET /api/audit [auth] [db] — recent-activity feed (?limit=, any authenticated user, field_name only — no values) or full paginated audit log (admin). ⛔ For a NON-super_admin the `old_value`/`new_value` of every `smtp:*` row is replaced with '(hidden — super admin only)': the mail server's host/username/From are super_admin-only on GET /api/suite/smtp, and this route was a read path around that gate. The EVENT stays visible; `smtp:password` is left alone because the writer already stored a sentinel, not a value.
   ⛔ `page` is CLAMPED via `lib/pagination.ts` with `fixedLimit: 50` (1.63.0) — `page=0` built a
   negative OFFSET, which PostgreSQL rejects, so a hand-typed query string answered 500.
 
@@ -154,7 +154,7 @@ GET /api/suite/health [public] [external] — aggregate sibling apps' /api/healt
 GET /api/suite/stats [public] [external] — aggregate sibling apps' /api/stats (cached 20s)
 GET /api/suite/smtp [super_admin] — the hub-owned SMTP transport for the whole suite. ⛔ NEVER returns the password in ANY form (not the ciphertext, not a mask) — `password_set` is a boolean instead. Also returns `secret_configured` so the UI can say NEXTAUTH_SECRET is missing rather than failing mysteriously on save.
 PUT /api/suite/smtp [super_admin] — upsert the single row. A `password` that is absent/empty/`'********'` KEEPS the stored ciphertext; only a genuinely new value is re-encrypted. 503 (saving nothing) if encryptCred throws — never a plaintext fallback. MERGES: an omitted field keeps its stored value. Audited via recordSystemChanges(prefix 'smtp'); ⛔ the password is recorded as `(set)`/`(not set)`/`(set — replaced)` BY THIS ROUTE, because lib/systemAudit.ts's VALUE_NEVER_RECORDED is keyed on the setting name and lists only the three Entra keys — an `smtp:` value would be written to audit_log verbatim.
-POST /api/suite/smtp/test [super_admin] — send a test message using the SAVED config (save, then test). Works while `enabled` is false, so an admin can verify before switching it on. ⛔ RATE-LIMITED 5/10min per IP: "connect to an arbitrary host:port and report what happened" is a port scanner even behind super_admin. A failed send is 200 + `{ok:false}` — the request was valid; the relay's refusal is the answer. The error is sanitized by mailErrorSummary before it leaves.
+POST /api/suite/smtp/test [super_admin] — send a test message using the SAVED config (save, then test). Works while `enabled` is false, so an admin can verify before switching it on. ⛔ RATE-LIMITED 5/10min PER ACTOR (session user id, NOT the IP — `getClientIp` reads x-forwarded-for, so an IP key was a fresh bucket per request): "connect to an arbitrary host:port and report what happened" is a port scanner even behind super_admin. A failed send is 200 + `{ok:false}` — the request was valid; the relay's refusal is the answer. The error is sanitized by mailErrorSummary before it leaves.
 
 ## system
 GET /api/system/enrich-eol/latest [auth] [db] — most recent completed EOL enrichment job summary

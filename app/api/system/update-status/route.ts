@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.65.8': [
+    "Accepting an end-of-life recommendation, or resolving a date discrepancy, changed a device's lifecycle status and support dates even while the licence was expired - the one thing the licence does restrict. Editing the same fields on the device page was correctly refused, so the restriction depended on which screen you used. All three of these actions now follow the same rule as the rest of the inventory.",
+    "The audit log showed an administrator the suite mail server's address, sign-in name and From address. Those details are deliberately limited to a super administrator on the Mail server page, so the audit log was a way around that. The entry still appears - who changed the mail server, and when - with the values withheld.",
+    "Clearing the From name on the mail server no longer silently puts 'NocVault' back the next time any other mail setting is saved.",
+    "The throttle on the mail server's test message could be sidestepped, and now counts per administrator instead.",
+    "On the launcher, the Open button on every tile now lines up with the others. NetVault's sat slightly higher because of its extra Suite settings link.",
+  ],
   '1.65.7': [
     "Correction to 1.65.5. That release said an expired licence no longer stops you adding an administrator or deleting an account that should no longer have access. The server was changed, but the buttons were not: every Save and Delete in Settings is greyed out and unclickable while a licence is expired, and only the Activate Licence button was exempt. The claim was wrong as shipped, and this release makes it true.",
     "User management, the certificate, HTTPS, the console address, sign-on, the suite mail server and your own 2FA now stay usable while a licence is expired, so an installation can always be repaired and access can always be revoked. Adding and editing sites, devices and circuits stays read-only, which is what the licence actually covers.",

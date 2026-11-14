@@ -52,6 +52,10 @@ const read = (rel: string) => fs.readFileSync(path.join(repo, rel), 'utf8')
  * were removed and fail on a correct file — which, tuned away, is how a guard
  * test ends up asserting nothing.
  */
+// Next.js route handlers may be route.ts, route.tsx or route.js. Any walk over
+// app/api that keys on one extension silently skips the others.
+const ROUTE_FILE = /^route\.(ts|tsx|js)$/
+
 const strip = (src: string) =>
   src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '')
 const code = (rel: string) => strip(read(rel))
@@ -859,6 +863,13 @@ test('⛔ the licence gate is on product data, and NOWHERE in hub administration
     'app/api/circuits/route.ts',
     'app/api/circuits/[id]/route.ts',
     'app/api/import/route.ts',
+    // Accepting an EOL recommendation or a discrepancy writes
+    // devices.lifecycle_status / support_end_date — the same product data the
+    // device routes above gate. All three were ungated until 1.65.8; the first
+    // two were found by the SMTP sweep, the third by the class-level walk below.
+    'app/api/admin/eol-recommendations/bulk/route.ts',
+    'app/api/admin/eol-recommendations/[id]/resolve/route.ts',
+    'app/api/admin/eol-discrepancies/[id]/resolve/route.ts',
   ]
   const UNGATED = [
     'app/api/users/route.ts',          // identity — see the note in that file
@@ -902,19 +913,72 @@ test('⛔ no route gates on the licence without being classified above', () => {
     'app/api/sites/[id]/route.ts', 'app/api/sites/manage/route.ts',
     'app/api/sites/import/route.ts', 'app/api/circuits/route.ts', 'app/api/circuits/[id]/route.ts',
     'app/api/import/route.ts',
+    'app/api/admin/eol-recommendations/bulk/route.ts',
+    'app/api/admin/eol-recommendations/[id]/resolve/route.ts',
+    'app/api/admin/eol-discrepancies/[id]/resolve/route.ts',
   ])
   const found: string[] = []
   const walk = (dir: string) => {
     for (const e of fs.readdirSync(path.join(repo, dir), { withFileTypes: true })) {
       const rel = `${dir}/${e.name}`
       if (e.isDirectory()) walk(rel)
-      else if (e.name === 'route.ts' && /checkWriteAllowed/.test(code(rel))) found.push(rel)
+      // ⛔ EVERY route file extension. Next.js accepts route.ts, route.tsx and
+      // route.js; keying on 'route.ts' alone meant a route could add the gate —
+      // or, in the walk below, write product data without it — and stay
+      // invisible to both assertions purely by its file extension.
+      else if (ROUTE_FILE.test(e.name) && /checkWriteAllowed/.test(code(rel))) found.push(rel)
     }
   }
   walk('app/api')
   const surprises = found.filter((f) => !known.has(f))
   assert.deepEqual(surprises, [],
     `these routes gate on the licence but are not classified in the test above — decide whether each produces product value (gate it, add it to the list) or is administration/recovery (remove the gate): ${surprises.join(', ')}`)
+})
+
+// ⛔ BOTH assertions above are blind to the route that NEVER MENTIONS THE GATE.
+//
+// GATED/UNGATED is hand-maintained, and the walk only inspects routes that
+// already call `checkWriteAllowed`. So a new route that writes product data and
+// simply never imports the gate is invisible to both — which is exactly how
+// three of them shipped. Two were found by a sweep, and the third
+// (`admin/eol-discrepancies/[id]/resolve`) was found by this test on its first
+// run, after the sweep had finished. The lesson is the one already recorded in
+// CLAUDE.md: a fixed access-control bug is a fixed INSTANCE, not a fixed class.
+//
+// So this works the other way round: find every route that WRITES a licensed
+// table, and require each one to be classified. A route that genuinely should
+// not gate (there are none today) goes in EXEMPT with its reason, which forces
+// the decision to be written down rather than inherited from an absent import.
+//
+// ⛔ A SQL-shape match, deliberately, not a list of routes. `UPDATE devices` in
+// a route file is the fact that matters, and it cannot be refactored out of
+// sight the way an import can. The cost is that a write issued through a lib
+// helper is not seen here — see the note on lib/eolEnrich.ts for the one case
+// that is, and why it is correct.
+const PRODUCT_DATA_WRITE =
+  /\b(?:UPDATE\s+(?:devices|sites|circuits)\b|INSERT\s+INTO\s+(?:devices|sites|circuits)\b|DELETE\s+FROM\s+(?:devices|sites|circuits)\b)/i
+
+test('⛔ every route that writes licensed product data is behind the licence gate', () => {
+  // Routes that write one of these tables but must NOT gate. Empty today, and a
+  // new entry needs a reason in a comment — not just a path.
+  const EXEMPT = new Set<string>([])
+  const offenders: string[] = []
+  const walk = (dir: string) => {
+    for (const e of fs.readdirSync(path.join(repo, dir), { withFileTypes: true })) {
+      const rel = `${dir}/${e.name}`
+      if (e.isDirectory()) { walk(rel); continue }
+      if (!ROUTE_FILE.test(e.name)) continue
+      const src = code(rel)
+      if (!PRODUCT_DATA_WRITE.test(src)) continue
+      if (EXEMPT.has(rel)) continue
+      if (!/await\s+checkWriteAllowed\s*\(/.test(src)) offenders.push(rel)
+    }
+  }
+  walk('app/api')
+  assert.deepEqual(offenders, [],
+    `these routes write devices/sites/circuits with no licence gate — add `
+    + `\`const writeBlock = await checkWriteAllowed(); if (writeBlock) return writeBlock\` `
+    + `and classify them in the GATED list above, or add them to EXEMPT with a reason: ${offenders.join(', ')}`)
 })
 
 // ── The licence gate has TWO sides, and only one of them was ever tested ─────
