@@ -352,7 +352,8 @@ Write-Step "Installing dependencies"
 Set-Location $AppDir
 # npm ci, not npm install: a fresh install must reproduce the locked dependency
 # tree the release was tested against, and fail loudly if the lock disagrees with
-# package.json. (The UPDATER keeps npm install on purpose - incremental.)
+# package.json. (The UPDATER uses npm ci as well, as of 2026-11-14 - see its own
+# note there; its rollback restores the self-contained .next\standalone build.)
 & npm ci 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
 Write-OK "Dependencies installed"
 

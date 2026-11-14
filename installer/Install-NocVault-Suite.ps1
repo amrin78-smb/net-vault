@@ -1455,9 +1455,13 @@ Write-Info "Installing NetVault dependencies..."
 # npm ci installs package-lock.json exactly (all four repos track theirs) and
 # fails loudly if the lock and package.json disagree, which is the right outcome
 # here rather than silently installing something else. Safe for a FRESH install
-# specifically because npm ci starts by deleting node_modules - that is why the
-# per-app UPDATERS deliberately keep npm install instead (incremental, preserves
-# node_modules and the build cache; see netvault's CLAUDE.md performance notes).
+# specifically because npm ci starts by deleting node_modules.
+# ⛔ The per-app UPDATERS now use npm ci too (changed 2026-11-14). They used to
+# keep npm install on the stated grounds of staying "incremental", but three of
+# the four already rename node_modules to node_modules.lastgood BEFORE installing,
+# so npm was installing into an empty directory anyway and the saving was
+# imaginary. NetVault's updater is the one real cold install, and it is safe there
+# because NSSM serves .next\standalone, which is snapshotted separately.
 & npm ci 2>&1 | Tee-Object -FilePath "$NVDir\logs\npm-install.log"
 if ($LASTEXITCODE -ne 0) { throw "NetVault npm ci failed" }
 Write-Info "Building NetVault (3-5 minutes)..."

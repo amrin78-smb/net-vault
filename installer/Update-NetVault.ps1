@@ -1242,17 +1242,31 @@ try {
 
     Write-Step "Rebuilding NetVault"
     $currentStage = 'npm-install'
-    Write-Host "    Running: npm install" -ForegroundColor Gray
+    # ⛔ npm ci, NOT npm install. Reproducibility: npm install may resolve newer
+    # transitive versions that still satisfy package.json's semver ranges, so two
+    # updates to the SAME NocVault tag can ship different dependency trees - and
+    # the one that breaks is the customer's, weeks later, with nothing to diff.
+    # npm ci installs package-lock.json exactly and fails loudly if the lock and
+    # package.json disagree. It also never REWRITES the tracked lock, which npm
+    # install does on every run - that write is why this script can never use
+    # 'git pull' (a dirty tree refuses the merge) and must hard-reset instead.
+    # ⛔ Unlike the other three updaters, this one does NOT snapshot root
+    # node_modules, so npm install here really was incremental and npm ci is a
+    # cold install - measurably slower. Accepted, and safe: NSSM serves the app
+    # from .next\standalone\server.js, which bundles its own self-contained
+    # node_modules and IS snapshotted/restored, so a failed npm ci cannot take
+    # the running app down. See Invoke-Rollback's note above.
+    Write-Host "    Running: npm ci" -ForegroundColor Gray
     # npm writes deprecation/audit notices to stderr (e.g. "This endpoint is being
     # retired..."). Under $ErrorActionPreference = 'Stop', merging that via 2>&1
     # turns a benign notice into a terminating ErrorRecord even though npm exits 0
     # — same class of bug already fixed above for git/psql. Relax Stop around the
     # call, capture the real exit code, then restore Stop and check that instead.
     $ErrorActionPreference = 'Continue'
-    $null = & npm install 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
+    $null = & npm ci 2>&1 | Tee-Object -FilePath "$InstallDir\logs\npm-install.log"
     $exitCode = $LASTEXITCODE
     $ErrorActionPreference = 'Stop'
-    if ($exitCode -ne 0) { throw "npm install failed (exit $exitCode) - check $InstallDir\logs\npm-install.log" }
+    if ($exitCode -ne 0) { throw "npm ci failed (exit $exitCode) - check $InstallDir\logs\npm-install.log" }
     $currentStage = 'npm-build'
     Write-Host "    Running: npm run build" -ForegroundColor Gray
     $ErrorActionPreference = 'Continue'

@@ -75,6 +75,9 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.65.9': [
+    "An update now installs the exact dependency versions this release was built and tested against. Before, an update could resolve newer compatible versions instead, so two servers on the same NocVault release could end up running subtly different software with no way to tell them apart. This takes effect from your next update onwards, because an update always runs the previous release's own update script."
+  ],
   '1.65.8': [
     "Accepting an end-of-life recommendation, or resolving a date discrepancy, changed a device's lifecycle status and support dates even while the licence was expired - the one thing the licence does restrict. Editing the same fields on the device page was correctly refused, so the restriction depended on which screen you used. All three of these actions now follow the same rule as the rest of the inventory.",
     "The audit log showed an administrator the suite mail server's address, sign-in name and From address. Those details are deliberately limited to a super administrator on the Mail server page, so the audit log was a way around that. The entry still appears - who changed the mail server, and when - with the values withheld.",

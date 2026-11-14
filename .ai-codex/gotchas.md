@@ -1032,3 +1032,47 @@ per-user `mfa_locked_until` in the database, which cannot be spoofed.) Not fixed
 fix is a real design decision, not a key change: either gate forwarded-header trust behind the
 `TRUST_PROXY_HEADERS` allowlist already KIV'd in CLAUDE.md, or add a per-account lockout — and a
 naive fallback to one shared bucket turns the limiter into a lockout lever anybody can pull.
+
+## ⛔ The updaters now use `npm ci`, and the comment that said otherwise was wrong
+
+All four `Update-*.ps1` scripts ran `npm install` until 1.65.9, with a comment in
+`Install-NocVault-Suite.ps1` asserting the updaters "deliberately keep npm install instead
+(incremental, preserves node_modules and the build cache)". **Three of the four already
+rename `node_modules` to `node_modules.lastgood` BEFORE npm runs** (logvault 892/902,
+ddivault 752/760, spanvault 808/820), so npm was installing into an empty directory either
+way — the incremental saving the comment claimed never existed. Verify the claim in a
+comment before you let it decide a change.
+
+Why `npm ci` matters here beyond the standing rule: `npm install` may resolve newer
+transitive versions that still satisfy package.json's ranges, so two updates to the *same*
+NocVault tag can ship different dependency trees — and the one that breaks is the
+customer's, weeks later, with nothing to diff. `npm ci` installs the lock exactly and fails
+loudly when the lock and package.json disagree.
+
+**`npm install` also REWRITES the tracked `package-lock.json` on every run.** That write is
+the documented reason these scripts can never use `git pull` (a dirty tree refuses the
+merge, so the checkout freezes at an old commit and the in-app updater reports "update
+available" forever) and must `git reset --hard`. `npm ci` never writes the lock, so this
+removes the cause rather than working around it — the hard reset stays, it is now belt and
+braces rather than load-bearing.
+
+⛔ **NetVault is the one genuine cold install.** Its updater does NOT snapshot root
+`node_modules`, so here `npm install` really was incremental and `npm ci` is slower. Safe
+regardless: NSSM serves the app from `.next\standalone\server.js`, which bundles its own
+self-contained `node_modules` and IS snapshotted and restored, so a failed `npm ci` cannot
+take the running app down — `Invoke-Rollback`'s own note says restoring that folder is
+enough "independent of whatever state the root node_modules/build cache was left in".
+
+Preconditions checked before the change, and worth re-checking if a lock is ever
+regenerated: all 7 locks (4 roots + 3 frontends) are git-tracked and `npm ci --dry-run`
+clean. A lock that drifts from package.json now fails the update loudly instead of being
+silently repaired.
+
+⛔ **This took effect one release LATER (from 1.66.0 / 2.41.7 / 1.35.7 / 1.118.2 onward),**
+because `Update-*.ps1` is fully parsed before it runs `git pull` — the update that *ships*
+this change still installs with the old `npm install`. See the two-run rule above.
+
+⛔ **`logvault/Update-LogVault.ps1` (repo root) is a dead 134-line relic** from 2026-06-22
+with **zero** rollback, beside the real 1430-line `logvault/installer/Update-LogVault.ps1`.
+Nothing references it — `api/server.js:3884` builds the path as `installer/...`. It was
+left untouched by this change on purpose: polishing dead code hides it. Delete it.
