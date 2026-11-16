@@ -1076,3 +1076,35 @@ this change still installs with the old `npm install`. See the two-run rule abov
 with **zero** rollback, beside the real 1430-line `logvault/installer/Update-LogVault.ps1`.
 Nothing references it — `api/server.js:3884` builds the path as `installer/...`. It was
 left untouched by this change on purpose: polishing dead code hides it. Delete it.
+
+## ⛔ NetVault holds NO MAC addresses — do not add the OUI feed client here (measured 2026-11-16)
+
+A suite-wide brief scheduled MAC-vendor resolution for DDIVault, then "NetVault and
+LogVault, which have no MAC-vendor resolution at all". For NetVault that premise is
+false in a way worth recording, because it reads as a gap and it is not one.
+
+**NetVault has no MAC address anywhere.** Measured against the production database:
+**0 MAC-like columns across all 30 tables** (`information_schema` search for
+`%mac%`/`%hwaddr%`/`%ether%`/`%physical%`), and `devices` — 2,482 rows — carries
+`ip_address` with no hardware address beside it. There is no discovery, ARP or scan
+feature that would produce one.
+
+⛔ **THE MAC-BEARING CODE IN THIS REPO BELONGS TO OTHER APPS.** `agent/modules/ddi/*`
+(ARP/DHCP-lease collection) and `agent/modules/span/snmp.js` ship their MACs to
+**DDIVault** and **SpanVault** over the agent ingest channel; `installer/seeds/*-seed.js`
+generate demo MACs into those apps' databases. Grepping this repo for `mac_address` hits
+all of them and none of it is NetVault's own data. DDIVault resolves those MACs as of its
+1.36.0 — that is the correct place, and doing it at the edge would put a 54,466-row
+catalogue on every agent.
+
+⛔ **WHAT ADDING IT ANYWAY WOULD COST.** A daily 2.2 MB signed download, a 54,466-row
+in-memory catalogue, a test suite, and one more consumer that must be updated in lockstep
+whenever the hub bumps `match_version` — to answer zero queries. Dead code with a
+maintenance bill is worse than an absent feature, because it looks maintained.
+
+If MAC capture is ever genuinely wanted here it is a **new feature**, not an integration:
+a `mac_address` column, import/bulk mapping, and UI, plus something to populate it — the
+2,482 devices are hand-maintained inventory, not discovered. Decide that on its merits;
+do not reach for it because an OUI client exists elsewhere in the suite.
+
+See `ddivault/.ai-codex/gotchas.md` for the lookup contract if this is ever revisited.
