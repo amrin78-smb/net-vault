@@ -1456,6 +1456,12 @@ else {
     if ($mcL -eq "t" -and $mcG -eq "t") { Ok "spanvault_user can SELECT map_shapes.locked + group_id" } else { Bad ("spanvault_user cannot SELECT map_shapes locked/group_id (locked=" + $mcL + " group_id=" + $mcG + ")") }
     $wp = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','map_connections','waypoints','SELECT');"
     if ($wp -eq "t") { Ok "spanvault_user can SELECT map_connections.waypoints (adjustable elbow lines)" } else { Bad ("spanvault_user cannot SELECT map_connections.waypoints (got '" + $wp + "')") }
+    # wireless_aps.retired_at (spanvault 1.119.0) - an AP unseen longer than
+    # wireless_ap_stale_days is retired and stops raising wireless_ap_down.
+    # Without this column the collector's AP query fails and NO wireless alert
+    # of any kind is evaluated, so a fresh install must prove it exists.
+    $wr = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','wireless_aps','retired_at','SELECT');"
+    if ($wr -eq "t") { Ok "spanvault_user can SELECT wireless_aps.retired_at (AP retirement)" } else { Bad ("spanvault_user cannot SELECT wireless_aps.retired_at (got '" + $wr + "')") }
     $svOk = $true; $svBad = @()
     foreach ($t in @('monitored_devices','alerts','sv_maps','wireless_controllers')) {
         $p = Pg "spanvault" "SELECT has_table_privilege('spanvault_user','$t','SELECT');"
