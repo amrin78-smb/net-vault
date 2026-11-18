@@ -1446,6 +1446,23 @@ else {
     if ($ddAg -eq "t") { Ok "ddivault.ddi_agents table exists (Phase 4b agent registry)" } else { Bad ("ddivault.ddi_agents table MISSING (got '" + $ddAg + "')") }
     $ddHub = Pg "ddivault" "SELECT EXISTS(SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='ddi_servers' AND column_name='agent_hub_id');"
     if ($ddHub -eq "t") { Ok "ddivault.ddi_servers.agent_hub_id column exists (Phase 4b)" } else { Bad ("ddivault.ddi_servers.agent_hub_id column MISSING (got '" + $ddHub + "')") }
+    # Linux DNS platforms (ddivault 1.37.0 / generic 1.39.0). These columns come from
+    # the FIFTH schema file, scripts/schema-dns-platform.sql, which is newer than the
+    # other four and so the one a provisioning path is most likely to have skipped.
+    # has_column_privilege on a column that does not exist ERRORS rather than
+    # returning false, so this fails loudly either way - the column being absent
+    # and the app role being unable to read it both land in the Bad branch.
+    # (The column-level GRANT at the end of that file is for the READONLY
+    # diagnostic roles; ddivault_user owns the table, so for it this is an
+    # existence check.) getActiveServers() in
+    # collector/collector.js selects dns_platform AND dns_zone_list in the SINGLE
+    # query that feeds EVERY poll, so either column being unreadable halts DHCP, DNS
+    # and IPAM collection together - not just DNS. DDIVault's own /api/health runs
+    # SELECT NOW() and never touches this table, so nothing else here would notice.
+    $ddPlat = Pg "ddivault" "SELECT has_column_privilege('ddivault_user','ddi_servers','dns_platform','SELECT');"
+    $ddZl   = Pg "ddivault" "SELECT has_column_privilege('ddivault_user','ddi_servers','dns_zone_list','SELECT');"
+    if ($ddPlat -eq "t" -and $ddZl -eq "t") { Ok "ddivault_user can SELECT ddi_servers.dns_platform + dns_zone_list (schema-dns-platform.sql applied, grant covers it)" }
+    else { Bad ("ddivault_user cannot SELECT ddi_servers DNS-platform columns (dns_platform=" + $ddPlat + " dns_zone_list=" + $ddZl + ") - scripts/schema-dns-platform.sql did not apply, or its column-level GRANT is stale; the collector will fail on EVERY poll") }
 
     Write-Host "  --- SpanVault (map shapes + connection waypoints) ---" -ForegroundColor DarkGray
     # ROLE-SCOPED: assert the spanvault_user app role can SELECT each object/column.
@@ -1570,6 +1587,12 @@ else {
     # (a) column-level: a representative secret column must be UNreadable.
     $secCol = @(
         @{ Db="ddivault";  Tbl="ddi_servers";              Col="ps_password" },
+        # The Linux DNS credentials (ddivault 1.37.0). Same table, same reason as
+        # ps_password: schema-dns-platform.sql's column-level GRANT must EXCLUDE
+        # them. Adding a secret column to an already-protected table is the easy
+        # one to miss - the table looks covered because its grant already exists.
+        @{ Db="ddivault";  Tbl="ddi_servers";              Col="tsig_secret" },
+        @{ Db="ddivault";  Tbl="ddi_servers";              Col="dns_api_key" },
         @{ Db="spanvault"; Tbl="monitored_devices";        Col="snmp_community" },
         @{ Db="spanvault"; Tbl="agents";                   Col="api_key" },
         @{ Db="spanvault"; Tbl="agent_discovered_devices"; Col="snmp_community" },
@@ -1585,7 +1608,7 @@ else {
         $r = Pg $s.Db "SELECT has_column_privilege('nocvault_readonly','$($s.Tbl)','$($s.Col)','SELECT');"
         if ($r -ne "f") { $secOk = $false; $secBad += ($s.Db + "." + $s.Tbl + "." + $s.Col + "=" + $r) }
     }
-    if ($secOk) { Ok "nocvault_readonly is BLOCKED from every secret credential column (ddi_servers.ps_password, monitored_devices/agent_discovered_devices.snmp_community, agents.api_key, wireless_controllers.api_refresh_token, user_mfa_backup_codes.code_hash)" }
+    if ($secOk) { Ok "nocvault_readonly is BLOCKED from every secret credential column (ddi_servers.ps_password/tsig_secret/dns_api_key, monitored_devices/agent_discovered_devices.snmp_community, agents.api_key, wireless_controllers.api_refresh_token, user_mfa_backup_codes.code_hash)" }
     else { Bad ("SECURITY REGRESSION: nocvault_readonly CAN read secret column(s): " + ($secBad -join ', ') + " -- a blanket GRANT likely re-widened access") }
     # (b) view-based: each secret base table must be UNreadable AND its *_public view readable.
     $secView = @(
