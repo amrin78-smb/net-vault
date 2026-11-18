@@ -1463,6 +1463,17 @@ else {
     $ddZl   = Pg "ddivault" "SELECT has_column_privilege('ddivault_user','ddi_servers','dns_zone_list','SELECT');"
     if ($ddPlat -eq "t" -and $ddZl -eq "t") { Ok "ddivault_user can SELECT ddi_servers.dns_platform + dns_zone_list (schema-dns-platform.sql applied, grant covers it)" }
     else { Bad ("ddivault_user cannot SELECT ddi_servers DNS-platform columns (dns_platform=" + $ddPlat + " dns_zone_list=" + $ddZl + ") - scripts/schema-dns-platform.sql did not apply, or its column-level GRANT is stale; the collector will fail on EVERY poll") }
+    # dns_poll_status / dns_polled_at (ddivault 1.40.0) record whether DNS
+    # collection succeeded. They come from schema.sql, not schema-dns-platform.sql,
+    # so they are a SEPARATE failure from the pair above. Without them every DNS
+    # server reports "Never polled" while collecting fine, and - the half that
+    # matters - a role='both' server whose DNS collection has failed completely
+    # still reports healthy, because the old single poll_status only ever
+    # described the DHCP scope poll.
+    $ddDps = Pg "ddivault" "SELECT has_column_privilege('ddivault_user','ddi_servers','dns_poll_status','SELECT');"
+    $ddDpa = Pg "ddivault" "SELECT has_column_privilege('ddivault_user','ddi_servers','dns_polled_at','SELECT');"
+    if ($ddDps -eq "t" -and $ddDpa -eq "t") { Ok "ddivault_user can SELECT ddi_servers.dns_poll_status + dns_polled_at (DNS collection status)" }
+    else { Bad ("ddivault_user cannot SELECT ddi_servers DNS collection-status columns (dns_poll_status=" + $ddDps + " dns_polled_at=" + $ddDpa + ") - scripts/schema.sql did not apply its 1.40.0 block") }
 
     Write-Host "  --- SpanVault (map shapes + connection waypoints) ---" -ForegroundColor DarkGray
     # ROLE-SCOPED: assert the spanvault_user app role can SELECT each object/column.
