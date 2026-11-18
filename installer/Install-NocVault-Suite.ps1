@@ -1834,6 +1834,14 @@ if ($InstallDDIVault) {
     if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-server-auth.sql failed to apply (exit $LASTEXITCODE) - installation aborted; the ddi_servers ps_username/ps_password credential columns may not exist. Check the psql output above." }
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 --single-transaction -f "$DDIAppDir\scripts\schema-sites.sql"
     if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-sites.sql failed to apply (exit $LASTEXITCODE) - installation aborted. Check the psql output above." }
+
+    # schema-dns-platform.sql (ddivault 1.37.0) MUST be applied LAST: it adds the
+    # Linux/third-party DNS columns - including two SECRET ones - and ends with the
+    # ddi_servers column-level GRANT that excludes them from the readonly roles.
+    # That GRANT has to be the final statement touching those privileges, so any
+    # future ddivault schema file goes BEFORE this line, never after it.
+    & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -v ON_ERROR_STOP=1 --single-transaction -f "$DDIAppDir\scripts\schema-dns-platform.sql"
+    if ($LASTEXITCODE -ne 0) { throw "DDIVault schema-dns-platform.sql failed to apply (exit $LASTEXITCODE) - installation aborted. Check the psql output above." }
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO ddivault_user;"
     & "$PgBin\psql.exe" -U postgres -h localhost -p 5432 -d ddivault -c "GRANT ALL ON SCHEMA public TO ddivault_user;"
