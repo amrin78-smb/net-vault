@@ -1490,6 +1490,21 @@ else {
     # of any kind is evaluated, so a fresh install must prove it exists.
     $wr = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','wireless_aps','retired_at','SELECT');"
     if ($wr -eq "t") { Ok "spanvault_user can SELECT wireless_aps.retired_at (AP retirement)" } else { Bad ("spanvault_user cannot SELECT wireless_aps.retired_at (got '" + $wr + "')") }
+    # monitored_devices.topology_status / topology_parts / topology_error
+    # (spanvault 1.121.0) record whether LLDP/CDP neighbour discovery actually
+    # worked, per protocol. has_column_privilege ERRORS on a column that does
+    # not exist rather than returning false, so this is a loud existence check
+    # for the app role (spanvault_user owns the table). Without these columns
+    # api/server.js's GET /api/topology/devices fails outright and the topology
+    # page loses the only thing that can explain a device discovering nothing -
+    # which is the state it was in before: a device with no links does not
+    # appear in topology_links, so it did not appear on the page at all, while
+    # topology_discovered_at was stamped on every pass and read as success.
+    $svTs = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','monitored_devices','topology_status','SELECT');"
+    $svTp = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','monitored_devices','topology_parts','SELECT');"
+    $svTe = Pg "spanvault" "SELECT has_column_privilege('spanvault_user','monitored_devices','topology_error','SELECT');"
+    if ($svTs -eq "t" -and $svTp -eq "t" -and $svTe -eq "t") { Ok "spanvault_user can SELECT monitored_devices topology-outcome columns (discovery status)" }
+    else { Bad ("spanvault_user cannot SELECT monitored_devices topology-outcome columns (topology_status=" + $svTs + " topology_parts=" + $svTp + " topology_error=" + $svTe + ") - scripts/schema.sql did not apply its 1.121.0 block") }
     $svOk = $true; $svBad = @()
     foreach ($t in @('monitored_devices','alerts','sv_maps','wireless_controllers')) {
         $p = Pg "spanvault" "SELECT has_table_privilege('spanvault_user','$t','SELECT');"
@@ -1575,9 +1590,16 @@ else {
         if ($roSel -eq "t") { Ok ("nocvault_readonly has SELECT on " + $ro.Db + "." + $ro.Tbl) }
         else { Bad ("nocvault_readonly missing SELECT on " + $ro.Db + "." + $ro.Tbl + " (got '" + $roSel + "') -- Hub cross-DB reads broken") }
     }
+    # ⛔ monitored_devices / ddi_servers carry COLUMN-level grants (the 2026-07
+    # credential-column fix revoked the table-level one), so a newly added
+    # column is INVISIBLE to the diagnostic roles until it is named in that
+    # list in schema.sql. That fails closed, which is the right trade for a
+    # secret - and a silent loss of visibility for anything else. Naming a
+    # recently added NON-secret column here is what catches the omission.
     $roCol = @(
         @{ Db="ddivault";  Tbl="ddi_servers";       Col="id" },
-        @{ Db="spanvault"; Tbl="monitored_devices"; Col="id" }
+        @{ Db="spanvault"; Tbl="monitored_devices"; Col="id" },
+        @{ Db="spanvault"; Tbl="monitored_devices"; Col="topology_status" }
     )
     foreach ($ro in $roCol) {
         $roSel = Pg $ro.Db "SELECT has_column_privilege('nocvault_readonly','$($ro.Tbl)','$($ro.Col)','SELECT');"
