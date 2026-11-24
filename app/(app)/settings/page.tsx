@@ -2332,7 +2332,7 @@ function SettingsInner() {
               /license|expire/i.test(applyUpdateErr) ? (
                 <div style={{ background: 'var(--tint-warn)', color: 'var(--tint-warn-fg)', border: '1px solid var(--tint-warn-fg)', padding: '10px 14px', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-base)', marginTop: '10px' }}>
                   License expired — updates disabled. Renew your license to receive updates.{' '}
-                  <a href={`${process.env.NEXT_PUBLIC_NOCVAULT_HUB_URL || ''}/settings/license`} style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>Manage License →</a>
+                  <a href="/settings/license" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>Manage License →</a>
                 </div>
               ) : (
                 <div style={{ color: 'var(--tint-danger-fg)', fontSize: 'var(--text-base)', fontWeight: '500', marginTop: '10px' }}>
