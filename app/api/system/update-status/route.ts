@@ -75,6 +75,13 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.66.0': [
+    "Settings - Console address now sets the address for all four applications, not just this one. Each application signs its own sign-in cookies for its own address, and until now only NetVault's could be changed from the product: the other three kept whatever address was written at install time. On this server that meant NetVault was reached by name while LogVault, DDIVault and SpanVault still named the raw server IP - which put that IP into every sign-in redirect and sent people to an address the certificate does not cover.",
+    "There is still only one address to type. The four applications share one host and one transport and differ only by port, so the other three are derived from the one you enter; the page now lists all four with the address each should have and the address each actually has, so a mismatch is visible instead of silent.",
+    "Each application is reported on its own. An application whose files could not be located - the service is not installed, or this account cannot read its configuration - is reported as 'could not check' rather than quietly treated as correct, and the other three are still saved. The same applies when an application's address is pinned in its Windows service configuration, which overrides the files: the page says so instead of reporting a save that cannot take effect.",
+    "Apply it now restarts every application whose address changed, in one pass, bringing the shared HTTPS front door down once rather than once per application. Background services that read the same address restart with their application: SpanVault's API, which uses it to decide which hostnames it may call, and LogVault's collector, which puts it in the links of every alert email.",
+    "An address on one of the internal ports the HTTPS front door forwards to (13000 and the like) is now refused outright. Those ports answer only on the server itself, so saving one locked everybody out - including whoever would have to put it back.",
+  ],
   '1.65.9': [
     "An update now installs the exact dependency versions this release was built and tested against. Before, an update could resolve newer compatible versions instead, so two servers on the same NocVault release could end up running subtly different software with no way to tell them apart. This takes effect from your next update onwards, because an update always runs the previous release's own update script."
   ],

@@ -20,6 +20,7 @@ import {
   RESTART_SENTINEL,
   buildRestartHeader,
   buildRestartWrapper,
+  restartWaitLimitMs,
 } from '../lib/serviceRestart.ts'
 import { parseRunLog, RUN_SENTINEL, buildWrapperScript } from '../lib/tlsTransport.ts'
 import { transportPresentation } from '../components/settings/systemPanelHelpers.ts'
@@ -34,6 +35,7 @@ import {
   type LockEnv,
 } from '../lib/runLock.ts'
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, resolvePaging } from '../lib/pagination.ts'
+import { buildPinUpdateScript } from '../lib/envTargets.ts'
 import {
   PRIVILEGED_LICENSE_FIELDS,
   licensePayloadFor,
@@ -102,7 +104,7 @@ test('the next labelled field ends the dependency block', () => {
 
 // ─── seam 2: the wrapper's log -> the restart verdict ───────────────────────
 
-const restartLog = (...lines: string[]) => [buildRestartHeader('run-1', 'NetVault').trim(), ...lines].join('\r\n')
+const restartLog = (...lines: string[]) => [buildRestartHeader('run-1', ['NetVault']).trim(), ...lines].join('\r\n')
 
 test('a dependent left DOWN is not a success, however well the service itself restarted', () => {
   // ⛔ THE FALSE ALL-CLEAR THIS FUNCTION EXISTS TO REFUSE, from the other side.
@@ -274,15 +276,173 @@ test('the restart route derives its dependents from a real dependency probe', ()
   // ⛔ It used to key on the terminator merely EXISTING, which re-created the
   // four-console outage the updaters had just been fixed to avoid — while the
   // confirm dialog promised the other three were unaffected.
+  //
+  // ⛔ AND THE PROBE IS NOW RUN FOR EVERY CONSOLE SERVICE IN THE RUN, not only
+  // for the hub. `NocVault-Tls` fronts all four, so `sc stop LogVault-App` is
+  // refused with 1051 exactly as `sc stop NetVault` is — keyed on the hub
+  // alone, a LogVault-only restart would have hit that and reported `failed`
+  // with the old process still serving.
   const src = read('app/api/system/service-restart/route.ts')
-  assert.match(src, /terminatorDependsOn\(HUB_SERVICE\)/)
+  assert.match(src, /terminatorDependsOn\(svc\)/)
+  assert.match(src, /consoleForService\(svc\) === null\) continue/)
+  assert.doesNotMatch(src, /terminatorDependsOn\(HUB_SERVICE\)/, 'the hub-only probe is gone')
   assert.doesNotMatch(src, /dependents:.*present === true/)
+  // ⛔ THE ASYMMETRY SURVIVES THE WIDENING: the front door is stopped ONLY on a
+  // positive reading, and `null` falls to "do not stop it".
+  assert.match(src, /dep\.dependsOn === true && !hubDependents\.includes/)
+})
+
+test('the restart route takes app SLUGS, never a service name, from the body', () => {
+  // ⛔ THE RULE IN `lib/serviceRestart.ts`'s HEADER. A route that restarts
+  // whatever service a JSON body names is a denial-of-service primitive handed
+  // to anyone who reaches it — and the list stopped being a constant when the
+  // hub learned to write all four consoles' addresses. What keeps the rule true
+  // is that the body carries a CLOSED FOUR-VALUE ENUM and the slug→service
+  // mapping stays in lib code.
+  const src = code('app/api/system/service-restart/route.ts')
+  assert.match(src, /asConsoleSlug\(a\)/, 'every element goes through the enum')
+  assert.doesNotMatch(src, /body\.service/, 'no service name may be read from the body')
+  assert.doesNotMatch(src, /body\.services/, 'nor a list of them')
+  // ⛔ AN UNRECOGNISED SLUG IS REFUSED, NOT DROPPED: silently restarting a
+  // different set from the one asked for and reporting success is worse than a
+  // 400.
+  assert.match(src, /mapped\.some\(\(a\) => a === null\)/)
+  // And the panel sends slugs, not names.
+  const panel = code('components/settings/ConsoleAddressPanel.tsx')
+  assert.match(panel, /apps=\{restartApps\}/)
+  assert.doesNotMatch(panel, /'LogVault-App'|'DDIVault-App'|'SpanVault-App'|'SpanVault-API'/,
+    'a panel that names services is a second slug→service mapping')
 })
 
 test('the console-address example port cannot be the loopback port', () => {
   const src = read('app/api/system/console-url/route.ts')
   assert.doesNotMatch(src, /examplePort: tls\.httpsPort \|\| DEFAULT_CONSOLE_PORT/)
   assert.match(src, /HUB_PUBLIC_PORT/)
+})
+
+// ─── seam 4b: the hub owns all four console addresses ───────────────────────
+
+test('the console-address route asks for all four consoles, hub FIRST', () => {
+  // ⛔ ORDER IS LOAD-BEARING TWICE OVER. The hub's write must land first — the
+  // other three addresses are DERIVED from it, so writing them against an
+  // address the hub itself refused would point the whole suite at a value
+  // nothing holds — and a satellite failure must never roll the hub back.
+  const src = code('app/api/system/console-url/route.ts')
+  const hubWrite = src.indexOf("writeConsoleKey(HUB_SLUG")
+  const fanOut = src.indexOf('for (const slug of CONSOLE_SLUGS)')
+  assert.ok(hubWrite > 0, 'the hub is written through the same function as the rest')
+  assert.ok(fanOut > hubWrite, 'the fan-out follows the hub write')
+  assert.match(src, /if \(slug === HUB_SLUG\) continue/, 'and does not write the hub twice')
+  // ⛔ THE HUB'S FAILURE STOPS THE FAN-OUT; a satellite's does not stop the others.
+  assert.match(src, /if \(hub\.state === 'failed'\)/)
+})
+
+test('the satellites\' addresses are DERIVED, never read from the request', () => {
+  // ⛔ A SATELLITE'S NEXTAUTH_URL CARRIES NO INDEPENDENT INFORMATION: one host,
+  // one transport, four fixed ports. A request field per console would invite
+  // three of them to be wrong, and a satellite whose host disagrees with the
+  // hub's bounces every cross-app redirect with no error anywhere.
+  const src = code('app/api/system/console-url/route.ts')
+  assert.match(src, /deriveSiblingUrl\(decision\.url, CONSOLES\[slug\]\.publicPort\)/)
+  // The ports come from lib/consoles.ts (which imports SIBLING_PORTS), never
+  // from a literal in the route or a probe of the running process.
+  assert.doesNotMatch(src, /3004|3006|3008/, 'no port literals in the route')
+  const consoles = code('lib/consoles.ts')
+  assert.match(consoles, /import \{ SIBLING_PORTS \} from '\.\/publicUrl\.ts'/)
+  assert.doesNotMatch(consoles, /publicPort: 3004|publicPort: 3006|publicPort: 3008/,
+    'the satellite ports must not be restated here')
+})
+
+test('the DNS judgement is made ONCE for all four', () => {
+  // ⛔ FOUR COPIES OF ONE JUDGEMENT EVENTUALLY DISAGREE, and this judgement is
+  // the lockout guard: the host is identical to the hub's BY CONSTRUCTION, so
+  // `decideConsoleUrl`'s single `pointsHere` reading and its single
+  // confirmation prompt cover every console. Asking four times would also ask
+  // the operator the same question four times.
+  const src = code('app/api/system/console-url/route.ts')
+  assert.equal((src.match(/decideConsoleUrl\(/g) || []).length, 1)
+  assert.equal((src.match(/localAddresses\(\)/g) || []).length, 2, 'the helper, and one call site')
+  assert.doesNotMatch(src, /hostPointsHere/, 'the route must not re-derive the lockout guard')
+})
+
+test('tlsActive is passed EXPLICITLY, and one value is correct for all four', () => {
+  // ⛔ `ConsoleUrlContext.tlsActive` IS TRI-STATE: `undefined` refuses NEITHER
+  // scheme, so a caller that forgets it silently disables the strongest refusal
+  // in lib/consoleUrl.ts. One TLS terminator fronts the whole suite, so there is
+  // one transport for all four consoles to agree or disagree with — and
+  // `deriveSiblingUrl` therefore must NOT re-judge it.
+  const src = code('app/api/system/console-url/route.ts')
+  assert.match(src, /const tlsActive = tls\.status === 'active'/)
+  assert.match(src, /decideConsoleUrl\(body\.url, \{\s*\n\s*tlsActive,/)
+  assert.doesNotMatch(code('lib/consoleUrl.ts'), /deriveSiblingUrl[\s\S]{0,600}tlsActive/,
+    'the derivation must not take a transport argument')
+})
+
+test('a satellite write goes to the DEPLOY SOURCE first, and both files come from AppDirectory', () => {
+  // ⛔ LOAD-BEARING FOR DDIVAULT: `Update-DDIVault.ps1` copies the root
+  // `.env.local` over `frontend\.env.local` on EVERY run, so a running-file-only
+  // write silently reverts at the next deploy — with nothing reporting it at
+  // the time it breaks.
+  //
+  // ⛔ AND NEITHER PATH IS PATTERN-MATCHED. Install paths are not uniform
+  // (`C:\Apps\SpanVault\app` vs `C:\Apps\logvault`), which is why both files are
+  // derived from the service's own NSSM AppDirectory at runtime.
+  const lib = code('lib/envTargets.ts')
+  const fn = lib.slice(lib.indexOf('export function resolveConsoleEnvTargets'))
+  const deploy = fn.indexOf("role: 'deploy-source'")
+  const running = fn.indexOf("role: 'running'")
+  assert.ok(deploy > 0 && running > deploy, 'deploy source first')
+  assert.match(fn, /parentPath\(dir\)/, 'the deploy source is the PARENT of AppDirectory')
+  const route = code('app/api/system/console-url/route.ts')
+  assert.doesNotMatch(route, /C:\\\\Apps|Apps\\\\(NetVault|logvault|ddivault|SpanVault)/i,
+    'no install path may be hardcoded in the route')
+  assert.match(route, /readServiceParams\(CONSOLES\[slug\]\.service\)/)
+})
+
+test('the pin is written ONLY where one already exists, and only line by line', () => {
+  // ⛔ APPENDING A PIN WOULD CREATE THE SHADOWING PROBLEM THE UN-PIN STEP EXISTS
+  // TO UNDO — a console that reads its value from a file must keep doing so.
+  // And the string being edited holds NEXTAUTH_SECRET, DATABASE_URL and
+  // NETVAULT_DB_PASS, so it is edited entry by entry INSIDE PowerShell: the
+  // values never enter this process, and nothing but a verdict comes back.
+  const lib = code('lib/envTargets.ts')
+  assert.match(lib, /if \(pins !== null && pins\.includes\(key\)\)/, 'only when already pinned')
+  assert.doesNotMatch(lib, /New-ItemProperty/, 'it may never create the value')
+  const script = buildPinUpdateScript({ serviceName: 'NetVault', key: 'NEXTAUTH_URL', value: 'http://x:3000' })
+  // ⛔ NO BRANCH MAY ECHO AN ENTRY. Every output is a verdict token.
+  const printed = [...script.matchAll(/Write-Output ('[^']*')/g)].map((m) => m[1])
+  assert.ok(printed.length >= 6, 'every branch must say something')
+  for (const line of printed) {
+    assert.match(line, /^'\[NV-PIN\] [a-z-]+'$/, `a branch printed more than a verdict: ${line}`)
+  }
+  // And nothing else is written to any stream at all.
+  assert.equal((script.match(/Write-Output/g) || []).length, printed.length)
+  assert.doesNotMatch(script, /Write-Host|Out-File/)
+  assert.doesNotMatch(script, /\$before\[\$i\]" *\|/, 'no entry is ever written to a log or stream')
+})
+
+test('a console whose files were written is offered a restart even when the PIN STATUS is unknown', () => {
+  // ⛔ "WE COULD NOT READ THE SERVICE ENVIRONMENT" IS NOT "DO NOT RESTART IT".
+  // The files landed; a restart is the only thing that could apply them, and
+  // withholding one would guarantee the value never takes effect. The test is
+  // "did anything land" (`url !== null`), not "does the state say saved" — on
+  // the dev box, where no registry can be read, every console is `unknown`.
+  const route = code('app/api/system/console-url/route.ts')
+  assert.match(route, /const changedApps = results\.filter\(\(r\) => r\.url !== null\)/)
+  const panel = code('components/settings/ConsoleAddressPanel.tsx')
+  assert.match(panel, /typeof r\.url === 'string'/)
+})
+
+test('the console-address panel reports a failed read per console, never as clean', () => {
+  const panel = code('components/settings/ConsoleAddressPanel.tsx')
+  // Four rows, each with its own outcome pill and its own note.
+  assert.match(panel, /rows\.map\(/)
+  assert.match(panel, /consoleStatePresentation\(row\.state\)/)
+  assert.match(panel, /consoleDrift\(row\.expected, row\.saved\)/)
+  assert.match(panel, /row\.error \|\| row\.note/, 'the reason must render')
+  // ⛔ `locatable` IS TRI-STATE AND THE PANEL MUST NOT READ `false` AS "fine":
+  // it branches on "is it true", so both `false` and `null` read as unknown.
+  assert.match(panel, /row\.locatable !== true/)
 })
 
 // ─── seam 5: the hub's identity (Group A) ───────────────────────────────────
@@ -613,7 +773,7 @@ test('both wrappers refuse to act unless the route armed them for THIS run', () 
     taskName: 'NocVault-TlsTransport', runId: 'run-zz',
   })
   const restart = buildRestartWrapper({
-    service: 'NetVault', log: 'C:\\x\\logs\\r.log', lock: 'C:\\x\\logs\\r.lock',
+    services: ['NetVault'], log: 'C:\\x\\logs\\r.log', lock: 'C:\\x\\logs\\r.lock',
     taskName: 'NocVault-ServiceRestart', dependents: ['NocVault-Tls'], runId: 'run-zz',
   })
   for (const [name, s, dangerous] of [
@@ -747,15 +907,24 @@ test('hub uptime alone can no longer declare a restart finished', () => {
   )).outcome, 'failed')
 })
 
-test('the restart wait limit covers the wrapper\'s own worst case', () => {
+test('the restart wait limit covers the wrapper\'s own worst case, for a FIVE-service run', () => {
   // ⛔ NOW THAT THE VERDICT DECIDES, A SHORT LIMIT REPORTS "could not confirm"
   // FOR RESTARTS THAT ARE WORKING. The wrapper's bounds add up: 45 s per
-  // dependent stop + 60 s stop poll + 150 s of start attempts + 90 s per
-  // dependent coming back = 345 s before the sentinel is written.
+  // dependent stop + (60 s stop poll + 150 s of start attempts) PER SERVICE +
+  // 90 s per dependent coming back.
+  //
+  // ⛔ AND A FIXED LIMIT STOPPED BEING ENOUGH THE MOMENT ONE RUN COULD COVER
+  // FOUR CONSOLES (six services: SpanVault brings its API, LogVault its collector): the old
+  // flat seven minutes is less than half of that run's own worst case, so the
+  // panel would have reported "could not confirm the restart" for a restart
+  // that was working normally — on the very change this feature exists for. The
+  // limit is now computed by the module that owns those timeouts.
   const src = read('components/settings/RestartControl.tsx')
-  const m = /const WAIT_LIMIT_MS = (\d+) \* 60 \* 1000/.exec(src)
-  assert.ok(m, 'the limit must be stated in minutes')
-  assert.ok(Number(m[1]) * 60 >= 345, `the limit must cover 345 s, got ${Number(m[1]) * 60} s`)
+  assert.match(src, /restartWaitLimitMs\(/, 'the limit must be computed, not a constant')
+  assert.match(src, /waitLimit\.current = restartWaitLimitMs\(/, 'and re-sized per run')
+  assert.ok(restartWaitLimitMs(1, 1) >= 345_000)
+  assert.ok(restartWaitLimitMs(6, 1) >= (45 + 6 * 210 + 90) * 1000)
+  assert.ok(restartWaitLimitMs(6, 1) > 7 * 60 * 1000, 'the flat seven-minute limit was too short')
 })
 
 test('the restart button is not offered to a role the route will refuse', () => {
@@ -787,7 +956,11 @@ test('the dependency probe\'s explanation reaches the operator', () => {
   // refuses the stop — so the operator got a bare "The restart did not take
   // effect" with no hint that an unreadable dependency field was the cause.
   const route = read('app/api/system/service-restart/route.ts')
-  assert.match(route, /dependencyDetail = dep\.dependsOn === null \? dep\.detail : null/)
+  // ⛔ THE FIRST `null` READING WINS AND IS KEPT. With the probe now run per
+  // console service, a later readable service must not overwrite the
+  // explanation for the one that was unreadable — that reading is the branch
+  // where the stop is guaranteed to be refused.
+  assert.match(route, /if \(dep\.dependsOn === null && dependencyDetail === null\) dependencyDetail = dep\.detail/)
   assert.match(route, /^\s*dependencyDetail,$/m, 'it must be in the response')
   const panel = read('components/settings/RestartControl.tsx')
   assert.match(panel, /setDependencyDetail\(/, 'the panel must read it')

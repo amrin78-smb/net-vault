@@ -35,7 +35,6 @@ import {
   terminatorDependsOn,
 } from '@/lib/terminatorState.ts'
 import {
-  HUB_SERVICE,
   buildRestartHeader,
   RESTART_PURPOSES,
   RESTART_SENTINEL,
@@ -47,6 +46,13 @@ import {
   resolveRestartTarget,
   restartPaths,
 } from '@/lib/serviceRestart.ts'
+import {
+  CONSOLE_SLUGS,
+  HUB_SLUG,
+  asConsoleSlug,
+  consoleForService,
+  type ConsoleSlug,
+} from '@/lib/consoles.ts'
 import { claimRunLock, readRunLock, releaseRunLock, type LockEnv } from '@/lib/runLock.ts'
 
 const execFileAsync = promisify(execFile)
@@ -147,20 +153,36 @@ export async function GET() {
   const lock = readRunLock(paths.lock, lockEnv)
   if (lock.reaped) await deleteRestartTask()
 
-  const targets: Record<string, { service: string | null; why: string }> = {}
+  const targets: Record<string, { services: string[]; why: string }> = {}
   for (const purpose of RESTART_PURPOSES) {
     // ⛔ `present !== false`, NOT `present === true`. `null` means we could not
     // read the service, and the two outcomes are not symmetric: offering a
     // restart that then fails with 1060 is recoverable noise, while telling an
     // operator their newly-installed certificate needs no action is the
     // 2026-11-06 production failure restated in calmer words.
+    //
+    // ⛔ ASKED WITH THE DEFAULT APP SET (the hub), because a GET cannot know
+    // WHICH consoles a pending change covers — only the panel that just saved
+    // does. `consoleServices` below is how it turns its own app list into the
+    // same service names this route would derive, WITHOUT either side mapping a
+    // slug to a service in the browser.
     targets[purpose] = resolveRestartTarget(purpose, present !== false)
+  }
+
+  // ⛔ THE SLUG→SERVICE MAPPING STAYS IN LIB CODE AND IS SERVED, NEVER GUESSED
+  // CLIENT-SIDE. The panel needs to SAY which services a restart will bounce
+  // before the operator clicks; building those names in the browser would be a
+  // second mapping, and the one in `lib/consoles.ts` is the one the POST uses.
+  const consoleServices: Record<string, string[]> = {}
+  for (const slug of CONSOLE_SLUGS) {
+    consoleServices[slug] = resolveRestartTarget('console-address', present !== false, [slug]).services
   }
 
   return NextResponse.json({
     available: process.platform === 'win32',
     terminatorPresent: present,
     targets,
+    consoleServices,
     inProgress: lock.held,
     // ⛔ So the panel can prove the hub answering it is a NEW process rather
     // than the old one that never went down. "The page loaded again" is not
@@ -173,6 +195,10 @@ export async function GET() {
       // ⛔ The panel matches this against the id POST handed it, so a verdict
       // from an earlier run can never be read as this one's.
       runId: report.runId,
+      // ⛔ NAMED, because a six-service run that failed on one console must say
+      // WHICH. "The restart did not take effect" about an unnamed service sends
+      // an operator to check all four.
+      failedServices: report.failedServices,
       lines: report.lines.slice(-20),
     },
   })
@@ -200,7 +226,7 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  let body: { purpose?: unknown }
+  let body: { purpose?: unknown; apps?: unknown }
   try {
     body = await req.json()
   } catch {
@@ -214,29 +240,84 @@ export async function POST(req: NextRequest) {
   }
   const purpose = body.purpose
 
+  // ⛔ A CLOSED ENUM OF APP SLUGS — STILL NEVER A SERVICE NAME. The hub now
+  // owns all four consoles' addresses, so a console-address restart can cover
+  // up to six services; the request says WHICH CONSOLES, from a four-value
+  // enum, and `lib/consoles.ts` turns that into service names in code. A body
+  // that could name a service would be a denial-of-service primitive handed to
+  // anyone who reaches this route — that rule is unchanged, and this is what
+  // keeps it true while the list stopped being a constant.
+  //
+  // ⛔ AN UNRECOGNISED SLUG IS REFUSED, NOT IGNORED. Dropping it silently would
+  // restart a different set from the one the caller asked for and report
+  // success.
+  let apps: ConsoleSlug[] = [HUB_SLUG]
+  if (body.apps !== undefined) {
+    if (!Array.isArray(body.apps)) {
+      return NextResponse.json({ error: 'apps must be an array of console slugs.' }, { status: 400 })
+    }
+    const mapped = body.apps.map((a) => asConsoleSlug(a))
+    if (mapped.some((a) => a === null) || mapped.length === 0) {
+      return NextResponse.json(
+        { error: `apps must each be one of: ${CONSOLE_SLUGS.join(', ')}.` },
+        { status: 400 },
+      )
+    }
+    apps = [...new Set(mapped as ConsoleSlug[])]
+  }
+
   const present = await terminatorPresent()
-  const target = resolveRestartTarget(purpose, present !== false)
-  if (!target.service) {
+  const target = resolveRestartTarget(purpose, present !== false, apps)
+  if (target.services.length === 0) {
     // Not an error — there is genuinely nothing to restart, and saying so is
     // more useful than bouncing a service for no effect.
-    return NextResponse.json({ started: false, service: null, reason: target.why })
+    return NextResponse.json({ started: false, services: [], reason: target.why })
   }
-  // ⛔ ONLY A DEFINITE `false` BLOCKS. `null` is "we could not ask" — refusing
-  // there would turn an unreadable SCM into "nothing to restart", which is the
-  // same collapse as above.
-  if ((await serviceExists(target.service)) === false) {
+  // ⛔ ONLY A DEFINITE `false` DROPS A SERVICE. `null` is "we could not ask" —
+  // refusing there would turn an unreadable SCM into "nothing to restart",
+  // which is the same collapse as above.
+  //
+  // ⛔ AND ONE ABSENT SERVICE DOES NOT CANCEL THE REST. A suite where SpanVault
+  // was never installed must still be able to apply the hub's new address; the
+  // absent one is NAMED in the response rather than silently dropped.
+  const existence = await Promise.all(
+    target.services.map(async (svc) => [svc, await serviceExists(svc)] as const),
+  )
+  const services = existence.filter(([, e]) => e !== false).map(([svc]) => svc)
+  const absent = existence.filter(([, e]) => e === false).map(([svc]) => svc)
+  if (services.length === 0) {
     return NextResponse.json(
-      { error: `The ${target.service} service is not installed on this host, so there is nothing to restart.` },
+      {
+        error:
+          `${absent.join(', ')} ${absent.length === 1 ? 'is' : 'are'} not installed on this host, `
+          + 'so there is nothing to restart.',
+      },
       { status: 409 },
     )
   }
 
   const paths = restartPaths(findGitRoot(process.cwd()))
 
-  let hubDependents: string[] = []
+  // ⛔ WIDENED FROM "IF IT IS THE HUB" TO ANY CONSOLE SERVICE, BECAUSE THE
+  // TERMINATOR FRONTS ALL FOUR AND MAY DECLARE A DEPENDENCY ON ANY OF THEM.
+  // `NocVault-Tls` declares `DependOnService` for the consoles it fronts, so
+  // `sc stop LogVault-App` is refused with 1051 exactly as `sc stop NetVault`
+  // is — and the restart then "succeeds" with the old process still serving.
+  // Keyed on the hub alone, a LogVault-only restart would have hit that.
+  //
+  // ⛔ THE ASYMMETRY IS KEPT: THE FRONT DOOR IS STOPPED ONLY ON A POSITIVE
+  // READING. `null` falls to "do not stop it" — an updater that guesses wrong
+  // gets 1051, carries on, and rebuilds node_modules under a live process
+  // (corruption); this button that guesses wrong just reports `failed`, which
+  // the operator retries. And cutovers from 1.61.1 CLEAR `DependOnService`
+  // (NocVault-TlsCutover.ps1) precisely because it turned every one-app restart
+  // into a four-console outage, so assuming the dependency would reintroduce
+  // that outage while the confirm dialog promised the others were unaffected.
+  const hubDependents: string[] = []
   let dependencyDetail: string | null = null
-  if (target.service === HUB_SERVICE) {
-    const dep = await terminatorDependsOn(HUB_SERVICE)
+  for (const svc of services) {
+    if (consoleForService(svc) === null) continue
+    const dep = await terminatorDependsOn(svc)
     // ⛔ THE REASON `null` LEAVES IT OUT IS WORTH SURFACING, NOT DISCARDING.
     // `terminatorDependsOn` computes a `detail` explaining why it could not
     // tell, and this route read only `.dependsOn` — while `null` is precisely
@@ -244,8 +325,10 @@ export async function POST(req: NextRequest) {
     // terminator is left running and Windows refuses the stop. The operator got
     // "The restart did not take effect" with no hint that an unreadable
     // dependency field was the cause. Carried into the response below.
-    if (dep.dependsOn === true) hubDependents = [TERMINATOR_SERVICE]
-    dependencyDetail = dep.dependsOn === null ? dep.detail : null
+    if (dep.dependsOn === true && !hubDependents.includes(TERMINATOR_SERVICE)) {
+      hubDependents.push(TERMINATOR_SERVICE)
+    }
+    if (dep.dependsOn === null && dependencyDetail === null) dependencyDetail = dep.detail
   }
 
   // ⛔ THE ROUTE OWNS THE LOG HEADER. Without a run id written BEFORE the task
@@ -287,11 +370,16 @@ export async function POST(req: NextRequest) {
   const withdraw = () => releaseRunLock(paths.lock, lockEnv, { onlyIfPending: true, runId })
 
   try {
-    fs.writeFileSync(paths.log, buildRestartHeader(runId, target.service), 'utf8')
+    fs.writeFileSync(paths.log, buildRestartHeader(runId, services), 'utf8')
     fs.writeFileSync(
       paths.wrapper,
       buildRestartWrapper({
-        service: target.service,
+        // ⛔ ONE WRAPPER FOR THE WHOLE LIST, BECAUSE THE RUN LOCK IS ONE FILE.
+        // `restartPaths` gives a single `logs/service-restart.lock`, so two
+        // concurrent restarts cannot exist — one POST per console would have
+        // the second refused with 409. The wrapper walks the services in order
+        // and stops the shared front door ONCE, bringing it back LAST.
+        services,
         log: paths.log,
         lock: paths.lock,
         taskName: RESTART_TASK_NAME,
@@ -361,7 +449,11 @@ export async function POST(req: NextRequest) {
   // audit write queued after it is one that may never happen — "who restarted
   // the console, and why" is exactly what an audit log is read for.
   try {
-    await recordSystemChanges(user.id, [{ key: purpose, from: null, to: target.service }], 'service_restart')
+    await recordSystemChanges(
+      user.id,
+      [{ key: purpose, from: null, to: services.join(', ') }],
+      'service_restart',
+    )
   } catch { /* never block the restart on the audit row */ }
 
   try {
@@ -395,7 +487,8 @@ export async function POST(req: NextRequest) {
     // out. Report it as started, because it was.
     return NextResponse.json({
       started: true,
-      service: target.service,
+      services,
+      absentServices: absent,
       why: target.why,
       runId,
       dependencyDetail,
@@ -407,7 +500,14 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     started: true,
-    service: target.service,
+    // ⛔ THE LIST, AND NOTHING DERIVED FROM IT TWICE. The panel reads these
+    // names to say what is restarting and to size its own wait limit; a second
+    // singular `service` field beside them is how the two drift apart (see the
+    // `selfRestart` note below).
+    services,
+    // ⛔ NAMED RATHER THAN DROPPED. A suite missing one app still applies the
+    // address to the rest, and the operator is told which one was skipped.
+    absentServices: absent,
     why: target.why,
     runId,
     // ⛔ `selfRestart` WAS REMOVED (1.63.0): it was computed, returned, and read

@@ -388,6 +388,172 @@ test('console-url PUT refuses a duplicated key before writing anything', async (
   }
 })
 
+// ── all four consoles ───────────────────────────────────────────────────────
+
+type AppRow = {
+  slug: string
+  label: string
+  service: string
+  publicPort: number
+  locatable: boolean | null
+  state?: string
+  saved: string | null
+  running?: string | null
+  runningSource?: string | null
+  expected: string | null
+  matchesExpected?: boolean | null
+  note?: string | null
+  error?: string | null
+  files?: Array<{ role: string; path: string }>
+  takesEffectOnRestart?: boolean | null
+  restartServices?: string[]
+}
+
+const appsOf = (body: Record<string, unknown>) => body.apps as AppRow[]
+const bySlug = (body: Record<string, unknown>, slug: string) =>
+  appsOf(body).find((a) => a.slug === slug) as AppRow
+
+test('console-url GET reports ALL FOUR consoles and derives the other three addresses', async () => {
+  sandbox('NEXTAUTH_URL=https://console.example.com:3000\n')
+  try {
+    session('admin')
+    const { body } = (await consoleUrlRoute.GET()) as unknown as Answer
+    // ⛔ THREE OF THESE PRODUCTS HAVE NO SETTINGS PAGE OF THEIR OWN, so this
+    // payload is the only place an operator can see their console addresses.
+    assert.deepEqual(appsOf(body).map((a) => a.slug), ['netvault', 'logvault', 'ddivault', 'spanvault'])
+    assert.deepEqual(
+      appsOf(body).map((a) => a.expected),
+      [
+        'https://console.example.com:3000',
+        'https://console.example.com:3004',
+        'https://console.example.com:3006',
+        'https://console.example.com:3008',
+      ],
+      'one host, one transport, four fixed ports',
+    )
+    assert.deepEqual(appsOf(body).map((a) => a.service), ['NetVault', 'LogVault-App', 'DDIVault-App', 'SpanVault-App'])
+    // ⛔ SpanVault's Express API must restart with its console: it reads the same
+    // NEXTAUTH_URL into an SSRF allow-list (spanvault/api/rbacScope.js).
+    assert.deepEqual(bySlug(body, 'spanvault').restartServices, ['SpanVault-App', 'SpanVault-API'])
+  } finally {
+    resetEnv()
+  }
+})
+
+test('console-url GET: the hub reads its OWN process env; a satellite is NOT guessed', async () => {
+  sandbox('NEXTAUTH_URL=https://console.example.com:3000\n')
+  try {
+    process.env.NEXTAUTH_URL = 'http://old.invalid:3000'
+    session('admin')
+    const { body } = (await consoleUrlRoute.GET()) as unknown as Answer
+    const hub = bySlug(body, 'netvault')
+    assert.equal(hub.locatable, true)
+    assert.equal(hub.saved, 'https://console.example.com:3000')
+    // ⛔ THE HUB'S "RUNNING" IS PROOF (its own environment); a satellite's would
+    // only ever be a FILE, and the payload says which it is showing.
+    assert.equal(hub.running, 'http://old.invalid:3000')
+    assert.equal(hub.runningSource, 'process')
+
+    for (const slug of ['logvault', 'ddivault', 'spanvault']) {
+      const row = bySlug(body, slug)
+      // ⛔ `null`, NEVER `false`: `reg query` fails identically for an absent
+      // service, an absent value and a refused permission, so claiming "not
+      // installed" would be a guess presented as a fact. Off Windows we cannot
+      // read it at all.
+      assert.equal(row.locatable, null, slug)
+      assert.equal(row.saved, null, slug)
+      assert.equal(row.matchesExpected, null, slug)
+      assert.deepEqual(row.files, [], slug)
+      // ⛔ AND IT SAYS SO IN WORDS AN OPERATOR CAN ACT ON — never silence.
+      assert.match(String(row.note), /Could not locate/, slug)
+      assert.match(String(row.note), /unknown, not a clean state/, slug)
+      // The shadow verdict for a console we could not read is `unknown`, never `clear`.
+      assert.equal((row as unknown as { shadow: { state: string } }).shadow.state, 'unknown', slug)
+      assert.equal(row.takesEffectOnRestart, null, slug)
+    }
+  } finally {
+    resetEnv()
+  }
+})
+
+test('console-url PUT fans out, and a satellite it cannot locate NEVER rolls the hub back', async () => {
+  const dir = sandbox('NEXTAUTH_URL=http://old.invalid:3000\n')
+  try {
+    session('admin')
+    const { status, body } = (await consoleUrlRoute.PUT(
+      req({ url: 'http://127.0.0.1:3000' }),
+    )) as unknown as Answer
+    assert.equal(status, 200)
+    assert.equal(body.ok, true)
+    // ⛔ THE HUB'S OWN WRITE LANDED AND STAYED. Three satellites could not even
+    // be located here, and undoing a verified write to the hub's secret-bearing
+    // deploy source because of that would turn a partial success into a total
+    // failure for no safety gain.
+    assert.match(fs.readFileSync(path.join(dir, '.env'), 'utf8'), /127\.0\.0\.1:3000/)
+    assert.match(
+      fs.readFileSync(path.join(dir, '.next', 'standalone', '.env.local'), 'utf8'),
+      /127\.0\.0\.1:3000/,
+    )
+
+    assert.deepEqual(appsOf(body).map((a) => a.slug), ['netvault', 'logvault', 'ddivault', 'spanvault'])
+    // ⛔ EACH SATELLITE IS `unknown` WITH A REASON — never `saved`, never silent.
+    for (const slug of ['logvault', 'ddivault', 'spanvault']) {
+      const row = bySlug(body, slug)
+      assert.equal(row.state, 'unknown', slug)
+      assert.equal(row.locatable, null, slug)
+      assert.match(String(row.note), /Could not locate/, slug)
+    }
+    // ⛔ AND ONLY THE CONSOLES THAT ACTUALLY CHANGED ARE OFFERED A RESTART.
+    // Bouncing LogVault for a write that never reached it is an outage for
+    // nothing.
+    assert.deepEqual(body.restartServices, ['NetVault'])
+    assert.equal(body.restartRequired, true)
+    // The derived addresses are still reported, so the operator can see what
+    // those three SHOULD be even though we could not write them.
+    assert.equal(bySlug(body, 'spanvault').expected, 'http://127.0.0.1:3008')
+  } finally {
+    resetEnv()
+  }
+})
+
+test('console-url PUT writes a satellite when its install directory IS readable', async () => {
+  // ⛔ THE ONLY PATH THAT CANNOT BE EXERCISED OFF WINDOWS IS THE REGISTRY READ
+  // ITSELF, so the write it leads to is pinned in tests/envTargets.test.ts
+  // against real files (`writeConsoleKey`, both install layouts, deploy source
+  // first). This test pins the ROUTE's half: that it asks for all four, in
+  // order, hub first, and reports each one separately.
+  sandbox('NEXTAUTH_URL=http://old.invalid:3000\n')
+  try {
+    session('super_admin')
+    const { body } = (await consoleUrlRoute.PUT(req({ url: 'http://127.0.0.1:3000' }))) as unknown as Answer
+    assert.equal(appsOf(body)[0].slug, 'netvault', 'the hub is written first')
+    assert.equal(appsOf(body)[0].state, 'unknown', 'off Windows even the hub cannot read its own pins')
+    // ⛔ THE HUB'S TOP-LEVEL VERDICT IS THE HUB ROW'S, NOT A SECOND DERIVATION.
+    assert.equal(body.takesEffectOnRestart, appsOf(body)[0].takesEffectOnRestart)
+    assert.match(String(body.shadowNote), /not a clean bill of health/)
+  } finally {
+    resetEnv()
+  }
+})
+
+test('console-url PUT refuses a loopback port before anything is written', async () => {
+  const dir = sandbox('NEXTAUTH_URL=http://old.invalid:3000\n')
+  try {
+    session('admin')
+    // ⛔ THE DOCUMENTED LOCKOUT: 13000 is the port the TLS front door proxies to,
+    // reachable only from the server itself, and this route printed it as the
+    // field's own placeholder for a while.
+    const { status, body } = (await consoleUrlRoute.PUT(
+      req({ url: 'http://127.0.0.1:13000' }),
+    )) as unknown as Answer
+    assert.equal(status, 400)
+    assert.match(String(body.error), /loopback/)
+    assert.match(fs.readFileSync(path.join(dir, '.env'), 'utf8'), /old\.invalid/)
+  } finally {
+    resetEnv()
+  }
+})
+
 // ════════════════════════════════════════════════════════════════════════════
 // /api/system/entra
 // ════════════════════════════════════════════════════════════════════════════

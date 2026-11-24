@@ -16,11 +16,18 @@
 //
 // ⛔ THE SERVICE NAME IS A CONSTANT HERE, NEVER A REQUEST FIELD. A route that
 // restarts whatever service a JSON body names is a denial-of-service primitive
-// handed to anyone who reaches it; the only thing this feature needs to restart
-// is the hub.
+// handed to anyone who reaches it.
+//
+// ⛔ AND THAT RULE SURVIVED THE HUB LEARNING TO WRITE ALL FOUR CONSOLES'
+// ADDRESSES. A console-address change can now need `LogVault-App`,
+// `DDIVault-App`, `SpanVault-App` and `SpanVault-API` restarted as well — so the
+// request carries a CLOSED ENUM OF APP SLUGS (`lib/consoles.ts`,
+// `asConsoleSlug`) and the slug→service mapping stays here, in code. A slug is
+// one of four constants; a service name would be anything the caller typed.
 
 import { psLiteral } from './tlsTransport.ts'
 import { psArmGuard, psLockHeartbeat, psLockTakeover } from './runLock.ts'
+import { CONSOLES, HUB_SLUG, consoleRestartServices, type ConsoleSlug } from './consoles.ts'
 
 /**
  * What the operator is trying to apply. ⛔ A PURPOSE, NEVER A SERVICE NAME FROM
@@ -36,16 +43,21 @@ export function isRestartPurpose(v: unknown): v is RestartPurpose {
 }
 
 /** The hub. Reads NEXTAUTH_URL and the ENTRA_* values once, at startup. */
-export const HUB_SERVICE = 'NetVault'
+export const HUB_SERVICE = CONSOLES[HUB_SLUG].service
 /** The TLS front door. ⛔ THIS is the process that holds the certificate. */
 export const TERMINATOR_SERVICE = 'NocVault-Tls'
 
-export type RestartTarget =
-  | { service: string; why: string }
-  | { service: null; why: string }
+/**
+ * ⛔ A LIST, NOT A SERVICE, SINCE THE HUB OWNS FOUR CONSOLE ADDRESSES. It used
+ * to be `{ service: string | null }` and `null` meant "there is nothing to
+ * restart" — the certificate-with-no-terminator case. An empty list says the
+ * same thing without a second shape for "none", and the callers that only ever
+ * wanted one service read `services[0]` from a list of one.
+ */
+export type RestartTarget = { services: string[]; why: string }
 
 /**
- * Which service has to restart for this change to take effect.
+ * Which services have to restart for this change to take effect.
  *
  * ⛔ A CERTIFICATE IS NOT RESTARTED BY RESTARTING THE APP. NetVault's
  * standalone server never terminates TLS on this product — `NocVault-Tls`
@@ -63,29 +75,62 @@ export type RestartTarget =
  * saying "restart X" there sends an operator to bounce a service for no
  * effect and conclude the certificate is broken.
  */
-export function resolveRestartTarget(purpose: RestartPurpose, terminatorPresent: boolean): RestartTarget {
+export function resolveRestartTarget(
+  purpose: RestartPurpose,
+  terminatorPresent: boolean,
+  /**
+   * Which consoles changed, for `console-address`.
+   *
+   * ⛔ IT DEFAULTS TO THE HUB, WHICH IS THE ANSWER THIS FUNCTION ALWAYS GAVE.
+   * The GET handler has no way to know which apps a pending change covers, so
+   * it asks with the default and gets today's behaviour; the POST is told, from
+   * a closed enum, and gets the full list.
+   */
+  apps: readonly ConsoleSlug[] = [HUB_SLUG],
+): RestartTarget {
   if (purpose === 'certificate') {
     if (!terminatorPresent) {
       return {
-        service: null,
+        services: [],
         why:
           'HTTPS is not turned on, so nothing is serving this certificate yet and there is nothing to '
           + 'restart. Turn HTTPS on from Settings → HTTPS and the new certificate is used from the start.',
       }
     }
     return {
-      service: TERMINATOR_SERVICE,
+      services: [TERMINATOR_SERVICE],
       why:
         `${TERMINATOR_SERVICE} is the process that terminates TLS and it reads the certificate when it `
         + 'starts. Restarting it serves the new certificate; the four consoles behind it are not restarted.',
     }
   }
+  if (purpose === 'sso') {
+    // ⛔ THE DIRECTORY SETTINGS ARE THE HUB'S ALONE. The satellites have no
+    // Entra configuration — they verify a token the hub signed — so fanning an
+    // SSO change out to them would bounce three consoles for no change at all.
+    return {
+      services: [HUB_SERVICE],
+      why:
+        'The directory settings are read once at startup, so single sign-on keeps using the old '
+        + `values until ${HUB_SERVICE} restarts.`,
+    }
+  }
+  // ⛔ DEDUPED, AND THE COMPANION SERVICES COME WITH THEIR CONSOLE.
+  // `SpanVault-API` reads the same `NEXTAUTH_URL` out of the same file (its
+  // dotenv loads the root `.env.local`) and puts it into the SSRF allow-list
+  // that decides which hostnames a server-side fetch may use
+  // (`spanvault/api/rbacScope.js`). Restart only `SpanVault-App` and the API
+  // goes on trusting the old hostname and refusing the new one.
+  const services = [...new Set(apps.flatMap((slug) => consoleRestartServices(slug)))]
+  const labels = [...new Set(apps.map((slug) => CONSOLES[slug].label))]
   return {
-    service: HUB_SERVICE,
+    services,
     why:
-      purpose === 'console-address'
-        ? `NextAuth builds its options once at startup, so sign-in keeps using the old address until ${HUB_SERVICE} restarts.`
-        : `The directory settings are read once at startup, so single sign-on keeps using the old values until ${HUB_SERVICE} restarts.`,
+      services.length <= 1
+        ? 'NextAuth builds its options once at startup, so sign-in keeps using the old address '
+          + `until ${services[0] || HUB_SERVICE} restarts.`
+        : `NextAuth builds its options once at startup, so ${labels.join(', ')} keep using their old `
+          + `addresses until these restart: ${services.join(', ')}.`,
   }
 }
 
@@ -135,15 +180,26 @@ export function restartPaths(repoRoot: string): RestartPaths {
  * left down by a settings page.
  */
 export function buildRestartWrapper(opts: {
-  service: string
+  /**
+   * The services to restart, in order.
+   *
+   * ⛔ A LIST, AND THE WRAPPER — NOT THE ROUTE — IS WHAT WALKS IT. The run lock
+   * is a SINGLE file (`restartPaths` → one `logs/service-restart.lock`), so two
+   * concurrent restarts are impossible by construction; firing one POST per
+   * console would mean the second, third and fourth being refused with 409. One
+   * wrapper taking the list also means the shared TLS front door is stopped
+   * ONCE for the whole set and started again LAST, instead of being bounced
+   * once per console.
+   */
+  services: string[]
   log: string
   lock: string
   taskName: string
   /**
-   * Services that DEPEND ON `service` and must be stopped before it, then
-   * started again after.
+   * Services that DEPEND ON the services above and must be stopped before
+   * them, then started again after.
    *
-   * ⛔ WITHOUT THIS THE HUB RESTART IS A NO-OP THAT REPORTS SUCCESS.
+   * ⛔ WITHOUT THIS THE RESTART IS A NO-OP THAT REPORTS SUCCESS.
    * `NocVault-Tls` declares `DependOnService NetVault`, so Windows REFUSES
    * `sc stop NetVault` with 1051 (ERROR_DEPENDENT_SERVICES_RUNNING) while the
    * terminator is running. The stop fails, the following `sc start` returns
@@ -163,15 +219,20 @@ export function buildRestartWrapper(opts: {
    */
   runId: string
 }): string {
-  const svc = psLiteral(opts.service)
-  const deps = (opts.dependents || []).filter((d) => d && d !== opts.service)
+  const services = opts.services.filter((s) => s)
+  const servicesLiteral = services.length ? `@(${services.map(psLiteral).join(', ')})` : '@()'
+  // ⛔ A SERVICE IS NEVER ITS OWN DEPENDENT, and with a list that filter has to
+  // consider EVERY service in the run: stopping SpanVault-App "as a dependent"
+  // of SpanVault-API and then stopping it again as a target would double the
+  // outage and confuse the verdict.
+  const deps = (opts.dependents || []).filter((d) => d && !services.includes(d))
   const depsLiteral = deps.length ? `@(${deps.map(psLiteral).join(', ')})` : '@()'
   return [
     '# Generated by app/api/system/service-restart. Overwritten on every run.',
     "$ErrorActionPreference = 'Continue'",
     `$log  = ${psLiteral(opts.log)}`,
     `$lock = ${psLiteral(opts.lock)}`,
-    `$svc  = ${svc}`,
+    `$services = ${servicesLiteral}`,
     'New-Item -ItemType Directory -Force -Path (Split-Path -Parent $log) | Out-Null',
     // ⛔ BEFORE ANY `sc.exe` CALL. An un-armed wrapper must stop a service.
     ...psArmGuard({ runId: opts.runId, taskName: opts.taskName, quote: psLiteral }),
@@ -185,15 +246,13 @@ export function buildRestartWrapper(opts: {
     // there would be a window — task scheduled, wrapper not yet started — in
     // which the log still holds the PREVIOUS run's verdict, and the panel
     // would present it as this run's result.
-    '"[NV-RESTART] service=$svc started $(Get-Date -Format s)" | Out-File -FilePath $log -Append -Encoding UTF8',
+    '"[NV-RESTART] services=$($services -join \', \') started $(Get-Date -Format s)" | Out-File -FilePath $log -Append -Encoding UTF8',
     `$deps = ${depsLiteral}`,
     '$rc = 1',
-    // ⛔ THE PID, NOT "IS IT RUNNING". A service that never stopped is still
-    // Running, and that is exactly what a refused stop leaves behind. The only
-    // evidence a restart happened is a DIFFERENT process.
-    '$before = (Get-CimInstance Win32_Service -Filter "Name=\'$svc\'" -ErrorAction SilentlyContinue).ProcessId',
-    '"[NV-RESTART] pid before: $before" | Out-File -FilePath $log -Append -Encoding UTF8',
+    '$allOk = $true',
     'try {',
+    // ⛔ THE DEPENDENTS COME DOWN ONCE, FOR THE WHOLE SET. Stopping the shared
+    // front door per console would take the public ports down N times.
     '    foreach ($d in $deps) {',
     '        $ds = (Get-Service -Name $d -ErrorAction SilentlyContinue)',
     '        if ($ds -and $ds.Status -ne \'Stopped\') {',
@@ -203,16 +262,22 @@ export function buildRestartWrapper(opts: {
     '            while ($dw.Elapsed.TotalSeconds -lt 45 -and (Get-Service -Name $d -ErrorAction SilentlyContinue).Status -ne \'Stopped\') { Start-Sleep -Milliseconds 250 }',
     '        }',
     '    }',
-    '    $stopOut = (& sc.exe stop $svc 2>&1 | Out-String).Trim()',
-    '    "[NV-RESTART] stop issued: $($stopOut -replace \'\\s+\', \' \')" | Out-File -FilePath $log -Append -Encoding UTF8',
-    '    $sw = [Diagnostics.Stopwatch]::StartNew()',
-    '    while ($sw.Elapsed.TotalSeconds -lt 60) {',
-    '        if ((Get-Service -Name $svc -ErrorAction SilentlyContinue).Status -eq \'Stopped\') { break }',
-    `        ${psLockHeartbeat()}`,
-    '        Start-Sleep -Milliseconds 250',
-    '    }',
-    '    $state = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status',
-    '    "[NV-RESTART] state after $([int]$sw.ElapsedMilliseconds) ms: $state" | Out-File -FilePath $log -Append -Encoding UTF8',
+    '    foreach ($svc in $services) {',
+    // ⛔ THE PID, NOT "IS IT RUNNING". A service that never stopped is still
+    // Running, and that is exactly what a refused stop leaves behind. The only
+    // evidence a restart happened is a DIFFERENT process.
+    '        $before = (Get-CimInstance Win32_Service -Filter "Name=\'$svc\'" -ErrorAction SilentlyContinue).ProcessId',
+    '        "[NV-RESTART] service=$svc pid before: $before" | Out-File -FilePath $log -Append -Encoding UTF8',
+    '        $stopOut = (& sc.exe stop $svc 2>&1 | Out-String).Trim()',
+    '        "[NV-RESTART] service=$svc stop issued: $($stopOut -replace \'\\s+\', \' \')" | Out-File -FilePath $log -Append -Encoding UTF8',
+    '        $sw = [Diagnostics.Stopwatch]::StartNew()',
+    '        while ($sw.Elapsed.TotalSeconds -lt 60) {',
+    '            if ((Get-Service -Name $svc -ErrorAction SilentlyContinue).Status -eq \'Stopped\') { break }',
+    `            ${psLockHeartbeat()}`,
+    '            Start-Sleep -Milliseconds 250',
+    '        }',
+    '        $state = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status',
+    '        "[NV-RESTART] service=$svc state after $([int]$sw.ElapsedMilliseconds) ms: $state" | Out-File -FilePath $log -Append -Encoding UTF8',
     // ⛔ UNCONDITIONAL **AND RETRIED**, and the retry is the load-bearing half.
     // The stop poll above exits either because the service reached Stopped or
     // because it timed out — and the only way it times out is the service
@@ -223,12 +288,12 @@ export function buildRestartWrapper(opts: {
     // finished stopping a few seconds later and stayed Stopped forever.
     // That is the console left down by a settings page — the one outcome
     // this function's header calls worse than a slow restart.
-    '    $running = $false',
-    '    $sw2 = [Diagnostics.Stopwatch]::StartNew()',
-    '    $attempt = 0',
-    '    while ($sw2.Elapsed.TotalSeconds -lt 150) {',
-    '        $st = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status',
-    '        if ($st -eq \'Running\') { $running = $true; break }',
+    '        $running = $false',
+    '        $sw2 = [Diagnostics.Stopwatch]::StartNew()',
+    '        $attempt = 0',
+    '        while ($sw2.Elapsed.TotalSeconds -lt 150) {',
+    '            $st = (Get-Service -Name $svc -ErrorAction SilentlyContinue).Status',
+    '            if ($st -eq \'Running\') { $running = $true; break }',
     // ⛔ AN ABSENT SERVICE IS NOT A PENDING ONE. `$st` is `$null` when
     // `Get-Service` finds nothing, and `$null` passes both `-ne` tests below —
     // so this loop used to issue `sc.exe start` ONCE A SECOND FOR 150 SECONDS
@@ -238,21 +303,30 @@ export function buildRestartWrapper(opts: {
     // could not ask", `present !== false` offers the target anyway, and
     // `serviceExists() === null` does not block it either — both deliberately,
     // so the honest place to notice is here. One line, and stop.
-    '        if ($null -eq $st) {',
-    '            "[NV-RESTART] $svc is not installed on this host - nothing to start." |',
-    '                Out-File -FilePath $log -Append -Encoding UTF8',
-    '            break',
-    '        }',
+    '            if ($null -eq $st) {',
+    '                "[NV-RESTART] service=$svc is not installed on this host - nothing to start." |',
+    '                    Out-File -FilePath $log -Append -Encoding UTF8',
+    '                break',
+    '            }',
     // Never fire into a pending transition: that is the rejection above.
-    '        if ($st -ne \'StartPending\' -and $st -ne \'StopPending\') {',
-    '            $attempt = $attempt + 1',
-    '            $startOut = (& sc.exe start $svc 2>&1 | Out-String).Trim()',
-    '            "[NV-RESTART] start attempt $attempt : $($startOut -replace \'\\s+\', \' \')" | Out-File -FilePath $log -Append -Encoding UTF8',
-    '        }',
+    '            if ($st -ne \'StartPending\' -and $st -ne \'StopPending\') {',
+    '                $attempt = $attempt + 1',
+    '                $startOut = (& sc.exe start $svc 2>&1 | Out-String).Trim()',
+    '                "[NV-RESTART] service=$svc start attempt $attempt : $($startOut -replace \'\\s+\', \' \')" | Out-File -FilePath $log -Append -Encoding UTF8',
+    '            }',
     // ⛔ THE HEARTBEAT. `LOCK_IDLE_MS` is a death signal only because this
     // runs; with one write at start, age alone reaped a live run's lock.
-    `        ${psLockHeartbeat()}`,
-    '        Start-Sleep -Milliseconds 1000',
+    `            ${psLockHeartbeat()}`,
+    '            Start-Sleep -Milliseconds 1000',
+    '        }',
+    '        $after = (Get-CimInstance Win32_Service -Filter "Name=\'$svc\'" -ErrorAction SilentlyContinue).ProcessId',
+    '        $changed = ($before -ne $after)',
+    '        "[NV-RESTART] service=$svc pid after: $after changed=$changed" | Out-File -FilePath $log -Append -Encoding UTF8',
+    '        "[NV-RESTART] service=$svc running=$running after $([int]$sw2.ElapsedMilliseconds) ms" | Out-File -FilePath $log -Append -Encoding UTF8',
+    // ⛔ ONE FAILED SERVICE FAILS THE RUN. The panel reads the verdict, and
+    // "three of four consoles took the new address" must not read as success —
+    // the fourth is the one nobody can sign in to.
+    '        if (-not ($running -and $changed)) { $allOk = $false }',
     '    }',
     // The dependents go back up LAST, and whether they do is part of the
     // verdict: a terminator left stopped means four consoles unreachable.
@@ -269,11 +343,7 @@ export function buildRestartWrapper(opts: {
     '        if (-not $ok) { $depsBack = $false }',
     '        "[NV-RESTART] dependent $d back: $ok" | Out-File -FilePath $log -Append -Encoding UTF8',
     '    }',
-    '    $after = (Get-CimInstance Win32_Service -Filter "Name=\'$svc\'" -ErrorAction SilentlyContinue).ProcessId',
-    '    $changed = ($before -ne $after)',
-    '    "[NV-RESTART] pid after: $after changed=$changed" | Out-File -FilePath $log -Append -Encoding UTF8',
-    '    "[NV-RESTART] running=$running after $([int]$sw2.ElapsedMilliseconds) ms" | Out-File -FilePath $log -Append -Encoding UTF8',
-    '    $rc = if ($running -and $changed -and $depsBack) { 0 } else { 1 }',
+    '    $rc = if ($allOk -and $depsBack) { 0 } else { 1 }',
     '} catch {',
     '    "[NV-RESTART] wrapper error: $($_.Exception.Message)" | Out-File -FilePath $log -Append -Encoding UTF8',
     '    $rc = 1',
@@ -286,7 +356,35 @@ export function buildRestartWrapper(opts: {
   ].join('\r\n')
 }
 
+/**
+ * How long a panel should wait for a verdict before admitting it cannot confirm.
+ *
+ * ⛔ IT SCALES WITH THE RUN, BECAUSE A FIXED LIMIT IS WRONG AS SOON AS THE LIST
+ * CAN HOLD MORE THAN ONE SERVICE. The wrapper's own bounds add up, per service:
+ * 60 s polling for Stopped plus 150 s of start attempts; plus, once for the run,
+ * 45 s stopping each dependent and 90 s waiting for each to come back. Four
+ * consoles (six services: SpanVault brings its API and LogVault its collector)
+ * with the front door declared is 45 + 6×210 + 90 = 1395 s — so the old flat seven-minute limit
+ * would have reported "could not confirm the restart" for a restart that was
+ * working normally, on the very change this feature exists to make.
+ */
+export function restartWaitLimitMs(serviceCount: number, dependentCount = 0): number {
+  const services = Math.max(1, Math.floor(serviceCount) || 1)
+  const deps = Math.max(0, Math.floor(dependentCount) || 0)
+  // A slack term, because the sentinel is written after the last log line and a
+  // loaded host does everything slower than its own timeout bounds.
+  return ((60 + 150) * services + (45 + 90) * deps + 60) * 1000
+}
+
 export type RestartOutcome = 'none' | 'running' | 'succeeded' | 'failed'
+
+export type ServiceVerdict = {
+  /** `''` for a log written before the per-service lines carried a name. */
+  service: string
+  /** ⛔ `null` means the line was never written — the run did not get that far. */
+  running: boolean | null
+  changed: boolean | null
+}
 
 export type RestartReport = {
   outcome: RestartOutcome
@@ -294,13 +392,17 @@ export type RestartReport = {
   lines: string[]
   /** Which run this log belongs to, so a panel never reads a stale verdict. */
   runId: string | null
+  /** Per-service, so a panel can name the console that did not come back. */
+  services: ServiceVerdict[]
+  /** The ones that failed, named. Empty when the run succeeded. */
+  failedServices: string[]
 }
 
 /** The header the ROUTE writes before scheduling, stamping this run's id. */
 export const RESTART_RUN_PREFIX = '[NV-RESTART] runId='
 
-export function buildRestartHeader(runId: string, service: string): string {
-  return `${RESTART_RUN_PREFIX}${runId} service=${service}\r\n`
+export function buildRestartHeader(runId: string, services: string[]): string {
+  return `${RESTART_RUN_PREFIX}${runId} services=${services.join(',')}\r\n`
 }
 
 /**
@@ -318,18 +420,52 @@ export function buildRestartHeader(runId: string, service: string): string {
  * service actually came back, and that line is what is read.
  */
 export function parseRestartLog(text: string | null | undefined): RestartReport {
-  if (text === null || text === undefined) return { outcome: 'none', finished: false, lines: [], runId: null }
+  const none: RestartReport = {
+    outcome: 'none', finished: false, lines: [], runId: null, services: [], failedServices: [],
+  }
+  if (text === null || text === undefined) return none
   const lines = String(text).split(/\r?\n/).map((l) => l.replace(/\s+$/, '')).filter((l) => l !== '')
   const finished = lines.some((l) => l.startsWith(RESTART_SENTINEL))
   const idLine = lines.find((l) => l.startsWith(RESTART_RUN_PREFIX))
   const runId = idLine ? (idLine.slice(RESTART_RUN_PREFIX.length).split(/\s+/)[0] || null) : null
-  if (!finished) return { outcome: 'running', finished: false, lines, runId }
+
+  // ⛔ PER SERVICE, AND THE `service=` PREFIX IS OPTIONAL ON PURPOSE. A restart
+  // can now cover up to six services, so one `running=True` anywhere in the
+  // file is not a verdict about the run — but the log on disk immediately after
+  // a deploy may still be the PREVIOUS build's, written without the prefix. An
+  // unprefixed line is therefore read as one unnamed service rather than
+  // ignored, which would turn an old failed run into `succeeded` (no lines
+  // found, nothing to disagree with).
+  const seen = new Map<string, ServiceVerdict>()
+  const at = (service: string): ServiceVerdict => {
+    const existing = seen.get(service)
+    if (existing) return existing
+    const fresh: ServiceVerdict = { service, running: null, changed: null }
+    seen.set(service, fresh)
+    return fresh
+  }
+  for (const line of lines) {
+    const run = /\[NV-RESTART\] (?:service=(\S+) )?running=(True|False)/i.exec(line)
+    if (run) at(run[1] || '').running = /^true$/i.test(run[2])
+    const pid = /\[NV-RESTART\] (?:service=(\S+) )?pid after: \S* ?changed=(True|False)/i.exec(line)
+    if (pid) at(pid[1] || '').changed = /^true$/i.test(pid[2])
+  }
+  const services = [...seen.values()]
+  if (!finished) {
+    return { outcome: 'running', finished: false, lines, runId, services, failedServices: [] }
+  }
   // ⛔ BOTH, AND `changed` IS THE LOAD-BEARING HALF. A refused stop (1051,
   // dependent service running) leaves the service Running the whole time, so
   // `running=True` alone is exactly what a restart that never happened looks
   // like. A different PID is the only proof the process was replaced.
-  const ran = lines.some((l) => /\[NV-RESTART\] running=True/i.test(l))
-  const changed = lines.some((l) => /\[NV-RESTART\] pid after: .*changed=True/i.test(l))
+  //
+  // ⛔ AND IT IS EVERY SERVICE, NOT ANY. "Three of the four consoles took the
+  // new address" is not a success: the fourth is the one nobody can sign in to.
+  const failedServices = services
+    .filter((s) => !(s.running === true && s.changed === true))
+    .map((s) => s.service)
+  const ran = services.length > 0
+  const changed = failedServices.length === 0
   // ⛔ AND THE DEPENDENTS HAVE TO BE BACK. The wrapper already makes `$depsBack`
   // a third term of its exit code — and this function deliberately ignores exit
   // codes, so that term was being written into a value nothing read. The log
@@ -338,5 +474,12 @@ export function parseRestartLog(text: string | null | undefined): RestartReport 
   // public ports were dead — a false all-clear from the one function whose
   // entire job is to refuse them.
   const depsFailed = lines.some((l) => /\[NV-RESTART\] dependent .* back: False/i.test(l))
-  return { outcome: ran && changed && !depsFailed ? 'succeeded' : 'failed', finished: true, lines, runId }
+  return {
+    outcome: ran && changed && !depsFailed ? 'succeeded' : 'failed',
+    finished: true,
+    lines,
+    runId,
+    services,
+    failedServices,
+  }
 }

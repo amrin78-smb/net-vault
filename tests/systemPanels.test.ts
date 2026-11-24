@@ -15,6 +15,8 @@ import {
   fileRoleLabel,
   base64Payload,
   redirectUriPresentation,
+  consoleDrift,
+  consoleStatePresentation,
   EXPIRY_DANGER_DAYS,
   EXPIRY_WARN_DAYS,
 } from '../components/settings/systemPanelHelpers.ts'
@@ -390,4 +392,58 @@ test('fronted does not rescue a failed or disabled transport', () => {
   assert.equal(transportPresentation('failed', { fronted: true, publicPort: 3000 }).tone, 'danger')
   assert.equal(transportPresentation('failed', { fronted: true, publicPort: 3000 }).loud, true)
   assert.equal(transportPresentation('disabled', { fronted: true, publicPort: 3000 }).normal, true)
+})
+
+// ─── the four consoles ───────────────────────────────────────────────────────
+
+test('console state: the four outcomes are four outcomes', () => {
+  assert.equal(consoleStatePresentation('saved').tone, 'ok')
+  assert.equal(consoleStatePresentation('shadowed').tone, 'warn')
+  assert.equal(consoleStatePresentation('failed').tone, 'danger')
+  assert.equal(consoleStatePresentation('unknown').tone, 'warn')
+  // ⛔ `shadowed` IS NOT `saved`: the write is durable and inert because a
+  // service environment pin wins over both files.
+  assert.notEqual(consoleStatePresentation('shadowed').state, 'saved')
+  assert.match(consoleStatePresentation('shadowed').label, /service environment/i)
+})
+
+test('console state: anything unrecognised fails closed to "could not check"', () => {
+  // ⛔ THE HUB WRITES THREE OTHER PRODUCTS IT CANNOT EVEN LOCATE WITHOUT READING
+  // THEIR SERVICES, so a missing state is a read we did not get. Rendering it
+  // like "saved" is this suite's signature bug.
+  for (const v of [undefined, null, '', 'ok', 'clean', 'SAVED']) {
+    const p = consoleStatePresentation(v as string | null | undefined)
+    assert.equal(p.state, 'unknown', String(v))
+    assert.notEqual(p.state, 'saved', String(v))
+    assert.match(p.label, /could not check/i, String(v))
+  }
+})
+
+test('console drift: a satellite on the old address is reported, not glossed over', () => {
+  // ⛔ THE PRODUCTION DEFECT, ON SCREEN: the hub on the public FQDN while the
+  // satellites were still on the raw install-time IP, leaking it into every
+  // NextAuth callback and sending users to an address the certificate does not
+  // cover.
+  const bad = consoleDrift('https://console.example.com:3004', 'http://192.0.2.10:3004')
+  assert.equal(bad.drifted, true)
+  assert.equal(bad.tone, 'warn')
+  assert.match(bad.label, /does not match/i)
+
+  const good = consoleDrift('https://console.example.com:3004', 'https://console.example.com:3004')
+  assert.equal(good.drifted, false)
+  assert.equal(good.tone, 'ok')
+  // Whitespace is not a difference.
+  assert.equal(consoleDrift('https://a.example.com:3004', ' https://a.example.com:3004 ').drifted, false)
+})
+
+test('console drift: an unknown side is `null`, never "matches"', () => {
+  // ⛔ A SATELLITE WE COULD NOT LOCATE HAS NO SAVED VALUE TO COMPARE, and
+  // rendering that as agreement is the same failed-read-as-fact the rest of
+  // this feature is careful about.
+  for (const pair of [[null, 'x'], ['x', null], [null, null], ['', 'x'], ['x', undefined]] as const) {
+    const d = consoleDrift(pair[0], pair[1])
+    assert.equal(d.drifted, null, JSON.stringify(pair))
+    assert.notEqual(d.drifted, false, JSON.stringify(pair))
+    assert.match(d.label, /not compared/i)
+  }
 })

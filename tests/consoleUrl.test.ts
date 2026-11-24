@@ -11,6 +11,8 @@ import {
   WARN_LOOPBACK,
   WARN_UNRESOLVED,
   WARN_POINTS_ELSEWHERE,
+  deriveSiblingUrl,
+  isLoopbackOnlyPort,
   type LookupFn,
 } from '../lib/consoleUrl.ts'
 
@@ -416,4 +418,79 @@ test('the decision carries no `ok` field that could be read as a verdict', async
     localAddresses: OURS,
   })
   assert.equal('ok' in d, false, 'there is exactly one verdict field and it is `decision`')
+})
+
+// ─── the loopback ports, and the other three consoles ───────────────────────
+
+test('a 1300x loopback port is REFUSED, not warned about', () => {
+  // ⛔ A DOCUMENTED LOCKOUT, CLOSED STRUCTURALLY. After a TLS cutover each
+  // console moves onto `127.0.0.1:1300X` and NocVault-Tls holds the public
+  // port. The range check accepts 13000 happily, and this route printed that
+  // very port into the field's own placeholder for a while — so it was the
+  // number an operator was most likely to type. After the restart NextAuth
+  // issues callbacks to an address no browser can reach, and nobody can sign in
+  // to change it back. A warning is not enough: an operator told "this may not
+  // work" and proceeding is locked out just as thoroughly.
+  for (const port of [13000, 13004, 13006, 13008, 13009]) {
+    const r = validateConsoleUrl(`https://netvault.example.com:${port}`, { tlsActive: true })
+    assert.equal(r.ok, false, String(port))
+    assert.match((r as { error: string }).error, /loopback ports the TLS front door proxies to/)
+  }
+  // ⛔ ONE PREDICATE, TWO CALLERS (the typed address and the derived one). A
+  // second copy of the rule in the fan-out would be a second answer to "can a
+  // browser reach this".
+  assert.equal(isLoopbackOnlyPort(13000), true)
+  assert.equal(isLoopbackOnlyPort(3000), false)
+  assert.equal(isLoopbackOnlyPort(null), false)
+  assert.equal(isLoopbackOnlyPort(undefined), false)
+  // The PUBLIC ports are untouched — this must not refuse the suite's own ports.
+  for (const port of [3000, 3004, 3006, 3008, 1300, 130000 % 65536]) {
+    const r = validateConsoleUrl(`https://netvault.example.com:${port}`, { tlsActive: true })
+    assert.equal(r.ok, true, String(port))
+  }
+})
+
+test('deriveSiblingUrl keeps the hub host and transport and swaps ONLY the port', () => {
+  // ⛔ A DERIVATION, NOT A SECOND SETTING. A satellite's NEXTAUTH_URL carries no
+  // independent information: one host, one transport (one terminator fronts all
+  // four), four fixed ports. Asking for four addresses would invite three of
+  // them to be wrong.
+  const r = deriveSiblingUrl('https://netvault.example.com:3000', 3004)
+  assert.deepEqual(r, { ok: true, url: 'https://netvault.example.com:3004' })
+  // No port on the hub's address is still a port on the satellite's.
+  assert.deepEqual(deriveSiblingUrl('https://console.example.com', 3008), {
+    ok: true,
+    url: 'https://console.example.com:3008',
+  })
+  // http stays http: the scheme follows the transport, which is shared.
+  assert.deepEqual(deriveSiblingUrl('http://192.0.2.10:3000', 3006), {
+    ok: true,
+    url: 'http://192.0.2.10:3006',
+  })
+})
+
+test('deriveSiblingUrl refuses a loopback port, and says the hub address is the cause', () => {
+  const loop = deriveSiblingUrl('https://netvault.example.com:3000', 13004)
+  assert.equal(loop.ok, false)
+  assert.match((loop as { error: string }).error, /loopback/)
+
+  const bad = deriveSiblingUrl('netvault.example.com:3000', 3004)
+  assert.equal(bad.ok, false)
+  // ⛔ IT NAMES WHERE THE PROBLEM IS. The operator typed the HUB's address; a
+  // bare "include the scheme" against a satellite they never typed would send
+  // them looking for a field that does not exist.
+  assert.match((bad as { error: string }).error, /derived from this one/)
+  for (const port of [0, -1, 70000, 1.5, Number.NaN]) {
+    assert.equal(deriveSiblingUrl('https://netvault.example.com:3000', port).ok, false, String(port))
+  }
+})
+
+test('deriveSiblingUrl does NOT re-judge the transport', () => {
+  // ⛔ THE SCHEME WAS ALREADY JUDGED AGAINST THE REAL TRANSPORT FOR THE HUB, and
+  // one terminator fronts all four — so re-running that refusal here could only
+  // produce the same answer or a disagreeing one. A `tlsActive` the caller
+  // happened not to pass would silently turn into a refusal of a correct
+  // address, on three products with no settings page of their own.
+  assert.equal(deriveSiblingUrl('http://netvault.example.com:3000', 3004).ok, true)
+  assert.equal(deriveSiblingUrl('https://netvault.example.com:3000', 3004).ok, true)
 })

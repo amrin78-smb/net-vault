@@ -18,11 +18,19 @@
 // certificate and following it would have left the old certificate serving.
 // The server decides, from `purpose` — this component never names a service.
 //
+// ⛔ AND IT IS NOT ALWAYS ONE SERVICE EITHER, SINCE THE HUB OWNS ALL FOUR
+// CONSOLE ADDRESSES. A console-address change can need `LogVault-App`,
+// `DDIVault-App`, `SpanVault-App` and `SpanVault-API` bounced as well. This
+// component passes APP SLUGS (a closed enum) and renders the service names the
+// ROUTE served back; it still never maps a slug to a service itself, because
+// the mapping that matters is the one the POST handler uses.
+//
 // ⛔ EVERY COMPONENT AT MODULE TOP LEVEL (CLAUDE.md's first critical rule).
 // No Tailwind, no hardcoded hex.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Callout, Mono } from './panelChrome.tsx'
+import { restartWaitLimitMs } from '@/lib/serviceRestart.ts'
 
 export type RestartPurpose = 'console-address' | 'certificate' | 'sso'
 
@@ -41,12 +49,25 @@ export type RestartControlProps = {
   title?: string
   /** Defaults to `true` so an un-updated call site keeps today's behaviour. */
   canRestart?: boolean
+  /**
+   * Which consoles changed, for `console-address`.
+   *
+   * ⛔ SLUGS, NEVER SERVICE NAMES, AND THE SERVER TURNS THEM INTO SERVICES.
+   * `lib/serviceRestart.ts`'s rule — a service name is never a request field —
+   * is what keeps this route from being a denial-of-service primitive, and a
+   * closed four-value enum is not a service name. The names this component
+   * DISPLAYS come from the route's own `consoleServices` map for the same
+   * reason: building them here would be a second mapping.
+   */
+  apps?: string[]
 }
 
 type RestartState = {
   available: boolean
   terminatorPresent: boolean | null
-  targets: Record<string, { service: string | null; why: string }>
+  targets: Record<string, { services: string[]; why: string }>
+  /** slug → the services that console's address needs restarted. */
+  consoleServices?: Record<string, string[]>
   inProgress: boolean
   uptimeSeconds: number
   logUnreadable?: boolean
@@ -54,6 +75,7 @@ type RestartState = {
     outcome: 'none' | 'running' | 'succeeded' | 'failed'
     finished: boolean
     runId: string | null
+    failedServices?: string[]
     lines: string[]
   }
 }
@@ -68,6 +90,9 @@ type StartedRun = {
   dependencyDetail?: string | null
   /** Whether the wrapper will stop and restart the shared TLS front door. */
   stopsDependents?: boolean
+  /** What the run is actually restarting, after absent services were dropped. */
+  services?: string[]
+  absentServices?: string[]
   error?: string
 }
 
@@ -90,17 +115,21 @@ const DEPENDENCY_HINT =
 /**
  * How long to keep waiting before admitting we cannot confirm.
  *
- * ⛔ IT HAS TO COVER THE WRAPPER'S OWN WORST CASE, and at four minutes it did
- * not. `buildRestartWrapper`'s bounds add up: up to 45 s stopping each
- * dependent, 60 s polling for Stopped, 150 s of start attempts, then up to 90 s
- * waiting for each dependent to come back — 345 s before the sentinel is
- * written on a slow host. Now that the verdict (not the hub's uptime) is what
- * declares success, a limit shorter than that would report "could not confirm"
- * for restarts that were still working normally.
+ * ⛔ IT HAS TO COVER THE WRAPPER'S OWN WORST CASE, and a FIXED limit cannot —
+ * which is why this is now `restartWaitLimitMs(serviceCount, dependentCount)`
+ * from `lib/serviceRestart.ts`, the module that owns the wrapper's timeouts. The
+ * bounds add up per service (60 s polling for Stopped + 150 s of start
+ * attempts) plus once per run (45 s stopping each dependent, 90 s waiting for
+ * it to come back). A console-address change can cover six services, so the
+ * old flat seven minutes would have reported "could not confirm the restart"
+ * for a restart that was working normally — and the verdict, not the hub's
+ * uptime, is what declares success now.
+ *
+ * This default is the single-service case, used until POST says how many.
  */
-const WAIT_LIMIT_MS = 7 * 60 * 1000
+const WAIT_LIMIT_MS = restartWaitLimitMs(1, 1)
 
-export default function RestartControl({ purpose, pending, title, canRestart = true }: RestartControlProps) {
+export default function RestartControl({ purpose, pending, title, canRestart = true, apps }: RestartControlProps) {
   const [state, setState] = useState<RestartState | null>(null)
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -117,6 +146,12 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
   const [dependencyDetail, setDependencyDetail] = useState<string | null>(null)
   /** Whether THIS run stops and restarts the shared TLS front door. */
   const stopsDependents = useRef(false)
+  /** What THIS run is restarting, as the server resolved it. */
+  const [runServices, setRunServices] = useState<string[] | null>(null)
+  /** Services this host does not have, named by the server so they are not a mystery. */
+  const [absentServices, setAbsentServices] = useState<string[]>([])
+  /** ⛔ SIZED TO THIS RUN, not to a constant. See WAIT_LIMIT_MS. */
+  const waitLimit = useRef(WAIT_LIMIT_MS)
   /** The console answered again. Progress, NEVER a verdict — see `load`. */
   const [backOnline, setBackOnline] = useState(false)
 
@@ -173,11 +208,19 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
         // front door up, which is the honest thing to say in that window.
         if (uptimeProof) setBackOnline(true)
         if (mine && data.lastRun.finished && data.lastRun.outcome === 'failed') {
-          setFailReason(data.lastRun.lines.slice(-4).join(' · ') || null)
+          // ⛔ NAME THE CONSOLE THAT DID NOT COME BACK. With up to five
+          // services in one run, "the restart did not take effect" without a
+          // name sends an operator to check all four consoles by hand.
+          const failed = data.lastRun.failedServices || []
+          setFailReason(
+            [failed.length ? `Did not restart: ${failed.join(', ')}.` : '', data.lastRun.lines.slice(-4).join(' · ')]
+              .filter(Boolean)
+              .join(' ') || null,
+          )
           setPhase('failed')
         } else if (mine && data.lastRun.finished && data.lastRun.outcome === 'succeeded') {
           setPhase('done')
-        } else if (waitingSince.current !== null && Date.now() - waitingSince.current > WAIT_LIMIT_MS) {
+        } else if (waitingSince.current !== null && Date.now() - waitingSince.current > waitLimit.current) {
           // ⛔ NEVER SPIN FOREVER. A wrapper killed before it wrote its
           // sentinel leaves `outcome: 'running'` in the log permanently.
           setPhase('unconfirmed')
@@ -204,7 +247,27 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
   }, [phase, load])
 
   const target = state?.targets?.[purpose]
-  const service = target?.service ?? null
+  /**
+   * The services this restart will bounce.
+   *
+   * ⛔ FROM THE SERVER, FOR BOTH SHAPES. For a certificate or an SSO change the
+   * route's own `targets[purpose]` is the answer. For a console address the
+   * route cannot know WHICH consoles changed, so it serves the slug→service map
+   * and this unions the rows for the apps the panel was given — still the
+   * server's mapping, never one rebuilt in the browser.
+   */
+  // ⛔ MEMOISED BECAUSE `start` DEPENDS ON IT. A fresh array every render would
+  // give the callback a new identity every render, which is the churn the
+  // exhaustive-deps rule is warning about.
+  const services = useMemo(
+    () =>
+      purpose === 'console-address' && apps && apps.length > 0 && state?.consoleServices
+        ? [...new Set(apps.flatMap((slug) => state.consoleServices?.[slug] || []))]
+        : (target?.services ?? []),
+    [purpose, apps, state?.consoleServices, target?.services],
+  )
+  const serviceLabel = (runServices ?? services).join(', ')
+  const onlyTerminator = services.length === 1 && services[0] === 'NocVault-Tls'
 
   const start = useCallback(async () => {
     setConfirming(false)
@@ -215,11 +278,18 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
     setBackOnline(false)
     stopsDependents.current = false
     myRunId.current = null
+    setRunServices(null)
+    setAbsentServices([])
     try {
       const res = await fetch('/api/system/service-restart', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ purpose }),
+        // ⛔ SLUGS ONLY, AND ONLY FOR THE PURPOSE THAT HAS THEM. The route
+        // defaults to the hub when `apps` is absent, which is what a certificate
+        // or SSO restart wants.
+        body: JSON.stringify(
+          purpose === 'console-address' && apps && apps.length > 0 ? { purpose, apps } : { purpose },
+        ),
       })
       const body = (await res.json().catch(() => ({}))) as StartedRun
       if (!res.ok) throw new Error(body?.error || `The server answered ${res.status}.`)
@@ -250,13 +320,24 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
       // restart did not take effect" and nothing else.
       setDependencyDetail(typeof body?.dependencyDetail === 'string' ? body.dependencyDetail : null)
       stopsDependents.current = body?.stopsDependents === true
+      // ⛔ WHAT THE SERVER ACTUALLY RESOLVED, which is not always what this
+      // component asked for: a service this host does not have is dropped and
+      // NAMED, and the wait limit has to be sized to the run that is really
+      // happening rather than to the list that was requested.
+      const started = Array.isArray(body?.services) ? body.services.filter((x) => typeof x === 'string') : []
+      setRunServices(started.length > 0 ? started : null)
+      setAbsentServices(Array.isArray(body?.absentServices) ? body.absentServices : [])
+      waitLimit.current = restartWaitLimitMs(
+        started.length || services.length || 1,
+        body?.stopsDependents === true ? 1 : 0,
+      )
       waitingSince.current = Date.now()
       setPhase('waiting')
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err))
       setPhase('failed')
     }
-  }, [purpose, state?.uptimeSeconds, load])
+  }, [purpose, apps, services, state?.uptimeSeconds, load])
 
   if (!pending) return null
 
@@ -270,18 +351,28 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
   }
 
   // A certificate with no terminator: there is genuinely nothing to restart.
-  if (state && target && service === null) {
+  // ⛔ AN EMPTY LIST IS THE "NOTHING TO RESTART" ANSWER, not an error: a
+  // certificate on a suite with no terminator genuinely needs no restart, and
+  // naming a service there sends an operator to bounce one for no effect.
+  if (state && target && services.length === 0) {
     return <Callout tone="info" title="Nothing to restart">{target.why}</Callout>
   }
 
   if (phase === 'waiting' || phase === 'starting') {
     return (
-      <Callout tone="info" title={phase === 'starting' ? 'Starting the restart…' : `Restarting ${service || 'the service'}…`}>
+      <Callout tone="info" title={phase === 'starting' ? 'Starting the restart…' : `Restarting ${serviceLabel || 'the service'}…`}>
         <div>
-          {service === 'NocVault-Tls'
+          {onlyTerminator
             ? 'The four consoles stay up; the public ports stop answering for a few seconds while the front door reloads.'
-            : 'This console is going down for about twenty seconds. This page will lose contact — that is expected.'}
+            : (runServices ?? services).includes('NetVault')
+              ? 'This console is going down for about twenty seconds. This page will lose contact — that is expected.'
+              : 'The consoles being restarted stop answering for about twenty seconds each. This page stays up.'}
         </div>
+        {absentServices.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            Not installed on this host, so skipped: <Mono>{absentServices.join(', ')}</Mono>
+          </div>
+        )}
         {lostContact && (
           <div style={{ marginTop: 8 }}>
             Contact lost, as expected. This page keeps checking and will confirm as soon as the console
@@ -310,7 +401,7 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
     return (
       <Callout tone="ok" title="Restarted — the change is now in force">
         <div>
-          {service} restarted and this page is talking to a new process. The saved value is the one
+          {serviceLabel} restarted and the run reported its own verdict. The saved value is the one
           being used.
         </div>
         <div style={{ marginTop: 8 }}>
@@ -326,7 +417,7 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
     return (
       <Callout tone="warn" title="Could not confirm the restart">
         <div>
-          The restart was started, but this page has not seen proof that {service} came back with a new
+          The restart was started, but this page has not seen proof that {serviceLabel} came back with a new
           process. It may still have worked. Check the service on the server before assuming the saved
           value is in force.
         </div>
@@ -344,8 +435,8 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
     return (
       <Callout tone="danger" title="The restart did not take effect">
         <div>
-          {service} was asked to restart and the process did not change, so the old value is still in
-          use.
+          {serviceLabel} was asked to restart and at least one process did not change, so the old
+          value is still in use on that console.
         </div>
         {/* ⛔ THE LIKELIEST CAUSE, NAMED. An unreadable dependency field means
             the front door was left running, and Windows then REFUSES the stop
@@ -370,7 +461,7 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
       )}
       {state?.logUnreadable && (
         <Callout tone="warn" title="The restart log could not be read">
-          A restart may have run. This panel cannot report its outcome, so treat the state of {service || 'the service'} as
+          A restart may have run. This panel cannot report its outcome, so treat the state of {serviceLabel || 'the service'} as
           unknown rather than as unchanged.
         </Callout>
       )}
@@ -396,11 +487,11 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
       ) : confirming ? (
         <Callout
           tone="warn"
-          title={service === 'NocVault-Tls' ? 'Reload the TLS front door?' : 'Restart the console now?'}
+          title={onlyTerminator ? 'Reload the TLS front door?' : services.length > 1 ? 'Restart these services now?' : 'Restart the console now?'}
           actions={
             <>
               <button type="button" className="btn-primary readonly-allowed" onClick={() => void start()} style={{ padding: '8px 18px' }}>
-                Yes, restart {service}
+                Yes, restart {serviceLabel}
               </button>
               <button type="button" className="btn-secondary" onClick={() => setConfirming(false)} style={{ padding: '8px 18px' }}>
                 Not now
@@ -410,18 +501,21 @@ export default function RestartControl({ purpose, pending, title, canRestart = t
         >
           <div>{target?.why}</div>
           <div style={{ marginTop: 8 }}>
-            {service === 'NocVault-Tls'
+            {onlyTerminator
               ? 'The consoles themselves are not restarted. The public ports stop answering for a few seconds.'
-              : 'Everyone using this console is signed out of their current page for about twenty seconds. The other three consoles are unaffected.'}
+              : services.length > 1
+                ? `Everyone using ${serviceLabel} is interrupted for about twenty seconds each, in that order. `
+                  + 'Any console not listed is unaffected.'
+                : 'Everyone using this console is signed out of their current page for about twenty seconds. The other three consoles are unaffected.'}
           </div>
         </Callout>
       ) : (
         <Callout tone="warn" title={title || 'Saved, but not yet in force'}>
           <div>{target?.why || 'This change takes effect when the service restarts.'}</div>
-          {service && (
+          {services.length > 0 && (
             <div style={{ marginTop: 10 }}>
               <button type="button" className="btn-primary readonly-allowed" onClick={() => setConfirming(true)} disabled={Boolean(state?.inProgress)} style={{ padding: '8px 18px' }}>
-                {state?.inProgress ? 'A restart is already running…' : <>Restart <Mono>{service}</Mono> now</>}
+                {state?.inProgress ? 'A restart is already running…' : <>Restart <Mono>{services.join(', ')}</Mono> now</>}
               </button>
             </div>
           )}

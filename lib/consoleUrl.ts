@@ -49,6 +49,39 @@ export function isIpv4(host: string): boolean {
   return !!m && m.slice(1).every((o) => o.length <= 3 && Number(o) >= 0 && Number(o) <= 255)
 }
 
+// ⛔ THE LOOPBACK PORTS THE TLS TERMINATOR PROXIES TO. After a cutover each
+// console moves off its public port onto `127.0.0.1:1300X` (13000/13004/13006/
+// 13008 — see installer/terminator and lib/terminatorState.ts), and
+// `NocVault-Tls` holds the public one. Those ports are reachable from the
+// server itself and from nowhere else.
+const LOOPBACK_PORT_RE = /^1300\d$/
+
+/**
+ * Is this a port only this machine can reach?
+ *
+ * ⛔ THIS CLOSES A DOCUMENTED LOCKOUT STRUCTURALLY RATHER THAN BY WARNING. The
+ * range check below cannot tell a loopback-only port from a public one, so
+ * `https://console.example.com:13000` was ACCEPTED — and the route printed that
+ * very port into the field's own placeholder for a while, so it was the number
+ * an operator was most likely to type. After the restart NextAuth issues
+ * callbacks to an address no browser can reach and nobody can sign in to change
+ * it back. It is REFUSED, not warned about, for the same reason as the
+ * scheme-versus-transport disagreement: an operator told "this may not work"
+ * and proceeding is locked out just as thoroughly.
+ *
+ * ⛔ ONE PREDICATE, TWO CALLERS. `validateConsoleUrl` refuses a typed one and
+ * `deriveSiblingUrl` refuses a derived one; a second copy of the rule in the
+ * fan-out would be a second answer to "can a browser reach this".
+ */
+export function isLoopbackOnlyPort(port: number | null | undefined): boolean {
+  return port !== null && port !== undefined && LOOPBACK_PORT_RE.test(String(port))
+}
+
+export const REFUSE_LOOPBACK_PORT =
+  'is one of the loopback ports the TLS front door proxies to (1300x). Only this server can reach '
+  + 'it, so sign-in would fail for everyone — including whoever needs to change it back. Use the '
+  + 'public port a browser connects to.'
+
 export const WARN_IP_ADDRESS =
   'This is an IP address. A certificate must carry it as an IP SAN, which public CAs do not '
   + 'issue for private addresses — a hostname is usually the better choice.'
@@ -148,6 +181,10 @@ export function validateConsoleUrl(input: unknown, ctx: ConsoleUrlContext = {}):
     port = Number(parsed.port)
     if (!Number.isInteger(port) || port < PORT_MIN || port > PORT_MAX) {
       return { ok: false, error: `Port ${parsed.port} is out of range.` }
+    }
+    // ⛔ IN RANGE IS NOT REACHABLE. See `isLoopbackOnlyPort`.
+    if (isLoopbackOnlyPort(port)) {
+      return { ok: false, error: `Port ${port} ${REFUSE_LOOPBACK_PORT}` }
     }
   }
 
@@ -341,4 +378,53 @@ export async function decideConsoleUrl(
   }
 
   return { decision: 'accept', ...accepted, warnings, resolution }
+}
+
+// ─── the other three consoles ───────────────────────────────────────────────
+
+export type SiblingUrlResult = { ok: true; url: string } | { ok: false; error: string }
+
+/**
+ * A satellite console's address, derived from the hub's.
+ *
+ * ⛔ IT IS A DERIVATION, NOT A SECOND SETTING, AND THAT IS THE WHOLE DESIGN.
+ * A satellite's `NEXTAUTH_URL` carries no independent information: the four
+ * consoles are reached on ONE host, over ONE transport, on four fixed ports —
+ * one TLS terminator fronts all of them. So there is exactly one thing an
+ * operator can decide (the hub's address) and three values that follow from it.
+ * Asking for four addresses would invite three of them to be wrong, and a
+ * satellite whose host disagrees with the hub's bounces every cross-app
+ * redirect with no error anywhere.
+ *
+ * ⛔ PURE, AND IT RE-VALIDATES RATHER THAN TRUSTING ITS INPUT. The caller has
+ * normally just put this string through `decideConsoleUrl`, but this function
+ * is what writes three files on three other products, so it parses the host
+ * itself. `validateConsoleUrl` is called with NO context deliberately:
+ * `tlsActive` has already been judged against the real transport for the hub's
+ * own address, and one terminator fronts all four, so re-judging it here could
+ * only ever produce the same answer or a disagreeing one.
+ *
+ * ⛔ THE DERIVED PORT GOES THROUGH THE LOOPBACK REFUSAL TOO. A caller handing
+ * this `13004` — a cutover's loopback port rather than LogVault's public 3004 —
+ * would otherwise produce an address only the server can reach, on a console
+ * whose operator cannot see the result until someone fails to sign in.
+ */
+export function deriveSiblingUrl(hubUrl: unknown, port: number): SiblingUrlResult {
+  if (!Number.isInteger(port) || port < PORT_MIN || port > PORT_MAX) {
+    return { ok: false, error: `Port ${String(port)} is out of range.` }
+  }
+  if (isLoopbackOnlyPort(port)) {
+    return { ok: false, error: `Port ${port} ${REFUSE_LOOPBACK_PORT}` }
+  }
+  const shape = validateConsoleUrl(hubUrl)
+  if (!shape.ok) {
+    return {
+      ok: false,
+      error: `The other consoles' addresses are derived from this one, which could not be used: ${shape.error}`,
+    }
+  }
+  // ⛔ THE PORT IS REPLACED, NOT APPENDED. `shape.port` may be null (the hub on
+  // a default port) or the hub's own port; either way the satellite's port is
+  // the one that belongs to the satellite.
+  return { ok: true, url: `${shape.scheme}://${shape.host}:${port}` }
 }

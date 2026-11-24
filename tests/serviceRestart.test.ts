@@ -22,14 +22,16 @@ import {
   parseRestartLog,
   resolveRestartTarget,
   restartPaths,
+  restartWaitLimitMs,
 } from '../lib/serviceRestart.ts'
+import { CONSOLES } from '../lib/consoles.ts'
 
 // ─── which service applies which change ─────────────────────────────────────
 
 test('a certificate is applied by the terminator, NOT by the hub', () => {
   const t = resolveRestartTarget('certificate', true)
-  assert.equal(t.service, TERMINATOR_SERVICE)
-  assert.notEqual(t.service, HUB_SERVICE)
+  assert.deepEqual(t.services, [TERMINATOR_SERVICE])
+  assert.ok(!t.services.includes(HUB_SERVICE))
   assert.match(t.why, /terminates TLS/i)
 })
 
@@ -38,18 +40,76 @@ test('with no terminator a certificate needs no restart at all', () => {
   // bouncing a service achieves nothing and invites the conclusion that the
   // certificate is broken.
   const t = resolveRestartTarget('certificate', false)
-  assert.equal(t.service, null)
+  // ⛔ AN EMPTY LIST, NOT A LIST WITH A NULL IN IT: "nothing to restart" has one
+  // spelling, so a caller cannot read it as "one service called null".
+  assert.deepEqual(t.services, [])
   assert.match(t.why, /HTTPS is not turned on/i)
   assert.match(t.why, /Settings → HTTPS/)
 })
 
-test('the console address and SSO are applied by the hub', () => {
+test('the console address and SSO are applied by the hub by DEFAULT', () => {
+  // ⛔ THE DEFAULT IS THE ANSWER THIS FUNCTION ALWAYS GAVE, because the GET
+  // handler cannot know which consoles a pending change covers.
   for (const purpose of ['console-address', 'sso'] as const) {
     const t = resolveRestartTarget(purpose, true)
-    assert.equal(t.service, HUB_SERVICE, purpose)
+    assert.deepEqual(t.services, [HUB_SERVICE], purpose)
   }
   assert.match(resolveRestartTarget('console-address', true).why, /NextAuth builds its options once/i)
   assert.match(resolveRestartTarget('sso', true).why, /read once at startup/i)
+})
+
+test('a console-address change restarts exactly the consoles named, and SpanVault brings its API', () => {
+  // ⛔ `SpanVault-API` IS NOT OPTIONAL. `spanvault/api/rbacScope.js`'s
+  // `trustedFetchHostnames` puts NEXTAUTH_URL into the SSRF allow-list that
+  // decides which hostnames a server-side fetch may use, and that process
+  // dotenv-loads the same root `.env.local` this feature writes. Restart only
+  // `SpanVault-App` and the API goes on trusting the old hostname — on routes
+  // reachable with no session, i.e. sign-in itself.
+  const t = resolveRestartTarget('console-address', true, ['spanvault'])
+  assert.deepEqual(t.services, ['SpanVault-App', 'SpanVault-API'])
+
+  // ⛔ AND LOGVAULT'S COLLECTOR IS THE SAME CLASS, FOUND BY LOOKING. Every alert
+  // email's links come from `logvault/collector/emailer.js`'s `appUrl()` =
+  // `process.env.NEXTAUTH_URL`, and that service dotenv-loads the same root
+  // `.env.local` the hub just wrote. Restart only the console and every alert
+  // email keeps pointing at the old address — the one symptom nobody sees in
+  // the product.
+  assert.deepEqual(resolveRestartTarget('console-address', true, ['logvault']).services,
+    ['LogVault-App', 'LogVault-Collector'])
+  // ⛔ AND NOTHING THAT DOES NOT READ THE VALUE: DDIVault has no second reader,
+  // so restarting its API or collector would be an outage for nothing.
+  assert.deepEqual(resolveRestartTarget('console-address', true, ['ddivault']).services, ['DDIVault-App'])
+
+  const all = resolveRestartTarget('console-address', true, ['netvault', 'logvault', 'ddivault', 'spanvault'])
+  assert.deepEqual(all.services, [
+    'NetVault', 'LogVault-App', 'LogVault-Collector', 'DDIVault-App', 'SpanVault-App', 'SpanVault-API',
+  ])
+  // The hub is NOT dragged in by a satellite-only change: bouncing the console
+  // the operator is holding, for a change that is not its own, is an outage for
+  // nothing.
+  assert.ok(!resolveRestartTarget('console-address', true, ['logvault']).services.includes(HUB_SERVICE))
+})
+
+test('an SSO change is never fanned out to the satellites', () => {
+  // ⛔ THE DIRECTORY SETTINGS ARE THE HUB'S ALONE — the satellites verify a
+  // token the hub signed and have no Entra configuration of their own.
+  const t = resolveRestartTarget('sso', true, ['netvault', 'logvault', 'ddivault', 'spanvault'])
+  assert.deepEqual(t.services, [HUB_SERVICE])
+})
+
+test('the slug→service mapping is the one place that knows the names', () => {
+  // ⛔ NOT A PATTERN: the hub is bare `NetVault` while the satellites carry an
+  // `-App` suffix, so deriving a service name from a slug would be wrong for
+  // the hub and right by accident for the rest.
+  assert.equal(CONSOLES.netvault.service, 'NetVault')
+  assert.equal(CONSOLES.logvault.service, 'LogVault-App')
+  assert.equal(CONSOLES.ddivault.service, 'DDIVault-App')
+  assert.equal(CONSOLES.spanvault.service, 'SpanVault-App')
+  // And the ports come from lib/publicUrl.ts's SIBLING_PORTS, not from a second copy.
+  assert.deepEqual(
+    [CONSOLES.netvault.publicPort, CONSOLES.logvault.publicPort, CONSOLES.ddivault.publicPort, CONSOLES.spanvault.publicPort],
+    [3000, 3004, 3006, 3008],
+  )
 })
 
 test('isRestartPurpose refuses anything that is not one of the three', () => {
@@ -106,6 +166,59 @@ test('a real restart is succeeded', () => {
   assert.equal(r.finished, true)
 })
 
+test('a run where ONE of several services did not come back is a failure, and it is NAMED', () => {
+  // ⛔ "THREE OF THE FOUR CONSOLES TOOK THE NEW ADDRESS" IS NOT A SUCCESS: the
+  // fourth is the one nobody can sign in to. And an unnamed failure sends an
+  // operator to check all four by hand.
+  const log = [
+    '[NV-RESTART] runId=r1 services=NetVault,LogVault-App',
+    '[NV-RESTART] service=NetVault pid after: 7120 changed=True',
+    '[NV-RESTART] service=NetVault running=True after 4320 ms',
+    '[NV-RESTART] service=LogVault-App pid after: 6224 changed=False',
+    '[NV-RESTART] service=LogVault-App running=True after 120 ms',
+    `${RESTART_SENTINEL} exit=1`,
+  ].join('\r\n')
+  const r = parseRestartLog(log)
+  assert.equal(r.outcome, 'failed')
+  assert.deepEqual(r.failedServices, ['LogVault-App'])
+  assert.equal(r.services.length, 2)
+})
+
+test('every service coming back with a new PID is a success', () => {
+  const log = [
+    '[NV-RESTART] runId=r1 services=SpanVault-App,SpanVault-API',
+    '[NV-RESTART] service=SpanVault-App pid after: 11 changed=True',
+    '[NV-RESTART] service=SpanVault-App running=True after 9 ms',
+    '[NV-RESTART] service=SpanVault-API pid after: 12 changed=True',
+    '[NV-RESTART] service=SpanVault-API running=True after 9 ms',
+    `${RESTART_SENTINEL} exit=0`,
+  ].join('\r\n')
+  const r = parseRestartLog(log)
+  assert.equal(r.outcome, 'succeeded')
+  assert.deepEqual(r.failedServices, [])
+})
+
+test('a log with NO per-service lines at all is failed, never succeeded', () => {
+  // ⛔ THE WRAPPER DIED BEFORE IT SAID ANYTHING. With "any running=True" as the
+  // test this was already failed; with "every service" it must not become
+  // vacuously true — an empty set satisfies "all of them".
+  const r = parseRestartLog(`[NV-RESTART] runId=r1 services=NetVault\r\n${RESTART_SENTINEL} exit=1`)
+  assert.equal(r.outcome, 'failed')
+})
+
+test('a log from the PREVIOUS build, with no service= prefix, is still read', () => {
+  // ⛔ THE FILE ON DISK RIGHT AFTER A DEPLOY IS THE OLD WRAPPER'S. Ignoring an
+  // unprefixed line would find no services, and "all of none succeeded" would
+  // turn an old FAILED run into a green verdict.
+  const r = parseRestartLog([
+    '[NV-RESTART] pid after: 6224 changed=False',
+    '[NV-RESTART] running=True after 12 ms',
+    `${RESTART_SENTINEL} exit=1`,
+  ].join('\r\n'))
+  assert.equal(r.outcome, 'failed')
+  assert.deepEqual(r.failedServices, [''])
+})
+
 test('no sentinel means still running; no log at all means none', () => {
   assert.equal(parseRestartLog('[NV-RESTART] pid before: 1').outcome, 'running')
   assert.equal(parseRestartLog(null).outcome, 'none')
@@ -115,7 +228,7 @@ test('no sentinel means still running; no log at all means none', () => {
 // ─── the wrapper ────────────────────────────────────────────────────────────
 
 const wrapperArgs = {
-  service: HUB_SERVICE,
+  services: [HUB_SERVICE],
   log: 'C:\\Apps\\NetVault\\app\\logs\\service-restart.log',
   lock: 'C:\\Apps\\NetVault\\app\\logs\\service-restart.lock',
   taskName: RESTART_TASK_NAME,
@@ -142,7 +255,10 @@ test('the wrapper captures the PID on both sides and makes the change part of th
   assert.ok(s.includes('$before = (Get-CimInstance Win32_Service'), 'PID before')
   assert.ok(s.includes('$after = (Get-CimInstance Win32_Service'), 'PID after')
   assert.ok(s.includes('$changed = ($before -ne $after)'))
-  assert.ok(s.includes('$rc = if ($running -and $changed -and $depsBack) { 0 } else { 1 }'))
+  // ⛔ EVERY service, not any: `$allOk` is false the moment one of them did not
+  // come back with a new PID, and the dependents still have to be up.
+  assert.ok(s.includes('if (-not ($running -and $changed)) { $allOk = $false }'))
+  assert.ok(s.includes('$rc = if ($allOk -and $depsBack) { 0 } else { 1 }'))
 })
 
 test('the sentinel is written before the cleanup, inside finally', () => {
@@ -220,14 +336,49 @@ test('the wrapper heartbeats the lock while it works', () => {
 })
 
 test('a terminator restart carries no dependents', () => {
-  const s = buildRestartWrapper({ ...wrapperArgs, service: TERMINATOR_SERVICE, dependents: [] })
+  const s = buildRestartWrapper({ ...wrapperArgs, services: [TERMINATOR_SERVICE], dependents: [] })
   assert.ok(s.includes('$deps = @()'))
-  assert.ok(s.includes("$svc  = 'NocVault-Tls'"))
+  assert.ok(s.includes("$services = @('NocVault-Tls')"))
 })
 
-test('a service is never listed as its own dependent', () => {
-  const s = buildRestartWrapper({ ...wrapperArgs, dependents: [HUB_SERVICE, TERMINATOR_SERVICE] })
-  assert.ok(s.includes(`$deps = @('${TERMINATOR_SERVICE}')`), 'the service itself is filtered out')
+test('no service in the run is ever listed as its own dependent', () => {
+  // ⛔ WITH A LIST THE FILTER HAS TO CONSIDER EVERY SERVICE IN THE RUN, not just
+  // one: stopping SpanVault-App "as a dependent" and then again as a target
+  // doubles the outage and confuses the verdict.
+  const s = buildRestartWrapper({
+    ...wrapperArgs,
+    services: ['SpanVault-App', 'SpanVault-API'],
+    dependents: ['SpanVault-API', TERMINATOR_SERVICE],
+  })
+  assert.ok(s.includes(`$deps = @('${TERMINATOR_SERVICE}')`), 'a service in the run is filtered out')
+  assert.ok(s.includes("$services = @('SpanVault-App', 'SpanVault-API')"))
+})
+
+test('ONE wrapper walks the whole list, because the run lock is ONE file', () => {
+  // ⛔ `restartPaths` gives a single `logs/service-restart.lock`, so two
+  // concurrent restarts cannot exist — one POST per console would have the
+  // second, third and fourth refused with 409. The wrapper takes the list, and
+  // the shared front door comes down ONCE and goes back up LAST.
+  const s = buildRestartWrapper({
+    ...wrapperArgs,
+    services: ['NetVault', 'LogVault-App'],
+    dependents: [TERMINATOR_SERVICE],
+  })
+  assert.equal((s.match(/foreach \(\$svc in \$services\)/g) || []).length, 1, 'one loop over the services')
+  assert.equal((s.match(/sc\.exe stop \$d/g) || []).length, 1, 'the front door is stopped once')
+  assert.ok(s.indexOf('sc.exe stop $d') < s.indexOf('foreach ($svc in $services)'), 'before any console')
+  assert.ok(s.lastIndexOf('sc.exe start $d') > s.lastIndexOf('sc.exe start $svc'), 'and comes back last')
+})
+
+test('the wait limit covers the wrapper\'s own worst case for every size of run', () => {
+  // ⛔ A FIXED LIMIT IS WRONG AS SOON AS THE LIST CAN HOLD MORE THAN ONE. Per
+  // service: 60 s polling for Stopped + 150 s of start attempts. Per dependent:
+  // 45 s to stop + 90 s to come back.
+  assert.ok(restartWaitLimitMs(1, 1) >= 345_000, 'one service behind the front door')
+  assert.ok(restartWaitLimitMs(6, 1) >= (45 + 6 * 210 + 90) * 1000, 'all four consoles and their companions')
+  // Monotonic, and never zero for a nonsense count.
+  assert.ok(restartWaitLimitMs(6, 1) > restartWaitLimitMs(1, 1))
+  assert.ok(restartWaitLimitMs(0, 0) > 0)
 })
 
 test('paths sit beside the updater\'s, under the repo root', () => {

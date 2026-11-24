@@ -22,7 +22,14 @@
        service still serving an older build than its checkout), plus a coarse
        floor for a checkout that is itself ancient
     5. Public endpoints + launcher performance (suite probes, cache, license)
-    6. NextAuth / login smoke (best-effort)
+    6. NextAuth / login smoke (best-effort), plus the console ADDRESSES: each
+       console's NEXTAUTH_URL is read from the env file its own service really
+       loads (resolved from the service's NSSM AppDirectory - the install layout
+       is NOT uniform, so a hardcoded path silently checks nothing on half the
+       suite), must not be pinned in the service environment, must share ONE
+       scheme and ONE host with the other three and differ only by its own public
+       port, must never name a 1300X loopback port (that is a suite-wide lockout),
+       and /api/auth/signin must answer with a RELATIVE Location on all four
     7. Scheduled tasks (the 3 NetVault cron tasks): enabled with a live trigger,
        posting to the port the console really listens on, with a Bearer token
        that matches the live CRON_SECRET
@@ -189,7 +196,13 @@ function Http($url, [int]$timeoutSec = 15, [switch]$NoRedirect) {
 # validate here would say nothing about whether the customer's chain is good.
 # Both globals are saved and restored - they are process-wide, and leaving the
 # callback permissive would quietly weaken every later probe in this script.
-function Https($url, [int]$timeoutSec = 15) {
+#
+# -NoRedirect is a straight passthrough to Http's own switch, for the checks that
+# have to READ a Location header rather than follow it. It is a passthrough and
+# not a second implementation on purpose: Http is the only place in this script
+# that knows HttpWebRequest is required on PS 5.1 (see its note), and a redirect
+# that has already been followed cannot be un-followed.
+function Https($url, [int]$timeoutSec = 15, [switch]$NoRedirect) {
     $prevCb    = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
     $prevProto = [System.Net.ServicePointManager]::SecurityProtocol
     try {
@@ -199,6 +212,7 @@ function Https($url, [int]$timeoutSec = 15) {
         }
         [System.Net.ServicePointManager]::SecurityProtocol = $proto
         [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+        if ($NoRedirect) { return (Http $url $timeoutSec -NoRedirect) }
         return (Http $url $timeoutSec)
     } finally {
         [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prevCb
@@ -1082,15 +1096,90 @@ if ($TestLogin) {
 # When Settings starts managing TLS_CERT_PATH / TLS_KEY_PATH / ENTRA_TENANT_ID /
 # ENTRA_CLIENT_ID / ENTRA_CLIENT_SECRET, add them to $runtimeKeys in the SAME
 # change as the installer + updater edits.
-$runtimeKeys = @('NEXTAUTH_URL')
-foreach ($rsa in @(
-    @{ Svc='NetVault';      File=(Join-Path $InstallDir "NetVault\app\.next\standalone\.env.local") },
-    @{ Svc='LogVault-App';  File=(Join-Path $InstallDir "LogVault\app\frontend\.env.local") },
-    @{ Svc='DDIVault-App';  File=(Join-Path $InstallDir "DDIVault\app\frontend\.env.local") },
-    @{ Svc='SpanVault-App'; File=(Join-Path $InstallDir "SpanVault\app\frontend\.env.local") }
+#
+# ⛔ AND THE ENV FILE IS FOUND BY ASKING THE SERVICE, NOT BY GUESSING THE LAYOUT.
+# This loop used to hardcode '<InstallDir>\<App>\app\frontend\.env.local' for the
+# three satellites. The install layout is NOT uniform: the suite installer lays
+# NetVault and SpanVault down under '<App>\app', while LogVault and DDIVault
+# installs in the field have the repo root AS the install root with no 'app'
+# subfolder at all. So on production two of the four paths did not exist, and the
+# branch that fired was the Wn "env file not found" - a FAILED READ reported as a
+# non-finding. Nothing was checked for half the suite and the output said so in
+# words mild enough that nobody noticed for releases.
+#
+# NSSM's AppDirectory is the authoritative answer and needs no layout knowledge:
+# it is the working directory the console process really starts in, which is
+# exactly the directory @next/env loads .env.local from. It also comes from the
+# REGISTRY rather than nssm.exe, so it still answers on a box where nssm.exe was
+# never found (another thing that used to silently skip these checks).
+function Get-NssmAppDirectory([string]$service) {
+    $key = 'HKLM:\SYSTEM\CurrentControlSet\Services\' + $service + '\Parameters'
+    try {
+        if (-not (Test-Path -LiteralPath $key -ErrorAction SilentlyContinue)) { return $null }
+        $item = Get-Item -LiteralPath $key -ErrorAction Stop
+        if (@($item.GetValueNames()) -notcontains 'AppDirectory') { return $null }
+        # ⛔ BOTH STRING KINDS. NSSM writes its path values as REG_EXPAND_SZ on
+        # some builds and REG_SZ on others, and a check that accepts only one
+        # reads the other as "no AppDirectory" - i.e. as the unreadable case,
+        # which is the very answer this must not invent.
+        $kind = $item.GetValueKind('AppDirectory')
+        if ($kind -ne [Microsoft.Win32.RegistryValueKind]::String -and
+            $kind -ne [Microsoft.Win32.RegistryValueKind]::ExpandString) { return $null }
+        # GetValue expands a REG_EXPAND_SZ by default (DoNotExpandEnvironmentNames
+        # is deliberately NOT passed); ExpandEnvironmentVariables is then a no-op
+        # on it, and the safety net for a REG_SZ that nevertheless carries %VAR%.
+        $raw = $item.GetValue('AppDirectory', $null)
+        if (-not $raw) { return $null }
+        $dir = [Environment]::ExpandEnvironmentVariables([string]$raw).Trim().Trim('"')
+        if (-not $dir) { return $null }
+        return $dir
+    } catch { return $null }
+}
+
+# One record per console: where it runs from, which env file it really loads, and
+# - when that could not be established - WHY, so every check below can say "could
+# not check" in those words instead of passing.
+#
+# ⛔ $null Dir/File means UNKNOWN AND IS NEVER TREATED AS AN ANSWER. Same rule as
+# $script:NvNssmPort in section 3c: a value that also means "no reading" cannot be
+# told apart from a real one, and a failed read recorded as an affirmative answer
+# is this suite's signature bug.
+$ConsoleAddr = @()
+foreach ($ca in @(
+    @{ App='NetVault';  Svc='NetVault';      Public=3000; Loopback=13000 },
+    @{ App='LogVault';  Svc='LogVault-App';  Public=3004; Loopback=13004 },
+    @{ App='DDIVault';  Svc='DDIVault-App';  Public=3006; Loopback=13006 },
+    @{ App='SpanVault'; Svc='SpanVault-App'; Public=3008; Loopback=13008 }
 )) {
+    $caDir  = Get-NssmAppDirectory $ca.Svc
+    $caFile = $null
+    $caWhy  = $null
+    if (-not (Get-Service -Name $ca.Svc -ErrorAction SilentlyContinue)) {
+        $caWhy = "the " + $ca.Svc + " service is not installed on this box (section 2 reports it)"
+    } elseif (-not $caDir) {
+        $caWhy = "AppDirectory is unreadable under HKLM\SYSTEM\CurrentControlSet\Services\" + $ca.Svc + "\Parameters (missing, empty, or not a string value)"
+    } elseif (-not (Test-Path -LiteralPath $caDir)) {
+        $caWhy = "the service's AppDirectory does not exist on disk: " + $caDir
+    } else {
+        # Both files @next/env loads from the process working directory, in its
+        # own precedence order. .env.local is what the installer writes and what
+        # Settings rewrites; .env is accepted so an install that keeps it there
+        # is read rather than reported as empty.
+        foreach ($caCand in @((Join-Path $caDir '.env.local'), (Join-Path $caDir '.env'))) {
+            if ((-not $caFile) -and (Test-Path -LiteralPath $caCand)) { $caFile = $caCand }
+        }
+        if (-not $caFile) { $caWhy = "neither .env.local nor .env exists in the service's own working directory " + $caDir }
+    }
+    $ConsoleAddr += [pscustomobject]@{
+        App = $ca.App; Svc = $ca.Svc; Public = $ca.Public; Loopback = $ca.Loopback
+        Dir = $caDir;  File = $caFile; Why = $caWhy
+    }
+}
+
+$runtimeKeys = @('NEXTAUTH_URL')
+foreach ($rsa in $ConsoleAddr) {
     $rsSvcEnv  = WsSvcEnv $rsa.Svc
-    $rsFileEnv = WsEnvFile $rsa.File
+    $rsFileEnv = if ($rsa.File) { WsEnvFile $rsa.File } else { "" }
     foreach ($rsk in $runtimeKeys) {
         $rsPat     = "(?m)^\s*" + $rsk + "\s*=\s*\S"
         $rsInFile  = ($rsFileEnv -match $rsPat)
@@ -1099,18 +1188,252 @@ foreach ($rsa in @(
             Bad ($rsa.Svc + ": " + $rsk + " is pinned in the NSSM service environment AND in " + $rsa.File + " - the service env wins, so changing it from Settings silently does nothing. Fix: re-run this app's updater (it clears the key), or inspect with 'nssm get " + $rsa.Svc + " AppEnvironmentExtra'")
         }
         elseif ($rsInSvc) {
-            Bad ($rsa.Svc + ": " + $rsk + " comes ONLY from the NSSM service environment - Settings cannot change it and " + $rsa.File + " does not supply it")
+            Bad ($rsa.Svc + ": " + $rsk + " comes ONLY from the NSSM service environment - Settings cannot change it and the env file in " + $rsa.Dir + " does not supply it")
         }
         elseif ($rsInFile) {
             if ($nssm) { Ok  ($rsa.Svc + ": " + $rsk + " is file-supplied only (" + $rsa.File + ") - runtime-settable from Settings") }
             else       { Wn  ($rsa.Svc + ": " + $rsk + " found in " + $rsa.File + ", but nssm.exe was not located - could not confirm the service environment does not also pin it") }
         }
-        elseif (-not (Test-Path -LiteralPath $rsa.File)) {
-            Wn ("Cannot verify " + $rsa.Svc + " " + $rsk + " - env file not found at " + $rsa.File)
+        elseif (-not $rsa.File) {
+            # ⛔ "COULD NOT CHECK", IN THOSE WORDS, AND NEVER A PASS. This is the
+            # branch the old hardcoded paths fell into on two of four apps.
+            Wn ("COULD NOT CHECK " + $rsa.Svc + " " + $rsk + " - " + $rsa.Why)
         }
         else {
             Bad ($rsa.Svc + ": " + $rsk + " is set NOWHERE (neither " + $rsa.File + " nor the NSSM service environment) - sign-in and callback redirects will break")
         }
+    }
+}
+
+# --- The four console addresses are ONE address with four ports ---------------
+# ⛔ A SATELLITE'S NEXTAUTH_URL CARRIES NO INFORMATION OF ITS OWN. It is exactly
+# the hub's scheme and host with that app's own public port - one terminator
+# fronts all four. So any disagreement in scheme or host between the four is
+# drift, not configuration, and it is drift nothing else reports: each of the
+# four values is individually well-formed, every /api/health stays 200, and the
+# only symptom is that a satellite redirect sends the browser to a host it may
+# not be able to reach. MEASURED on production: the hub had been moved to the
+# public FQDN while all three satellites still named the raw server IP, because
+# the suite installer wrote the four as four independent literals and only one of
+# them was ever updated. It now derives all four from one host + one scheme.
+#
+# The EFFECTIVE value is what is asserted, resolved in the precedence the app
+# itself sees - NSSM service environment first (it beats every file; dotenv never
+# overwrites an existing process.env entry), then the env file the service really
+# loads. Checking the file alone would miss a service-environment pin, which is
+# exactly how two satellites stayed wrong through a cutover that rewrote files.
+function ConsoleNextAuthUrl($c) {
+    foreach ($l in @((WsSvcEnv $c.Svc) -split "`r?`n")) {
+        if ($l.Trim() -match '^NEXTAUTH_URL\s*=\s*(\S+)$') {
+            return [pscustomobject]@{ Url = $Matches[1]; Src = ('the ' + $c.Svc + ' service environment') }
+        }
+    }
+    if ($c.File) {
+        foreach ($l in @((WsEnvFile $c.File) -split "`r?`n")) {
+            if ($l.Trim() -match '^NEXTAUTH_URL\s*=\s*(\S+)$') {
+                return [pscustomobject]@{ Url = $Matches[1]; Src = $c.File }
+            }
+        }
+    }
+    # ⛔ $null, not @(). A PowerShell function returning an empty array hands the
+    # caller $null anyway, so the two cannot be told apart - say $null once, here.
+    return $null
+}
+
+$naUrls = @()
+$naUnread = @()
+foreach ($c in $ConsoleAddr) {
+    $na = ConsoleNextAuthUrl $c
+    if (-not $na) {
+        # Built as a statement, not inlined into the string: an `if` is not a
+        # sub-expression in Windows PowerShell, so "(" + (if ...) + ")" is a
+        # PARSE error on 5.1 even though newer hosts accept more.
+        $naWhy = $c.Why
+        if (-not $naWhy) { $naWhy = "no NEXTAUTH_URL in the service environment or in " + $c.File }
+        $naUnread += ($c.Svc + " (" + $naWhy + ")")
+        continue
+    }
+    # Parsed with a regex rather than [Uri], deliberately: [Uri] substitutes the
+    # scheme's DEFAULT port when the URL carries none, so a NEXTAUTH_URL with no
+    # port at all would read back as :443 and compare equal to nothing real. Here
+    # an absent port stays absent and is reported as such. The host alternative
+    # accepts a bracketed IPv6 literal.
+    $naM = [regex]::Match($na.Url, '^(?<scheme>[A-Za-z][A-Za-z0-9+.\-]*)://(?<host>\[[^\]]+\]|[^/:?#]+)(?::(?<port>\d+))?')
+    if (-not $naM.Success) {
+        $naUnread += ($c.Svc + " (NEXTAUTH_URL is not a parsable absolute URL: '" + $na.Url + "' from " + $na.Src + ")")
+        continue
+    }
+    # Same reason as above: the ternary-ish `if` is a statement, so it is resolved
+    # before the literal rather than inside it.
+    $naPort = $null
+    if ($naM.Groups['port'].Success) { $naPort = $naM.Groups['port'].Value }
+    $naUrls += [pscustomobject]@{
+        App    = $c.App
+        Svc    = $c.Svc
+        Public = $c.Public
+        Url    = $na.Url
+        Src    = $na.Src
+        Scheme = $naM.Groups['scheme'].Value.ToLower()
+        Host   = $naM.Groups['host'].Value.ToLower()
+        Port   = $naPort
+    }
+}
+foreach ($nu in $naUnread) { Wn ("COULD NOT CHECK the console address for " + $nu) }
+
+if (@($naUrls).Count -lt 2) {
+    Wn ("COULD NOT CHECK that the console addresses agree - fewer than two NEXTAUTH_URL values could be read (" + @($naUrls).Count + ")")
+} else {
+    $naSchemes = @($naUrls | ForEach-Object { $_.Scheme } | Sort-Object -Unique)
+    $naHosts   = @($naUrls | ForEach-Object { $_.Host }   | Sort-Object -Unique)
+    $naWrongPt = @($naUrls | Where-Object { $_.Port -ne ([string]$_.Public) })
+    $naSplit   = $false
+    if ($naSchemes.Count -gt 1) {
+        $naSplit = $true
+        Bad ("The four console addresses do NOT share one scheme (" + ($naSchemes -join ', ') + "): " + (($naUrls | ForEach-Object { $_.App + '=' + $_.Url }) -join '; ') + " - one terminator fronts all four, so a console on the other scheme cannot complete a sign-in")
+    }
+    if ($naHosts.Count -gt 1) {
+        $naSplit = $true
+        Bad ("The four console addresses do NOT share one host (" + ($naHosts -join ', ') + "): " + (($naUrls | ForEach-Object { $_.App + '=' + $_.Url }) -join '; ') + " - every redirect to the odd-one-out sends the browser to a host it may not reach. Fix each console's NEXTAUTH_URL to <scheme>://<the host users type>:<that app's own public port>")
+    }
+    if ($naWrongPt.Count -gt 0) {
+        $naSplit = $true
+        Bad ("Console address port mismatch: " + (($naWrongPt | ForEach-Object { $_.App + " NEXTAUTH_URL=" + $_.Url + " but its public port is " + $_.Public + " (from " + $_.Src + ")" }) -join '; '))
+    }
+    if (-not $naSplit) {
+        Ok ("The " + @($naUrls).Count + " readable console address(es) of " + @($ConsoleAddr).Count + " share one scheme and host (" + $naSchemes[0] + "://" + $naHosts[0] + ") and differ only by their own public port")
+    }
+}
+
+# --- ⛔ NO CONSOLE ADDRESS MAY NAME A 1300X LOOPBACK PORT ----------------------
+# 13000/13004/13006/13008 are the SERVER-SIDE ports the consoles are bound to
+# BEHIND the terminator. They are reachable from the box and from nowhere else.
+# A console whose NEXTAUTH_URL names one is therefore a LOCKOUT, not a
+# degradation: every sign-in redirect points the browser at an address only the
+# server can open, nobody can get in through any console, and the only fix is
+# editing a file on the server - which needs the access that just stopped
+# working. It passes every other check in this suite; /api/health is 200
+# throughout.
+#
+# This is checked separately from the agreement check above because it is the one
+# value that must never appear even when all four agree PERFECTLY: four consoles
+# consistently naming their own loopback ports is a tidy configuration that locks
+# the whole suite out. A loopback port has been SUGGESTED and accepted here
+# before - that incident is why this check exists.
+$naLoopPorts = @($ConsoleAddr | ForEach-Object { [string]$_.Loopback })
+$naLocked = @($naUrls | Where-Object { $_.Port -and ($naLoopPorts -contains $_.Port) })
+if (@($naUrls).Count -eq 0) {
+    Wn "COULD NOT CHECK the console addresses for loopback ports - no NEXTAUTH_URL could be read"
+} elseif ($naLocked.Count -gt 0) {
+    Bad ("LOCKOUT: a console address names a server-side loopback port - " + (($naLocked | ForEach-Object { $_.App + " NEXTAUTH_URL=" + $_.Url + " (from " + $_.Src + ")" }) -join '; ') + ". Those ports (" + ($naLoopPorts -join '/') + ") exist only behind the terminator, so every sign-in redirect sends the browser somewhere it cannot reach and NOBODY can log in. Set it to <scheme>://<the host users type>:" + (($naLocked | ForEach-Object { [string]$_.Public }) -join '/'))
+} else {
+    Ok ("No console address names a loopback port (" + ($naLoopPorts -join '/') + ") - checked " + @($naUrls).Count + " of " + @($ConsoleAddr).Count + " console addresses")
+}
+
+# --- /api/auth/signin must return a RELATIVE Location on every console --------
+# ⛔ THIS TESTS THE BEHAVIOUR, NOT THE CONFIGURATION, AND THAT IS THE POINT.
+# NextAuth evaluates `pages.signIn` ONCE at module load, so an absolute value
+# there is frozen to whatever the env var held at install time and can never
+# follow the request. The env-file checks above cannot see that: the file can be
+# perfect while the running process still answers with a stale absolute address.
+# MEASURED on production before the fix: two satellites answered
+# http://127.0.0.1:13000/login?... (the hub's server-side loopback - dead from any
+# browser) and one answered http://<server-ip>:3000/login?... So the assertion is
+# simply that the Location is RELATIVE; a relative redirect follows whatever host
+# the user actually reached, which is the only thing that works behind one
+# terminator with four ports and any number of hostnames.
+#
+# Probed through the PUBLIC port (the terminator's own listener), not the 1300X
+# loopback: that is the path a browser takes. -NoRedirect is essential - the
+# Location header is the whole subject, and a followed redirect cannot be read
+# back. Http/Https handle the PS 5.1 traps (HttpWebRequest because
+# Invoke-WebRequest cannot complete a self-signed HTTPS request there and has no
+# -SkipCertificateCheck; explicit TLS 1.2; 3xx returned rather than thrown).
+foreach ($c in $ConsoleAddr) {
+    if (-not (Get-Service -Name $c.Svc -ErrorAction SilentlyContinue)) {
+        Wn ("COULD NOT CHECK /api/auth/signin on " + $c.App + " - " + $c.Svc + " is not installed")
+        continue
+    }
+    $siUrl = "http://127.0.0.1:" + $c.Public + "/api/auth/signin"
+    if ($script:TlsFronted) { $siUrl = "https://127.0.0.1:" + $c.Public + "/api/auth/signin" }
+    $si = if ($script:TlsFronted) { Https $siUrl 15 -NoRedirect } else { Http $siUrl 15 -NoRedirect }
+    $siLoc = if ($si.Loc) { [string]$si.Loc } else { '' }
+    if (-not $si.Code) {
+        Wn ("COULD NOT CHECK /api/auth/signin on " + $c.App + " (" + $siUrl + ") - no response (err=" + $si.Err + ")")
+    } elseif ($si.Code -ge 300 -and $si.Code -lt 400) {
+        if (-not $siLoc) {
+            Bad ($c.App + " /api/auth/signin answered " + $si.Code + " with NO Location header - the sign-in redirect goes nowhere")
+        } elseif ($siLoc -match '^[A-Za-z][A-Za-z0-9+.\-]*:' -or $siLoc.StartsWith('//')) {
+            # Absolute (scheme-qualified, or protocol-relative - which also pins
+            # the host and is just as frozen).
+            Bad ($c.App + " /api/auth/signin returned an ABSOLUTE Location (" + $siLoc + ") - pages.signIn is frozen to an install-time address and can never follow the request. Any user who reaches this console by another hostname, or any user at all if that address is a loopback port, is sent somewhere unreachable")
+        } elseif ($siLoc.StartsWith('/')) {
+            Ok ($c.App + " /api/auth/signin -> " + $si.Code + " with a relative Location (" + $siLoc + ")")
+        } else {
+            Bad ($c.App + " /api/auth/signin returned a Location that is neither absolute nor root-relative (" + $siLoc + ") - a browser resolves it against the current path, so the sign-in target depends on where the user happened to be")
+        }
+    } elseif ($si.Code -eq 200) {
+        Wn ($c.App + " /api/auth/signin answered 200 rather than a redirect - NextAuth's own built-in sign-in page is being served, so this console has no pages.signIn to freeze (nothing to fail, but not the expected shape either)")
+    } else {
+        Bad ($c.App + " /api/auth/signin answered " + $si.Code + " (expected a 3xx to the sign-in page) - err=" + $si.Err)
+    }
+}
+
+# --- and the SECOND hop proves the derivation, not just the first -------------
+# The check above proves each satellite's first hop is relative. This one follows
+# it one step: a satellite's own /auth/signin must bounce to the HUB's login, and
+# it must build that address from the REQUEST rather than from an env var. So the
+# Location has to be absolute (it crosses to port 3000), name the hub's PUBLIC
+# port, and carry the scheme this probe arrived on.
+#
+# ⛔ THE HOST IS DELIBERATELY NOT REQUIRED TO EQUAL THE PROBE'S HOST, AND THAT IS
+# NOT LAXNESS. The terminator PINS X-Forwarded-Host to TLS_PUBLIC_HOST when one is
+# configured, and resolveOrigin() prefers the forwarded header - so on a suite with
+# a public hostname the correct answer to a probe of 127.0.0.1 is the FQDN, not
+# 127.0.0.1. Demanding the probe's own host back would therefore FAIL a perfectly
+# healthy TLS install, which is the "a test that fails on working software" trap
+# this file already warns about twice. Either of the two legitimate answers passes;
+# a THIRD host is reported as suspected freezing, and it is a Wn because this
+# script cannot see the forwarded headers the console actually received.
+#
+# ⛔ The hub is skipped: /auth/signin is the satellites' route. The hub's own
+# sign-in page is /login and the check above already asserts it.
+$siPinnedHost = $null
+if ($ConsoleAddr[0].File) { $siPinnedHost = Get-EnvVal $ConsoleAddr[0].File 'TLS_PUBLIC_HOST' }
+foreach ($c in $ConsoleAddr) {
+    if ($c.App -eq 'NetVault') { continue }
+    if (-not (Get-Service -Name $c.Svc -ErrorAction SilentlyContinue)) { continue }
+    $hopScheme = 'http'
+    if ($script:TlsFronted) { $hopScheme = 'https' }
+    $hopUrl = $hopScheme + "://127.0.0.1:" + $c.Public + "/auth/signin"
+    $hop = if ($script:TlsFronted) { Https $hopUrl 15 -NoRedirect } else { Http $hopUrl 15 -NoRedirect }
+    $hopLoc = if ($hop.Loc) { [string]$hop.Loc } else { '' }
+    if (-not $hop.Code) {
+        Wn ("COULD NOT CHECK " + $c.App + " /auth/signin (" + $hopUrl + ") - no response (err=" + $hop.Err + ")")
+        continue
+    }
+    if ($hop.Code -lt 300 -or $hop.Code -ge 400) {
+        Wn ("COULD NOT CHECK " + $c.App + " /auth/signin - answered " + $hop.Code + " rather than a redirect to the hub, so there is no Location to read")
+        continue
+    }
+    $hopM = [regex]::Match($hopLoc, '^(?<scheme>[A-Za-z][A-Za-z0-9+.\-]*)://(?<host>\[[^\]]+\]|[^/:?#]+)(?::(?<port>\d+))?')
+    if (-not $hopM.Success) {
+        Wn ($c.App + " /auth/signin -> " + $hop.Code + " with a non-absolute Location (" + $hopLoc + ") - it has to cross to the hub on port 3000, which a relative redirect cannot do")
+        continue
+    }
+    $hopS = $hopM.Groups['scheme'].Value.ToLower()
+    $hopH = $hopM.Groups['host'].Value.ToLower()
+    $hopP = $null
+    if ($hopM.Groups['port'].Success) { $hopP = $hopM.Groups['port'].Value }
+    if ($naLoopPorts -contains $hopP) {
+        Bad ("LOCKOUT: " + $c.App + " /auth/signin redirects to the hub's SERVER-SIDE loopback port (" + $hopLoc + ") - that address is reachable only from the box, so no browser can complete a sign-in from this console")
+    } elseif ($hopP -ne '3000') {
+        Bad ($c.App + " /auth/signin redirects to port " + $hopP + " instead of the hub's public 3000 (" + $hopLoc + ")")
+    } elseif ($hopS -ne $hopScheme) {
+        Bad ($c.App + " /auth/signin redirects with scheme " + $hopS + " although the request arrived over " + $hopScheme + " (" + $hopLoc + ") - the hub address is not being derived from the request")
+    } elseif ($hopH -eq '127.0.0.1' -or ($siPinnedHost -and $hopH -eq $siPinnedHost.ToLower())) {
+        Ok ($c.App + " /auth/signin -> " + $hop.Code + " " + $hopLoc + " (hub on 3000, same scheme, host derived from the request)")
+    } else {
+        Wn ($c.App + " /auth/signin -> " + $hop.Code + " names host '" + $hopH + "', which is neither the probed host (127.0.0.1) nor a pinned TLS_PUBLIC_HOST - if no forwarded host is configured this address is frozen rather than derived. Confirm in a browser from a second hostname")
     }
 }
 

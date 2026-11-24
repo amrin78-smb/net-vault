@@ -125,8 +125,11 @@ Console address, Certificate and Single sign-on all end with a saved-but-inert v
 product could save a change it could not apply.
 - ⛔ **ONE COMPONENT FOR ALL THREE.** Fixing one would leave the other two telling a customer to use
   PowerShell (CLAUDE.md: a fixed instance is not a fixed class).
-- ⛔ **IT NEVER NAMES A SERVICE.** It sends a `purpose`; the server decides. That is what stops the
-  Certificate panel pointing at NetVault again.
+- ⛔ **IT NEVER NAMES A SERVICE.** It sends a `purpose` (and, since 1.66.0, app SLUGS from a closed
+  four-value enum); the server decides which services those are. That is what stops the Certificate
+  panel pointing at NetVault again, and it is what keeps `lib/serviceRestart.ts`'s "a service name is
+  never a request field" rule true now that one restart can cover six services. The names it DISPLAYS
+  come from the route's own `consoleServices` map — a panel that built them would be a second mapping.
 - ⛔ **THE RUN'S OWN VERDICT IS THE PROOF; A LOWER UPTIME IS ONLY PROGRESS (changed 1.63.0).** "The
   page loaded again" is not evidence a restart happened — a refused stop leaves the original process
   answering this very poll — but a lower uptime is not evidence the restart FINISHED either. On an
@@ -140,9 +143,13 @@ product could save a change it could not apply.
   this, unreachable on the only path where dependents exist. `done` now requires
   `mine && finished && outcome === 'succeeded'`; `uptimeProof` sets `backOnline`, which is how the
   panel says "this console is answering, the front door is still coming back".
-- `WAIT_LIMIT_MS` is 7 minutes, because the wrapper's own bounds add to 345 s (45 s per dependent
-  stop + 60 s stop poll + 150 s of start attempts + 90 s per dependent returning). At 4 minutes the
-  new verdict-based rule would have reported "could not confirm" for restarts that were working.
+- The wait limit is `restartWaitLimitMs(serviceCount, dependentCount)` from `lib/serviceRestart.ts`,
+  re-sized from the POST response (changed 1.66.0). It was a flat 7 minutes, chosen because the
+  wrapper's bounds add to 345 s for ONE service (45 s per dependent stop + 60 s stop poll + 150 s of
+  start attempts + 90 s per dependent returning). ⛔ A FIXED LIMIT STOPPED BEING CORRECT the moment a
+  console-address change could cover four consoles (six services — SpanVault brings its API, LogVault
+  its collector): that run's own worst case is ~1395 s, so the panel would have reported "could not confirm the restart"
+  for a restart that was working normally — on the very change the feature exists for.
 - `canRestart?: boolean` (default true) — ⛔ `POST /api/system/service-restart` is super_admin and
   both call sites rendered this with NO role prop, so an `admin` met an enabled "Restart NetVault
   now" that answered a bare 403 — in the same commit that correctly gated `CertificatePanel`'s
@@ -153,6 +160,22 @@ product could save a change it could not apply.
   running, Windows refuses the stop). The route computed it and threw it away; the panel now names
   it in both the `failed` and `unconfirmed` callouts.
 - Losing contact mid-restart is rendered as expected, not as a fault.
+
+### Changed 1.66.0 — the hub owns all four console addresses
+- `RestartControl` takes `apps?: string[]` (console SLUGS). It reads `targets[purpose].services` (a
+  LIST now) and, for `console-address`, unions the route's `consoleServices` rows for those slugs; the
+  confirmation, the progress copy and the verdict all name the whole set. A run reports
+  `failedServices`, so "the restart did not take effect" says WHICH console — with six services in
+  one run, an unnamed failure sends an operator to check all four by hand.
+- `ConsoleAddressPanel` renders a FOUR-ROW table (`The four consoles`): per app the service, public
+  port, `expected` (derived from the hub's address), `saved`, what is in force (with whether that is a
+  process or a FILE), the per-file rows, and the save outcome. ⛔ Three of those products have no
+  settings page of their own, so this table is the only place their addresses are visible — and a
+  satellite still on the install-time IP while the hub is on the public name was the live defect. It
+  offers the restart for the consoles that actually changed, never for all four.
+- `systemPanelHelpers` gained `consoleStatePresentation(state)` (four outcomes; anything unrecognised
+  FAILS CLOSED to "could not check") and `consoleDrift(expected, saved)` (⛔ `null` when either side is
+  unknown — never "matches", because a satellite we could not locate has nothing to compare).
 
 ### Changed 1.62.0
 - `CertificatePanel` takes `canInstall?: boolean` (default true). Settings passes `isSuperAdmin`; a plain admin sees the tab read-only rather than a button the server will 403.

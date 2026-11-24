@@ -513,3 +513,60 @@ export function redirectUriPresentation(
       : null,
   }
 }
+
+// ─── the four consoles (Console address) ─────────────────────────────────────
+
+export type ConsoleStatePresentation = {
+  state: 'saved' | 'shadowed' | 'unknown' | 'failed'
+  tone: Tone
+  label: string
+}
+
+/**
+ * One console's save outcome, as a pill.
+ *
+ * ⛔ FOUR STATES, AND ANYTHING UNRECOGNISED FAILS CLOSED TO `unknown`. The hub
+ * writes four consoles' `NEXTAUTH_URL` now, and three of them it cannot even
+ * locate without reading their services — so "we could not check LogVault"
+ * must never render like "LogVault is fine". A missing state is a read we did
+ * not get, which is exactly the case this suite keeps getting wrong.
+ */
+export function consoleStatePresentation(state: string | null | undefined): ConsoleStatePresentation {
+  if (state === 'saved') return { state: 'saved', tone: 'ok', label: 'Saved' }
+  if (state === 'shadowed') {
+    return { state: 'shadowed', tone: 'warn', label: 'Pinned by the service environment' }
+  }
+  if (state === 'failed') return { state: 'failed', tone: 'danger', label: 'Not saved' }
+  return { state: 'unknown', tone: 'warn', label: 'Could not check' }
+}
+
+export type ConsoleDrift = {
+  /** ⛔ `null` when either side is unknown — never `false`. */
+  drifted: boolean | null
+  tone: Tone
+  label: string
+}
+
+/**
+ * Whether one console's saved address is the one it should have.
+ *
+ * ⛔ THIS IS THE PRODUCTION DEFECT, ON SCREEN. The hub sat on the public FQDN
+ * while all three satellites were still on the raw install-time server IP,
+ * which leaked that IP into every NextAuth callback and sent users to an
+ * address the certificate does not cover — and nothing in the product could
+ * either show it or fix it.
+ *
+ * ⛔ AN UNKNOWN SIDE IS `null`, NOT "matches". A satellite we could not locate
+ * has no saved value to compare, and rendering that as agreement is the same
+ * failed-read-as-fact this whole feature is careful about.
+ */
+export function consoleDrift(
+  expected: string | null | undefined,
+  saved: string | null | undefined,
+): ConsoleDrift {
+  const want = (expected || '').trim()
+  const have = (saved || '').trim()
+  if (!want || !have) return { drifted: null, tone: 'warn', label: 'Not compared' }
+  if (want === have) return { drifted: false, tone: 'ok', label: 'Correct' }
+  return { drifted: true, tone: 'warn', label: 'Does not match the hub' }
+}

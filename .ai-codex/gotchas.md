@@ -1108,3 +1108,118 @@ a `mac_address` column, import/bulk mapping, and UI, plus something to populate 
 do not reach for it because an OUI client exists elsewhere in the suite.
 
 See `ddivault/.ai-codex/gotchas.md` for the lookup contract if this is ever revisited.
+
+## A setting that only ONE of four apps could change had drifted on three of them (1.66.0)
+
+⛔ **`NEXTAUTH_URL` IS PER-APP, AND ONLY THE HUB'S WAS EVER SETTABLE.** Settings → Console address
+managed `NEXTAUTH_URL` for NetVault alone. The other three apps keep their own copy, each signing its
+own sign-in cookies for its own address — and nothing in the product could set them, so they still
+held whatever the installer wrote. On production that meant the hub on the public FQDN while LogVault,
+DDIVault and SpanVault all named the raw server IP: that IP travelled in every NextAuth `callbackUrl`,
+and it is an address the wildcard certificate does not cover.
+- The lesson generalises past this field: **a setting that exists in four places and is editable in
+  one will drift in three.** When a value is per-app but DERIVABLE from one input, the hub should own
+  all of them — and when it is not derivable, the fact that three copies are unmanaged belongs in the
+  index, not in a comment nobody reads.
+- It is derivable here: a satellite's value is exactly `<hub scheme>://<hub host>:<that app's public
+  port>` — one host, one transport (one terminator fronts all four), four fixed ports from
+  `SIBLING_PORTS`. ⛔ So there is ONE thing an operator can decide and three values that follow. Do not
+  "improve" this into four text boxes: three of them can only ever be wrong, and a satellite whose
+  host disagrees with the hub's bounces every cross-app redirect with no error anywhere.
+
+## The hub cannot know where the other three apps are installed — and must not guess (1.66.0)
+
+⛔ **INSTALL PATHS ARE NOT UNIFORM ACROSS THE SUITE.** `C:\Apps\NetVault\app` and
+`C:\Apps\SpanVault\app`, but `C:\Apps\logvault` and `C:\Apps\ddivault` with **no `app` subfolder**.
+A hub that pattern-matched a path would write a console address into a directory that does not exist
+on half the installs — and report success.
+- The install root is read at runtime from the service's own NSSM `AppDirectory`
+  (`HKLM\SYSTEM\CurrentControlSet\Services\<svc>\Parameters`), the same key `serviceEnvPins` already
+  queries, and the same reasoning as `Get-NssmForService` locating nssm.exe from `ImagePath` in all
+  four updaters rather than from a guessed layout.
+- ⛔ **FOR A SATELLITE, `<AppDirectory>\.env.local` IS THE RUNNING FILE AND
+  `<parent(AppDirectory)>\.env.local` IS THE DEPLOY SOURCE** — `next start` dotenv-loads from its own
+  cwd, and the satellites' console service runs with `AppDirectory = <root>\frontend`. That derivation
+  is correct for BOTH layouts, which is the whole point of reading the service.
+- ⛔ **IT IS WRONG FOR THE HUB**, whose `AppDirectory` is `<root>\.next\standalone` — the parent of
+  that is the build output `git clean` removes. `resolveConsoleEnvTargets` REFUSES the hub slug; the
+  hub resolves its own two files from its repo root, because it is running from it.
+- ⛔ **`node:path` IS THE WRONG TOOL FOR A PATH THIS PROCESS DID NOT BUILD.** `path.dirname` on a
+  POSIX host returns a Windows path unchanged, so the deploy-source target would silently become the
+  running target: two writes to one file, and the deploy source never updated. The separator is taken
+  from the value itself (the same trick `restartPaths` uses).
+- ⛔ **A FAILED REGISTRY READ IS `null`, PER APP, AND THE OTHER APPS STILL PROCEED.** `reg query` fails
+  identically for an absent service, an absent value and a refused permission, so "LogVault is not
+  installed" is never claimed — the app is reported as "could not locate LogVault's environment files",
+  which is an unknown, not a clean state. `locatable` is therefore `true | null` and never `false`.
+
+## The NSSM pin had to be WRITTEN, not just reported — and the array it lives in holds every secret (1.66.0)
+
+⛔ **A SERVICE-ENVIRONMENT PIN BEATS BOTH ENV FILES**, because it is already in `process.env` when the
+Next server starts and @next/env does not overwrite an existing variable. Until now the panel reported
+that and stopped: on a pinned console the save was durable and inert for ever.
+- The pin is now updated too — ⛔ **ONLY WHERE ONE ALREADY EXISTS.** Appending a pin to a console that
+  reads its value from a file would CREATE the shadowing problem the updaters' un-pin step
+  (`Clear-NssmEnvKeys`) exists to undo; a settings page that re-added it would be fighting the updater.
+- ⛔ **IT IS A LINE-BY-LINE EDIT DONE INSIDE POWERSHELL (`buildPinUpdateScript`, script on STDIN).**
+  `AppEnvironmentExtra` carries `NEXTAUTH_SECRET`, `DATABASE_URL` and `NETVAULT_DB_PASS`, so rebuilding
+  it from a template is the one bug that takes the whole suite down (every satellite verifies its SSO
+  token against `NEXTAUTH_SECRET`). Doing the edit in the script means **those values never enter this
+  process at all** — nothing comes back over the pipe but a one-word verdict, so no secret can reach a
+  response body, a log line or a command line. The script verifies itself and restores the original on
+  any mismatch, exactly as `setEnvValue` does for a file; an entry it cannot parse as `KEY=VALUE` is
+  refused rather than round-tripped.
+- ⛔ **`serviceAppDirectory` IS A SEPARATE FUNCTION FROM `parseServiceEnvKeys` ON PURPOSE.** That one
+  deliberately discards every value; one function that sometimes returns values out of the
+  secret-bearing string is what the next "just one more field" would widen.
+- ⛔ **IF A PIN EXISTS AND CANNOT BE WRITTEN, THAT APP IS `shadowed`, NEVER `saved`** — and if the pin
+  list could not be READ, the app is `unknown` with its files written, because "we did not check" is
+  not "nothing is pinned". A console whose files landed is still offered the restart in both cases:
+  withholding it would guarantee the value never takes effect.
+
+## One restart, several services, and ONE lock file (1.66.0)
+
+⛔ **THE RUN LOCK IS A SINGLE FILE** (`restartPaths(repoRoot)` → one `logs/service-restart.lock`), so
+two concurrent restarts are impossible by construction. A console-address change can need up to five
+services restarted, and firing one POST per console would have the second, third and fourth refused
+with 409 — so the WRAPPER takes the list: the shared front door is stopped ONCE, the services are
+walked in order, and the front door is started LAST.
+- ⛔ **THE CONSOLE IS NOT THE ONLY PROCESS THAT READS `NEXTAUTH_URL`, AND THE SECOND READERS WERE
+  FOUND BY GREPPING THE SIBLING REPOS RATHER THAN BY ASSUMING.** `SpanVault-API` restarts with
+  SpanVault's console: `spanvault/api/rbacScope.js`'s `trustedFetchHostnames` puts `NEXTAUTH_URL` into
+  the SSRF allow-list deciding which hostnames a server-side fetch may use, and `api/server.js`
+  dotenv-loads the SAME root `.env.local` the hub just wrote — restart only `SpanVault-App` and the API
+  goes on trusting the old hostname and refusing the new one, on routes reachable with no session (i.e.
+  sign-in itself). `LogVault-Collector` restarts with LogVault's: `logvault/collector/emailer.js` builds
+  every alert email's links from `appUrl()` = `process.env.NEXTAUTH_URL`, out of the same file, so the
+  console alone would leave every alert email pointing at the old address — a symptom that never
+  appears anywhere in the product. DDIVault has no second reader; neither does SpanVault's collector.
+  ⛔ `companionServices` in `lib/consoles.ts` is therefore "who reads the value", NOT "who belongs to
+  the app" — restarting a service for a value it does not read is an outage for nothing.
+- ⛔ **THE DEPENDENCY PROBE RUNS FOR EVERY CONSOLE SERVICE, NOT JUST THE HUB.** `NocVault-Tls` fronts
+  all four, so `sc stop LogVault-App` is refused with 1051 exactly as `sc stop NetVault` is — and the
+  restart then "succeeds" with the old process still serving. The documented asymmetry is kept: the
+  front door is stopped only on a POSITIVE `dependsOn` reading, and `null` falls to "do not stop it"
+  (a cutover CLEARS `DependOnService` precisely because it turned every one-app restart into a
+  four-console outage).
+- ⛔ **THE VERDICT IS EVERY SERVICE, NOT ANY.** `parseRestartLog` requires `running=True` AND
+  `changed=True` per service: "three of the four consoles took the new address" is not a success, the
+  fourth is the one nobody can sign in to. The `service=` prefix is OPTIONAL in the scan because the
+  log on disk right after a deploy may be the PREVIOUS build's, and ignoring an unprefixed line would
+  find no services and read an old FAILED run as green.
+- ⛔ **THE PANEL'S WAIT LIMIT MUST SCALE WITH THE RUN.** The wrapper's bounds are per service (60 s +
+  150 s) plus per dependent (45 s + 90 s): a six-service run is ~1395 s, so the old flat 7 minutes
+  would have called a working restart "could not confirm".
+
+## A port that is in range can still be unreachable (1.66.0)
+
+⛔ **THE 1300x PORTS ARE LOOPBACK-ONLY AND WERE ACCEPTED AS A CONSOLE ADDRESS.** After a TLS cutover
+each console moves onto `127.0.0.1:1300X` and `NocVault-Tls` holds the public port.
+`lib/consoleUrl.ts` range-checks 1–65535 and cannot tell a loopback-only port from a public one — and
+this route printed that very port into the field's own HINT AND PLACEHOLDER for a while (fixed 1.60.1),
+so it was the number an operator was most likely to type. Saving it points every NextAuth callback at
+an address no browser can reach, and the person who did it cannot sign in to undo it.
+- It is now REFUSED, not warned about — in `validateConsoleUrl` AND in `deriveSiblingUrl`, from ONE
+  predicate (`isLoopbackOnlyPort`), so the typed address and the three derived ones cannot disagree.
+- Same reasoning as the scheme-versus-transport refusal in that file: an operator told "this may not
+  work" and proceeding is locked out just as thoroughly.

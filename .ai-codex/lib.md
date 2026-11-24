@@ -361,21 +361,38 @@ answers "can I change that, and what happened when I did". Nothing here reimplem
 ## lib/serviceRestart.ts
 "Apply it now" for the settings that are inert until a service restarts (NEXTAUTH_URL, the
 `ENTRA_*` values, a replaced certificate).
-- `resolveRestartTarget(purpose, terminatorPresent)` — ⛔ **A CERTIFICATE IS NOT APPLIED BY RESTARTING
-  THE APP.** NetVault never terminates TLS on this product; `NocVault-Tls` holds the certificate and
-  reads it at ITS startup. The Certificate panel said "Restart the NetVault service to begin serving
-  it" — text from before the terminator existed. Caught when a real wildcard certificate was installed
-  on production 2026-11-06. With no terminator the answer is `service: null` — nothing to restart.
-- `buildRestartWrapper({service, dependents, runId, ...})` — ⛔ **`dependents` IS WHAT MAKES A HUB
+- `resolveRestartTarget(purpose, terminatorPresent, apps = ['netvault'])` → `{ services: string[], why }`
+  — ⛔ **A CERTIFICATE IS NOT APPLIED BY RESTARTING THE APP.** NetVault never terminates TLS on this
+  product; `NocVault-Tls` holds the certificate and reads it at ITS startup. The Certificate panel said
+  "Restart the NetVault service to begin serving it" — text from before the terminator existed. Caught
+  when a real wildcard certificate was installed on production 2026-11-06. With no terminator the
+  answer is `services: []` — nothing to restart (⛔ an EMPTY LIST, not a list holding `null`: "none" has
+  one spelling). ⛔ **IT RETURNS A LIST SINCE 1.66.0**, because the hub owns all four consoles'
+  `NEXTAUTH_URL`: `apps` is a list of CLOSED-ENUM slugs (`lib/consoles.ts`) and the slug→service
+  mapping stays in lib code — a service NAME is still never a request field. `console-address` with
+  `['spanvault']` returns `['SpanVault-App', 'SpanVault-API']`; `sso` is always the hub alone (the
+  satellites have no directory settings); the DEFAULT is the hub, which is what GET must answer.
+- `restartWaitLimitMs(serviceCount, dependentCount)` — the panel's "could not confirm" limit, computed
+  from the wrapper's OWN bounds (60 s + 150 s per service, 45 s + 90 s per dependent). ⛔ A FIXED limit
+  stopped being correct the moment one run could cover six services: the old flat 7 minutes is less
+  than half of that run's worst case, so the panel would have called a working restart unconfirmed.
+- `buildRestartWrapper({services, dependents, runId, ...})` — ⛔ **`dependents` IS WHAT MAKES A HUB
   RESTART RESTART ANYTHING** (the 1051 trap above). Captures the PID either side; the verdict is
-  `running && changed && depsBack`. It RETRIES the start until the service runs, skipping a pending
+  `running && changed` for EVERY service (`$allOk`) plus `depsBack`. ⛔ **ONE WRAPPER TAKES THE WHOLE
+  LIST, because `restartPaths` gives ONE lock file** — concurrent restarts are impossible by
+  construction, so a POST per console would have the second refused with 409. It stops the shared front
+  door ONCE, walks the services, and brings the front door back LAST. It RETRIES the start until the service runs, skipping a pending
   transition — not "even if the stop timed out", which is what the header used to claim and the loop
   has never done (a start fired at STOP_PENDING is rejected 1056/1061). An ABSENT service now ends
   the loop with one log line instead of 150 `sc.exe start` calls over 150 s. `runId` is the arm token
   (`lib/runLock.ts` `psArmGuard`) without which an orphaned task re-runs this unattended.
 - `parseRestartLog(text)` — ⛔ `running=True` ALONE IS NOT SUCCESS; `changed=True` is the load-bearing
   half. Same family as `lib/tlsTransport.ts`: on this codebase a PowerShell exit code is evidence of
-  nothing.
+  nothing. ⛔ **PER SERVICE SINCE 1.66.0** (`services[]`, `failedServices[]`): one `running=True`
+  anywhere is not a verdict about a six-service run — EVERY service must have come back with a new
+  PID, because "three of the four consoles took the new address" is not a success. The `service=`
+  prefix is OPTIONAL in the scan: the log on disk right after a deploy may be the PREVIOUS build's,
+  and ignoring an unprefixed line would find no services and turn an old FAILED run green.
 
 ## lib/terminatorState.ts  (SERVER ONLY — spawns sc.exe)
 One shared answer to "is the TLS front door there, and running", used by four routes.
@@ -383,6 +400,8 @@ One shared answer to "is the TLS front door there, and running", used by four ro
   `unknown`, with `present`/`running` as `null`, **never `false`**.
 - `HUB_PUBLIC_PORT` (3000) — ⛔ **NOT `process.env.PORT`**: behind the terminator that is the LOOPBACK
   port, and reporting it as the address anyone connects to is the bug this module exists to stop.
+  Since 1.66.0 it is an ALIAS of `CONSOLES.netvault.publicPort` (`lib/consoles.ts`), not a second
+  declaration — the four consoles' ports now live in one place.
 
 ### `lib/terminatorState.ts` (server only)
 - `TERMINATOR_SERVICE`, `HUB_PUBLIC_PORT` — the front-door service name and the hub's PUBLIC port (never `process.env.PORT`, which is the loopback port behind a cutover).
@@ -394,7 +413,7 @@ One shared answer to "is the TLS front door there, and running", used by four ro
 - `serviceExists(name): Promise<boolean | null>` — tri-state. Replaced a boolean version that returned `false` for non-Windows and for ANY exception.
 
 ### `lib/serviceRestart.ts` additions
-- `RESTART_RUN_PREFIX`, `buildRestartHeader(runId, service)` — the ROUTE writes this header and truncates the log before scheduling, so a panel can never read the previous run's verdict as this run's.
+- `RESTART_RUN_PREFIX`, `buildRestartHeader(runId, services)` — the ROUTE writes this header and truncates the log before scheduling, so a panel can never read the previous run's verdict as this run's.
 - `parseRestartLog` now returns `runId`, and requires `running=True` AND `changed=True` AND no `dependent <x> back: False`. ⛔ That `depsFailed` term was UNREACHABLE on the only path where dependents exist until 1.63.0, because `RestartControl` reached `done` on a bare uptime proof before the wrapper had brought the front door back — see components.md.
 - `RESTART_SERVICE` was REMOVED: an alias of `HUB_SERVICE` "kept for callers that only ever meant the hub", with none — i.e. an inviting second name for the one fact `resolveRestartTarget` exists to be careful about.
 
@@ -454,3 +473,89 @@ One shared answer to "is the TLS front door there, and running", used by four ro
   `disableFileAccess`/`disableUrlAccess`.
 - `sendMail` takes a FULLY RESOLVED `SmtpConfig`: no DB read, no decryption, no hub-vs-local
   precedence. The caller supplies those.
+
+## The hub owns all four consoles' `NEXTAUTH_URL` (1.66.0)
+
+Settings → Console address used to manage only the hub's own `NEXTAUTH_URL`. It now writes all four.
+⛔ **WHY THIS IS A DERIVATION AND NOT FOUR SETTINGS:** a satellite's `NEXTAUTH_URL` carries NO
+independent information — it is exactly `<hub scheme>://<hub host>:<that app's public port>`, because
+the four consoles are reached on ONE host over ONE transport (one TLS terminator fronts all of them)
+on four fixed ports. Nothing in the product could set the other three, so production drifted: the hub
+on the public FQDN while all three satellites still named the raw install-time server IP, which leaks
+that IP into every NextAuth `callbackUrl` and sends users to an address the certificate does not cover.
+The satellites have no settings page for this, so the hub's GET payload is the ONLY place those three
+values are visible.
+
+### `lib/consoles.ts` (NEW)
+- `ConsoleSlug`, `CONSOLE_SLUGS` (hub first — the order writes and restarts happen in), `HUB_SLUG`,
+  `SATELLITE_SLUGS`, `CONSOLES`, `asConsoleSlug`/`isConsoleSlug`, `consoleRestartServices(slug)`,
+  `consoleForService(name)`.
+- ⛔ **LAYOUT-INDEPENDENT FACTS ONLY — NO PATHS.** Install paths are NOT uniform
+  (`C:\Apps\NetVault\app`, `C:\Apps\SpanVault\app`, but `C:\Apps\logvault` and `C:\Apps\ddivault` with
+  no `app` subfolder), so a hub that pattern-matched a path would write a console address into a
+  directory that does not exist on half the installs and report success. Paths are derived at RUNTIME
+  from the service's own NSSM `AppDirectory` — the same reasoning as `Get-NssmForService` locating
+  nssm.exe from `ImagePath` in all four updaters.
+- ⛔ **THE PORTS ARE IMPORTED FROM `lib/publicUrl.ts`'s `SIBLING_PORTS`, NEVER RESTATED.** A second
+  copy of 3004/3006/3008 would be a second answer to "where is LogVault", and the disagreement is a
+  console address on another app's port. The hub's 3000 lives here and `terminatorState` aliases it.
+- ⛔ **THE SERVICE NAMES ARE NOT A PATTERN**: the hub is bare `NetVault`, the satellites carry `-App`.
+- ⛔ **`companionServices` IS "WHO ELSE READS THE VALUE", AND IT WAS FOUND BY LOOKING.** SpanVault
+  brings `SpanVault-API`: `spanvault/api/rbacScope.js`'s `trustedFetchHostnames` puts `NEXTAUTH_URL`
+  into the SSRF allow-list deciding which hostnames a server-side fetch may use, and that process
+  dotenv-loads the SAME root `.env.local` this feature writes — restart only the console and the API
+  keeps trusting the old hostname, on routes reachable with no session (i.e. sign-in itself). LogVault
+  brings `LogVault-Collector`: `logvault/collector/emailer.js` builds every alert email's links from
+  `appUrl()` = `process.env.NEXTAUTH_URL`, loaded from the same file, so restarting only the console
+  leaves every alert email pointing at the old address — a symptom nobody sees in the product.
+  DDIVault has no second reader and neither does SpanVault's collector, so neither is listed:
+  restarting a service for a value it does not read is an outage for nothing. ⛔ If a new process
+  starts reading `NEXTAUTH_URL`, it belongs here — grep the sibling repos, do not assume the console
+  is the only reader.
+- ⛔ **CLIENT-SAFE**: it imports only `lib/publicUrl.ts` (whose Next import is `import type`), because
+  `lib/serviceRestart.ts` imports it and is reachable from a `'use client'` component.
+
+### `lib/envTargets.ts` additions
+- `serviceParamsKey(service)`, `parseServiceAppDirectory(regOutput)`, `serviceAppDirectory(service, run?, platform?)`,
+  `readServiceParams(service, read?, platform?)`, `resolveConsoleEnvTargets(slug, appDirectory)`,
+  `duplicateIn(text, key)`, `duplicateKeyPreflight(targets, key, io?)`, `assertManagedKey(key)`,
+  `writeManagedKey(..., { targets })`, `buildPinUpdateScript`, `parsePinUpdateOutput`,
+  `updateServiceEnvPin`, `powershellPinRunner`, `writeConsoleKey(slug, key, value, deps?)`.
+- ⛔ **`serviceAppDirectory` IS TRI-STATE AND A SEPARATE FUNCTION FROM `parseServiceEnvKeys`.** `null`
+  means "could not read" — off Windows, without permission, or service absent — and is NEVER a
+  fallback path. It is separate because `parseServiceEnvKeys` deliberately discards every VALUE (its
+  string holds `NEXTAUTH_SECRET`, `DATABASE_URL`, `NETVAULT_DB_PASS`); one function that sometimes
+  returns values out of that string is what the next "just one more field" would widen.
+- ⛔ **BOTH `REG_SZ` AND `REG_EXPAND_SZ`, AND NEITHER IS EXPANDED** — expanding means resolving another
+  process's environment from this one, and a wrong guess invents a directory.
+- ⛔ **`resolveConsoleEnvTargets` WORKS ON BOTH LAYOUTS AND REFUSES THE HUB.** `next start` dotenv-loads
+  from its cwd, so for a satellite `<AppDirectory>\.env.local` is the RUNNING file and
+  `<parent(AppDirectory)>\.env.local` the deploy source — identical arithmetic for both layouts. The
+  hub's AppDirectory is `<root>\.next\standalone`, whose parent is the build output `git clean`
+  removes, so the hub uses `resolveEnvTargets` (it is running from its own repo). It does its own
+  separator arithmetic because `node:path` on Linux cannot split a Windows path — `path.dirname` would
+  return the whole string and both writes would hit one file.
+- ⛔ **DEPLOY SOURCE FIRST, PER APP.** `Update-DDIVault.ps1:805` copies the root `.env.local` over
+  `frontend\.env.local` on EVERY run, so a running-file-only write silently reverts at the next deploy.
+- ⛔ **THE NSSM PIN IS WRITTEN ONLY WHERE ONE ALREADY EXISTS**, as a line-by-line edit, INSIDE
+  PowerShell (`buildPinUpdateScript`, script on STDIN) — so the entry values never enter this process
+  and only a one-word verdict comes back. Appending a pin would create the shadowing problem the
+  updaters' un-pin step exists to undo. The script verifies itself and restores the original on any
+  mismatch, exactly as `setEnvValue` does for a file. ⛔ **A pin that exists and could not be written
+  makes that console `shadowed`, never `saved`.**
+- ⛔ **`writeConsoleKey` HAS FOUR STATES and `saved` is the only one meaning the change will be read**:
+  `saved` / `shadowed` (pinned, pin not updated) / `unknown` (could not locate it, or could not read
+  its pins) / `failed` (a refusal or a failed write, with the reason). Its `locate`/`readPins`/
+  `writePin` dependencies are injected, which is the only reason the write paths are testable off
+  Windows. No rollback across files OR across consoles.
+
+### `lib/consoleUrl.ts` additions
+- `isLoopbackOnlyPort(port)`, `REFUSE_LOOPBACK_PORT`, `deriveSiblingUrl(hubUrl, port)`.
+- ⛔ **A 1300x PORT IS NOW REFUSED, NOT WARNED ABOUT** — in `validateConsoleUrl` AND in the derivation,
+  from ONE predicate. Those are the loopback ports the terminator proxies to: reachable only from the
+  server itself, in range, and this route printed one into the field's own placeholder for a while, so
+  it was the number an operator was most likely to type. A documented lockout, closed structurally.
+- ⛔ **`deriveSiblingUrl` DOES NOT RE-JUDGE THE TRANSPORT.** `tlsActive` was already judged against the
+  real transport for the hub's address and one terminator fronts all four, so a second judgement here
+  could only agree or disagree. It re-validates the HOST (it is what writes three other products'
+  files) and names the hub's address as the cause of any refusal.

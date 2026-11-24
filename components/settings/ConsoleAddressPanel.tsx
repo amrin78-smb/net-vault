@@ -34,6 +34,8 @@ import {
   StatePill,
 } from './panelChrome.tsx'
 import {
+  consoleDrift,
+  consoleStatePresentation,
   filePresentation,
   fileRoleLabel,
   savedVsRunning,
@@ -51,12 +53,48 @@ type FileReport = {
   error?: string | null
 }
 
+/**
+ * One of the four consoles, as GET reports it.
+ *
+ * ⛔ `locatable` IS `true` OR `null` AND NEVER `false` — the route cannot tell
+ * "that console is not installed" from "the registry could not be read", so it
+ * does not claim either. This panel renders `null` as "could not check".
+ */
+type AppRow = {
+  slug?: string
+  label?: string
+  service?: string
+  publicPort?: number
+  locatable?: boolean | null
+  appDirectory?: string | null
+  note?: string | null
+  /** The deploy-source value: what the next deploy propagates. */
+  saved?: string | null
+  /** ⛔ For a satellite this is a FILE, not that process's environment. */
+  running?: string | null
+  runningSource?: 'process' | 'file' | null
+  /** What this console's address should be, derived from the hub's. */
+  expected?: string | null
+  matchesExpected?: boolean | null
+  files?: FileReport[]
+  shadow?: ShadowVerdictLike
+  shadowNote?: string | null
+  takesEffectOnRestart?: boolean | null
+  restartServices?: string[]
+  /** Only on a PUT response: what the write did. */
+  state?: string
+  /** Only on a PUT response: the address written, `null` when nothing was. */
+  url?: string | null
+  error?: string | null
+}
+
 type ConsoleUrlState = {
   saved?: string | null
   running?: string | null
   restartPending?: boolean
   restartRequiresService?: string
   files?: FileReport[]
+  apps?: AppRow[]
   shadow?: ShadowVerdictLike
   shadowNote?: string | null
   takesEffectOnRestart?: boolean | null
@@ -92,6 +130,10 @@ type SaveResult = {
   pointsHere?: boolean
   takesEffectOnRestart?: boolean | null
   message?: string
+  /** Per console, in the order written — the hub first. */
+  apps?: AppRow[]
+  /** The services the consoles that actually changed need restarted. */
+  restartServices?: string[]
 }
 
 /**
@@ -176,6 +218,12 @@ export default function ConsoleAddressPanel({ canRestart = true }: { canRestart?
         pointsHere: data.pointsHere,
         takesEffectOnRestart: data.takesEffectOnRestart ?? null,
         message: data.message,
+        // ⛔ KEPT ON SCREEN PER CONSOLE. Three of these four products have no
+        // settings page of their own, so this is the only place an operator
+        // ever sees whether their address was written, shadowed by a service
+        // environment pin, or not even located.
+        apps: Array.isArray(data.apps) ? (data.apps as AppRow[]) : [],
+        restartServices: Array.isArray(data.restartServices) ? data.restartServices : [],
       })
       // ⛔ THE TOAST IS THE ANNOUNCEMENT, NOT THE RESTART NOTICE. A toast
       // disappears; the callout above keeps the restart sentence on screen,
@@ -221,6 +269,28 @@ export default function ConsoleAddressPanel({ canRestart = true }: { canRestart?
   const pair = savedVsRunning(state.saved, state.running)
   const examplePort = state.examplePort || 3000
   const exampleScheme = state.transport?.status === 'active' ? 'https' : 'http'
+  // The four rows, with the just-saved outcome merged onto the GET reading so
+  // the table does not go back to "Not compared" the moment a save returns.
+  const rows: AppRow[] = (state.apps || []).map((row) => {
+    const written = (result?.apps || []).find((w) => w.slug === row.slug)
+    return written ? { ...row, ...written } : row
+  })
+  // ⛔ WHICH CONSOLES ARE ACTUALLY OUT OF STEP, not "all four". Offering to
+  // restart a console whose address already matches interrupts it for nothing.
+  const driftedSlugs = rows
+    .filter((r) => consoleDrift(r.expected, r.saved).drifted === true)
+    .map((r) => String(r.slug))
+  // ⛔ "SOMETHING LANDED", NOT "THE STATE SAYS saved". A console whose pin
+  // status could not be read is `unknown` and its files were still written — so
+  // it still needs the restart, and withholding one would guarantee the value
+  // never takes effect. `url` is set for exactly the consoles that were written.
+  const savedSlugs = (result?.apps || [])
+    .filter((r) => typeof r.url === 'string' && r.url !== '')
+    .map((r) => String(r.slug))
+  // The hub's own pending change is still decided by saved-vs-running, which is
+  // the only one of the four where the RUNNING value is this process's own
+  // environment rather than a file another product's process read.
+  const restartApps = [...new Set([...(pair.differs ? ['netvault'] : []), ...savedSlugs, ...driftedSlugs])]
 
   return (
     <div>
@@ -242,7 +312,7 @@ export default function ConsoleAddressPanel({ canRestart = true }: { canRestart?
           </FactRow>
         </FactTable>
 
-        {pair.differs && (
+        {(pair.differs || restartApps.length > 0) && (
           <div style={{ marginTop: 14 }}>
             {/* ⛔ THE RESTART IS OFFERED, NOT DESCRIBED. This used to be a
                 sentence ending "until the NetVault service is restarted",
@@ -256,14 +326,14 @@ export default function ConsoleAddressPanel({ canRestart = true }: { canRestart?
                 is why the save route is admin+), but bouncing the service for
                 the whole site is a step beyond editing a value. Rendered with no
                 role prop, this showed them an enabled button that answered 403. */}
-            <RestartControl purpose="console-address" pending={pair.differs} canRestart={canRestart} />
+            <RestartControl purpose="console-address" pending={pair.differs || restartApps.length > 0} canRestart={canRestart} apps={restartApps} />
           </div>
         )}
 
         {/* ⛔ A scheme that disagrees with the real transport breaks every
             sign-in with no error anywhere, so it is loud. */}
         {state.schemeMismatch && (
-          <div style={{ marginTop: pair.differs ? 0 : 14 }}>
+          <div style={{ marginTop: pair.differs || restartApps.length > 0 ? 0 : 14 }}>
             <Callout tone="danger" title="The address and the transport disagree">{state.schemeMismatch}</Callout>
           </div>
         )}
@@ -277,7 +347,104 @@ export default function ConsoleAddressPanel({ canRestart = true }: { canRestart?
         )}
       </PanelCard>
 
-      <PanelCard title="Per-file state" description="NEXTAUTH_URL is written to both of these. If they disagree, the running file is what this process read at startup.">
+      {/* ⛔ ALL FOUR CONSOLES, BECAUSE THREE OF THEM HAVE NO SETTINGS PAGE.
+          A satellite's NEXTAUTH_URL is exactly `<hub scheme>://<hub host>:<its
+          port>` — it carries no independent information — and because nothing
+          in the product could set the other three, production drifted: the hub
+          on the public name, all three satellites still on the raw install-time
+          server IP, leaking it into every NextAuth callback and sending users
+          to an address the certificate does not cover. This table is the only
+          place that is visible, and the Save below writes all four. */}
+      <PanelCard
+        title="The four consoles"
+        description={
+          <>Each console signs its own cookies for its own address. They are all the same host
+          and transport as this one — only the port differs — so saving the address above writes
+          all four. <Mono>Expected</Mono> is derived from the address above; a console that does
+          not match it is still issuing sign-in callbacks for an older address.</>
+        }
+      >
+        <FactTable>
+          {rows.map((row, i) => {
+            const pill = consoleStatePresentation(row.state)
+            const drift = consoleDrift(row.expected, row.saved)
+            const unknown = row.locatable !== true
+            return (
+              <FactRow key={row.slug || i} label={`${row.label || row.slug} · port ${row.publicPort ?? '—'}`}>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {/* ⛔ THE SAVE OUTCOME ONLY ONCE THERE HAS BEEN ONE. Before a
+                      save there is nothing to report, and `consoleStatePresentation`
+                      fails closed to "could not check" — which would be a
+                      warning about a save nobody asked for yet. */}
+                  {row.state && <StatePill tone={pill.tone}>{pill.label}</StatePill>}
+                  <StatePill tone={unknown ? 'warn' : drift.tone}>
+                    {unknown ? 'Could not check' : drift.label}
+                  </StatePill>
+                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)' }}>
+                    {row.service}
+                  </span>
+                </div>
+                <div style={{ marginTop: 6, fontSize: 'var(--text-sm)', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  <div>Expected: {row.expected ? <Mono>{row.expected}</Mono> : 'not derived — set the address above first'}</div>
+                  <div>
+                    Saved: {row.saved ? <Mono>{row.saved}</Mono> : unknown ? 'not read' : 'not set'}
+                  </div>
+                  {/* ⛔ SAY WHAT "RUNNING" IS EVIDENCE OF. For this console it is
+                      its own process environment; for the other three it is the
+                      file that console's process loaded at ITS startup, which is
+                      not proof of what it currently holds — the hub cannot read
+                      another process's environment. */}
+                  {row.running && (
+                    <div>
+                      {row.runningSource === 'process' ? 'In force now' : 'In its running file'}:{' '}
+                      <Mono>{row.running}</Mono>
+                    </div>
+                  )}
+                </div>
+                {/* ⛔ A FAILED READ IS SAID OUT LOUD, PER CONSOLE, AND THE OTHER
+                    THREE STILL PROCEED. "Could not locate LogVault's environment
+                    files" is an unknown, not a clean state. */}
+                {(row.note || row.error) && (
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: 'var(--text-sm)',
+                      color: row.error ? 'var(--tint-danger-fg)' : 'var(--tint-warn-fg)',
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {row.error || row.note}
+                  </div>
+                )}
+                {(row.files || []).length > 0 && (
+                  <div style={{ marginTop: 6 }}>
+                    {(row.files || []).map((f, fi) => {
+                      const fp = filePresentation(f)
+                      return (
+                        <div key={f.path || fi} style={{ fontSize: 'var(--text-sm)', marginTop: 4 }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{fileRoleLabel(f.role)}: </span>
+                          <Mono>{f.path}</Mono>{' '}
+                          <StatePill tone={fp.tone}>{fp.label}</StatePill>
+                          {fp.detail && (
+                            <span style={{ color: 'var(--tint-danger-fg)' }}> {fp.detail}</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {row.shadowNote && (
+                  <div style={{ marginTop: 6, fontSize: 'var(--text-sm)', color: 'var(--tint-warn-fg)', lineHeight: 1.6 }}>
+                    {row.shadowNote}
+                  </div>
+                )}
+              </FactRow>
+            )
+          })}
+        </FactTable>
+      </PanelCard>
+
+      <PanelCard title="Per-file state" description="This console's own NEXTAUTH_URL is written to both of these. If they disagree, the running file is what this process read at startup.">
         <FactTable>
           {(state.files || []).map((f, i) => {
             const p = filePresentation(f)

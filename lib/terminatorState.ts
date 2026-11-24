@@ -19,6 +19,7 @@
 
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { CONSOLES } from './consoles.ts'
 
 const execFileAsync = promisify(execFile)
 
@@ -31,8 +32,14 @@ export const TERMINATOR_SERVICE = 'NocVault-Tls'
  * ⛔ NOT `process.env.PORT`. Behind the terminator that is the LOOPBACK port
  * (13000), and reporting it as the address anyone uses is the exact mistake
  * this module exists to stop.
+ *
+ * ⛔ DERIVED FROM `lib/consoles.ts`, NOT DECLARED TWICE. That module now owns
+ * the per-console facts (service name, public port) the hub writes all four
+ * `NEXTAUTH_URL`s from, and the hub's own public port is one of them. This name
+ * stays because four routes already import it and it reads better at those call
+ * sites than a record lookup — but it is an alias, not a second answer.
  */
-export const HUB_PUBLIC_PORT = 3000
+export const HUB_PUBLIC_PORT = CONSOLES.netvault.publicPort
 
 export type TerminatorState = 'running' | 'stopped' | 'absent' | 'unknown'
 

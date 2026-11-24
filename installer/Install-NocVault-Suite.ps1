@@ -911,9 +911,62 @@ if ($NocTlsPreflight -and (Test-Path -LiteralPath $NocTlsPreflight)) {
 } else {
     $TlsGateOk     = $false
     $TlsGateReason = 'installer\NocVault-TlsPreflight.ps1 is missing, so the certificate gates could not be evaluated. Ship the whole installer folder together.'
+    # The preflight is what normally defines $TlsPublicHostValue. Without it the
+    # variable would be $null for the rest of the run, so the -TlsPublicHost the
+    # operator passed would be silently dropped from every console address below.
+    # Trimmed here exactly as the preflight trims it, so there is still ONE value.
+    $TlsPublicHostValue = $TlsPublicHost.Trim()
     Write-Step "TLS terminator preflight"
     Write-Warn $TlsGateReason
 }
+
+# ── The ONE console address every console's NEXTAUTH_URL is derived from ──
+# ⛔ FOUR CONSOLES, ONE SCHEME, ONE HOST, FOUR PORTS - AND THAT IS A FACT, NOT A
+# CONVENTION. A satellite's NEXTAUTH_URL carries no information of its own: it is
+# exactly the hub's scheme and host with that app's own public port. Writing the
+# four as four independent literals is therefore not "explicit", it is four
+# chances to disagree - and they DID. On production the hub ended up on the public
+# FQDN while all three satellites still named the raw server IP, because only one
+# of the four literals was ever updated. Every satellite sign-in then redirected
+# to a host the browser may not reach, and nothing in the install reported it: the
+# four values were each individually well-formed.
+#
+# So there is one host and one scheme here, and the per-console line below adds
+# only its own port. A future fifth console gets a port and nothing else to get
+# wrong.
+#
+# ⛔ THE HOST IS -TlsPublicHost WHEN THERE IS ONE. That is the name users actually
+# type, and it is the same choice the closing banner ($AccessHost) and the
+# terminator's X-Forwarded-Host pin already make - reused, not re-decided.
+$ConsoleHostValue = if ($TlsPublicHostValue) { $TlsPublicHostValue } else { $ServerIP }
+#
+# ⛔ AND THE SCHEME IS http HERE EVEN WHEN THIS RUN IS PROVISIONING HTTPS. That is
+# deliberate and it is NOT a hardcode left over from the plain-HTTP days:
+#
+#   - At this point only gates 1 and 2 have been judged. Gate 3 - the terminator
+#     PROVEN answering HTTPS on all four public ports - is STEP 12.5, long after
+#     these env files are written. $TlsGateOk is "a certificate exists and Node can
+#     run the terminator", which is not "HTTPS is serving".
+#   - STEP 12.5 owns the flip. Set-ConsoleTransport (NocVault-TlsCutover.ps1)
+#     rewrites NEXTAUTH_URL to https://<host>:<public port> for EVERY console in
+#     the same operation that moves it to 127.0.0.1, because the bind and the
+#     scheme are one fact; and Restore-ConsoleTransport puts the files back
+#     VERBATIM from the pre-cutover snapshot when any gate fails.
+#   - So https:// written here would survive a reverted cutover: consoles back on
+#     0.0.0.0 serving plain HTTP, with NEXTAUTH_URL claiming https. That is the
+#     worst failure mode in the whole feature - NextAuth bounces every sign-in
+#     back to the login page with nothing logged on either side - and it is
+#     exactly what Test-NocVault-Suite.ps1 fails a suite for ("NEXTAUTH_URL is
+#     https:// on a plain-HTTP suite").
+#
+# In other words: the scheme follows the TRANSPORT, and the only step that knows
+# the transport is the cutover. This value is the pre-cutover scheme, which is
+# also the FINAL scheme on every install whose gates do not all hold.
+$ConsoleScheme = 'http'
+# ${ConsoleOrigin}, braced at every use site: PowerShell reads "$ConsoleOrigin:3000"
+# as a drive-qualified variable, not as the origin followed by a colon.
+$ConsoleOrigin = $ConsoleScheme + '://' + $ConsoleHostValue
+Write-Info "Console addresses derive from ${ConsoleOrigin}:<3000|3004|3006|3008> (NEXTAUTH_URL; STEP 12.5 moves the scheme to https if every TLS gate holds)"
 
 # ================================================================
 # STEP 5 — PostgreSQL
@@ -1430,7 +1483,7 @@ Write-OK "NetVault schema applied"
 @"
 DATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault
 NEXTAUTH_SECRET=$SharedSecret
-NEXTAUTH_URL=http://${ServerIP}:3000
+NEXTAUTH_URL=${ConsoleOrigin}:3000
 NODE_ENV=production
 SSL_DISABLED=true
 SERVER_IP=$ServerIP
@@ -1543,7 +1596,7 @@ Write-OK "NetVault static files copied"
 @"
 DATABASE_URL=postgresql://netvault:$NVDbPass@localhost:5432/netvault
 NEXTAUTH_SECRET=$SharedSecret
-NEXTAUTH_URL=http://${ServerIP}:3000
+NEXTAUTH_URL=${ConsoleOrigin}:3000
 NODE_ENV=production
 SSL_DISABLED=true
 SERVER_IP=$ServerIP
@@ -1686,7 +1739,7 @@ if ($InstallLogVault) {
     # Create .env.local in root AND frontend
     # POSTGRES_PASSWORD lets the app's own Update-LogVault.ps1 re-apply schema.sql as
     # the postgres superuser on later updates; without it that step silently skips.
-    $lvEnv = "DB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nLV_APP_PORT=3004`nLV_APP_URL=http://${ServerIP}:3004`nSYSLOG_PORTS=514,1514`nRETENTION_DAYS=90`nLOG_LEVEL=info`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nLOG_INTEGRITY_KEY=$LogIntegrityKey`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword`nSERVER_IP=$ServerIP"
+    $lvEnv = "DB_HOST=localhost`nDB_PORT=5432`nLV_DB_NAME=logvault`nLV_DB_USER=logvault_user`nLV_DB_PASS=$LVDbPass`nLV_API_PORT=3005`nLV_APP_PORT=3004`nLV_APP_URL=http://${ServerIP}:3004`nSYSLOG_PORTS=514,1514`nRETENTION_DAYS=90`nLOG_LEVEL=info`nNODE_ENV=production`nNEXTAUTH_URL=${ConsoleOrigin}:3004`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nLOG_INTEGRITY_KEY=$LogIntegrityKey`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword`nSERVER_IP=$ServerIP"
     $lvEnv | Out-File -FilePath "$LVAppDir\.env.local" -Encoding UTF8 -NoNewline
     $lvEnv | Out-File -FilePath "$LVAppDir\frontend\.env.local" -Encoding UTF8 -NoNewline
     Write-OK "LogVault .env.local created (root + frontend)"
@@ -1888,7 +1941,7 @@ $$;
     # Create .env.local in root AND frontend
     # $DDIWsEnvLines is either the DDI_WS_TLS_CERT/KEY pair (TLS on) or
     # DDI_WS_ALLOW_PLAINTEXT=1 (cert generation failed in STEP 6.5) - never both.
-    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_WS_PORT=3011`n$DDIWsEnvLines`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=http://${ServerIP}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
+    $ddiEnv = "DB_HOST=localhost`nDB_PORT=5432`nDDI_DB_NAME=ddivault`nDDI_DB_USER=ddivault_user`nDDI_DB_PASS=$DDIDbPass`nDDI_API_PORT=3007`nDDI_APP_PORT=3006`nDDI_WS_PORT=3011`n$DDIWsEnvLines`nDDI_APP_URL=http://${ServerIP}:3006`nSERVER_IP=$ServerIP`nDHCP_SERVER=`nDNS_SERVER=`nPS_AUTH_MODE=kerberos`nPS_USERNAME=`nPS_PASSWORD=`nPS_TIMEOUT_MS=30000`nDHCP_LOG_UNC=`nDHCP_LOG_LOCAL=`nSCOPE_WARNING_PCT=80`nSCOPE_CRITICAL_PCT=90`nRETENTION_DAYS=90`nNODE_ENV=production`nNEXTAUTH_URL=${ConsoleOrigin}:3006`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $DDIFrontendDir = "$DDIAppDir\frontend"
     $ddiEnv | Out-File -FilePath "$DDIAppDir\.env.local" -Encoding UTF8 -NoNewline
     $ddiEnv | Out-File -FilePath "$DDIFrontendDir\.env.local" -Encoding UTF8 -NoNewline
@@ -2058,7 +2111,7 @@ $$;
     # mint a certificate (port 3010 then stays plain ws://, as before).
     $svWsBlock = ""
     if ($SVWsEnvLines) { $svWsBlock = $SVWsEnvLines + "`n" }
-    $svEnv = "NODE_ENV=production`nSV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`n${svWsBlock}SV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=http://${ServerIP}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
+    $svEnv = "NODE_ENV=production`nSV_APP_PORT=3008`nSV_API_PORT=3009`nSERVER_IP=$ServerIP`nSV_PUBLIC_URL=http://${ServerIP}:3008`nSV_WS_PORT=3010`n${svWsBlock}SV_NSSM_PATH=$NssmExe`nNEXTAUTH_URL=${ConsoleOrigin}:3008`nNEXTAUTH_SECRET=$SharedSecret`nNOCVAULT_HUB_URL=http://${ServerIP}:3000`nNEXT_PUBLIC_NOCVAULT_HUB_URL=http://${ServerIP}:3000`nNETVAULT_DB_HOST=localhost`nNETVAULT_DB_PORT=5432`nNETVAULT_DB_NAME=netvault`nNETVAULT_DB_USER=netvault`nNETVAULT_DB_PASS=$NVDbPass`nSV_DB_HOST=localhost`nSV_DB_PORT=5432`nSV_DB_NAME=spanvault`nSV_DB_USER=spanvault_user`nSV_DB_PASS=$SVDbPass`nPOSTGRES_PASSWORD=$PgAdminPassword"
     $SVFrontendDir = "$SVAppDir\frontend"
     $svEnv | Out-File -FilePath "$SVAppDir\.env.local" -Encoding UTF8 -NoNewline
     $svEnv | Out-File -FilePath "$SVFrontendDir\.env.local" -Encoding UTF8 -NoNewline
