@@ -45,7 +45,19 @@ const PS_TIMEOUT = parseInt(process.env.PS_TIMEOUT_MS || '30000', 10);
 // DNS zone collection on servers with many zones (100+) takes far longer than a standard
 // DHCP query, so DNS reads use a dedicated, larger timeout (60s default) — as in the source.
 const DNS_PS_TIMEOUT = parseInt(process.env.PS_DNS_TIMEOUT_MS || '60000', 10);
-const MAX_BUFFER = 1024 * 1024 * 16;
+// 32 MB, matching the central collector (ddivault collector/powershellRunner.js).
+// The agent sat at the pre-fix 16 MB while the collector had already been raised
+// because "big DNS zones and DHCP log tails overflowed it" — and getDnsRecordsBatch
+// below now returns several zones' records in ONE response, so the old ceiling is
+// the first thing that would break.
+const MAX_BUFFER = 1024 * 1024 * 32;
+
+// ⛔ Zones per batched records read. Deliberately much SMALLER than the central
+// collector's 40: that one batches per-zone AGGREGATES (a handful of integers each),
+// whereas this returns every RECORD of every zone in the chunk. Production holds
+// 339 zones / ~256,951 records, i.e. ~38 MB of JSON if asked for in one go — over
+// even the raised MAX_BUFFER. 20 zones averages ~2.3 MB per chunk.
+const DNS_ZONE_BATCH = parseInt(process.env.PS_DNS_ZONE_BATCH || '20', 10);
 
 // PostgreSQL inet values include CIDR (e.g. 172.24.0.10/32) which the PowerShell remoting
 // functions reject — strip it before any PS use.
@@ -217,6 +229,51 @@ async function getDnsRecords(serverIp, zoneName, auth) {
   return asArray(await runPS(serverIp, script, auth, false, DNS_PS_TIMEOUT));
 }
 
+/**
+ * Batched records read — replaces N x getDnsRecords.
+ *
+ * Why: the central collector's per-zone WinRM loops were read by a firewall as a
+ * brute-force attempt on port 5985 on 2026-11-25 (every `Invoke-Command -Credential`
+ * is a full domain logon, ~4 Security 4648 events apiece). This path has the same
+ * shape — one call per zone at index.js's dns_zones case — just a 24th of the rate,
+ * because it has one loop on a 3600s interval rather than four on 1200s.
+ * ⛔ index.js defaults dns_interval_s to 900 if the hub stops sending it, which would
+ * quadruple that, so this is not merely theoretical.
+ *
+ * Returns { '<zone>': { ok: true, records: [...] } | { ok: false, error } }.
+ *
+ * ⛔ A try/catch statement cannot be the LEFT side of a pipeline in PowerShell —
+ * `try{}catch{}|ConvertTo-Json` is a parse error that fails the whole scriptblock and
+ * loses the entire chunk. Accumulate into $out, convert after the loop.
+ * ⛔ -Depth 5 is the exact depth needed: array > object > Records > record > scalar.
+ * ⛔ ConvertTo-Json -InputObject on a seeded @() array, never a pipe: an empty
+ * pipeline emits nothing, which is indistinguishable from a failed call.
+ */
+async function getDnsRecordsBatch(serverIp, zoneNames, auth) {
+  const names = (zoneNames || [])
+    .map((z) => (z && typeof z === 'object' ? z.ZoneName : z))
+    .filter((z) => typeof z === 'string' && z);
+  const result = {};
+  for (let i = 0; i < names.length; i += DNS_ZONE_BATCH) {
+    const chunk = names.slice(i, i + DNS_ZONE_BATCH);
+    const arr = '@(' + chunk.map((z) => "'" + String(z).replace(/'/g, "''") + "'").join(',') + ')';
+    const script = `$zones = ${arr}; $out = @(); foreach ($z in $zones) { try { $recs = @(Get-DnsServerResourceRecord -ZoneName $z -ErrorAction Stop | ForEach-Object { $r = $_; $data = ''; try { if ($r.RecordData.IPv4Address) { $data = $r.RecordData.IPv4Address.IPAddressToString } elseif ($r.RecordData.IPv6Address) { $data = $r.RecordData.IPv6Address.IPAddressToString } elseif ($r.RecordData.HostNameAlias) { $data = $r.RecordData.HostNameAlias } elseif ($r.RecordData.MailExchange) { $data = $r.RecordData.MailExchange + ' ' + $r.RecordData.Preference } elseif ($r.RecordData.NameServer) { $data = $r.RecordData.NameServer } elseif ($r.RecordData.DescriptiveText) { $data = $r.RecordData.DescriptiveText } else { $data = '' } } catch {}; [PSCustomObject]@{ HostName=$r.HostName; RecordType=$r.RecordType; TTL=[int]$r.TimeToLive.TotalSeconds; RecordData=$data } }); $out += [PSCustomObject]@{ Zone=$z; Ok=$true; Records=$recs } } catch { $out += [PSCustomObject]@{ Zone=$z; Ok=$false; Error=$_.Exception.Message } } }; ConvertTo-Json -InputObject $out -Depth 5 -Compress`;
+    const rows = await runPS(serverIp, script, auth, false, DNS_PS_TIMEOUT);
+    const chunkFailed = rows === null || rows === undefined;
+    for (const z of chunk) {
+      result[z] = { ok: false, error: chunkFailed ? 'batch read failed' : 'zone missing from batch response' };
+    }
+    if (chunkFailed) continue;
+    for (const r of asArray(rows)) {
+      if (!r || typeof r.Zone !== 'string') continue;
+      result[r.Zone] = r.Ok
+        ? { ok: true, records: asArray(r.Records) }
+        : { ok: false, error: String(r.Error == null ? 'unknown error' : r.Error) };
+    }
+  }
+  return result;
+}
+
 // ── DNS health readers (feed the aggregated dns_health kind) ──────────────────
 async function getDnsServerRole(serverIp, auth) {
   const script = `$d=(Get-WmiObject Win32_ComputerSystem).Domain;$pdc=(Get-ADDomain -ErrorAction SilentlyContinue).PDCEmulator;$isPdc=$pdc -eq "$env:COMPUTERNAME.$d";$fwd=(Get-DnsServerForwarder -ErrorAction SilentlyContinue).IPAddress.IPAddressToString -join ',';[PSCustomObject]@{isPDC=[bool]$isPdc;forwarders="$fwd";domain="$d"}|ConvertTo-Json -Compress`;
@@ -294,6 +351,7 @@ module.exports = {
   // DNS read
   getDnsZones,
   getDnsRecords,
+  getDnsRecordsBatch,
   // DNS health readers
   getDnsServerRole,
   getDnsZoneSoaDetail,

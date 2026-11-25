@@ -238,12 +238,25 @@ function createDdiModule(ctx) {
         // Records are fetched only for the eligible primary zones the writer will
         // actually persist (it re-applies the same filter).
         const zones = (await winrm.getDnsZones(ip, auth)) || [];
-        const recordsByZone = {};
+        const eligible = [];
         for (const zone of zones) {
           if (!zone || !zone.ZoneName) continue;
           if (!zone.IsReverseLookupZone && !zone.IsAutoCreated && zone.ZoneType === 'Primary') {
-            const records = await winrm.getDnsRecords(ip, zone.ZoneName, auth);
-            if (records && records.length) recordsByZone[zone.ZoneName] = records;
+            eligible.push(zone.ZoneName);
+          }
+        }
+        // ⛔ ONE batched WinRM read per chunk of zones, NOT one per zone. Every
+        // `Invoke-Command -Credential` is a full domain logon, and the per-zone shape
+        // this replaced is what a firewall read as a brute-force attempt on 5985
+        // (2026-11-25). See winrm.getDnsRecordsBatch / DNS_ZONE_BATCH.
+        const batch = await winrm.getDnsRecordsBatch(ip, eligible, auth);
+        const recordsByZone = {};
+        for (const name of eligible) {
+          const entry = batch[name];
+          // A zone that could not be read is simply omitted, exactly as a null
+          // getDnsRecords was before — the writer must not see it as "no records".
+          if (entry && entry.ok && entry.records && entry.records.length) {
+            recordsByZone[name] = entry.records;
           }
         }
         return { zones, recordsByZone };
