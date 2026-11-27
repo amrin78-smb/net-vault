@@ -61,6 +61,7 @@ WS_FP_DDI=""
 INSTALL_DIR="/opt/nocvault-agent"
 SVC_USER="nocvault-agent"
 SVC_NAME="nocvault-agent"
+UNINSTALL="0"
 
 step() { printf '\033[1;33m%s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m%s\033[0m\n' "$*"; }
@@ -79,6 +80,7 @@ while [ $# -gt 0 ]; do
     --ws-fingerprint-ddi) WS_FP_DDI="$2"; shift 2 ;;
     --install-dir)        INSTALL_DIR="$2"; shift 2 ;;
     --service-user)       SVC_USER="$2"; shift 2 ;;
+    --uninstall)          UNINSTALL="1"; shift ;;
     -h|--help)            sed -n '2,18p' "$0" 2>/dev/null || true; exit 0 ;;
     *) die "Unknown option: $1" ;;
   esac
@@ -89,8 +91,58 @@ if [ -n "$SERVER_URL" ]; then SERVER_URL="$(printf '%s' "$SERVER_URL" | sed 's:/
 
 printf '\033[1;36m=== NocVault Agent Installer (Linux) ===\033[0m\n'
 
-if [ -z "$TOKEN" ]; then die "An enrollment token is required: --token enr_... (or NOCVAULT_ENROLL_TOKEN=...)."; fi
 if [ "$(id -u)" -ne 0 ]; then die "This installer must run as root (it installs a systemd unit). Re-run with sudo."; fi
+
+# -- Uninstall -----------------------------------------------------------------
+# Handled BEFORE the token check: removing an agent must not require minting a new
+# enrollment token. The Windows side gets this from Uninstall-NocVault-Suite.ps1;
+# without an equivalent here a Linux agent could be installed and never cleanly
+# removed, which also makes it unsafe to trial on a machine you care about.
+if [ "$UNINSTALL" = "1" ]; then
+  step "Uninstalling $SVC_NAME ..."
+  # This block runs rm -rf as root against an operator-supplied path. Refuse the
+  # obvious catastrophes outright, then require positive proof the directory is
+  # actually an agent install rather than trusting the default.
+  case "$INSTALL_DIR" in
+    ""|"/"|"/usr"|"/usr/"*|"/etc"|"/etc/"|"/var"|"/var/"|"/opt"|"/opt/"|"/home"|"/home/"|"/root"|"/boot"|"/bin"|"/sbin"|"/lib")
+      die "Refusing to remove $INSTALL_DIR - that is not an agent install directory." ;;
+  esac
+  if [ ! -f "$INSTALL_DIR/nocvault-agent.js" ]; then
+    die "Refusing to remove $INSTALL_DIR - no nocvault-agent.js there, so it is not an agent install."
+  fi
+
+  if systemctl list-unit-files | grep -q "^$SVC_NAME.service"; then
+    systemctl stop "$SVC_NAME" 2>/dev/null || true
+    systemctl disable "$SVC_NAME" 2>/dev/null || true
+    ok "  Stopped and disabled $SVC_NAME."
+  else
+    ok "  No $SVC_NAME unit registered."
+  fi
+  rm -f "/etc/systemd/system/$SVC_NAME.service"
+  systemctl daemon-reload
+  systemctl reset-failed "$SVC_NAME" 2>/dev/null || true
+
+  rm -rf "$INSTALL_DIR"
+  ok "  Removed $INSTALL_DIR."
+
+  # Only remove the account this installer would have created, and only if it owns
+  # nothing else. A pre-existing account supplied via --service-user may be shared.
+  if id -u "$SVC_USER" >/dev/null 2>&1; then
+    if [ "$SVC_USER" = "nocvault-agent" ]; then
+      userdel "$SVC_USER" 2>/dev/null && ok "  Removed service user $SVC_USER." \
+        || fail "  Could not remove service user $SVC_USER - remove it by hand if unused."
+    else
+      ok "  Left service user $SVC_USER in place (not created by this installer)."
+    fi
+  fi
+
+  ok ""
+  ok "NocVault Agent uninstalled."
+  printf 'The hub still lists this agent - revoke it there if it is gone for good.\n'
+  exit 0
+fi
+
+if [ -z "$TOKEN" ]; then die "An enrollment token is required: --token enr_... (or NOCVAULT_ENROLL_TOKEN=...)."; fi
 
 command -v systemctl >/dev/null 2>&1 || die "systemd not found. This installer targets systemd hosts."
 command -v curl >/dev/null 2>&1 || die "curl is required but not installed."

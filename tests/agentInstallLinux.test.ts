@@ -143,11 +143,53 @@ test('Node is required, not silently installed from a third-party repo', () => {
 })
 
 test('the hub is probed before anything on the host is changed', () => {
-  const probeAt = script.indexOf('/api/health')
-  const mutateAt = Math.min(
-    ...[script.indexOf('useradd'), script.indexOf('mkdir -p'), script.indexOf('systemctl daemon-reload')]
-      .filter((i) => i >= 0)
-  )
-  assert.ok(probeAt > 0 && probeAt < mutateAt,
+  // Scoped to the INSTALL path. The --uninstall branch legitimately mutates the
+  // host (systemctl, rm -rf) and exits before reaching any of this, so measuring
+  // raw text order across the whole script would compare two paths that never
+  // run together — which is exactly how this test first went red.
+  const installPath = script.slice(script.indexOf('An enrollment token is required'))
+  const probeAt = installPath.indexOf('/api/health')
+  const mutations = ['useradd', 'mkdir -p', 'systemctl daemon-reload', 'rm -rf']
+    .map((m) => installPath.indexOf(m))
+    .filter((i) => i >= 0)
+  assert.ok(mutations.length > 0, 'expected the install path to mutate the host at all')
+  assert.ok(probeAt > 0 && probeAt < Math.min(...mutations),
     'the connectivity preflight must run before the first host mutation')
+})
+
+// ── uninstall: it runs rm -rf as root, so the guards are the feature ────────
+
+test('uninstall is reachable without a token', () => {
+  // Removing an agent must not require minting a new enrollment token. The
+  // --uninstall branch therefore has to sit ABOVE the token requirement.
+  const uninstallAt = script.indexOf('if [ "$UNINSTALL" = "1" ]')
+  const tokenCheckAt = script.indexOf('An enrollment token is required')
+  assert.ok(uninstallAt > 0, 'no --uninstall branch found')
+  assert.ok(uninstallAt < tokenCheckAt,
+    'the uninstall branch must come before the token check, or removal needs a token')
+})
+
+test('uninstall still requires root, and refuses catastrophic paths', () => {
+  const rootAt = script.indexOf('must run as root')
+  const uninstallAt = script.indexOf('if [ "$UNINSTALL" = "1" ]')
+  assert.ok(rootAt > 0 && rootAt < uninstallAt, 'the root check must precede uninstall')
+  for (const p of ['"/"', '"/usr"', '"/etc"', '"/home"', '"/root"', '"/bin"']) {
+    assert.ok(script.includes(p), `uninstall must refuse ${p} explicitly`)
+  }
+  assert.match(script, /Refusing to remove/)
+})
+
+test('uninstall proves the directory is an agent install before rm -rf', () => {
+  // A path guard alone is not enough: --install-dir could name any innocuous-
+  // looking directory full of someone else's files.
+  const proofAt = script.indexOf('no nocvault-agent.js there')
+  const rmAt = script.indexOf('rm -rf "$INSTALL_DIR"')
+  assert.ok(proofAt > 0, 'no positive proof-of-agent check before removal')
+  assert.ok(proofAt < rmAt, 'the proof check must run before rm -rf')
+})
+
+test('uninstall only removes the service account it would have created', () => {
+  // --service-user may name a pre-existing, shared account.
+  assert.match(script, /if \[ "\$SVC_USER" = "nocvault-agent" \]/)
+  assert.match(script, /not created by this installer/)
 })
