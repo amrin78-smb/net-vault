@@ -21,6 +21,30 @@ export const dynamic = 'force-dynamic'
 // usual single-host install both listeners share one cert and one pin covers
 // both. An app with no pin connects encrypted-but-unpinned — transport.js warns
 // rather than refusing, so pinning one app never strands the other.
+// Shape-check before interpolating: a pin is pasted verbatim into a command the
+// operator copies, and is only ever hex (with or without openssl's colons).
+// Anything else is a misconfiguration, and emitting it would be a
+// command-injection vector. Shared by the PowerShell and bash builders so the
+// two can never drift on what counts as a valid pin.
+function readPin(envName: string): string {
+  const raw = (process.env[envName] || '').trim()
+  return /^[0-9a-fA-F]{2}(:?[0-9a-fA-F]{2})+$/.test(raw) ? raw : ''
+}
+
+// The bash sibling of fingerprintFor. Same pins, same precedence, long-option
+// flags — see lib/agentInstallLinux.ts for the receiving end.
+function fingerprintArgsLinux(modules: string[]): string {
+  const apps = modules.length > 0 ? modules : ['span']
+  const slugs = new Set(apps.map((a) => toAppSlug(a)))
+  const span = readPin('SPANVAULT_WS_FINGERPRINT')
+  const ddi = slugs.has('ddivault') ? readPin('DDIVAULT_WS_FINGERPRINT') : ''
+  let out = ''
+  if (span) out += ` --ws-fingerprint "${span}"`
+  if (ddi && ddi !== span) out += ` --ws-fingerprint-ddi "${ddi}"`
+  if (!span && ddi) out = ` --ws-fingerprint-ddi "${ddi}"`
+  return out
+}
+
 function fingerprintFor(modules: string[]): string {
   // No preset => the agent loads span only (see install.ps1's -Modules default),
   // so span is the module whose pin applies.
@@ -31,10 +55,7 @@ function fingerprintFor(modules: string[]): string {
   // PowerShell one-liner, and a fingerprint is only ever hex (with or without
   // the colon separators openssl prints). Anything else is a misconfiguration,
   // and emitting it would be a command-injection vector.
-  const pin = (envName: string): string => {
-    const raw = (process.env[envName] || '').trim()
-    return /^[0-9a-fA-F]{2}(:?[0-9a-fA-F]{2})+$/.test(raw) ? raw : ''
-  }
+  const pin = readPin
 
   // Emitted per app, because SpanVault and DDIVault present their OWN
   // self-signed certificate whenever they are on different hosts — a single pin
@@ -110,10 +131,22 @@ export async function POST(req: NextRequest) {
     const fingerprintArg = fingerprintFor(modules)
     const install_command = `& ([scriptblock]::Create((irm ${origin}/api/agents/install.ps1))) -Token "${token}"${modulesArg}${fingerprintArg}`
 
+    // Linux sibling. ddi is STRIPPED rather than passed through: it is WinRM work
+    // and lib/agentInstallLinux.ts refuses it anyway, but a command that still
+    // NAMED it would leave the hub's agent_modules rows claiming ddi while the
+    // agent never loads it — the precise hub/agent divergence the --Modules
+    // comment above exists to prevent, just in the other direction.
+    const linuxModules = modules.filter((m) => m !== 'ddi' && m !== 'ddivault')
+    const linuxModulesArg = linuxModules.length > 0 ? ` --modules "${linuxModules.join(',')}"` : ''
+    const install_command_linux =
+      `curl -fsSL ${origin}/api/agents/install.sh | sudo bash -s --` +
+      ` --token "${token}"${linuxModulesArg}${fingerprintArgsLinux(modules)}`
+
     return NextResponse.json({
       token,
       expires_at: res.rows[0].expires_at,
       install_command,
+      install_command_linux,
     })
   } catch {
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })

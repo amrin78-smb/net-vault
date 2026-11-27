@@ -25,8 +25,15 @@ type Agent = {
   buffer_depth: number | null
 }
 type Site = { id: number; site: string; region?: string; country?: string }
-// POST /api/agents/enroll-tokens → { token, expires_at, install_command }
-type EnrollToken = { token: string; expires_at: string | null; install_command: string }
+// POST /api/agents/enroll-tokens → { token, expires_at, install_command, install_command_linux }
+// install_command_linux is optional so a page served during a rolling deploy (old
+// API, new bundle) renders the Windows command alone instead of "undefined".
+type EnrollToken = {
+  token: string
+  expires_at: string | null
+  install_command: string
+  install_command_linux?: string
+}
 
 // ── Module registry ───────────────────────────────────────────────────────────
 // Canonical short keys (ddi/span) drive the chip tints AND the values sent to the
@@ -899,7 +906,16 @@ export default function AgentsPage() {
                   </div>
 
                   <CopyBox label="One-time enrollment token" value={token.token} mono />
-                  <CopyBox label="Install command (run on the remote host)" value={token.install_command} mono />
+                  <CopyBox label="Install command — Windows (elevated PowerShell)" value={token.install_command} mono />
+                  {token.install_command_linux && (
+                    <>
+                      <CopyBox label="Install command — Linux (systemd, run with sudo)" value={token.install_command_linux} mono />
+                      <div style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginTop: -4, lineHeight: 1.45 }}>
+                        The Linux agent runs SpanVault collection only. DDIVault collection is
+                        WinRM-based and needs a Windows host; it is left out of the Linux command.
+                      </div>
+                    </>
+                  )}
 
                   <div style={{ display: 'flex', gap: 8, marginTop: 20 }}>
                     <button className="btn btn-secondary" onClick={resetForm} style={{ flex: 1, justifyContent: 'center' }}>Generate another</button>

@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.67.0': [
+    "The NocVault agent can now be installed on Linux. The Agents page shows two install commands for every enrollment token - one for Windows and one for Linux - and the Linux one installs the agent as a systemd service under its own unprivileged account.",
+    "This lets a remote site be monitored from a small Linux VM or container instead of requiring a Windows Server at that site. SpanVault collection (ping, SNMP, service checks, discovery) is identical on both platforms.",
+    "DDIVault collection is deliberately not offered on Linux: it works through Windows remote management, so it needs a Windows host. The Linux install command leaves it out, and the installer refuses it if asked, rather than installing an agent that would fail every poll.",
+    "The Linux installer checks that it can reach the hub before it changes anything on the host, requires Node 20 or newer rather than silently adding a package repository, and writes its credentials readable only by the service account.",
+  ],
   '1.66.0': [
     "Settings - Console address now sets the address for all four applications, not just this one. Each application signs its own sign-in cookies for its own address, and until now only NetVault's could be changed from the product: the other three kept whatever address was written at install time. On this server that meant NetVault was reached by name while LogVault, DDIVault and SpanVault still named the raw server IP - which put that IP into every sign-in redirect and sent people to an address the certificate does not cover.",
     "There is still only one address to type. The four applications share one host and one transport and differ only by port, so the other three are derived from the one you enter; the page now lists all four with the address each should have and the address each actually has, so a mismatch is visible instead of silent.",

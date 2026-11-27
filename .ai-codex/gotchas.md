@@ -1223,3 +1223,43 @@ an address no browser can reach, and the person who did it cannot sign in to und
   predicate (`isLoopbackOnlyPort`), so the typed address and the three derived ones cannot disagree.
 - Same reasoning as the scheme-versus-transport refusal in that file: an operator told "this may not
   work" and proceeding is locked out just as thoroughly.
+
+## 1.67.0 — the Linux agent, and four systemd settings that fail silently
+
+The agent core and its `span` module were already portable — pure-JS deps (`ws`, `ping`,
+`net-snmp`), every path `__dirname`-relative, and `modules/span/ping.js` already branches
+on `process.platform`. What was missing was packaging, so 1.67.0 adds
+`lib/agentInstallLinux.ts` + `GET /api/agents/install.sh` and nothing in `agent/` changed.
+⛔ **That is why no re-signing was needed**: a FRESH install downloads live files from
+`/api/agents/bundle`; the Ed25519 manifest signature gates SELF-UPDATE of an already
+installed agent, which is a different path.
+
+### ⛔ Writing bash inside a TypeScript template literal
+
+The first draft used a normal template literal with `\\\\\$VAR` escaping and rendered a DEAD
+script: it emitted the text `\$VAR`, which bash reads as a literal dollar, so every
+expansion silently became a string. It reviewed fine. The file now uses **`String.raw`**
+and the bash **avoids `${...}` and backticks entirely** (`$(printenv X || true)` instead of
+a brace default, `sed` instead of suffix stripping). ⛔ `${` interpolates even under
+`String.raw` — including **inside a comment**, which is how the second attempt broke.
+`tests/agentInstallLinux.test.ts` renders the script and runs `bash -n` over it; that test
+is the only thing between a typo here and a broken install on a customer's server. It also
+extracts the embedded `node -e '...'` programs with `[^']*`, which doubles as an assertion
+that neither contains an apostrophe — one in a comment ("the agent's own directory") would
+terminate the bash quoting.
+
+### The four unit directives that are load-bearing
+
+| directive | why it is not optional |
+|---|---|
+| `Restart=always` | the self-updater applies its staged files and **exits 0** on purpose. Under `Restart=on-failure` a clean exit just stops the agent, so every update silently takes the fleet offline instead of upgrading it. |
+| `StartLimitBurst` ≥ 3 | the crash-loop rollback only fires at `attempts >= 3` (`agent/core/apply-update.js`). systemd's default (5 in 10s) can latch the unit `failed` before the rollback runs — the same brick as NSSM `Paused`. |
+| `AmbientCapabilities=CAP_NET_RAW` | required **because of** `NoNewPrivileges`, not despite it. `ping` relies on a file capability, which `NoNewPrivileges` blocks through `execve`, so **every ping reports `down`** — a total monitoring failure that reads as a network fault. |
+| `ReadWritePaths=<install dir>` | with `ProtectSystem=strict`, config persistence, identity rotation, the offline buffer and self-update staging all fail without it. |
+
+⛔ And **never add `MemoryDenyWriteExecute=yes`** — it reads as free hardening and breaks
+V8's JIT outright.
+
+The Linux equivalent of the Windows `icacls` lockdown is a dedicated `nocvault-agent`
+system user owning a `0700` directory, with `config.json` at `0600`: that directory holds
+the enrollment credentials and the hub-signed JWT the agent authenticates with everywhere.
