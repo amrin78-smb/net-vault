@@ -1263,3 +1263,31 @@ V8's JIT outright.
 The Linux equivalent of the Windows `icacls` lockdown is a dedicated `nocvault-agent`
 system user owning a `0700` directory, with `config.json` at `0600`: that directory holds
 the enrollment credentials and the hub-signed JWT the agent authenticates with everywhere.
+
+### 1.67.1 — the Linux agent brings its own Node, and why not a package repo
+
+The first cut refused to install Node and told the operator to do it. That is the wrong
+trade on a one-liner installer, and it failed on the very first real host. It now unpacks
+a **private runtime from the official nodejs.org tarball into the agent's own directory**
+— parity with the Windows MSI, without touching the system package graph, without
+upgrading a system Node other software depends on, and removed by `--uninstall` along with
+everything else. ⛔ **No `apt`/`dnf`/`apk`/nodesource**, asserted by a test.
+
+⛔ **A system Node under `/home` or `/root` is deliberately REFUSED.** The unit sets
+`ProtectHome=yes`, so a per-user install (nvm, `~/.local/bin`) resolves perfectly for the
+root shell running the installer and is **invisible to the running service** — it would
+install cleanly and fail at first start. This is not hypothetical: the first Linux host we
+tried had exactly that layout, and the installer reporting "Node.js not found" under sudo
+was the symptom.
+
+The tarball is **checksum-verified against the published `SHASUMS256.txt` before
+unpacking**, and the nodejs.org fetches do NOT pass `-k` even though the hub fetches must
+(the hub may carry a self-signed cert; nodejs.org does not). A test pins both halves.
+
+⛔ **And a backtick in a COMMENT broke the whole template again.** The header of
+lib/agentInstallLinux.ts warns about exactly this and I still wrote
+`` - `--uninstall` removes it `` into a bash comment. The render threw, but the ad-hoc
+check that would have caught it had `2>/dev/null` on it, so `bash -n` and `shellcheck`
+both passed — **against the previous, stale rendering**. Two lessons, and the second is
+the general one: **never suppress stderr on a verification step**, and make sure the thing
+you verified is the thing you just changed.

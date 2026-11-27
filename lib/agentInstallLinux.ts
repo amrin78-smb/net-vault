@@ -62,6 +62,10 @@ INSTALL_DIR="/opt/nocvault-agent"
 SVC_USER="nocvault-agent"
 SVC_NAME="nocvault-agent"
 UNINSTALL="0"
+NO_NODE_DOWNLOAD="0"
+# Pinned to match the Windows installer's MSI, so both platforms run the runtime
+# the agent is actually tested against.
+NODE_VERSION="v20.19.0"
 
 step() { printf '\033[1;33m%s\033[0m\n' "$*"; }
 ok()   { printf '\033[1;32m%s\033[0m\n' "$*"; }
@@ -81,6 +85,8 @@ while [ $# -gt 0 ]; do
     --install-dir)        INSTALL_DIR="$2"; shift 2 ;;
     --service-user)       SVC_USER="$2"; shift 2 ;;
     --uninstall)          UNINSTALL="1"; shift ;;
+    --no-node-download)   NO_NODE_DOWNLOAD="1"; shift ;;
+    --node-version)       NODE_VERSION="$2"; shift 2 ;;
     -h|--help)            sed -n '2,18p' "$0" 2>/dev/null || true; exit 0 ;;
     *) die "Unknown option: $1" ;;
   esac
@@ -166,17 +172,78 @@ if [ -n "$SERVER_URL" ]; then
   fi
 fi
 
+mkdir -p "$INSTALL_DIR"
+
 # -- Node.js -------------------------------------------------------------------
-# Deliberately NOT auto-installed. The Windows installer can fetch one MSI; on
-# Linux the correct package source differs per distro and release, and silently
-# adding a third-party apt/dnf repo to a customer's server is not something an
-# agent installer should do uninvited. Fail with instructions instead.
-command -v node >/dev/null 2>&1 \
-  || die "Node.js not found. Install Node 20 LTS or newer (distro package, nodesource, or nvm) and re-run."
-NODE_BIN="$(command -v node)"
-NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
-if [ "$NODE_MAJOR" -lt 20 ]; then die "Node $(node -v) is too old - the agent needs Node 20 or newer."; fi
-ok "  Node $(node -v) at $NODE_BIN"
+# Parity with the Windows installer, which fetches a Node MSI rather than assuming
+# one is present - but NOT by adding a distro package repo. A PRIVATE runtime is
+# unpacked into the agent's own directory from the official nodejs.org tarball:
+#   - nothing is added to the system package graph, and no system Node is upgraded
+#     out from under whatever else on the box depends on it
+#   - the version is exactly the one the agent is tested against
+#   - --uninstall removes it along with everything else
+#
+# A system Node is still preferred when it is new enough AND usable by a service.
+# ⛔ "Usable" excludes anything under /home or /root: the unit sets ProtectHome=yes,
+# so a per-user install (nvm, ~/.local/bin) is invisible to the running service even
+# though it resolves perfectly well for the root shell doing the installing. That
+# combination fails at FIRST START, not at install time, which is the worst place
+# to find it.
+NODE_BIN=""
+SYS_NODE="$(command -v node 2>/dev/null || true)"
+if [ -n "$SYS_NODE" ]; then
+  SYS_NODE_REAL="$(readlink -f "$SYS_NODE" 2>/dev/null || printf '%s' "$SYS_NODE")"
+  SYS_MAJOR="$("$SYS_NODE" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  case "$SYS_NODE_REAL" in
+    /home/*|/root/*)
+      step "  Found Node at $SYS_NODE_REAL, but ProtectHome=yes hides it from the service - using a private runtime instead." ;;
+    *)
+      if [ "$SYS_MAJOR" -ge 20 ]; then
+        NODE_BIN="$SYS_NODE_REAL"
+        ok "  Using system Node $("$SYS_NODE" -v) at $NODE_BIN"
+      else
+        step "  System Node $("$SYS_NODE" -v) is older than 20 - using a private runtime instead."
+      fi ;;
+  esac
+fi
+
+if [ -z "$NODE_BIN" ]; then
+  if [ "$NO_NODE_DOWNLOAD" = "1" ]; then
+    die "No usable Node 20+ found and --no-node-download was given. Install Node 20 LTS outside /home and re-run."
+  fi
+  case "$(uname -m)" in
+    x86_64|amd64) NODE_ARCH="x64" ;;
+    aarch64|arm64) NODE_ARCH="arm64" ;;
+    armv7l) NODE_ARCH="armv7l" ;;
+    *) die "Unsupported CPU architecture $(uname -m) - install Node 20 LTS yourself and re-run." ;;
+  esac
+  NODE_TGZ="node-$NODE_VERSION-linux-$NODE_ARCH.tar.gz"
+  # .tar.gz, not .tar.xz: gzip is on every base image, xz-utils is not.
+  step "Installing a private Node runtime ($NODE_VERSION, $NODE_ARCH) into $INSTALL_DIR/runtime ..."
+  TMPD="$(mktemp -d)"
+  # ⛔ NO -k HERE. The hub may use a self-signed certificate, nodejs.org does not,
+  # and this downloads a binary that is about to run as a service. Verify the chain
+  # AND the published checksum - a tarball is not something to take on trust.
+  curl -fsSL --max-time 300 "https://nodejs.org/dist/$NODE_VERSION/$NODE_TGZ" -o "$TMPD/$NODE_TGZ" \
+    || { rm -rf "$TMPD"; die "Could not download $NODE_TGZ from nodejs.org. Install Node 20 LTS yourself, or pass --no-node-download."; }
+  curl -fsSL --max-time 60 "https://nodejs.org/dist/$NODE_VERSION/SHASUMS256.txt" -o "$TMPD/SHASUMS256.txt" \
+    || { rm -rf "$TMPD"; die "Could not download the nodejs.org checksum file - refusing to install an unverified runtime."; }
+  ( cd "$TMPD" && grep " $NODE_TGZ\$" SHASUMS256.txt | sha256sum -c - >/dev/null 2>&1 ) \
+    || { rm -rf "$TMPD"; die "Checksum mismatch on $NODE_TGZ - refusing to install it."; }
+  ok "  Download verified against the published SHA-256."
+  rm -rf "$INSTALL_DIR/runtime"
+  mkdir -p "$INSTALL_DIR/runtime"
+  tar -xzf "$TMPD/$NODE_TGZ" -C "$INSTALL_DIR/runtime" --strip-components=1 \
+    || { rm -rf "$TMPD"; die "Could not unpack the Node runtime."; }
+  rm -rf "$TMPD"
+  NODE_BIN="$INSTALL_DIR/runtime/bin/node"
+  [ -x "$NODE_BIN" ] || die "Private Node runtime unpacked but $NODE_BIN is not executable."
+  ok "  Private Node $("$NODE_BIN" -v) at $NODE_BIN"
+fi
+
+# Everything below runs node through $NODE_BIN, and npm through the same runtime,
+# so a private install never depends on PATH.
+NODE_DIR="$(dirname "$NODE_BIN")"
 
 # -- Dedicated unprivileged service account ------------------------------------
 # The Windows installer locks the agent directory with icacls because it holds
@@ -193,15 +260,13 @@ else
     || die "Could not create the service user $SVC_USER."
 fi
 
-mkdir -p "$INSTALL_DIR"
-
 # -- Agent files: manifest, then each file ------------------------------------
 step "Downloading agent bundle from $HUB_URL ..."
 MANIFEST="$(curl -fsSk --max-time 30 "$HUB_URL/api/agents/bundle")" \
   || die "Failed to fetch the agent bundle manifest from $HUB_URL."
 # node, not jq: node is a hard requirement above, jq is absent from most server
 # images, and hand-rolling JSON parsing in bash is how installers rot.
-FILES="$(printf '%s' "$MANIFEST" | node -e '
+FILES="$(printf '%s' "$MANIFEST" | "$NODE_BIN" -e '
   let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
     let m; try { m = JSON.parse(s); } catch (e) { process.exit(2); }
     const f = Array.isArray(m.files) ? m.files : [];
@@ -238,7 +303,7 @@ if [ ! -f "$INSTALL_DIR/nocvault-agent.js" ]; then die "Agent bundle did not inc
 step "Writing config.json ..."
 NV_HUB="$HUB_URL" NV_TOKEN="$TOKEN" NV_SERVER="$SERVER_URL" NV_APIKEY="$API_KEY" \
 NV_WSPORT="$WS_PORT" NV_MODULES="$MODULES" NV_FP="$WS_FP" NV_FPDDI="$WS_FP_DDI" \
-NV_OUT="$INSTALL_DIR/config.json" node -e '
+NV_OUT="$INSTALL_DIR/config.json" "$NODE_BIN" -e '
   const fs = require("fs"), e = process.env;
   const cfg = { hubUrl: e.NV_HUB, enrollToken: e.NV_TOKEN };
   if (e.NV_SERVER && e.NV_APIKEY) {
@@ -276,8 +341,12 @@ if [ -d "$INSTALL_DIR/node_modules/ws" ]; then
   ok "Dependencies already present (offline bundle) - skipping npm install."
 else
   step "Installing dependencies..."
-  command -v npm >/dev/null 2>&1 || die "npm not found but node is present - install npm and re-run."
-  ( cd "$INSTALL_DIR" && npm install --omit=dev --no-audit --no-fund >/dev/null 2>&1 ) \
+  # PATH-prefixed with the chosen runtime's bin so a PRIVATE node/npm is used even
+  # when an older system npm is also on PATH. npm needs to find its own node.
+  if [ ! -x "$NODE_DIR/npm" ] && ! command -v npm >/dev/null 2>&1; then
+    die "npm not found alongside $NODE_BIN and none on PATH - cannot install agent dependencies."
+  fi
+  ( cd "$INSTALL_DIR" && PATH="$NODE_DIR:$PATH" npm install --omit=dev --no-audit --no-fund >/dev/null 2>&1 ) \
     || die "npm install failed. Agent dependencies are incomplete - aborting before service registration."
 fi
 

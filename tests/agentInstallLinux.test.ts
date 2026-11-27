@@ -45,7 +45,7 @@ test('the embedded node snippets are valid JS and contain no apostrophe', () => 
   // into a comment, e.g. "the agent's own directory") would TERMINATE the bash
   // single-quoted string and shatter the script. bash -n may still accept the
   // wreckage, so this is the check that catches it.
-  const progs = [...script.matchAll(/node -e '([^']*)'/g)].map((m) => m[1])
+  const progs = [...script.matchAll(/"\$NODE_BIN" -e '([^']*)'/g)].map((m) => m[1])
   assert.equal(progs.length, 2, `expected exactly 2 embedded node programs, found ${progs.length}`)
   for (const p of progs) {
     const f = writeTemp(p, 'embedded.cjs')
@@ -137,9 +137,15 @@ test('it refuses to run without a token, and without root', () => {
   assert.match(script, /must run as root/)
 })
 
-test('Node is required, not silently installed from a third-party repo', () => {
-  assert.match(script, /Node\.js not found/)
-  assert.match(script, /NODE_MAJOR/)
+test('no distro package manager is ever invoked', () => {
+  // The runtime is a private tarball under the install dir, NOT a system package.
+  // Silently adding an apt/dnf repo to a customer's server, or upgrading a system
+  // Node that other software depends on, is not something an agent installer
+  // should do uninvited — and it is what the Windows MSI equivalent avoids too.
+  for (const pm of ['apt-get install', 'apt install', 'dnf install', 'yum install',
+                    'apk add', 'zypper install', 'nodesource']) {
+    assert.ok(!script.includes(pm), `installer must not invoke ${pm}`)
+  }
 })
 
 test('the hub is probed before anything on the host is changed', () => {
@@ -192,4 +198,59 @@ test('uninstall only removes the service account it would have created', () => {
   // --service-user may name a pre-existing, shared account.
   assert.match(script, /if \[ "\$SVC_USER" = "nocvault-agent" \]/)
   assert.match(script, /not created by this installer/)
+})
+
+// ── the private Node runtime ────────────────────────────────────────────────
+
+test('a system Node under /home or /root is refused, not used', () => {
+  // ⛔ The unit sets ProtectHome=yes, so a per-user install (nvm, ~/.local/bin)
+  // resolves fine for the root shell doing the installing and is INVISIBLE to the
+  // running service. Using it would fail at first start, not at install time.
+  assert.match(script, /\/home\/\*\|\/root\/\*\)/)
+  assert.match(script, /ProtectHome=yes hides it from the service/)
+})
+
+test('a missing or old system Node falls back to a private runtime in the install dir', () => {
+  assert.match(script, /NODE_VERSION="v\d+\.\d+\.\d+"/)
+  assert.match(script, /\$INSTALL_DIR\/runtime/)
+  // Inside INSTALL_DIR specifically, so --uninstall takes it away with everything else.
+  assert.match(script, /NODE_BIN="\$INSTALL_DIR\/runtime\/bin\/node"/)
+})
+
+test('the downloaded runtime is checksum-verified before it is unpacked', () => {
+  // It is a binary that is about to run as a service. Taking it on trust because
+  // it came over TLS is not the same as verifying it.
+  assert.match(script, /SHASUMS256\.txt/)
+  assert.match(script, /sha256sum -c -/)
+  assert.match(script, /Checksum mismatch/)
+  const verifyAt = script.indexOf('sha256sum -c -')
+  const unpackAt = script.indexOf('tar -xzf')
+  assert.ok(verifyAt > 0 && verifyAt < unpackAt, 'the checksum must be verified BEFORE unpacking')
+})
+
+test('the nodejs.org fetches verify TLS, even though the hub fetches do not', () => {
+  // The hub may legitimately carry a self-signed certificate; nodejs.org never does.
+  const nodeFetches = script.split('\n').filter((l) => l.includes('nodejs.org'))
+  assert.ok(nodeFetches.length >= 2, 'expected a tarball fetch and a checksum fetch')
+  for (const line of nodeFetches) {
+    assert.ok(!/curl[^|]*\s-[a-zA-Z]*k/.test(line), `nodejs.org fetch must not skip TLS verification: ${line.trim()}`)
+  }
+})
+
+test('every node and npm invocation goes through the chosen runtime, never bare PATH', () => {
+  // A bare `node` would silently pick a different runtime than the one the unit
+  // runs, which is exactly the class of bug this whole section exists to avoid.
+  const bare = script.split('\n').filter((l) => /(^|[^"$/\w-])node -e/.test(l))
+  assert.deepStrictEqual(bare, [], 'found a bare `node -e` invocation')
+  assert.match(script, /PATH="\$NODE_DIR:\$PATH" npm install/)
+})
+
+test('--no-node-download opts out and fails with instructions', () => {
+  assert.match(script, /--no-node-download\)/)
+  assert.match(script, /--no-node-download was given/)
+})
+
+test('an unsupported CPU architecture fails clearly rather than downloading nonsense', () => {
+  assert.match(script, /Unsupported CPU architecture/)
+  assert.match(script, /aarch64\|arm64\)/)
 })

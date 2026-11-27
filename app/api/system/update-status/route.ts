@@ -75,6 +75,12 @@ async function remoteVersion(repoRoot: string): Promise<string> {
 // version, add a matching entry with 3-5 bullets. There is no CHANGELOG.md —
 // release notes live here only.
 const releaseNotes: Record<string, string[]> = {
+  '1.67.1': [
+    "Fixed: the Linux agent installer now provides its own Node.js runtime instead of requiring one to already be installed, matching how the Windows installer supplies Node.",
+    "The runtime is unpacked inside the agent's own folder and is verified against the official published checksum before use. Nothing is added to the server's package manager and no existing Node installation is changed or upgraded.",
+    "An existing system-wide Node 20 or newer is still used when one is present. A per-user installation is deliberately not used: the agent runs as a locked-down service that cannot read home directories, so it would start and then fail.",
+    "Pass --no-node-download to require an existing system Node instead.",
+  ],
   '1.67.0': [
     "The NocVault agent can now be installed on Linux. The Agents page shows two install commands for every enrollment token - one for Windows and one for Linux - and the Linux one installs the agent as a systemd service under its own unprivileged account.",
     "This lets a remote site be monitored from a small Linux VM or container instead of requiring a Windows Server at that site. SpanVault collection (ping, SNMP, service checks, discovery) is identical on both platforms.",
